@@ -1,0 +1,41 @@
+Fix MediaTek platform include paths for mt6797
+
+Various MediaTek drivers include headers using angle brackets but don't have
+the proper include paths set up. This adds the necessary include paths to
+find mt_sd.h, mt_gpufreq.h, mt_ppm_platform.h, cmdq_engine.h, external_display.h,
+m4u_port.h, mtk-phy.h, platform_uart.h, musbfsh.h, disp_drv_platform.h, and
+mmprofile.h.
+
+--- a/drivers/misc/mediatek/Makefile
++++ b/drivers/misc/mediatek/Makefile
+@@ -17,6 +17,19 @@ subdir-ccflags-y += -Werror
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
++# Additional include paths for mt6797 platform headers
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/ppm_v1/src/mach/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/v2/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/ext_disp/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mu3phy
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mu3d/hal
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/uart/mt6797
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/usb11
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/mt6797/videox
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/mt6797/dispsys
++subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mmp
+ subdir-ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/$(MTK_PLATFORM)
+ 
+ obj-$(CONFIG_MTK_EMI_MPU)	+= emi_mpu/
+--- a/drivers/mmc/host/mediatek/mt6797/Makefile
++++ b/drivers/mmc/host/mediatek/mt6797/Makefile
+@@ -12,6 +12,8 @@
+ 
+ #add kernel source code path as head file search path
+ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
++# Add self directory to include path for mt_sd.h
++ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/mt6797
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
+ ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat

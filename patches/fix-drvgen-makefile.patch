@@ -1,0 +1,25 @@
+From: NixOS Gemini
+Subject: Fix DrvGen.py pattern match in Makefile
+
+The main Makefile has a pattern rule 'tools/%' that incorrectly matches
+tools/dct/DrvGen.py when it's listed as a prerequisite. This causes make
+to try to "build" the Python script, which fails with path issues.
+
+Add an explicit rule that marks DrvGen.py as existing (no recipe needed)
+to prevent the pattern rule from matching.
+
+diff --git a/scripts/drvgen/drvgen.mk b/scripts/drvgen/drvgen.mk
+index 1234567..abcdefg 100644
+--- a/scripts/drvgen/drvgen.mk
++++ b/scripts/drvgen/drvgen.mk
+@@ -29,6 +29,10 @@ endif
+ DRVGEN_FILE_LIST :=
+ endif
+ DRVGEN_TOOL := $(srctree)/tools/dct/DrvGen.py
++
++# Explicit rule to prevent tools/% pattern from matching DrvGen.py
++$(DRVGEN_TOOL): ;
++
+
+ .PHONY: drvgen
+ drvgen: $(DRVGEN_FILE_LIST)

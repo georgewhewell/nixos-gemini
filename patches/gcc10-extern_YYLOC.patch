@@ -1,0 +1,46 @@
+From: various
+Subject: Fix multiple definition of yylloc for GCC 10+
+
+GCC 10 changed the default to -fno-common, which causes multiple
+definition errors for global variables defined in multiple translation
+units. Fix by making yylloc extern where it's not the primary definition.
+
+diff --git a/scripts/dtc/dtc-lexer.l b/scripts/dtc/dtc-lexer.l
+index 0ee1caf1a..a8f6faf0a 100644
+--- a/scripts/dtc/dtc-lexer.l
++++ b/scripts/dtc/dtc-lexer.l
+@@ -39,7 +39,7 @@ LINECOMMENT	"//".*\n
+ #include "srcpos.h"
+ #include "dtc-parser.tab.h"
+
+-YYLTYPE yylloc;
++extern YYLTYPE yylloc;
+
+ /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
+ #define	YY_USER_ACTION \
+diff --git a/scripts/dtc/dtc-lexer.lex.c_shipped b/scripts/dtc/dtc-lexer.lex.c_shipped
+index 011bb9a9f..d091fab02 100644
+--- a/scripts/dtc/dtc-lexer.lex.c_shipped
++++ b/scripts/dtc/dtc-lexer.lex.c_shipped
+@@ -637,7 +637,7 @@ char *yytext;
+ #include "srcpos.h"
+ #include "dtc-parser.tab.h"
+
+-YYLTYPE yylloc;
++extern YYLTYPE yylloc;
+
+ /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
+ #define	YY_USER_ACTION \
+diff --git a/scripts/dtc/dtc-parser.y b/scripts/dtc/dtc-parser.y
+index f412460a2..87c2ccfdd 100644
+--- a/scripts/dtc/dtc-parser.y
++++ b/scripts/dtc/dtc-parser.y
+@@ -24,7 +24,7 @@ extern void yyerror(char const *s);
+ #define ERROR(loc, ...) \
+ 	srcpos_error((loc), "Error", __VA_ARGS__);
+
+-YYLTYPE yylloc;
++extern YYLTYPE yylloc;
+
+ extern struct boot_info *the_boot_info;
+ extern bool treesource_error;

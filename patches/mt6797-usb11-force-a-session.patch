@@ -1,0 +1,94 @@
+From: Gemini Mainline Maintainers <gemini-mainline@example.invalid>
+Date: Sat, 29 Aug 2026 22:10:00 +0200
+Subject: [PATCH] phy: mediatek: tphy: support forced A-device session
+
+The Gemini MT6797 USB11 host PHY receives board VBUS from the shared
+port supply, but its hardware session sensing path does not assert the
+signals consumed by MUSB.  The vendor USB11 power-on sequence forces
+VBUSVALID, SESSEND, BVALID, AVALID and IDDIG, then supplies the A-device
+values (VBUSVALID/AVALID/BVALID set, SESSEND/IDDIG clear).
+
+Add an opt-in counterpart to the existing forced B-device property.  Keep
+it disabled for every existing board and apply it only to the fixed-host
+Gemini USB11 PHY.
+
+Signed-off-by: Gemini Mainline Maintainers <gemini-mainline@example.invalid>
+---
+ .../bindings/phy/mediatek,tphy.yaml           |  7 +++++++
+ drivers/phy/mediatek/phy-mtk-tphy.c           | 15 +++++++++++++++
+ 2 files changed, 22 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml b/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
+index 16afd2f..5d923de 100644
+--- a/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
++++ b/Documentation/devicetree/bindings/phy/mediatek,tphy.yaml
+@@ -255,6 +255,13 @@ patternProperties:
+           by platform firmware rather than sensed by the PHY hardware.
+         type: boolean
+ 
++      mediatek,force-a-session-valid:
++        description:
++          Force the USB2 PHY session signals to a valid A-device state. This
++          is required on fixed-host platforms where the board supplies VBUS
++          but the PHY hardware sensing path does not report a valid session.
++        type: boolean
++
+       mediatek,force-mode:
+         description:
+           The force mode is used to manually switch the shared phy mode between
+diff --git a/drivers/phy/mediatek/phy-mtk-tphy.c b/drivers/phy/mediatek/phy-mtk-tphy.c
+index 41025a3..82ca738 100644
+--- a/drivers/phy/mediatek/phy-mtk-tphy.c
++++ b/drivers/phy/mediatek/phy-mtk-tphy.c
+@@ -127,6 +127,8 @@
+ #define P2C_RG_SESS_VALID_MSK \
+ 		(P2C_RG_VBUSVALID | P2C_RG_BVALID | \
+ 		 P2C_RG_AVALID | P2C_RG_IDDIG)
++#define P2C_RG_A_SESS_VALID_MSK \
++		(P2C_RG_VBUSVALID | P2C_RG_BVALID | P2C_RG_AVALID)
+ 
+ #define U3P_U2PHYBC12C		0x080
+ #define P2C_RG_CHGDT_EN		BIT(0)
+@@ -345,6 +347,7 @@ struct mtk_phy_instance {
+ 	int pre_emphasis;
+ 	bool bc12_en;
+ 	bool force_b_session_valid;
++	bool force_a_session_valid;
+ 	bool type_force_mode;
+ };
+ 
+@@ -894,6 +897,13 @@ static void u2_phy_instance_power_on(struct mtk_tphy *tphy,
+ 				 P2C_FORCE_SESS_MSK | P2C_RG_SESS_VALID_MSK);
+ 		dev_info(tphy->dev,
+ 			 "u2 phy%d: forcing valid B-device session\n", index);
++	} else if (instance->force_a_session_valid) {
++		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
++				   P2C_RG_SESSEND | P2C_RG_IDDIG);
++		mtk_phy_set_bits(com + U3P_U2PHYDTM1,
++				 P2C_FORCE_SESS_MSK | P2C_RG_A_SESS_VALID_MSK);
++		dev_info(tphy->dev,
++			 "u2 phy%d: forcing valid A-device session\n", index);
+ 	}
+ 
+ 	if (tphy->pdata->avoid_rx_sen_degradation && index) {
+@@ -920,6 +930,9 @@ static void u2_phy_instance_power_off(struct mtk_tphy *tphy,
+ 	if (instance->force_b_session_valid)
+ 		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
+ 				   P2C_FORCE_SESS_MSK | P2C_RG_SESS_VALID_MSK);
++	else if (instance->force_a_session_valid)
++		mtk_phy_clear_bits(com + U3P_U2PHYDTM1,
++				   P2C_FORCE_SESS_MSK | P2C_RG_A_SESS_VALID_MSK);
+ 
+ 	if (tphy->pdata->avoid_rx_sen_degradation && index) {
+ 		mtk_phy_clear_bits(com + U3P_U2PHYDTM0, P2C_RG_SUSPENDM | P2C_FORCE_SUSPENDM);
+@@ -1156,6 +1169,8 @@ static void phy_parse_property(struct mtk_tphy *tphy,
+ 	instance->bc12_en = device_property_read_bool(dev, "mediatek,bc12");
+ 	instance->force_b_session_valid = device_property_read_bool(dev,
+ 						"mediatek,force-b-session-valid");
++	instance->force_a_session_valid = device_property_read_bool(dev,
++						"mediatek,force-a-session-valid");
+ 	device_property_read_u32(dev, "mediatek,eye-src",
+ 				 &instance->eye_src);
+ 	device_property_read_u32(dev, "mediatek,eye-vrt",
+-- 
+2.51.0

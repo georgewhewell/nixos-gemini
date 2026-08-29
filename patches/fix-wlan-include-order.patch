@@ -1,0 +1,12 @@
+--- a/drivers/misc/mediatek/connectivity/wlan/gen3/os/linux/include/gl_os.h
++++ b/drivers/misc/mediatek/connectivity/wlan/gen3/os/linux/include/gl_os.h
+@@ -28,6 +28,9 @@
+ #ifndef _GL_OS_H
+ #define _GL_OS_H
+ 
++/* debug.h must be included first for DBG_MODULE_NUM enum */
++#include "../../../include/debug.h"
++
+ /*******************************************************************************
+ *                         C O M P I L E R   F L A G S
+ ********************************************************************************

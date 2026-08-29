@@ -1,0 +1,98 @@
+{
+  "nodes": {
+    "ixoo-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787012577,
+        "narHash": "sha256-D2BIXZd44i7iDJWwGmG3uoqnvMfVWM2fnExkLoYxt/g=",
+        "owner": "ixoo",
+        "repo": "gemini-pda-mainline",
+        "rev": "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ixoo",
+        "repo": "gemini-pda-mainline",
+        "rev": "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a",
+        "type": "github"
+      }
+    },
+    "ixoo-kernel": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787011291,
+        "narHash": "sha256-CzEBGiBJ/yyvaHbd+dj7EeEN3787deO8fCOXVvP7OmY=",
+        "owner": "ixoo",
+        "repo": "gemini-pda-mainline",
+        "rev": "7199e8229c6a805a941e33a6862956949dfebd3a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ixoo",
+        "repo": "gemini-pda-mainline",
+        "rev": "7199e8229c6a805a941e33a6862956949dfebd3a",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1787736819,
+        "narHash": "sha256-cV5xEJJK3BvhU8rEd4mC9UsmDi5qscv/kzGPhBRC5WA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "9fbb54b33e91ee4ca368e35a78e0613c720600b3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-old": {
+      "locked": {
+        "lastModified": 1704290814,
+        "narHash": "sha256-LWvKHp7kGxk/GEtlrGYV68qIvPHkU9iToomNFGagixU=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "70bdadeb94ffc8806c0570eb5c2695ad29f0e421",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-23.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "ixoo-candidate": "ixoo-candidate",
+        "ixoo-kernel": "ixoo-kernel",
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-old": "nixpkgs-old",
+        "vendor-kernel": "vendor-kernel"
+      }
+    },
+    "vendor-kernel": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1553722291,
+        "narHash": "sha256-Hd/XqCdePVRW/cAB8zEQpJUUFimEIjhQLnRN3CPaLh0=",
+        "owner": "gemian",
+        "repo": "gemini-linux-kernel-3.18",
+        "rev": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gemian",
+        "repo": "gemini-linux-kernel-3.18",
+        "rev": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
