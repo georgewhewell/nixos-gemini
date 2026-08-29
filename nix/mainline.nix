@@ -3,6 +3,7 @@
   oldPkgs,
   crossPkgs,
   ixoo-kernel,
+  linux-gemini,
   ixoo-candidate,
   debugOverlay ? true,
   storageOverlay ? false,
@@ -12,24 +13,12 @@
 }: let
   lib = buildPkgs.lib;
 
-  kernelRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
+  kernelRevision = "b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2";
+  ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
   ixooManifest = builtins.fromJSON (builtins.readFile (ixoo-kernel + "/kernel/manifest.json"));
   profileDefinition = ixooManifest.config.profiles.${profile};
-
-  # Keep ixoo's canonical series authoritative.  The selected revision has a
-  # single series for this profile; comments and blank lines are not patches.
-  seriesLines = lib.splitString "\n" (builtins.readFile (ixoo-kernel + "/patches/series"));
-  patchNames = builtins.filter (line: line != "" && !(lib.hasPrefix "#" line)) seriesLines;
-  patchFiles = map (name: ixoo-kernel + "/patches/${name}") patchNames;
-  localPatchFiles =
-    lib.optionals usbHostOverlay [
-      ../patches/mt6797-usb11-force-a-session.patch
-      ../patches/mt6797-usb11-multipoint.patch
-      ../patches/fusb301-vbus-supply.patch
-    ];
-  allPatchFiles = patchFiles ++ localPatchFiles;
 
   profileFragments = assert ixooManifest.architecture == "arm64";
   assert ixooManifest.kernel.version == "7.1.3";
@@ -70,11 +59,6 @@
     + lib.optionalString usbHostOverlay "-usb11-host";
   shellWords = paths: lib.concatMapStringsSep " " lib.escapeShellArg paths;
 
-  linuxSource = buildPkgs.fetchurl {
-    url = "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.3.tar.xz";
-    hash = "sha256-vkHAaOiPUkKhm8zb/74HexjEe0X2J+IyVQS0+red0dw=";
-  };
-
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
@@ -86,7 +70,7 @@
       + lib.optionalString storageOverlay "-emmc-probe"
       + lib.optionalString usbHostOverlay "-usb11-host";
     version = "7.1.3";
-    src = linuxSource;
+    src = linux-gemini;
     # Kbuild is not userspace.  The modern stdenv exposed stack-clash and
     # zero-call-used-register policy to the compiler wrapper, unlike ixoo's
     # plain GCC 12.2 build.  Eliminate that uncontrolled input and let the
@@ -118,17 +102,6 @@
       ++ [gcc12Cross];
     depsBuildBuild = [buildPkgs.stdenv.cc];
 
-    patchPhase = ''
-      runHook prePatch
-      git init --quiet
-      for patchFile in ${shellWords allPatchFiles}; do
-        echo "applying ''${patchFile##*/}"
-        git apply --check --unidiff-zero "$patchFile"
-        git apply --unidiff-zero "$patchFile"
-      done
-      runHook postPatch
-    '';
-
     configurePhase = ''
       runHook preConfigure
       export SOURCE_DATE_EPOCH=1783123200
@@ -157,6 +130,9 @@
       grep -Fqx '# CONFIG_USB_GADGETFS is not set' .config
       grep -Fqx '# CONFIG_USB_MASS_STORAGE is not set' .config
       ! grep -q '^CONFIG_USB_STORAGE=' .config
+      grep -Eq '^[[:space:]]*\.multipoint = true,$' drivers/usb/musb/mediatek.c
+      grep -Fq 'mediatek,force-a-session-valid' drivers/phy/mediatek/phy-mtk-tphy.c
+      grep -Fq 'devm_regulator_get_optional(dev, "vbus")' drivers/usb/typec/fusb301.c
       ${
         if usbHostOverlay
         then ''
@@ -250,18 +226,13 @@
 
       {
         echo "source-version=7.1.3"
-        echo "ixoo-kernel-revision=${kernelRevision}"
+        echo "linux-gemini-revision=${kernelRevision}"
+        echo "ixoo-baseline-revision=${ixooRevision}"
         echo "ixoo-candidate-revision=${candidateRevision}"
         echo "ixoo-profile=${profile}"
         echo "nix-debug-overlay=${overlayLabel}"
         echo "nix-hardening=disabled-all"
-        echo "patch-count=${toString (builtins.length patchFiles)}"
-        echo "local-patch-count=${toString (builtins.length localPatchFiles)}"
-        ${lib.optionalString usbHostOverlay ''
-          echo "local-usb11-force-a-session-patch-sha256=$(sha256sum ${../patches/mt6797-usb11-force-a-session.patch} | cut -d' ' -f1)"
-          echo "local-usb11-multipoint-patch-sha256=$(sha256sum ${../patches/mt6797-usb11-multipoint.patch} | cut -d' ' -f1)"
-          echo "local-fusb301-vbus-supply-patch-sha256=$(sha256sum ${../patches/fusb301-vbus-supply.patch} | cut -d' ' -f1)"
-        ''}
+        echo "source-patch-mode=preapplied-git-tree"
         echo "ixoo-patchset-sha256=ac1e5da43d6694178058c8a623405b2c53d8bd2782d5f1d3a23e05368dc18ae8"
         echo "ixoo-hardware-image-sha256=c5d73e077165f0f22b0d8ff109661edc29763c12f4ed6fbd64b2d0fef910e1cc"
         echo "ixoo-hardware-image-gz-sha256=086d109464533194abed2c19fa56e647033edd957dafb2ee2512acd3100ed9f1"
@@ -688,7 +659,8 @@
     ln -s ${probeBootImg} "$out/probe-raw.boot.img"
     ln -s ${probeBoot2Img} "$out/probe-padded-boot2.img"
     {
-      echo "ixoo-kernel-revision=${kernelRevision}"
+      echo "linux-gemini-revision=${kernelRevision}"
+      echo "ixoo-baseline-revision=${ixooRevision}"
       echo "ixoo-candidate-revision=${candidateRevision}"
       echo "ixoo-profile=${profile}"
       echo "nix-debug-overlay=${overlayLabel}"

@@ -20,6 +20,12 @@
       url = "github:ixoo/gemini-pda-mainline/7199e8229c6a805a941e33a6862956949dfebd3a";
       flake = false;
     };
+    linux-gemini = {
+      # Normal kernel source tree: Linux 7.1.3, ixoo's proven Gemini baseline,
+      # and our USB11 host changes committed directly on top.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-v7.1.3&rev=b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -34,6 +40,7 @@
     nixpkgs-old,
     vendor-kernel,
     ixoo-kernel,
+    linux-gemini,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -293,6 +300,7 @@
         oldPkgs
         crossPkgs
         ixoo-kernel
+        linux-gemini
         ixoo-candidate
         ;
     };
@@ -307,6 +315,7 @@
         oldPkgs
         crossPkgs
         ixoo-kernel
+        linux-gemini
         ixoo-candidate
         ;
       debugOverlay = false;
@@ -322,6 +331,7 @@
         oldPkgs
         crossPkgs
         ixoo-kernel
+        linux-gemini
         ixoo-candidate
         ;
       debugOverlay = true;
@@ -338,6 +348,7 @@
         oldPkgs
         crossPkgs
         ixoo-kernel
+        linux-gemini
         ixoo-candidate
         ;
       debugOverlay = true;
@@ -354,6 +365,7 @@
         oldPkgs
         crossPkgs
         ixoo-kernel
+        linux-gemini
         ixoo-candidate
         ;
       debugOverlay = true;

@@ -34,6 +34,24 @@
         "type": "github"
       }
     },
+    "linux-gemini": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788039401,
+        "narHash": "sha256-15cn7cZ+36kC41DtVEL0LcQaputgmnnV+NARf65/4Ts=",
+        "ref": "gemini-v7.1.3",
+        "rev": "b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2",
+        "revCount": 5,
+        "type": "git",
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+      },
+      "original": {
+        "ref": "gemini-v7.1.3",
+        "rev": "b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2",
+        "type": "git",
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1787736819,
@@ -70,6 +88,7 @@
       "inputs": {
         "ixoo-candidate": "ixoo-candidate",
         "ixoo-kernel": "ixoo-kernel",
+        "linux-gemini": "linux-gemini",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
         "vendor-kernel": "vendor-kernel"
