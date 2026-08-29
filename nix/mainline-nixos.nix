@@ -11,7 +11,7 @@
   # Keep every proven userspace payload available for rollback. The v2
   # payload adds the normal system/network/USB diagnostics and is staged next
   # to, never over, the first successful read-only NixOS payload.
-  storeFileName = "mainline-nixos-zlib-v2.squashfs";
+  storeFileName = "mainline-nixos-connectivity-m0.squashfs";
 
   initramfs = buildPkgs.runCommand "gemini-mainline-nixos-initramfs.cpio.gz" {
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];

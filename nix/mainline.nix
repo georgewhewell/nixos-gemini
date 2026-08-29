@@ -13,7 +13,7 @@
 }: let
   lib = buildPkgs.lib;
 
-  kernelRevision = "b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2";
+  kernelRevision = "6191785e643cb6397255eb417342ede9ed7fdc3f";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -27,6 +27,7 @@
   fragmentFiles = map (name: ixoo-kernel + "/${name}") profileFragments;
   finalFragmentFiles =
     fragmentFiles
+    ++ [./mainline-connectivity-m0.fragment]
     ++ lib.optionals debugOverlay [./mainline-debug.fragment]
     ++ lib.optionals storageOverlay [
       (ixoo-kernel + "/configs/gemini-emmc-development.fragment")
@@ -121,6 +122,14 @@
       grep -Fqx 'CONFIG_NVMEM_MTK_ATAG_DEVINFO=y' .config
       grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
       grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
+      grep -Fqx 'CONFIG_MTK_STP=y' .config
+      ! grep -q '^CONFIG_MTK_STP_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
+      grep -A20 -F 'consys: consys@18070000 {' \
+        arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
+        | grep -Fq 'status = "disabled";'
+      ! grep -Rqs 'mediatek,mt6797-btif' arch/arm64/boot/dts/mediatek
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
       grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
       grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
@@ -214,10 +223,10 @@
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
-      # Device Tree output is compiler-independent and must match the exact
-      # ixoo package used by the successful hardware run.
+      # Device Tree output is compiler-independent and must match the reviewed
+      # M0 tree: ixoo's hardware-passed DT plus the disabled CONSYS inventory.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709
+        a004d7a83b2d0d6a1a07a5ebfce302d04f98112ccc1695a80f8391a14ab22e35
 
       if strings "$out/Image" | grep -Fq /nix/store/; then
         echo "Nix store path leaked into mainline Image" >&2
@@ -250,7 +259,9 @@
     dontPatchELF = true;
   };
 
-  # Reuse ixoo's frozen candidate DT transformation verbatim.  It enables the
+  # Reuse ixoo's frozen candidate DT transformation, changing only its exact
+  # input/output fingerprints for the reviewed disabled CONSYS inventory node.
+  # It enables the
   # hardware-passed USB peripheral, I2C5/AW9523 keyboard, watchdog-without-IRQ,
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
@@ -259,12 +270,23 @@
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
-      bash ${ixoo-candidate}/experiments/2026-08-17-mainline-da921x-readonly-provider-baseline/scripts/build-provider-dtb.sh \
+      cp -R ${ixoo-candidate} candidate
+      chmod -R u+w candidate
+      providerBuilder=candidate/experiments/2026-08-17-mainline-da921x-readonly-provider-baseline/scripts/build-provider-dtb.sh
+      substituteInPlace "$providerBuilder" \
+        --replace-fail \
+          'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
+          'BASE_DTB_SHA256=a004d7a83b2d0d6a1a07a5ebfce302d04f98112ccc1695a80f8391a14ab22e35' \
+        --replace-fail \
+          'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
+          'OUTPUT_DTB_SHA256=5373db46efda4dd61b32950972a35dd162ee3b3a322453197365d3e8a94a3d3c'
+      bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
         > "$out/VALIDATION"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-        d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48
+        5373db46efda4dd61b32950972a35dd162ee3b3a322453197365d3e8a94a3d3c
+      test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay
         then ''
@@ -293,6 +315,7 @@
           test "$(fdtget "$out/gemini.dtb" /usb@11271000 status)" = okay
           test "$(fdtget "$out/gemini.dtb" /usb@11271000 dr_mode)" = peripheral
           test "$(fdtget "$out/gemini.dtb" /usb@11271000/usb@11270000 status)" = disabled
+          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
           echo 'usb11-host-overlay=passed' >> "$out/VALIDATION"
           echo 'usb11-session=forced-valid-A-device-matching-vendor-sequence' >> "$out/VALIDATION"
           echo 'usb11-typec=i2c0-fusb301a-source-eint3' >> "$out/VALIDATION"

@@ -22,8 +22,8 @@
     };
     linux-gemini = {
       # Normal kernel source tree: Linux 7.1.3, ixoo's proven Gemini baseline,
-      # and our USB11 host changes committed directly on top.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-v7.1.3&rev=b7b420ea0f2c270a6fd6dddf6628e8ee3e0aa1d2";
+      # USB11 host support, and the hardware-inert connectivity M0 foundation.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-v7.1.3&rev=6191785e643cb6397255eb417342ede9ed7fdc3f";
       flake = false;
     };
     ixoo-candidate = {
