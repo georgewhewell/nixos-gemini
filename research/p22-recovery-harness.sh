@@ -86,6 +86,7 @@ PROOF_VALIDATED=no
 ROOTFS_POLICY=
 HOST_NET_POLICY=
 ACCEPTANCE_DEADLINE=
+HOST_NET_FALLBACK_ARMED=no
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -241,10 +242,48 @@ else
     LEASE_MARKER=$EXPECTED_MARKER
 fi
 
-device_ssh() {
+device_ssh_gadget() {
     ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
         -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
         -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+}
+
+device_ssh_right() {
+    ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 \
+        "root@$EXPECTED_ETHERNET_IP" "$@"
+}
+
+host_net_fallback_allowed() {
+    [ "$HOST_NET_FALLBACK_ARMED" = yes ] || return 1
+    [ "$HOST_NET_POLICY" = required ] || return 1
+    [ -n "${RUN_SHARED:-}" ] || return 1
+    identity=$(trex_ssh "cat '$RUN_SHARED/trex-host-net.state'" 2>/dev/null) || return 1
+    case "$identity" in
+        "identity=verified usb=0525:a4a2 mac=42:00:15:19:82:00 iface="*" epoch="[0-9]*) ;;
+        *) return 1 ;;
+    esac
+    epoch=${identity##* epoch=}
+    now=$(date +%s)
+    case "$epoch" in *[!0-9]*|'') return 1 ;; esac
+    [ "$epoch" -le "$now" ] || return 1
+    # The per-run marker is exact-MAC/USB-bound and short-lived.  Full remote
+    # candidate validation still requires the expected model, SHA, and the
+    # device's own host-net marker before acceptance.
+    [ $((now - epoch)) -le 300 ]
+}
+
+device_ssh() {
+    if device_ssh_gadget "$@"; then
+        return 0
+    else
+        gadget_rc=$?
+    fi
+    if host_net_fallback_allowed; then
+        device_ssh_right "$@"
+    else
+        return "$gadget_rc"
+    fi
 }
 
 trex_ssh() {
@@ -320,6 +359,12 @@ start_capture() {
     # shellcheck disable=SC2029
     trex_ssh "mkdir -p '$RUN_SHARED'; nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
     trex_scp "$ROOT/research/p22-flash-wrapper.sh" "trex:$RUN_SHARED/flash-wrapper.sh" >/dev/null
+    trex_scp "$ROOT/research/trex-gadget-net-watcher.sh" "trex:$RUN_SHARED/trex-gadget-net-watcher.sh" >/dev/null
+    # This watcher starts before Flash Tool/reboot and repairs only the exact
+    # Gemini gadget interface after each USB recreation.
+    # shellcheck disable=SC2029
+    trex_ssh "nohup setsid sh '$RUN_SHARED/trex-gadget-net-watcher.sh' '$RUN_SHARED/trex-host-net.log' '$RUN_SHARED/trex-host-net.state' </dev/null > '$RUN_SHARED/trex-host-net.log' 2>&1 & echo \$! > '$RUN_SHARED/host-net.pid'"
+    HOST_NET_FALLBACK_ARMED=yes
 }
 
 stop_capture() {
@@ -538,7 +583,7 @@ wait_ssh_down() {
 request_reboot() {
     printf 'reboot-dispatch begin=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
     set +e
-    device_ssh 'if command -v systemctl >/dev/null 2>&1; then echo reboot-path=systemd; systemctl reboot --no-wall; elif [ -x /bin/reboot ]; then echo reboot-path=busybox; /bin/reboot -f; else echo reboot-path=missing; exit 127; fi' >> "$RUN_LOCAL/reboot.log" 2>&1
+    device_ssh_gadget 'if command -v systemctl >/dev/null 2>&1; then echo reboot-path=systemd; systemctl reboot --no-wall; elif [ -x /bin/reboot ]; then echo reboot-path=busybox; /bin/reboot -f; else echo reboot-path=missing; exit 127; fi' >> "$RUN_LOCAL/reboot.log" 2>&1
     dispatch_rc=$?
     set -e
     printf 'reboot-dispatch rc=%s\n' "$dispatch_rc" >> "$RUN_LOCAL/reboot.log"

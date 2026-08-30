@@ -672,3 +672,30 @@ firmware upgrade was issued.  All harness, wrapper, probe-capture, and Flash
 Tool processes from this run exited; unrelated pre-existing Trex monitors were
 not disturbed.  Further progress requires the explicitly reported manual
 network/reset intervention and a fresh read-only invariant check.
+
+## Host-plane repair and recovered readback: 2026-08-30
+
+After the stopped attempt, root restored access over the proven right NIC and
+independently re-read the device.  The recovered exact values are p22
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+These are readback evidence after recovery; they do not change the stopped
+phase verdict above.
+
+The next p22 transaction now owns
+`research/trex-gadget-net-watcher.sh`.  Before any Flash Tool/reboot, it
+requires both Trex USB identity `0525:a4a2` and the exact gadget MAC
+`42:00:15:19:82:00`, resolves only that interface, and uses noninteractive
+sudo to restore link UP and `10.15.19.81/24`.  It publishes a short-lived,
+per-run identity marker and logs every action.  Harness cleanup kills its
+run-specific PID.  Read-only right-NIC SSH fallback is enabled only after
+that exact marker is armed and remains subject to the candidate's full
+model/SHA/cmdline/host-net acceptance checks; reboot dispatch remains gadget
+only.  A current Stage-A logical link-down/up cycle passed, restoring the
+exact gadget address without reboot or flash.
+
+The old `a0bc87d...` artifact and manifest remain immutable and will not be
+rerun.  A rebuilt v2 candidate with `CONFIG_WATCHDOG_OPEN_TIMEOUT=90` is being
+reviewed separately; its new manifest/runner identity and acceptance/lease
+values are outside this watcher commit.
