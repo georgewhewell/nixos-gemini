@@ -85,12 +85,16 @@ P22_WRITE_MARKER=no
 PROOF_VALIDATED=no
 ROOTFS_POLICY=
 HOST_NET_POLICY=
+SSH_PATH_POLICY=
+POWER_PREFLIGHT_POLICY=
+TRANSACTION_POLICY=
 ACCEPTANCE_DEADLINE=
 HOST_NET_FALLBACK_ARMED=no
 CANDIDATE_HOSTKEY_MODE=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
 ACCEPTANCE_COMMITTED=no
+ATTEMPT_COUNTER=0
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -126,6 +130,9 @@ load_manifest() {
             expected_watchdog_timeout) [ -z "$EXPECTED_WATCHDOG_TIMEOUT" ] || die "duplicate expected_watchdog_timeout"; EXPECTED_WATCHDOG_TIMEOUT=$value ;;
             rootfs_policy) [ -z "$ROOTFS_POLICY" ] || die "duplicate rootfs_policy"; ROOTFS_POLICY=$value ;;
             host_net_policy) [ -z "$HOST_NET_POLICY" ] || die "duplicate host_net_policy"; HOST_NET_POLICY=$value ;;
+            ssh_path_policy) [ -z "$SSH_PATH_POLICY" ] || die "duplicate ssh_path_policy"; SSH_PATH_POLICY=$value ;;
+            power_preflight_policy) [ -z "$POWER_PREFLIGHT_POLICY" ] || die "duplicate power_preflight_policy"; POWER_PREFLIGHT_POLICY=$value ;;
+            transaction_policy) [ -z "$TRANSACTION_POLICY" ] || die "duplicate transaction_policy"; TRANSACTION_POLICY=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
     done < "$MANIFEST"
@@ -174,6 +181,9 @@ require_manifest() {
     case "$FEATURE_POLICY" in connectivity-no-radio|allow-platform) ;; *) die "unknown feature_policy" ;; esac
     case "$ROOTFS_POLICY" in nixos-stage2|enumeration-only) ;; *) die "unknown rootfs_policy" ;; esac
     case "$HOST_NET_POLICY" in none|required) ;; *) die "unknown host_net_policy" ;; esac
+    case "$SSH_PATH_POLICY" in fallback|both) ;; *) die "unknown ssh_path_policy" ;; esac
+    case "$POWER_PREFLIGHT_POLICY" in none|required) ;; *) die "unknown power_preflight_policy" ;; esac
+    case "$TRANSACTION_POLICY" in persistent-acceptance|observe-always-rollback) ;; *) die "unknown transaction_policy" ;; esac
     case "$WATCHDOG_PROFILE" in
         none)
             [ -z "$EXPECTED_WATCHDOG_IDENTITY$EXPECTED_WATCHDOG_STATE$EXPECTED_WATCHDOG_TIMEOUT" ] || die "watchdog fields are forbidden for watchdog_profile=none" ;;
@@ -233,11 +243,18 @@ require_manifest() {
 
 load_manifest
 [ -n "$HOST_NET_POLICY" ] || HOST_NET_POLICY=none
+[ -n "$SSH_PATH_POLICY" ] || SSH_PATH_POLICY=fallback
+[ -n "$POWER_PREFLIGHT_POLICY" ] || POWER_PREFLIGHT_POLICY=none
+[ -n "$TRANSACTION_POLICY" ] || TRANSACTION_POLICY=persistent-acceptance
 require_manifest
 
 if [ "$PROOF_LEASE" = yes ]; then
     [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
     [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "--proof-lease requires initramfs-petter manifest"
+fi
+if [ "$MODE" = --execute ] && [ "$TRANSACTION_POLICY" = observe-always-rollback ] &&
+    [ "$PROOF_LEASE" != yes ]; then
+    die "observe-always-rollback requires --proof-lease; persistent acceptance is disabled"
 fi
 
 if [ "$WATCHDOG_PROFILE" = initramfs-petter ]; then
@@ -438,7 +455,7 @@ stop_tool() {
     # shellcheck disable=SC2029
     trex_ssh "
 pid=; pgid=
-case \"\$(cat '$RUN_SHARED/state' 2>/dev/null || true)\" in
+case \"\$(cat '$STATE' 2>/dev/null || true)\" in
   flash_rc=*) exit 0 ;;
 esac
 test -s '$RUN_SHARED/tool.pid' && pid=\$(cat '$RUN_SHARED/tool.pid') || true
@@ -477,11 +494,12 @@ cleanup() {
 }
 
 wait_state() {
-    wanted=$1
-    limit=$2
+    state_file=$1
+    wanted=$2
+    limit=$3
     i=0
     while [ "$i" -lt "$limit" ]; do
-        state=$(cat "$STATE" 2>/dev/null || true)
+        state=$(cat "$state_file" 2>/dev/null || true)
         case "$state" in
             "$wanted"*) return 0 ;;
             flash_rc=*) return 1 ;;
@@ -522,6 +540,27 @@ case \"$ROOTFS_POLICY\" in
       test \"\$(date +%s)\" -lt \"\$accept_deadline\" || exit 1
       sleep 1
     done ;;
+  *) exit 1 ;;
+esac
+case \"$POWER_PREFLIGHT_POLICY\" in
+  required)
+    while ! test -s /run/bq2589x-preflight.pass; do
+      test ! -e /run/bq2589x-preflight.fail || exit 1
+      test \"\$(date +%s)\" -lt \"\$accept_deadline\" || exit 1
+      sleep 1
+    done
+    grep -Fqx 'result=pass watchdog_lease=unchanged remote_review_required=yes' \
+      /run/bq2589x-preflight.pass
+    grep -Fq 'GEMINI_BQ2589X_PREFLIGHT: result=pass watchdog_lease=unchanged remote_review_required=yes' \
+      /run/bq2589x-preflight.status
+    echo '--- bq2589x-preflight.status ---'
+    cat /run/bq2589x-preflight.status
+    echo '--- bq2589x-preflight.dmesg ---'
+    cat /run/bq2589x-preflight.dmesg
+    echo '--- bq2589x-preflight.pass ---'
+    cat /run/bq2589x-preflight.pass
+    ;;
+  none) : ;;
   *) exit 1 ;;
 esac
 grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
@@ -567,24 +606,47 @@ if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
   owner_device=\$(for fd in /proc/\$watchdog_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
   test -n \"\$owner_device\"
 fi
-# Proof mode validates the candidate but deliberately leaves this lease file
-# absent; normal acceptance sets P22_WRITE_MARKER=yes only after every check.
-if [ \"$P22_WRITE_MARKER\" = yes ]; then
+# The caller keeps validation marker-free and commits the lease separately
+# after every required SSH path succeeds.
+fi" > "$RUN_LOCAL/candidate-validation.log" 2>&1
+}
+
+commit_acceptance_marker() {
+    device_ssh "set -eu
 accept_tmp=/run/unattended-recovery.accepted.tmp.\$\$
 printf '%s\\n' \"$LEASE_MARKER\" > \"\$accept_tmp\"
 mv -f \"\$accept_tmp\" /run/unattended-recovery.accepted
-test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\"
-fi"
+test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\""
+}
+
+validate_candidate_right_path() {
+    [ "$SSH_PATH_POLICY" = both ] || return 0
+    # The gadget path performs the full profile validation.  This independent
+    # right-NIC session proves the second SSH transport reaches the same exact
+    # candidate before the lease marker is committed.
+    device_ssh_right "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
+grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
+grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
+test -s /run/probe-status"
 }
 
 accept_candidate_until_deadline() {
+    marker_requested=$P22_WRITE_MARKER
+    # Candidate validation is always marker-free.  Marker creation is a
+    # separate commit after every required SSH path has passed.
+    P22_WRITE_MARKER=no
     ACCEPTANCE_DEADLINE=$(( $(date +%s) + ACCEPTANCE_WINDOW_SECONDS ))
     while [ "$(date +%s)" -lt "$ACCEPTANCE_DEADLINE" ]; do
-        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1 && validate_candidate; then
-            if [ "$P22_WRITE_MARKER" = yes ]; then
-                # validate_candidate writes the lease marker only after every
-                # invariant, including p22/p30/p31 hashes, has passed.
+        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1 &&
+            validate_candidate && validate_candidate_right_path; then
+            if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
                 ACCEPTANCE_COMMITTED=yes
+            elif [ "$marker_requested" = yes ]; then
+                continue
             fi
             return 0
         fi
@@ -595,11 +657,15 @@ accept_candidate_until_deadline() {
 
 start_tool() {
     log=$1
+    ATTEMPT_COUNTER=$((ATTEMPT_COUNTER + 1))
+    attempt_tag=$(date +%s)-$$-$ATTEMPT_COUNTER
+    attempt_state=$RUN_SHARED/flash-attempt-$attempt_tag.state
+    STATE=$attempt_state
     # A private session lets cleanup terminate timeout, sudo, and flash_tool
     # together.  The wrapper publishes its actual PID/PGID after launch.
     # shellcheck disable=SC2029
     trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/launch.pid'"
-    if wait_state tool_started 20; then
+    if wait_state "$STATE" tool_started 20; then
         return 0
     fi
     # A fast tool failure is still a valid transaction state: let the caller
@@ -645,7 +711,7 @@ recover() {
     # Never launch a second Flash Tool while the candidate wrapper might still
     # own the USB port. The extra ten seconds avoids an exact timeout race;
     # failure here is a manual boundary, not an unsafe concurrent retry.
-    if ! wait_state flash_rc 250; then
+    if ! wait_state "$STATE" flash_rc 250; then
         printf 'recovery_blocked_candidate_tool_timeout %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
     fi
@@ -664,7 +730,7 @@ recover() {
             return 1
         fi
     fi
-    if ! wait_state flash_rc 250; then
+    if ! wait_state "$STATE" flash_rc 250; then
         printf 'manual_reset_required_no_preloader %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
     fi

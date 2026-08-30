@@ -75,7 +75,45 @@ test_post_marker_failure_does_not_recover() {
     test ! -e "$TEST_ROOT/recover-called"
 }
 
+test_stale_attempt_state_not_reused() {
+    sed -n '/^wait_state() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/wait-state-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/wait-state-function.sh"
+    stale=$TEST_ROOT/stale.state
+    fresh=$TEST_ROOT/fresh.state
+    printf '%s\n' 'flash_rc=0 old-attempt' > "$stale"
+    printf '%s\n' 'tool_started new-attempt' > "$fresh"
+    set +e
+    wait_state "$stale" flash_rc 1
+    stale_rc=$?
+    set -e
+    test "$stale_rc" -eq 0
+    set +e
+    wait_state "$stale" tool_started 1
+    stale_tool_rc=$?
+    set -e
+    test "$stale_tool_rc" -ne 0
+    (sleep 1; printf '%s\n' 'flash_rc=0 new-attempt' > "$fresh") &
+    wait_state "$fresh" flash_rc 3
+    test "$stale" != "$fresh"
+}
+
+test_observe_policy_disables_persistent_execute() {
+    set +e
+    "$HARNESS" --manifest \
+        "$ROOT/research/p22-unattended-recovery-power-preflight-v1.manifest" \
+        --execute > "$TEST_ROOT/observe-policy.log" 2>&1
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    grep -Fq 'observe-always-rollback requires --proof-lease' \
+        "$TEST_ROOT/observe-policy.log"
+}
+
 test_ssh_timeout
 test_duplicate_flash_tool_rejected
 test_post_marker_failure_does_not_recover
+test_stale_attempt_state_not_reused
+test_observe_policy_disables_persistent_execute
 echo 'p22-recovery-harness tests: passed'

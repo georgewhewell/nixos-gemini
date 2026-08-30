@@ -800,3 +800,34 @@ not claimed to cover a pre-MTK-watchdog-probe hang.
 A fake-SSH state-machine regression forces the post-marker final readback to
 fail and verifies that the accepted state is retained and `recover()` is not
 called.  The hanging-SSH and duplicate-owner regressions continue to pass.
+
+## Power-preflight v3 dry-run handoff: 2026-08-30
+
+The immutable build-only bundle is present at
+`artifacts/mainline-unattended-recovery-power-preflight-p22-v1` with padded
+p22 image SHA-256
+`2a0fe82213e5e549d12acde3a920427323ccd6d0458d59682b9847b7bf8f4802` and size
+16,777,216 bytes.  Its raw boot image is `173a067a69eda6b96c8c3395f727b9373a135040bb17289dc2d3aedff2ae0213`,
+initramfs is `41e215ef2563ca9c7ad68a37745f74cd038eb580635d7344e04bc50102048e2`,
+and final DT is `ee57546b97a42b22111e632113e9e409ad02ff75dc75c3aace9a9cf9eca7d773`.
+The artifact manifest records locked Linux source `1bb2a9863d9a1e6d59e513eddbec68e2866310cd`,
+platform baseline `7199e8229c6a805a941e33a6862956949dfebd3a`, and the read-only
+BQ2589x preflight observer.
+
+The dry-run handoff is
+`research/p22-unattended-recovery-power-preflight-v1.manifest`; its candidate
+is p22-only, rollback is the accepted Stage-A image
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, and it
+requires both gadget and right-NIC SSH, watchdog evidence, enumeration-only
+storage, and the exact BQ pass marker.  The harness dry-run passed at
+06:19:26 CEST while live p22/p30/p31 remained the exact Stage-A hashes and
+Trex had no Flash Tool.
+
+This manifest declares `transaction_policy=observe-always-rollback`:
+persistent acceptance is disabled, and `--execute` without `--proof-lease`
+fails before device contact.  An eventual reviewed proof run must validate and
+capture BQ/platform/watchdog evidence, arm the exact Stage-A p22 Download Only
+rollback before lease expiry, and verify recovery; it must never certify the
+power candidate.  The new per-attempt Flash Tool state paths prevent stale
+candidate `flash_rc=0` from satisfying rollback waits.  No v3 flash, reboot,
+erase, format, upgrade, p30 write, or p31 write has occurred.
