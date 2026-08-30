@@ -978,13 +978,18 @@ Trex transaction and supervisor units were subsequently absent.  The cycle is
 therefore a candidate-rejected, rescue-successful run with a harness timing
 diagnosis, not an unrecovered hardware state.
 
-Independent post-run audit found no BQ result to certify.  The candidate cpio
-contains `bin/bq2589x-preflight` with source shebang `#!/bin/sh`, but contains
-`bin/busybox` and no `bin/sh`; `/init` nevertheless launches that helper at
-initramfs startup.  No `GEMINI_BQ2589X_PREFLIGHT` line or pass/fail marker is
-therefore present in the preserved probe/pstore evidence.  A replacement must
-make the helper executable in this initramfs (for example, use the target
-BusyBox interpreter) and capture its actual status before any BQ conclusion.
+Independent post-run audit corrected the BQ interpretation.  Although the
+candidate cpio has no explicit `bin/sh`, `/init` runs
+`/bin/busybox --install -s /bin` before starting the helper, so the helper did
+execute.  The live pstore contains `GEMINI_BQ2589X_PREFLIGHT` start,
+`dmesg_relevant_errors=present`, and
+`result=fail reason=dmesg_i2c_or<<<RAM_RW>>>ror` at approximately 49 seconds.
+This is a fail-closed dmesg gate, not a BQ silicon identity failure: the old
+matcher falsely treated the successful I2C6 field
+`clock_validation_failures=0` as an error through its broad `i2c-mt65xx`/`fail`
+pattern.  The reviewed correction narrows matching to I2C0/charger context and
+resolves the dynamic `*-006b` adapter; the next run must capture the actual
+client/property result and pass marker.
 
 The host-net failure has independent kernel evidence: pstore records
 `mtk-tphy 11210000.t-phy` failing with `-EBUSY` while requesting
