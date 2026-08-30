@@ -13,6 +13,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 HARNESS=$ROOT/research/p22-recovery-harness.sh
 MANIFEST=$ROOT/research/p22-unattended-recovery-watchdog-hostnet-v2.manifest
 MODE=
+SSH_DEADLINE_SECONDS=15
 
 die() {
     echo "p22-chained-recovery-runner: $*" >&2
@@ -50,14 +51,16 @@ ROLLBACK_SHA=$(manifest_value rollback_sha256)
     die "manifest rollback is not accepted Stage A"
 
 device_ssh() {
-    ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-        -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+    timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
 }
 
 trex_ssh() {
-    ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 trex "$@"
+    timeout "$SSH_DEADLINE_SECONDS" ssh -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 trex "$@"
 }
 
 check_tool_idle() {

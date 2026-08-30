@@ -739,3 +739,45 @@ acceptance window is 80 seconds, still strictly shorter than the separate
 90-second initramfs lease.  `nix flake check --no-build`, the full Nix image
 build and the independent byte-contract checks passed; no v2 hardware action
 had occurred at this point.
+
+## Authorized v2 attempt and exact Stage-A recovery: 2026-08-30 05:51--05:58 CEST
+
+The reviewed v2 command was started once:
+
+```text
+research/p22-chained-recovery-runner.sh --manifest research/p22-unattended-recovery-watchdog-hostnet-v2.manifest --execute
+```
+
+The candidate Flash Tool transaction was boot-only Download Only and reported
+`[23] WRITE TO PARTITION [ boot ]`, `Download Succeeded`, and `flash_rc=0`.
+Trex captured the candidate USB disconnect, two `0e8d:2000` preloader windows,
+and subsequent `0525:a4a2` gadget enumeration.  Candidate acceptance stopped
+fail-closed because its per-boot Dropbear ED25519 host key differed from the
+stored key (`REMOTE HOST IDENTIFICATION HAS CHANGED`, fingerprint
+`SHA256:KIiyjPJnSwS/BW9PopIITtHRzeKS3H3OOqw0+vr0kmc`).  No acceptance marker
+was written and no candidate result was certified.
+
+The first interrupted harness left no Flash Tool owner.  An exact Stage-A
+rollback was then staged and armed before the next watchdog/preloader window;
+a duplicate emergency wrapper was detected and terminated before it acquired
+the USB port.  The surviving wrapper connected to BROM, uploaded DA, wrote
+only `[23] WRITE TO PARTITION [ boot ]`, reported `Download Succeeded`, and
+returned `flash_rc=0` at 05:58:09.  Its log is retained at
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-055149/manual-rollback-flash.log`.
+
+Post-recovery readback over both gadget and right-NIC SSH is exact: p22
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+The exact-MAC watcher was stopped after the tool exited; no Flash Tool remains.
+This is a recovered failed experiment, not a v2 acceptance.
+
+The harness now externally bounds every SSH/SCP child, permits the ephemeral
+candidate host-key policy only when fresh Trex state proves USB `0525:a4a2`,
+MAC `42:00:15:19:82:00`, and the exact interface marker, and restores strict
+host-key checking for preflight, reboot dispatch, and rollback.  A host-only
+regression uses a hanging fake SSH client to prove bounded exit, and a second
+fake client proves duplicate Flash Tool ownership is rejected.  `sh -n`,
+ShellCheck (only the pre-existing indirect-trap informational notices), and
+both regressions pass.  No further hardware action is authorized until root
+reviews the host-key fix.

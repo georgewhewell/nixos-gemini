@@ -87,6 +87,9 @@ ROOTFS_POLICY=
 HOST_NET_POLICY=
 ACCEPTANCE_DEADLINE=
 HOST_NET_FALLBACK_ARMED=no
+CANDIDATE_HOSTKEY_MODE=no
+SSH_DEADLINE_SECONDS=15
+SCP_DEADLINE_SECONDS=30
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -243,16 +246,33 @@ else
 fi
 
 device_ssh_gadget() {
-    ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-        -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+        timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
+    else
+        timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+    fi
 }
 
 device_ssh_right() {
-    ssh -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-        -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 \
-        "root@$EXPECTED_ETHERNET_IP" "$@"
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+        timeout "$SSH_DEADLINE_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null "root@$EXPECTED_ETHERNET_IP" "$@"
+    else
+        timeout "$SSH_DEADLINE_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 "root@$EXPECTED_ETHERNET_IP" "$@"
+    fi
 }
 
 host_net_fallback_allowed() {
@@ -274,6 +294,15 @@ host_net_fallback_allowed() {
     [ $((now - epoch)) -le 300 ]
 }
 
+candidate_hostkey_allowed() {
+    [ "$CANDIDATE_HOSTKEY_MODE" = yes ] || return 1
+    host_net_fallback_allowed || return 1
+    # The ephemeral host-key policy is permitted only while the exact Gemini
+    # USB gadget is physically enumerated and the exact-MAC watcher marker is
+    # fresh.  It is never used by preflight, reboot dispatch, or rollback.
+    trex_ssh 'lsusb -d 0525:a4a2 >/dev/null 2>&1'
+}
+
 device_ssh() {
     if device_ssh_gadget "$@"; then
         return 0
@@ -288,13 +317,15 @@ device_ssh() {
 }
 
 trex_ssh() {
-    ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 trex "$@"
+    timeout "$SSH_DEADLINE_SECONDS" ssh -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 trex "$@"
 }
 
 trex_scp() {
-    scp -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
-        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 "$@"
+    timeout "$SCP_DEADLINE_SECONDS" scp -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 "$@"
 }
 
 hash_size() {
@@ -597,6 +628,7 @@ request_reboot() {
 }
 
 recover() {
+    CANDIDATE_HOSTKEY_MODE=no
     printf 'candidate_acceptance_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     # Never launch a second Flash Tool while the candidate wrapper might still
     # own the USB port. The extra ten seconds avoids an exact timeout race;
@@ -656,6 +688,7 @@ if ! request_reboot; then
         exit $?
     fi
 fi
+CANDIDATE_HOSTKEY_MODE=yes
 if [ "$PROOF_LEASE" = yes ]; then
     # Deliberately do not write the acceptance marker. recover() starts the
     # rollback tool first, then waits for the candidate lease to kill its
