@@ -79,6 +79,8 @@ WATCHDOG_PROFILE=
 EXPECTED_WATCHDOG_IDENTITY=
 EXPECTED_WATCHDOG_STATE=
 EXPECTED_WATCHDOG_TIMEOUT=
+PROBE_CAPTURE_PID=
+P22_WRITE_MARKER=no
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -297,9 +299,32 @@ stop_capture() {
     ssh trex "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
 }
 
+start_probe_capture() {
+    proof_log=$RUN_LOCAL/probe-status-proof.log
+    (
+        while :; do
+            printf 'probe-status %s\n' "$(date -Is)"
+            if ! device_ssh 'cat /run/probe-status'; then
+                printf 'probe-status-disconnected %s\n' "$(date -Is)"
+                break
+            fi
+            sleep 3
+        done
+    ) > "$proof_log" 2>&1 &
+    PROBE_CAPTURE_PID=$!
+}
+
+stop_probe_capture() {
+    [ -n "${PROBE_CAPTURE_PID:-}" ] || return 0
+    kill "$PROBE_CAPTURE_PID" 2>/dev/null || true
+    wait "$PROBE_CAPTURE_PID" 2>/dev/null || true
+    PROBE_CAPTURE_PID=
+}
+
 cleanup() {
     rc=$?
     trap - EXIT INT TERM
+    stop_probe_capture
     stop_capture
     if [ "$rc" -ne 0 ] && [ -n "${RUN_LOCAL:-}" ] && [ -f "$RUN_LOCAL/state" ]; then
         case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
@@ -336,7 +361,7 @@ wait_ssh() {
     return 1
 }
 
-accept_candidate() {
+validate_candidate() {
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
@@ -371,10 +396,14 @@ if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
   owner_device=\$(for fd in /proc/\$watchdog_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
   test -n \"\$owner_device\"
 fi
+# Proof mode validates the candidate but deliberately leaves this lease file
+# absent; normal acceptance sets P22_WRITE_MARKER=yes only after every check.
+if [ \"$P22_WRITE_MARKER\" = yes ]; then
 accept_tmp=/run/unattended-recovery.accepted.tmp.\$\$
 printf '%s\\n' \"$LEASE_MARKER\" > \"\$accept_tmp\"
 mv -f \"\$accept_tmp\" /run/unattended-recovery.accepted
-test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\""
+test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\"
+fi"
 }
 
 start_tool() {
@@ -448,9 +477,13 @@ if [ "$PROOF_LEASE" = yes ]; then
     # Deliberately do not write the acceptance marker. recover() starts the
     # rollback tool first, then waits for the candidate lease to kill its
     # petter and expose the next watchdog/preloader window.
-    wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" || true
+    if wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && validate_candidate; then
+        start_probe_capture
+    else
+        printf 'proof_candidate_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    fi
     recover
-elif wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && accept_candidate; then
+elif wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && P22_WRITE_MARKER=yes validate_candidate; then
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
