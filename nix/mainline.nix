@@ -10,6 +10,7 @@
   sshAccess ? false,
   rootfsProbe ? false,
   usbHostOverlay ? false,
+  consysIdentityOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -38,7 +39,8 @@
     ++ lib.optionals storageOverlay [
       (ixoo-kernel + "/configs/gemini-emmc-development.fragment")
     ]
-    ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment];
+    ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
+    ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -59,11 +61,24 @@
     if usbHostOverlay
     then "right-port-usb11-musb-host-pio-multipoint-fusb301-vbus-rtl815x"
     else "none";
+  consysIdentityLabel =
+    if consysIdentityOverlay
+    then "bounded-0x0279-reset-held-v1"
+    else "none";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
     + lib.optionalString rootfsProbe "-p29-ro"
-    + lib.optionalString usbHostOverlay "-usb11-host";
+    + lib.optionalString usbHostOverlay "-usb11-host"
+    + lib.optionalString consysIdentityOverlay "-consys-identity";
+  baseDtbSha256 =
+    if consysIdentityOverlay
+    then "e6aa4b9d20360c260f313292be41f92df2deb8613ca6c665a9f045b6b4d880e7"
+    else "1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c";
+  serviceabilityBaseDtbSha256 =
+    if consysIdentityOverlay
+    then "753bf1fba79ac26c401a8d7de3482ea8c91041663ec19b2254aba909dc7d8297"
+    else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
@@ -73,7 +88,8 @@
       "linux-gemini-ixoo-lkro"
       + lib.optionalString (!debugOverlay) "-config-control"
       + lib.optionalString storageOverlay "-emmc-probe"
-      + lib.optionalString usbHostOverlay "-usb11-host";
+      + lib.optionalString usbHostOverlay "-usb11-host"
+      + lib.optionalString consysIdentityOverlay "-consys-identity";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -123,6 +139,10 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
+      ${lib.optionalString consysIdentityOverlay ''
+        bash scripts/config --set-str CMDLINE \
+          "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm mt6797_consys_live.identity_experiment=1"
+      ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
 
       test -z "''${NIX_HARDENING_ENABLE:-}"
@@ -138,6 +158,20 @@
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
+      ${
+        if consysIdentityOverlay
+        then ''
+          grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_LIVE=y' .config
+          grep -Fqx 'CONFIG_MFD_SYSCON=y' .config
+          grep -Fqx 'CONFIG_PM_GENERIC_DOMAINS=y' .config
+          grep -Fqx 'CONFIG_PM_GENERIC_DOMAINS_OF=y' .config
+          grep -Fqx 'CONFIG_REGULATOR_MT6351=y' .config
+          grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
+        ''
+        else ''
+          ! grep -q '^CONFIG_MTK_MT6797_CONSYS_LIVE=' .config
+        ''
+      }
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
@@ -206,7 +240,7 @@
         then ''
           grep -Fqx '# CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER is not set' .config
           grep -Fqx 'CONFIG_PSTORE_GEMINI_POST_RAMOOPS_CHECKPOINT=y' .config
-          grep -Fqx 'CONFIG_CMDLINE="console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"' .config
+          grep -Fqx 'CONFIG_CMDLINE="console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm${lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"}"' .config
         ''
         else ''
           grep -Fqx 'CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER=y' .config
@@ -238,13 +272,17 @@
       cp arch/arm64/boot/Image "$out/Image"
       cp arch/arm64/boot/Image.gz "$out/Image.gz"
       cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb "$out/base.dtb"
+      ${lib.optionalString consysIdentityOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
+          "$out/mt6797-gemini-consys-identity.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
       # Device Tree output is compiler-independent and must match the reviewed
       # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c
+        ${baseDtbSha256}
 
       if strings "$out/Image" | grep -Fq /nix/store/; then
         echo "Nix store path leaked into mainline Image" >&2
@@ -284,7 +322,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -294,16 +332,16 @@
       substituteInPlace "$providerBuilder" \
         --replace-fail \
           'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
-          'BASE_DTB_SHA256=1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c' \
+          'BASE_DTB_SHA256=${baseDtbSha256}' \
         --replace-fail \
           'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
-          'OUTPUT_DTB_SHA256=e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7'
+          'OUTPUT_DTB_SHA256=${serviceabilityBaseDtbSha256}'
       bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
         > "$out/VALIDATION"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-        e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7
+        ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay
@@ -313,27 +351,27 @@
             ${./mainline-usb11-host-overlay.dts}
           fdtoverlay \
             -i "$out/gemini-base.dtb" \
-            -o "$out/gemini.dtb" \
+            -o "$out/gemini-platform.dtb" \
             "$out/gemini-usb11-host.dtbo"
-          test "$(fdtget "$out/gemini.dtb" /t-phy@11210000 status)" = okay
-          test "$(fdtget "$out/gemini.dtb" /t-phy@11210000/usb-phy@11210800 status)" = okay
-          test "$(fdtget -t x "$out/gemini.dtb" /t-phy@11210000 reg)" = '0 11210000 0 800'
-          fdtget -p "$out/gemini.dtb" /t-phy@11210000/usb-phy@11210800 \
+          test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000 status)" = okay
+          test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 status)" = okay
+          test "$(fdtget -t x "$out/gemini-platform.dtb" /t-phy@11210000 reg)" = '0 11210000 0 800'
+          fdtget -p "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 \
             | grep -Fqx 'mediatek,force-a-session-valid'
-          test "$(fdtget "$out/gemini.dtb" /usb@11200000 status)" = okay
-          test "$(fdtget "$out/gemini.dtb" /usb@11200000 dr_mode)" = host
+          test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 status)" = okay
+          test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 dr_mode)" = host
           test "$(fdtget -t x "$out/gemini-base.dtb" /pinctrl@10005000 phandle)" = 9
-          test "$(fdtget "$out/gemini.dtb" /i2c@11007000 status)" = okay
-          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/typec@25 compatible)" = onsemi,fusb301a
-          test "$(fdtget -t x "$out/gemini.dtb" /i2c@11007000/typec@25 reg)" = 25
-          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/typec@25/connector power-role)" = source
-          fdtget -p "$out/gemini.dtb" /i2c@11007000/typec@25 \
+          test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000 status)" = okay
+          test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000/typec@25 compatible)" = onsemi,fusb301a
+          test "$(fdtget -t x "$out/gemini-platform.dtb" /i2c@11007000/typec@25 reg)" = 25
+          test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000/typec@25/connector power-role)" = source
+          fdtget -p "$out/gemini-platform.dtb" /i2c@11007000/typec@25 \
             | grep -Fqx 'vbus-supply'
-          test "$(fdtget "$out/gemini.dtb" /regulator-usb11-vbus regulator-name)" = usb11-vbus
-          test "$(fdtget "$out/gemini.dtb" /usb@11271000 status)" = okay
-          test "$(fdtget "$out/gemini.dtb" /usb@11271000 dr_mode)" = peripheral
-          test "$(fdtget "$out/gemini.dtb" /usb@11271000/usb@11270000 status)" = disabled
-          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
+          test "$(fdtget "$out/gemini-platform.dtb" /regulator-usb11-vbus regulator-name)" = usb11-vbus
+          test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000 status)" = okay
+          test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000 dr_mode)" = peripheral
+          test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000/usb@11270000 status)" = disabled
+          test "$(fdtget "$out/gemini-platform.dtb" /consys@18070000 status)" = disabled
           echo 'usb11-host-overlay=passed' >> "$out/VALIDATION"
           echo 'usb11-session=forced-valid-A-device-matching-vendor-sequence' >> "$out/VALIDATION"
           echo 'usb11-typec=i2c0-fusb301a-source-eint3' >> "$out/VALIDATION"
@@ -341,7 +379,35 @@
           echo 'usb11-route=gpio70-high-gpio71-low-gpio72-high-fixed-usb-mode' >> "$out/VALIDATION"
         ''
         else ''
-          cp "$out/gemini-base.dtb" "$out/gemini.dtb"
+          cp "$out/gemini-base.dtb" "$out/gemini-platform.dtb"
+        ''
+      }
+      ${
+        if consysIdentityOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini.dtb" \
+            ${kernel}/mt6797-gemini-consys-identity.dtbo
+          test "$(fdtget "$out/gemini.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-identity
+          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = okay
+          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+            | grep -Fqx 'mediatek,conn-power-domain'
+          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+            | grep -Fqx 'mediatek,infracfg'
+          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+            | grep -Fqx 'mediatek,spm'
+          ! fdtget "$out/gemini.dtb" /consys@18070000 power-domains \
+            >/dev/null 2>&1
+          test "$(sha256sum "$out/gemini-platform.dtb" | cut -d' ' -f1)" = \
+            9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff
+          test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
+            70c1b17ec8d5744ff5ac60bc7250c958dc99708e4afd463f632e45823ff1eeea
+          echo 'consys-identity-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else ''
+          cp "$out/gemini-platform.dtb" "$out/gemini.dtb"
         ''
       }
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
@@ -709,6 +775,7 @@
       echo "nix-access=${accessLabel}"
       echo "nix-rootfs-probe=${rootfsLabel}"
       echo "nix-usb-host=${usbHostLabel}"
+      echo "nix-consys-identity=${consysIdentityLabel}"
       echo "nix-hardening=disabled-all"
       echo "hardware-proof=ixoo-Buildbox-artifact-only"
       echo "nix-kernel-byte-match-ixoo=no"

@@ -374,6 +374,24 @@
       usbHostOverlay = true;
     };
 
+    # One-shot Stage-B image: preserve the booted storage/SSH/USB platform,
+    # then activate only the reset-held, bounded CONSYS identity overlay.
+    mainlineConsysIdentity = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysIdentityOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -805,6 +823,9 @@
       mainlineNixosSquashfs = mainlineNixosSquashfs;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
+      mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
+      mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
