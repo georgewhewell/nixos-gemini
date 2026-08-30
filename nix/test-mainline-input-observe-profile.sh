@@ -19,6 +19,9 @@ grep -Fqx '          test "$(fdtget "$out/gemini-input-observe.dtb" /i2c@1101100
 grep -Fqx '          ! fdtget -p "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 \' "$ROOT/nix/mainline.nix"
 grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' "$ROOT/nix/mainline-input-observe.fragment"
 grep -Fqx 'CONFIG_PINCTRL_AW9523=y' "$ROOT/nix/mainline-input-observe.fragment"
+grep -Fqx 'CONFIG_MTK_SCPSYS=y' "$ROOT/nix/mainline-platform-smoke.fragment"
+grep -Fqx '        grep -Fqx '\''CONFIG_MTK_SCPSYS=y'\'' .config' "$ROOT/nix/mainline.nix"
+grep -Fqx 'CONFIG_MTK_SCPSYS=y' "$ROOT/nix/mainline-consys-identity.fragment"
 grep -Fqx 'CONFIG_THERMAL_OF=y' "$ROOT/nix/mainline-input-observe.fragment"
 grep -Fqx 'CONFIG_MTK_SOC_THERMAL=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
 grep -Fqx 'CONFIG_MEDIATEK_MT6577_AUXADC=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
@@ -30,3 +33,5 @@ grep -Fqx '      /bin/busybox sh /bin/input-observe stage1 &' "$ROOT/nix/mainlin
 grep -Fqx '  systemd.services.gemini-input-observe = {' "$ROOT/nixos/mainline-configuration.nix"
 grep -Fqx '      ${pkgs.busybox}/bin/busybox sh ${../nix/input-observe.sh} stage2' "$ROOT/nixos/mainline-configuration.nix"
 nix eval --raw "$ROOT#mainlineUnattendedRecoveryInputObserveDtb.drvPath" >/dev/null
+nix eval --raw "$ROOT#mainlinePlatformSmokeKernel.drvPath" >/dev/null
+nix eval --raw "$ROOT#mainlineConsysIdentityKernel.drvPath" >/dev/null
