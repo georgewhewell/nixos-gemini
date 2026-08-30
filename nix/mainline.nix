@@ -117,9 +117,9 @@
     + lib.optionalString unattendedRecovery "-unattended-recovery";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
-  baseDtbSha256 = "23a36b1e5675ae6ceadcb3bb1668085e10340fbbc654f0e0c82212343e402609";
-  serviceabilityBaseDtbSha256 = "643a4a4a505273f464feebc27d00c3f26e1c6a09a296bc0fd06f99afcf87d8bd";
-  usbPlatformDtbSha256 = "0a4688f83e8b38a0b4b05844b7aa4e3bf20f5f8b33d2152b31464d5b1113402d";
+  baseDtbSha256 = "d8339bbfee7d75f3823eb3c11e6eabb4ddb09c73e43e77fafa99499177ee6fc4";
+  serviceabilityBaseDtbSha256 = "dcbdcbc80136fa8f54bfc132201d47388de786d7ea390f1e14564429edb04f94";
+  usbPlatformDtbSha256 = "c38495c961512c66dacd9e9c4e79a04c538df120096e042d6ab300d0fc7298c0";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -131,15 +131,15 @@
       !powerObserveOverlay
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
     if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
-    then "52251527fa1e6f413275ff6ac0f263e39a1b268c20bba13020e823e2677b15e4"
+    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
-    then "52251527fa1e6f413275ff6ac0f263e39a1b268c20bba13020e823e2677b15e4"
+    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
     else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
-    then "3bfd3fe1d1aacf97da0a0680f7e8f408b69c6e709e813879d1cb6e594531cde7"
+    then "cd1bd904000769bc7444a3ee384cb5c832d5659dc746291d60b5a3918bced763"
     else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
-    then "e3be740108d83c15829e7772bef06a19a2ff85aed68195c0b229852d956e35d0"
+    then "cfd1425190d812612989c8de69f90debdd93457fd1491e1f14701eb3a2377358"
     else if consysIdentityOverlay && !platformEnablement
-    then "1a2e2095dc73fa7539942efac46337c978006dfaa7298e5ef84e26816369f4bd"
+    then "cfd1425190d812612989c8de69f90debdd93457fd1491e1f14701eb3a2377358"
     else if usbHostOverlay
     then usbPlatformDtbSha256
     else serviceabilityBaseDtbSha256;
@@ -393,7 +393,7 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtbo \
           "$out/mt6797-gemini-pda-usb11-host.dtbo"
         test "$(sha256sum "$out/mt6797-gemini-pda-usb11-host.dtbo" | cut -d' ' -f1)" = \
-          3fd377df21528a3723d305eadcd3e948ddb60b34fcc5e1f52f19d72f2919877a
+          a341e238e2479c6ac3f633c4262f170c6b53dbeec7867b2956fd80f656ff3469
       ''}
       ${lib.optionalString displayOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display.dtbo \
@@ -487,7 +487,11 @@
             -o "$out/gemini-platform.dtb" \
             ${kernel}/mt6797-gemini-pda-usb11-host.dtbo
           test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000 status)" = okay
+          test "$(fdtget -t x "$out/gemini-platform.dtb" /t-phy@11210000 reg)" = \
+            '0 11210000 0 800'
           test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 status)" = okay
+          fdtget -p "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 \
+            | grep -Fqx 'mediatek,force-a-session-valid'
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 status)" = okay
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 dr_mode)" = host
           test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000 status)" = okay
@@ -1190,7 +1194,7 @@
       }"
       echo "usb-host-dtbo-sha256=${
         if usbHostOverlay
-        then "3fd377df21528a3723d305eadcd3e948ddb60b34fcc5e1f52f19d72f2919877a"
+        then "a341e238e2479c6ac3f633c4262f170c6b53dbeec7867b2956fd80f656ff3469"
         else "none"
       }"
       ${

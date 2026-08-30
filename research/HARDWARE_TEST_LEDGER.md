@@ -999,3 +999,60 @@ never enumerated; this is earlier than DHCP or the host-net script.  The next
 candidate therefore needs a reviewed DT/PHY correction (or a narrower host-net
 acceptance experiment), plus the BQ interpreter fix, with new immutable image,
 DT, initramfs, and manifest hashes.
+
+## d69d558 USB11/BQ corrected bundle dry-run: 2026-08-30 08:06--08:09
+
+The fresh local-source build materialized at immutable Nix output
+`/nix/store/y58j7c0fh93chq2c325v0jbk8fy5frdf-gemini-ixoo-mainline-probe-emmc-probe-ssh-usb11-host-platform-display-audio-power-observe-power-preflight-unattended-recovery-bundle`, from platform source revision
+`d69d55863b5971c2a8d0f296036fe77b35661447`.  Its padded p22 image is exactly
+16 MiB with SHA256
+`8b5d1c815bdf02e06f81fedb16c89cdecc2576840f13b1abe548ebe3bdd84329`;
+initramfs is `31e331fa7cee16297e9f3ce1ede3ede7cb3c2b4ae444c7eba8042580d9eab890`,
+final DT is `8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce`,
+Image is `66dcc4e233fe5e4cfbb396cb5e0e7bc351ee574e8b3e57d07434af06066e18e8`,
+Image.gz is `8ad554382ee2c3a3f17265b5924580c03860dbb70eb73f68060577afc8c1eb8b`,
+and the kernel-built USB11 DTBO is
+`a341e238e2479c6ac3f633c4262f170c6b53dbeec7867b2956fd80f656ff3469`.
+
+Independent DT inspection proves `/t-phy@11210000` is `status=okay` with
+`reg=<0x0 0x11210000 0x0 0x800>`, its `usb-phy@11210800` is enabled with
+`mediatek,force-a-session-valid`, and `/usb@11200000` is enabled in host mode.
+The dormant CONSYS and BTIF nodes remain disabled, and USB11 regulators have
+neither `regulator-always-on` nor `regulator-boot-on`.
+
+Independent cpio extraction proves `/init` installs BusyBox applets before
+launching `/bin/bq2589x-preflight`; the corrected helper is present, as are
+`usb-host-net`, the exact RTL firmware
+`5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f`, and the
+90-second watchdog-open/lease logic.  Kernel config records
+`CONFIG_WATCHDOG_OPEN_TIMEOUT=90`, `CONFIG_WATCHDOG_NOWAYOUT=y`, and
+`CONFIG_PANIC_TIMEOUT=5`.
+
+The immutable observe-always-rollback handoff is
+`research/p22-unattended-recovery-d69d558-bq-usb11.manifest`; it targets p22
+only, with exact Stage-A rollback SHA
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, and
+retains the fixed scatter/XML hashes and p30/p31 protections.  Read-only
+`research/p22-recovery-harness.sh --manifest research/p22-unattended-recovery-d69d558-bq-usb11.manifest --dry-run`
+passed at 08:11.  Live readback remained p22 Stage-A
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`;
+Trex had no p22 writer or transaction/proof unit.  No reboot, flash, or other
+hardware write was performed.  This is a review handoff, not authorization.
+
+The pinned-profile rebuild was independently rechecked at
+`/mnt/Home/src/nixos-gemini-d69d558-pinned-usb11-bq-preflight`, resolving to
+`/nix/store/87j1pdyyhipbvk41lxi1di9qy572nqlw-gemini-ixoo-mainline-probe-emmc-probe-ssh-usb11-host-platform-display-audio-power-observe-power-preflight-unattended-recovery-bundle`.
+It is byte-identical for the candidate, DT, initramfs, Image, Image.gz,
+config, and USB11 DTBO hashes above; the pinned MANIFEST now records the exact
+source revision `d69d55863b5971c2a8d0f296036fe77b35661447`.  The new manifest
+was updated to this pinned immutable candidate path and its read-only dry-run
+passed again.  Trex had zero `p22-*` units and no writer process; live p22,
+p30, and p31 remained the Stage-A/protected hashes above.
+
+The target static aarch64 BusyBox `ip` applet was also run under qemu with the
+bundled helper's exact `ip addr replace 192.168.23.70/255.255.255.0` form
+against a deliberately nonexistent interface.  It returned only
+`ip: can't find device`, not a prefix-parse error, proving dotted DHCP subnet
+syntax is accepted without mutating a real host interface.

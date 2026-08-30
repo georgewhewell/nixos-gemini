@@ -1,0 +1,41 @@
+# Immutable dry-run handoff for the d69d558 USB11 T-PHY and BQ2589x
+# preflight candidate.  This is observe-always-rollback: it never commits
+# p22 as persistent state and requires Stage-A rescue before lease expiry.
+# Build source pin: linux-gemini-platform d69d55863b5971c2a8d0f296036fe77b35661447.
+# Bundle component hashes: Image=66dcc4e233fe5e4cfbb396cb5e0e7bc351ee574e8b3e57d07434af06066e18e8,
+# Image.gz=8ad554382ee2c3a3f17265b5924580c03860dbb70eb73f68060577afc8c1eb8b,
+# initramfs=31e331fa7cee16297e9f3ce1ede3ede7cb3c2b4ae444c7eba8042580d9eab890,
+# DT=8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce,
+# USB11 DTBO=a341e238e2479c6ac3f633c4262f170c6b53dbeec7867b2956fd80f656ff3469.
+candidate=/nix/store/87j1pdyyhipbvk41lxi1di9qy572nqlw-gemini-ixoo-mainline-probe-emmc-probe-ssh-usb11-host-platform-display-audio-power-observe-power-preflight-unattended-recovery-bundle/boot-padded-p22.img
+candidate_sha256=8b5d1c815bdf02e06f81fedb16c89cdecc2576840f13b1abe548ebe3bdd84329
+candidate_size=16777216
+rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
+rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=unattended_recovery=healthy
+feature_policy=allow-platform
+acceptance_window_seconds=80
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31
+rootfs_policy=enumeration-only
+host_net_policy=required
+ssh_path_policy=both
+power_preflight_policy=required
+transaction_policy=observe-always-rollback
