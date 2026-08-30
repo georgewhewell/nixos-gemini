@@ -497,6 +497,32 @@
       unattendedRecovery = true;
     };
 
+    # Input-observability increment over the exact unattended full-platform
+    # candidate above.  It composes the reviewed AW9523 polling keyboard
+    # overlay and an I2C4-only touchscreen observer; the touchscreen client,
+    # VTOUCH rail, and reset line remain disabled/untouched.
+    mainlineUnattendedRecoveryInputObserve = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -567,15 +593,16 @@
 
     mainlineNixos = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
-      # Reuse the exact d69 kernel/DT profile already accepted with BQ2589x,
-      # USB11 and RTL8156.  Only the initramfs and Stage-2 userspace change.
-      kernel = mainlineUnattendedRecoveryPowerPreflight.kernel;
-      serviceabilityDtb = mainlineUnattendedRecoveryPowerPreflight.serviceabilityDtb;
+      # Extend the accepted d69 full platform with its reviewed native input
+      # overlays. Stage 1/2 only record read-only input/I2C/thermal metadata.
+      kernel = mainlineUnattendedRecoveryInputObserve.kernel;
+      serviceabilityDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
       squashfs = mainlineNixosSquashfs;
       nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
       authorizedKeys = ./nixos/authorized_keys;
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
+      inputDiagnostics = true;
       provisionStore = true;
       # Cycle 7 proved the RTL8156 Stage1 path but the one-time 100,421,632-byte
       # p29 install still exceeded 230 seconds.  Give the complete write,
@@ -934,8 +961,8 @@
       mainlineStorageSshBundle = mainlineStorageSsh.bundle;
       mainlineRootfsProbeInitramfs = mainlineRootfsProbe.probeInitramfs;
       mainlineRootfsProbeBundle = mainlineRootfsProbe.bundle;
-      mainlineNixosKernel = mainlineNixosPlatform.kernel;
-      mainlineNixosDtb = mainlineNixosPlatform.serviceabilityDtb;
+      mainlineNixosKernel = mainlineUnattendedRecoveryInputObserve.kernel;
+      mainlineNixosDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
@@ -958,6 +985,10 @@
       mainlineUnattendedRecoveryPowerPreflightDtb = mainlineUnattendedRecoveryPowerPreflight.serviceabilityDtb;
       mainlineUnattendedRecoveryPowerPreflightInitramfs = mainlineUnattendedRecoveryPowerPreflight.probeInitramfs;
       mainlineUnattendedRecoveryPowerPreflightBundle = mainlineUnattendedRecoveryPowerPreflight.bundle;
+      mainlineUnattendedRecoveryInputObserveKernel = mainlineUnattendedRecoveryInputObserve.kernel;
+      mainlineUnattendedRecoveryInputObserveDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
+      mainlineUnattendedRecoveryInputObserveInitramfs = mainlineUnattendedRecoveryInputObserve.probeInitramfs;
+      mainlineUnattendedRecoveryInputObserveBundle = mainlineUnattendedRecoveryInputObserve.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;

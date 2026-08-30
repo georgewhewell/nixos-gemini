@@ -9,12 +9,14 @@
   authorizedKeys,
   bq2589xPreflight,
   unattendedRecovery ? false,
+  inputDiagnostics ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
+assert builtins.isBool inputDiagnostics;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 let
@@ -38,6 +40,9 @@ let
     cp "$dropbear/bin/dropbear" root/bin/dropbear
     cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey
     cp ${bq2589xPreflight} root/bin/bq2589x-preflight
+    ${if inputDiagnostics then ''
+      cp ${./input-observe.sh} root/bin/input-observe
+    '' else ""}
     cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
     test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
@@ -323,6 +328,10 @@ let
     }
 
     @START_WATCHDOG@
+    ${if inputDiagnostics then ''
+      /bin/busybox sh /bin/input-observe stage1 &
+      log "input_observe=started mode=sysfs-read-only i2c_transfers=none touchscreen_client=untouched"
+    '' else ""}
     /bin/bq2589x-preflight &
     log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
     /bin/usb-net &
@@ -431,6 +440,11 @@ let
       root/bin/usb-host-net-udhcpc root/bin/ssh-server \
       root/bin/bq2589x-preflight \
       root/bin/dropbear root/bin/dropbearkey
+    ${if inputDiagnostics then ''
+      chmod 0755 root/bin/input-observe
+      grep -Fqx 'record "stage=$stage mode=sysfs-read-only i2c_transfers=none input_events=unopened touchscreen_client=untouched"' root/bin/input-observe
+      ! grep -Eq '/dev/(i2c|input)|i2cdetect|i2cget|i2cset' root/bin/input-observe
+    '' else ""}
     find root -exec touch -h -d @0 {} +
     (
       cd root

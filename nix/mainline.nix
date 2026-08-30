@@ -17,6 +17,7 @@
   powerObserveOverlay ? false,
   powerObservePreflight ? false,
   unattendedRecovery ? false,
+  inputObserveOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -49,7 +50,8 @@
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
-    ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment];
+    ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
+    ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -94,6 +96,10 @@
     if unattendedRecovery
     then "mtk-wdt-probe-start-90s-open-timeout-initramfs-pet-v2"
     else "none";
+  inputObserveLabel =
+    if inputObserveOverlay
+    then "aw9523-matrix-poll-and-nt36772-i2c4-client-disabled-v1"
+    else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
@@ -114,12 +120,19 @@
     + lib.optionalString audioOverlay "-audio"
     + lib.optionalString powerObserveOverlay "-power-observe"
     + lib.optionalString powerObservePreflight "-power-preflight"
-    + lib.optionalString unattendedRecovery "-unattended-recovery";
+    + lib.optionalString unattendedRecovery "-unattended-recovery"
+    + lib.optionalString inputObserveOverlay "-input-observe";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   baseDtbSha256 = "d8339bbfee7d75f3823eb3c11e6eabb4ddb09c73e43e77fafa99499177ee6fc4";
   serviceabilityBaseDtbSha256 = "dcbdcbc80136fa8f54bfc132201d47388de786d7ea390f1e14564429edb04f94";
   usbPlatformDtbSha256 = "c38495c961512c66dacd9e9c4e79a04c538df120096e042d6ab300d0fc7298c0";
+  # The frozen serviceability transform already enables the reviewed AW9523
+  # polling keyboard.  Applying the native overlay is therefore deliberately
+  # idempotent; retain its intermediate fingerprint so future base-DT drift is
+  # still detected before the touchscreen bus-only observer is composed.
+  keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";
+  inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -130,7 +143,20 @@
     assert
       !powerObserveOverlay
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
-    if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
+    assert
+      !inputObserveOverlay
+      || (
+        platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && powerObserveOverlay
+        && powerObservePreflight
+        && unattendedRecovery
+        && !consysIdentityOverlay
+      );
+    if inputObserveOverlay
+    then inputObserveDtbSha256
+    else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
     then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
     then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
@@ -159,7 +185,8 @@
       + lib.optionalString audioOverlay "-audio"
       + lib.optionalString powerObserveOverlay "-power-observe"
       + lib.optionalString powerObservePreflight "-power-preflight"
-      + lib.optionalString unattendedRecovery "-unattended-recovery";
+      + lib.optionalString unattendedRecovery "-unattended-recovery"
+      + lib.optionalString inputObserveOverlay "-input-observe";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -273,6 +300,17 @@
       ${lib.optionalString powerObserveOverlay ''
         grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
         grep -Fqx 'CONFIG_CHARGER_BQ25890=y' .config
+      ''}
+      ${lib.optionalString inputObserveOverlay ''
+        grep -Fqx 'CONFIG_INPUT=y' .config
+        grep -Fqx 'CONFIG_INPUT_EVDEV=y' .config
+        grep -Fqx 'CONFIG_INPUT_KEYBOARD=y' .config
+        grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' .config
+        grep -Fqx 'CONFIG_PINCTRL_AW9523=y' .config
+        grep -Fqx 'CONFIG_I2C=y' .config
+        grep -Fqx 'CONFIG_I2C_MT65XX=y' .config
+        grep -Fqx 'CONFIG_THERMAL=y' .config
+        grep -Fqx 'CONFIG_THERMAL_OF=y' .config
       ''}
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
@@ -409,6 +447,14 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtbo \
           "$out/mt6797-gemini-pda-power-observe.dtbo"
       ''}
+      ${lib.optionalString inputObserveOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtbo \
+          "$out/mt6797-gemini-pda-keyboard.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-observe.dtbo \
+          "$out/mt6797-gemini-pda-touchscreen-observe.dtbo"
+        test -s "$out/mt6797-gemini-pda-keyboard.dtbo"
+        test -s "$out/mt6797-gemini-pda-touchscreen-observe.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -455,7 +501,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -613,10 +659,52 @@
           cp "$out/gemini-audio.dtb" "$out/gemini.dtb"
         ''
       }
+      ${
+        if inputObserveOverlay
+        then ''
+          # Keep the native reviewed keyboard overlay in the composition even
+          # though the frozen serviceability transform already carries its
+          # exact polling state.  The intermediate hash makes that idempotency
+          # explicit and catches accidental changes before I2C4 is exposed.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-keyboard.dtb" \
+            ${kernel}/mt6797-gemini-pda-keyboard.dtbo
+          test "$(sha256sum "$out/gemini-keyboard.dtb" | cut -d' ' -f1)" = \
+            ${keyboardDtbSha256}
+          test "$(fdtget "$out/gemini-keyboard.dtb" /i2c@1101c000 status)" = okay
+          test "$(fdtget "$out/gemini-keyboard.dtb" /i2c@1101c000/gpio-expander@5b status)" = okay
+          test "$(fdtget "$out/gemini-keyboard.dtb" /keyboard-matrix status)" = okay
+          test "$(fdtget -t i "$out/gemini-keyboard.dtb" /keyboard-matrix poll-interval)" = 20
+          test "$(fdtget -t i "$out/gemini-keyboard.dtb" /keyboard-matrix col-scan-delay-us)" = 2
+
+          # This observer enables only I2C4.  The client remains disabled, so
+          # kernel probe cannot issue a touchscreen I2C transfer or request
+          # GPIO85/EINT8; VTOUCH and GPIO68 reset stay entirely untouched.
+          fdtoverlay \
+            -i "$out/gemini-keyboard.dtb" \
+            -o "$out/gemini-input-observe.dtb" \
+            ${kernel}/mt6797-gemini-pda-touchscreen-observe.dtbo
+          test "$(fdtget "$out/gemini-input-observe.dtb" /i2c@11011000 status)" = okay
+          test "$(fdtget "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 status)" = disabled
+          ! fdtget -p "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 \
+            | grep -Fqx 'reset-gpios'
+          test "$(sha256sum "$out/gemini-input-observe.dtb" | cut -d' ' -f1)" = \
+            ${inputObserveDtbSha256}
+          cp "$out/gemini-input-observe.dtb" "$out/gemini.dtb"
+          echo 'keyboard-overlay=polling-only-aw9523-matrix-passed' >> "$out/VALIDATION"
+          echo 'touchscreen-observer=i2c4-only-client-disabled-no-transfer-passed' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
       test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
         ${finalDtbSha256}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
-      (cd "$out" && sha256sum gemini-base.dtb gemini.dtb Image.gz-dtb) > "$out/SHA256SUMS"
+      (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
+        if inputObserveOverlay
+        then "gemini-keyboard.dtb gemini-input-observe.dtb "
+        else ""
+      }Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is intentionally smaller and less privileged than a NixOS stage 1.
@@ -1145,6 +1233,7 @@
       echo "nix-audio=${audioLabel}"
       echo "nix-power-observe=${powerObserveLabel}"
       echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
+      echo "nix-input-observe=${inputObserveLabel}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery

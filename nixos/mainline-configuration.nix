@@ -223,6 +223,24 @@
     '';
   };
 
+  # The Stage-1 copy runs before the root handoff.  Repeat only the same
+  # sysfs metadata inventory after systemd has settled, so a remote reviewer
+  # can compare input, I2C-adapter, and thermal-zone presence without opening
+  # an event/I2C device or changing the touchscreen's disabled-client gate.
+  systemd.services.gemini-input-observe = {
+    description = "Record Gemini input-board metadata without bus transfers";
+    wantedBy = ["multi-user.target"];
+    after = ["gemini-watchdog-takeover.service" "systemd-udevd.service"];
+    before = ["sshd.service" "gemini-mainline-success.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      ${pkgs.busybox}/bin/busybox sh ${../nix/input-observe.sh} stage2
+    '';
+  };
+
   systemd.services.gemini-mainline-success = {
     description = "Record mainline NixOS stage-2 success in volatile state";
     wantedBy = ["multi-user.target"];
