@@ -430,6 +430,28 @@
       unattendedRecovery = true;
     };
 
+    # Firmware-preflight companion to G2b. It packages only the three
+    # byte-identified Gemini WMT inputs under the bare names requested by the
+    # controller. The existing G2b command line deliberately leaves patch
+    # download and every radio function disabled.
+    mainlineConsysFirmwarePreflight = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2bOverlay = true;
+      consysFirmware = true;
+      unattendedRecovery = true;
+    };
+
     # Critical-path GPU identity experiment. It keeps the accepted recovery
     # substrate, then exclusively votes RT5735 and all four MFG domains,
     # enables BG3D, reads immutable Mali-T880 identity/features, and unwinds.
@@ -1157,6 +1179,10 @@
       mainlineConsysG2bNoFirmwareDtb = mainlineConsysG2bNoFirmware.serviceabilityDtb;
       mainlineConsysG2bNoFirmwareInitramfs = mainlineConsysG2bNoFirmware.probeInitramfs;
       mainlineConsysG2bNoFirmwareBundle = mainlineConsysG2bNoFirmware.bundle;
+      mainlineConsysFirmwarePreflightKernel = mainlineConsysFirmwarePreflight.kernel;
+      mainlineConsysFirmwarePreflightDtb = mainlineConsysFirmwarePreflight.serviceabilityDtb;
+      mainlineConsysFirmwarePreflightInitramfs = mainlineConsysFirmwarePreflight.probeInitramfs;
+      mainlineConsysFirmwarePreflightBundle = mainlineConsysFirmwarePreflight.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

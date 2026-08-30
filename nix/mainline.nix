@@ -12,6 +12,7 @@
   usbHostOverlay ? false,
   consysIdentityOverlay ? false,
   consysG2bOverlay ? false,
+  consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
   platformEnablement ? false,
@@ -94,7 +95,14 @@
     else "none";
   consysG2bLabel =
     if consysG2bOverlay
-    then "emi-identity-postid-raw-mandatory-full-no-firmware-v1"
+    then
+      if consysFirmware
+      then "emi-identity-postid-raw-mandatory-full-wmt-firmware-packaged-no-patch-v1"
+      else "emi-identity-postid-raw-mandatory-full-no-firmware-v1"
+    else "none";
+  consysFirmwareLabel =
+    if consysFirmware
+    then "tracked-production-wmt-patch-preflight-only-v1"
     else "none";
   gpuStagedLabel =
     if gpuStagedOverlay
@@ -164,6 +172,7 @@
     + lib.optionalString usbHostOverlay "-usb11-host"
     + lib.optionalString consysIdentityOverlay "-consys-identity"
     + lib.optionalString consysG2bOverlay "-consys-g2b"
+    + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
     + lib.optionalString platformEnablement "-platform"
@@ -194,6 +203,7 @@
     else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert !(consysIdentityOverlay && consysG2bOverlay);
+    assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay));
     assert
@@ -1205,6 +1215,27 @@
         test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
           5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
       ''}
+      ${lib.optionalString consysFirmware ''
+        # The staged MT6797 patch controller accepts only these bare names and
+        # complete-image digests. Packaging is not activation: the G2b command
+        # line deliberately leaves its patch-download gate and all radio
+        # functions disabled.
+        mkdir -p root/lib/firmware
+        cp ${../blobs/WMT_SOC.cfg} root/lib/firmware/WMT_SOC.cfg
+        cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
+          root/lib/firmware/ROMv3_patch_1_1_hdr.bin
+        cp ${../blobs/ROMv3_patch_1_0_hdr.bin} \
+          root/lib/firmware/ROMv3_patch_1_0_hdr.bin
+        test "$(stat -c %s root/lib/firmware/WMT_SOC.cfg)" = 80
+        test "$(sha256sum root/lib/firmware/WMT_SOC.cfg | cut -d' ' -f1)" = \
+          f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+        test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_1_hdr.bin)" = 46472
+        test "$(sha256sum root/lib/firmware/ROMv3_patch_1_1_hdr.bin | cut -d' ' -f1)" = \
+          5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+        test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_0_hdr.bin)" = 210904
+        test "$(sha256sum root/lib/firmware/ROMv3_patch_1_0_hdr.bin | cut -d' ' -f1)" = \
+          450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+      ''}
       cp "$busybox/bin/busybox" root/bin/busybox
       ${lib.optionalString audioHeadphoneTest ''
         cp "$audioHeadphoneExercise/bin/gemini-audio-headphone" \
@@ -1776,6 +1807,7 @@
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
       echo "nix-consys-g2b=${consysG2bLabel}"
+      echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
       echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
