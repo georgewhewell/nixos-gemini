@@ -22,10 +22,14 @@ STATUS_FILE="$RUN_ROOT/bq2589x-preflight.status"
 DMESG_CAPTURE="$RUN_ROOT/bq2589x-preflight.dmesg"
 PASS_MARKER="$RUN_ROOT/bq2589x-preflight.pass"
 FAIL_MARKER="$RUN_ROOT/bq2589x-preflight.fail"
-ERROR_CONTEXT='(bq2589|0-006b|11007000|i2c-mt65xx)'
-ERROR_FAILURE='(error|fail|timeout|timed out|nack|abort|unknown chip|'
+# Keep the controller match specific to I2C0.  A bare i2c-mt65xx match also
+# selects the independent I2C6 handoff guard, whose successful diagnostic
+# contains the field name clock_validation_failures=0.  Failure words are
+# bounded so zero-valued counter names cannot be mistaken for prose errors.
+ERROR_CONTEXT='(bq2589|[0-9]+-006b|11007000(\.i2c)?)'
+ERROR_FAILURE='(error|failed|failure|timeout|timed out|nack|abort|unknown chip|'
 ERROR_FAILURE="${ERROR_FAILURE}unknown device revision|cannot)"
-ERROR_PATTERN="${ERROR_CONTEXT}.*${ERROR_FAILURE}"
+ERROR_PATTERN="${ERROR_CONTEXT}.*(^|[^[:alnum:]_])${ERROR_FAILURE}([^[:alnum:]_]|$)"
 
 record()
 {
@@ -73,18 +77,32 @@ if grep -Eqi "$ERROR_PATTERN" "$DMESG_CAPTURE"; then
 fi
 record "dmesg_relevant_errors=absent"
 
-# The DT overlay's precise route is I2C0, 7-bit address 0x6b.  Checking the
-# already-created I2C client is metadata-only; it does not issue an I2C
-# transfer.  The driver name check also proves that the generic I2C client did
-# not bind to an unexpected driver.
-i2c_client="$SYSFS_ROOT/bus/i2c/devices/0-006b"
-[ -d "$i2c_client" ] || fail "i2c_client_missing"
+# The DT overlay's precise physical route is controller 0x11007000, 7-bit
+# address 0x6b.  Linux adapter numbers are probe-order identifiers: the live
+# platform image exposed this controller's client as 2-006b, while the Stage-A
+# baseline calls the same controller i2c-0.  Resolve the immutable controller
+# ancestry and require exactly one match instead of trusting that dynamic
+# number.  This is metadata-only and issues no additional I2C transfer.
+i2c_client=
+i2c_client_count=0
+for candidate in "$SYSFS_ROOT"/bus/i2c/devices/*-006b; do
+	[ -d "$candidate" ] || continue
+	target=$(readlink -f "$candidate" 2>/dev/null || true)
+	case "$target" in
+	*/11007000.i2c/*) ;;
+	*) continue ;;
+	esac
+	i2c_client=$candidate
+	i2c_client_count=$((i2c_client_count + 1))
+done
+[ "$i2c_client_count" -eq 1 ] || fail "i2c_client_count=$i2c_client_count"
 driver=$(readlink "$i2c_client/driver" 2>/dev/null || true)
 case "$driver" in
 */bq25890-charger) ;;
 *) fail "unexpected_i2c_driver" ;;
 esac
-record "i2c_client=0-006b driver=bq25890-charger"
+i2c_client_id=${i2c_client##*/}
+record "i2c_client=$i2c_client_id controller=11007000.i2c driver=bq25890-charger"
 
 charger=
 charger_count=0

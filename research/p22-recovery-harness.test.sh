@@ -493,6 +493,15 @@ test_supervisor_is_trex_owned_and_bounded() {
     grep -Fq 'supervisor_waiting_candidate' "$ROOT/research/p22-proof-supervisor.sh"
 }
 
+test_recovery_ssh_window_covers_platform_gate() {
+    grep -Fq 'RECOVERY_SSH_TIMEOUT_SECONDS=90' "$HARNESS"
+    test "$(grep -Fc 'wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS"' "$HARNESS")" -eq 2
+    if grep -Fq 'wait_ssh 40' "$HARNESS"; then
+        echo 'stale pre-DVFSP recovery SSH window returned' >&2
+        return 1
+    fi
+}
+
 test_wrapper_requires_transaction_owner_when_requested() {
     test_bin=$TEST_ROOT/owner-bin
     mkdir -p "$test_bin"
@@ -553,6 +562,7 @@ test_supervisor_stale_metadata_does_not_kill_foreign
 test_harness_waits_for_nonterminal_supervisor_states
 test_local_exit_preserves_active_supervisor
 test_supervisor_is_trex_owned_and_bounded
+test_recovery_ssh_window_covers_platform_gate
 test_wrapper_requires_transaction_owner_when_requested
 test_wrapper_rejects_stale_transaction_owner
 test_transaction_holder_removes_expired_owner

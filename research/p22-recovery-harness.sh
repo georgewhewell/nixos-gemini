@@ -94,6 +94,11 @@ HOST_NET_FALLBACK_ARMED=no
 CANDIDATE_HOSTKEY_MODE=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
+# Both known-good and candidate initramfs hold their user-visible services
+# behind the approximately 48-second DVFSP late-validation gate.  Trex may
+# finish restoring p22 before that boot reaches SSH, so recovery readback must
+# cover the measured gate plus USB/dropbear settling time.
+RECOVERY_SSH_TIMEOUT_SECONDS=90
 ACCEPTANCE_COMMITTED=no
 ATTEMPT_COUNTER=0
 TOOL_PID_FILE=
@@ -577,7 +582,7 @@ wait_supervisor_rollback() {
 
 verify_recovered_stage_a() {
     CANDIDATE_HOSTKEY_MODE=no
-    wait_ssh 40 || return 1
+    wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS" || return 1
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
@@ -978,7 +983,7 @@ recover() {
     fi
     state=$(trex_ssh "cat '$STATE'")
     case "$state" in flash_rc=0*) ;; *) printf 'recovery_flash_failed %s\n' "$state" > "$RUN_LOCAL/state"; return 1;; esac
-    if ! wait_ssh 40; then printf 'manual_reset_required_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
+    if ! wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS"; then printf 'manual_reset_required_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
     if ! device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
