@@ -678,7 +678,7 @@ terminate_snapshot() {
 terminate_snapshot || exit 0
 rm -f "\$snapshot"
 exit 0
-fi" 2>/dev/null || true
+" 2>/dev/null || true
 }
 
 # shellcheck disable=SC2329 # invoked by the EXIT/INT/TERM trap below
