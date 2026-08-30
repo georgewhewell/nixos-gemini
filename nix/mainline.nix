@@ -15,6 +15,7 @@
   displayOverlay ? false,
   audioOverlay ? false,
   powerObserveOverlay ? false,
+  powerObservePreflight ? false,
   unattendedRecovery ? false,
 }: let
   lib = buildPkgs.lib;
@@ -85,6 +86,10 @@
     if powerObserveOverlay
     then "bq2589x-i2c0-no-write-no-irq-v1"
     else "none";
+  powerObservePreflightLabel =
+    if powerObservePreflight
+    then "bq2589x-sysfs-dmesg-no-write-watchdog-markers-v1"
+    else "none";
   unattendedRecoveryLabel =
     if unattendedRecovery
     then "mtk-wdt-probe-start-90s-open-timeout-initramfs-pet-v2"
@@ -108,6 +113,7 @@
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
     + lib.optionalString powerObserveOverlay "-power-observe"
+    + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery";
   baseDtbSha256 =
     if unattendedRecovery
@@ -132,6 +138,9 @@
     then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
     else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
   finalDtbSha256 =
+    assert
+      !powerObservePreflight
+      || (powerObserveOverlay && unattendedRecovery);
     assert
       (!displayOverlay && !audioOverlay)
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
@@ -164,6 +173,7 @@
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
       + lib.optionalString powerObserveOverlay "-power-observe"
+      + lib.optionalString powerObservePreflight "-power-preflight"
       + lib.optionalString unattendedRecovery "-unattended-recovery";
     version = "7.1.3";
     src = linux-gemini;
@@ -447,7 +457,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString unattendedRecovery "-unattended-recovery"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -634,6 +644,10 @@
           5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
       ''}
       cp "$busybox/bin/busybox" root/bin/busybox
+      ${lib.optionalString powerObservePreflight ''
+        cp ${./bq2589x-preflight.sh} root/bin/bq2589x-preflight
+        chmod 0755 root/bin/bq2589x-preflight
+      ''}
       ${lib.optionalString unattendedRecovery ''
         # busybox is an aarch64 target binary; inspect it, never execute it on
         # the x86_64 builder.  The applet is then exposed by --install below.
@@ -718,6 +732,13 @@
       else
         note "unattended_recovery=failed watchdog_userspace=device-missing"
       fi
+      ''}
+      ${lib.optionalString powerObservePreflight ''
+      # Runs asynchronously after the watchdog petter is established.  Its
+      # result intentionally cannot extend the watchdog lease; a reviewer must
+      # inspect /run/bq2589x-preflight.{status,dmesg,pass|fail} and decide.
+      /bin/bq2589x-preflight &
+      note "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
       ''}
       udc_names=
       for udc in /sys/class/udc/*; do
@@ -1121,6 +1142,7 @@
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"
       echo "nix-power-observe=${powerObserveLabel}"
+      echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery

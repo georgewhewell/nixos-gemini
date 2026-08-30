@@ -473,6 +473,30 @@
       unattendedRecovery = true;
     };
 
+    # One-shot Stage-D acceptance image.  The BQ2589x DT observer remains
+    # opt-in, and this extra collector only records bounded read-only evidence
+    # for a remote reviewer; it never takes the watchdog lease itself.
+    mainlineUnattendedRecoveryPowerPreflight = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -919,6 +943,10 @@
       mainlineUnattendedRecoveryKernel = mainlineUnattendedRecoveryPlatform.kernel;
       mainlineUnattendedRecoveryDtb = mainlineUnattendedRecoveryPlatform.serviceabilityDtb;
       mainlineUnattendedRecoveryBundle = mainlineUnattendedRecoveryPlatform.bundle;
+      mainlineUnattendedRecoveryPowerPreflightKernel = mainlineUnattendedRecoveryPowerPreflight.kernel;
+      mainlineUnattendedRecoveryPowerPreflightDtb = mainlineUnattendedRecoveryPowerPreflight.serviceabilityDtb;
+      mainlineUnattendedRecoveryPowerPreflightInitramfs = mainlineUnattendedRecoveryPowerPreflight.probeInitramfs;
+      mainlineUnattendedRecoveryPowerPreflightBundle = mainlineUnattendedRecoveryPowerPreflight.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
