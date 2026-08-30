@@ -977,3 +977,20 @@ p31 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
 Trex transaction and supervisor units were subsequently absent.  The cycle is
 therefore a candidate-rejected, rescue-successful run with a harness timing
 diagnosis, not an unrecovered hardware state.
+
+Independent post-run audit found no BQ result to certify.  The candidate cpio
+contains `bin/bq2589x-preflight` with source shebang `#!/bin/sh`, but contains
+`bin/busybox` and no `bin/sh`; `/init` nevertheless launches that helper at
+initramfs startup.  No `GEMINI_BQ2589X_PREFLIGHT` line or pass/fail marker is
+therefore present in the preserved probe/pstore evidence.  A replacement must
+make the helper executable in this initramfs (for example, use the target
+BusyBox interpreter) and capture its actual status before any BQ conclusion.
+
+The host-net failure has independent kernel evidence: pstore records
+`mtk-tphy 11210000.t-phy` failing with `-EBUSY` while requesting
+`0x11210800-0x112108ff`, followed by repeated `11200000.usb` `-517` deferred
+probes waiting for that PHY.  The required `r8152` interface consequently
+never enumerated; this is earlier than DHCP or the host-net script.  The next
+candidate therefore needs a reviewed DT/PHY correction (or a narrower host-net
+acceptance experiment), plus the BQ interpreter fix, with new immutable image,
+DT, initramfs, and manifest hashes.
