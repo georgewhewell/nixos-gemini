@@ -228,6 +228,8 @@
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_STP_SESSION=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_CONSYS_STP_SESSION_KUNIT_TEST=' .config
       ${
         if consysIdentityOverlay
         then ''
@@ -243,6 +245,15 @@
         ''
       }
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_GNSS=y' .config
+      grep -Fqx 'CONFIG_GNSS_MTK_CONSYS=y' .config
+      ! grep -q '^CONFIG_GNSS_MTK_CONSYS_KUNIT_TEST=' .config
       ${lib.optionalString platformEnablement ''
         grep -Fqx 'CONFIG_DRM=y' .config
         grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
