@@ -309,3 +309,102 @@ files.  The retained pstore record SHA-256 is
 
 **Verdict: Stage A accepted after the timing/actuator correction.**  Stage B
 remains closed pending its separate explicit handoff and authorization.
+
+## Stage B preflight and unattended-selection gate: 2026-08-30
+
+The immutable Stage-B artifact was independently checked before any write:
+`artifacts/mainline-consys-identity-p30/probe-padded-boot2.img` is a regular
+16777216-byte file with SHA-256
+`59b9febf7b397a3cca0ef82407af1c1d347f1751550ab7006aa29f0429e90716`.
+`MANIFEST` hashes to
+`f9aac2db3fe38a33109b2747c6ed8245b3fb1c6478db2b65534e19dd4dd0505a`; every
+listed Nix-store payload hash (Dropbear, authorized keys, Image/Image.gz,
+final DTB, initramfs, raw boot image, and padded image) matched.  The
+manifest identifies the source NAR as
+`sha256-V7BMwHlvvKF4HRP/wHaCc3Ma+rmlWVBaOYpIARbKZdI=`, ixoo baseline
+`7199e8229c6a805a941e33a6862956949dfebd3a`, candidate
+`a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a`, and the
+`bounded-0x0279-reset-held-v1` CONSYS identity profile.  The clean local
+source checkout is at commit `41f987351d4f54dc60f6c68179238eb9892d6ebb`,
+whose ancestry contains the identity implementation commit `8fe066799`; the
+artifact's NAR/store hashes, not the mutable checkout, are the provenance
+authority.
+
+A fresh read-only p30 check resolved `/dev/disk/by-partlabel/boot2` to
+`/dev/mmcblk0p30`, verified it is 16777216 bytes, inactive and unmounted, and
+confirmed the active root is p29.  The fresh rollback snapshot
+`artifacts/stage-a-20260830/p30-before-stage-b.img` is 16777216 bytes and
+SHA-256
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`.
+p31 was not opened or accessed.
+
+The unattended boot-selection gate is **not met**.  The retained LK audit
+`artifacts/ixoo-7199e822/experiments/2026-07-12-boot-contract-recovery/results/lk-boot2-software-selection-audit-20260718.txt`
+finds `boot2_key_code=0x11`, no `reboot_boot2_string`, absent
+`boot_target_sysfs`, `reboot_mode_sysfs`, and `boot_slot_sysfs`, no kexec or
+`fw_printenv`, and concludes `direct_gemian_reboot_to_boot2=not-found` with
+`current_supported_workflow=hold-the-silver-button-during-LK-selection`.
+The public README independently states normal power-on selects p22 and the
+side button selects p30; prior hardware records label p30 selection
+`owner-attended` and `automatic_boot2_selection=no`.  Flash Tool's `-b`
+option only controls reboot after a write; it is not an MTK-LK slot selector.
+No accepted software, kexec, USB, watchdog, or remote GPIO path can select
+p30 without repurposing the artifact or changing the bootloader.
+
+**Verdict: Stage B stopped at preflight; no p30 write was performed.**  The
+device remains on the accepted Stage-A p22 image, and no catcher, Flash Tool,
+reboot loop, or watchdog process was armed.  The next discriminating action
+requires one owner-attended physical side-button selection with host captures
+already armed; it must not be replaced by an automatic reboot or a p31 path.
+
+## Bounded default-p22 recovery harness and reboot dry-run: 2026-08-30 03:59--04:06 CEST
+
+The read-only recovery dry-run was performed while the accepted Stage-A image
+was running.  The pre-state recorded p22 as the candidate digest
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30 as
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+as `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+`systemctl reboot --no-wall` returned `Call to Reboot failed: Input/output
+error` but did perform an orderly reboot: trex recorded gadget disconnect at
+03:59:11, `0e8d:2000`/`MT65xx Preloader` with `ttyACM2` at 03:59:13,
+preloader disconnect at 03:59:16, and gadget `0525:a4a2` at 03:59:22.  SSH
+returned, the host interface was restored host-side, and all three partition
+digests remained unchanged.  Post-boot pstore contains the orderly
+`mtk-wdt ... shutdown` and `reboot: Restarting system` records.
+
+The captured evidence is under
+`artifacts/stage-a-20260830/recovery-dryrun/`: post dmesg SHA-256
+`c12554350714e161a5571167022269c97c185efe7e3a56336cf99becf424cf56`, post
+journal `30d19f0d7469e53e587202a90c7ee50ef3b5ff87484c6b3a3d01bc0d81dcc6e4`,
+and pstore `ba1c58c388344dfd0672df9e142da1841f9c4807fdc4088f668cee10a36d47f7`.
+The corresponding trex USB/kernel/IP/udev captures are in
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/stage-a-20260830/`.
+
+The watchdog preflight found `/dev/watchdog0` (`mtk-wdt`) inactive, timeout
+31 seconds, `nowayout=0`, with `RuntimeWatchdogUSec=0` and only a ten-minute
+`RebootWatchdogUSec`.  Therefore Linux can prove a normal reboot actuator and
+preloader recovery, but cannot guarantee a watchdog reset through a pre-init
+hang.  The harness deliberately does not induce a hang or claim that
+guarantee.
+
+The bounded transaction is implemented by
+`research/p22-recovery-harness.sh` and
+`research/p22-flash-wrapper.sh`.  It has no default write mode: `--execute` is
+required, while `--dry-run` independently verifies the exact 16 MiB candidate
+and rollback hashes, immutable boot-only scatter/XML hashes, one and only one
+downloadable entry at offset `0xb100000`/size `0x1000000` in `EMMC_USER`, and
+the current p22/p30/p31 readbacks.  The execute state machine captures pstore,
+dmesg, p22 pre-hash, trex USB/kernel/IP logs, and a state file; stages only
+`boot.img`; starts Flash Tool Download Only before requesting reboot; allows a
+fixed 120-second SSH/acceptance window; and, on failed acceptance, stages the
+exact known-good p22 rollback, pre-arms the same boot-only tool, and permits a
+clean reboot or natural watchdog/preloader transition within bounded waits.
+There is no force reset, erase, format, firmware upgrade, p30 target, or p31
+write.  Capture processes have a 900-second timeout and are stopped by the
+exit trap; tool and acceptance/recovery waits are bounded and leave explicit
+state markers.  The script passed `sh -n` and
+`sh research/p22-recovery-harness.sh --dry-run` at 04:06:19 CEST.
+
+**Verdict: recovery mechanism is proven for orderly reboot and known-good
+return, but pre-init watchdog recovery remains unproven by hardware design.**
+No Stage-B artifact was flashed and no p30/p31 write occurred.
