@@ -11,6 +11,7 @@ PGID_FILE=${5:-${STATE%/*}/tool.pgid}
 LOCK_FILE=${6:-${STATE%/*}/flash.lock}
 TRANSACTION_OWNER_FILE=${7:-}
 SID_FILE=${8:-${STATE%/*}/tool.sid}
+STARTTIME_FILE=${9:-${STATE%/*}/tool.starttime}
 TOOL=/nix/store/wlgln84hg9k6hnqdm6r24vn21fxf85b7-mtk-flash-tool-2018-04-07/opt/mtk-flash-tool/flash_tool
 
 if [ -n "$TRANSACTION_OWNER_FILE" ] && ! test -s "$TRANSACTION_OWNER_FILE"; then
@@ -56,6 +57,11 @@ case "$sid" in
     ''|*[!0-9]*) sid=unknown ;;
 esac
 printf '%s\n' "$sid" > "$SID_FILE"
+starttime=$(awk '{print $22}' "/proc/$$/stat" 2>/dev/null || true)
+case "$starttime" in
+    ''|*[!0-9]*) starttime=unknown ;;
+esac
+printf '%s\n' "$starttime" > "$STARTTIME_FILE"
 
 printf 'tool_started %s\n' "$(date -Is)" > "$STATE"
 {

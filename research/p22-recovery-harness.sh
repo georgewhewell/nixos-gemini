@@ -65,6 +65,7 @@ SCATTER=
 SCATTER_SHA=
 XML=
 XML_SHA=
+XML_RUN_FILE=
 STAGE_IMAGE=
 TREX_CAPTURE_ROOT=
 EXPECTED_MODEL=
@@ -98,6 +99,7 @@ ATTEMPT_COUNTER=0
 TOOL_PID_FILE=
 TOOL_PGID_FILE=
 TOOL_SID_FILE=
+TOOL_STARTTIME_FILE=
 TOOL_LAUNCH_PID_FILE=
 TOOL_LOCK_FILE=
 FLASH_LOCK_FILE=
@@ -426,6 +428,7 @@ start_capture() {
     TRANSACTION_UNIT=p22-transaction-$run_name
     SUPERVISOR_UNIT=p22-proof-$run_name
     ROLLBACK_RESCUE_IMAGE=$RUN_SHARED/rollback-rescue.img
+    XML_RUN_FILE=$RUN_SHARED/download-only-p22.xml
     printf 'preflight %s mode=%s\n' "$(date -Is)" "$MODE" > "$RUN_LOCAL/state"
     device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
     device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
@@ -459,6 +462,9 @@ start_capture() {
     test "$(stat -Lc %s "$ROLLBACK_RESCUE_IMAGE")" -eq "$SIZE"
     test "$(sha256sum "$ROLLBACK_RESCUE_IMAGE" | cut -d' ' -f1)" = "$ROLLBACK_SHA"
     trex_ssh "test \"\$(stat -Lc %s '$ROLLBACK_RESCUE_IMAGE')\" -eq '$SIZE'; test \"\$(sha256sum '$ROLLBACK_RESCUE_IMAGE' | cut -d' ' -f1)\" = '$ROLLBACK_SHA'"
+    cp "$XML" "$XML_RUN_FILE"
+    test "$(sha256sum "$XML_RUN_FILE" | cut -d' ' -f1)" = "$XML_SHA"
+    trex_ssh "test \"\$(sha256sum '$XML_RUN_FILE' | cut -d' ' -f1)\" = '$XML_SHA'"
     trex_scp "$ROOT/research/p22-proof-supervisor.sh" "trex:$RUN_SHARED/p22-proof-supervisor.sh" >/dev/null
     trex_scp "$ROOT/research/p22-flash-wrapper.sh" "trex:$RUN_SHARED/flash-wrapper.sh" >/dev/null
     trex_scp "$ROOT/research/trex-gadget-net-watcher.sh" "trex:$RUN_SHARED/trex-gadget-net-watcher.sh" >/dev/null
@@ -491,8 +497,12 @@ stop_capture() {
     if [ -n "${TRANSACTION_UNIT:-}" ]; then
         trex_ssh "systemctl --user stop '$TRANSACTION_UNIT'" 2>/dev/null || true
     fi
+    # The three timeout-based diagnostics are intentionally allowed to expire
+    # at their bounded 900-second lifetime. Only the exact run-specific
+    # watcher is stopped, after validating its argv; never trust *.pid files
+    # generically or risk a recycled PID.
     # shellcheck disable=SC2029
-    trex_ssh "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
+    trex_ssh "pid=\$(cat '$RUN_SHARED/host-net.pid' 2>/dev/null || true); case \"\$pid\" in ''|*[!0-9]*) exit 0 ;; esac; ps -o args= -p \"\$pid\" | grep -F -- '$RUN_SHARED/trex-gadget-net-watcher.sh' >/dev/null || exit 0; kill -TERM \"\$pid\" 2>/dev/null || true" 2>/dev/null || true
 }
 
 start_probe_capture() {
@@ -525,7 +535,7 @@ start_supervisor() {
     # This service is Trex-owned and independent of the local harness. It
     # starts before candidate reboot, then owns the always-rollback decision
     # if the harness or its SSH session disappears.
-    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE'"
+    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML_RUN_FILE' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE'"
     supervisor_ready=no
     supervisor_wait=0
     while [ "$supervisor_wait" -lt 15 ]; do
@@ -578,26 +588,42 @@ test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2
 # shellcheck disable=SC2329 # reached through the EXIT/INT/TERM cleanup trap
 stop_tool() {
     [ -n "${RUN_SHARED:-}" ] || return 0
-    # The wrapper runs in a private session.  Validate PID=PGID=SID and then
-    # terminate every process in that exact session.  This closes the
-    # interrupted-harness orphan window for timeout/sudo/flash_tool, including
-    # the historical GNU-timeout child-PGID split, without broad process kills.
+    # The wrapper runs in a private session. Validate PID/PGID/SID, starttime,
+    # and the attempt-unique XML before taking a process snapshot.
+    xml_owner=${XML_RUN_FILE:-${XML:-}}
+    [ -n "$xml_owner" ] || return 0
+    XML=$xml_owner
     # shellcheck disable=SC2029
     trex_ssh "
-pid=; pgid=; sid=; launch=
+pid=; pgid=; sid=; launch=; start=
 case \"\$(cat '$STATE' 2>/dev/null || true)\" in
   flash_rc=*) exit 0 ;;
 esac
 test -s '$TOOL_PID_FILE' && pid=\$(cat '$TOOL_PID_FILE') || true
 test -s '$TOOL_PGID_FILE' && pgid=\$(cat '$TOOL_PGID_FILE') || true
 test -s '$TOOL_SID_FILE' && sid=\$(cat '$TOOL_SID_FILE') || true
+test -s '$TOOL_STARTTIME_FILE' && start=\$(cat '$TOOL_STARTTIME_FILE') || true
 test -s '$TOOL_LAUNCH_PID_FILE' && launch=\$(cat '$TOOL_LAUNCH_PID_FILE') || true
 case \"\$pid\" in ''|*[!0-9]*) exit 0 ;; esac
 case \"\$sid\" in ''|*[!0-9]*) exit 0 ;; esac
+case \"\$start\" in ''|*[!0-9]*) exit 0 ;; esac
 case \"\$launch\" in ''|*[!0-9]*) exit 0 ;; esac
 test \"\$launch\" -gt 1 || exit 0
 if test \"\$launch\" != \"\$pid\" && ! ps -o args= -p \"\$launch\" | grep -F -- '$STATE' >/dev/null; then exit 0; fi
 test \"\$sid\" = \"\$pid\" || exit 0
+# Validate the live leader identity before touching the private session.
+if test -d /proc/\$pid; then
+  test \$(awk '{print \$22}' /proc/\$pid/stat 2>/dev/null) = \$start || exit 0
+  test \$(ps -o sid= -p \$pid | tr -d ' ') = \$sid || exit 0
+  test \$(ps -o pgid= -p \$pid | tr -d ' ') = \$pgid || exit 0
+  ps -o args= -p \$pid | grep -F -- '$STATE' >/dev/null ||
+  ps -o args= -p \$pid | grep -F -- '$xml_owner' >/dev/null || exit 0
+fi
+if test \"\$launch\" != \"\$pid\" && test -d /proc/\$launch; then
+  ps -o args= -p \$launch | grep -F -- '$STATE' >/dev/null || exit 0
+fi
+ps -eo pid=,sid=,args= | awk -v sid=\$sid -v xml='$xml_owner' \
+    '\$2 == sid && index(\$0, xml) {found=1} END {exit(found ? 0 : 1)}' || exit 0
 # GNU timeout without --foreground historically escaped into a child PGID.
 # Enumerate only this private session so cleanup remains safe even when the
 # wrapper leader has already exited; never use a process-name kill.
@@ -608,7 +634,51 @@ if ps -o args= -p \"\$pid\" | grep -F -- '$STATE' >/dev/null ||
   session_owner=yes
 fi
 test \"\$session_owner\" = yes || exit 0
-session_pids() { ps -eo pid=,sid= | awk -v sid=\"\$sid\" -v self=\"\$pid\" '\$2 == sid && \$1 != self {print \$1}'; }
+snapshot='$RUN_SHARED/stop-session.snapshot'
+: > \"\$snapshot\"
+ps -eo pid=,sid=,pgid= | awk -v sid=\"\$sid\" '\$2 == sid {print \$1, \$2, \$3}' |
+while read -r member msid mpgid; do
+  case \"\$member\" in ''|*[!0-9]*) exit 1 ;; esac
+  mstart=\$(awk '{print \$22}' /proc/\$member/stat 2>/dev/null || true)
+  case \"\$mstart\" in ''|*[!0-9]*) exit 1 ;; esac
+  printf '%s %s %s %s\\n' \"\$member\" \"\$msid\" \"\$mpgid\" \"\$mstart\" >> \"\$snapshot\"
+done || exit 0
+validate_snapshot() {
+  while read -r member msid mpgid mstart; do
+    test -n \"\$member\" || continue
+    test -d /proc/\$member || return 1
+    test \$(awk '{print \$22}' /proc/\$member/stat 2>/dev/null) = \$mstart || return 1
+    test \$(ps -o sid= -p \$member | tr -d ' ') = \$msid || return 1
+    test \$(ps -o pgid= -p \$member | tr -d ' ') = \$mpgid || return 1
+  done < \"\$snapshot\"
+}
+validate_snapshot || exit 0
+terminate_snapshot() {
+  while read -r member msid mpgid mstart; do
+    test -n "\$member" || continue
+    test -d /proc/\$member || return 1
+    test \$(awk '{print \$22}' /proc/\$member/stat 2>/dev/null) = \$mstart || return 1
+    test \$(ps -o sid= -p \$member | tr -d ' ') = \$msid || return 1
+    test \$(ps -o pgid= -p \$member | tr -d ' ') = \$mpgid || return 1
+    kill -TERM \$member 2>/dev/null || true
+  done < "\$snapshot"
+  sleep 2
+  while read -r member msid mpgid mstart; do
+    test -n "\$member" || continue
+    test -d /proc/\$member || continue
+    test \$(awk '{print \$22}' /proc/\$member/stat 2>/dev/null) = \$mstart || continue
+    test \$(ps -o sid= -p \$member | tr -d ' ') = \$msid || continue
+    test \$(ps -o pgid= -p \$member | tr -d ' ') = \$mpgid || continue
+    kill -KILL \$member 2>/dev/null || true
+  done < "\$snapshot"
+}
+terminate_snapshot || exit 0
+rm -f "\$snapshot"
+exit 0
+# Legacy loops below are deliberately inert; do not issue a group kill after
+# the validated per-member pass because that could race PID/PGID reuse.
+pgid=disabled
+session_pids() { :; }
 for child in \$(session_pids); do
   case \"\$child\" in ''|*[!0-9]*) ;; *) kill -TERM \"\$child\" 2>/dev/null || true ;; esac
 done
@@ -621,6 +691,7 @@ for child in \$(session_pids); do
 done
 if test \"\$pgid\" = \"\$pid\"; then
   kill -KILL \"-\$pgid\" 2>/dev/null || true
+validate_snapshot || exit 0
 fi" 2>/dev/null || true
 }
 
@@ -819,6 +890,7 @@ start_tool() {
     TOOL_PID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.pid
     TOOL_PGID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.pgid
     TOOL_SID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.sid
+    TOOL_STARTTIME_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.starttime
     TOOL_LAUNCH_PID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.launch.pid
     # This pathname is intentionally outside RUN_SHARED. Every run and every
     # candidate/rollback attempt therefore contends for the same Trex-global
@@ -829,7 +901,7 @@ start_tool() {
     # together.  The wrapper publishes its actual PID/PGID after launch.
     # shellcheck disable=SC2029
     launch_rc=0
-    trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' '$TOOL_PID_FILE' '$TOOL_PGID_FILE' '$TOOL_LOCK_FILE' '$RUN_SHARED/transaction-owner' '$TOOL_SID_FILE' </dev/null >/dev/null 2>&1 & echo \$! > '$TOOL_LAUNCH_PID_FILE'" || launch_rc=$?
+    trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML_RUN_FILE' '$TOOL_PID_FILE' '$TOOL_PGID_FILE' '$TOOL_LOCK_FILE' '$RUN_SHARED/transaction-owner' '$TOOL_SID_FILE' '$TOOL_STARTTIME_FILE' </dev/null >/dev/null 2>&1 & echo \$! > '$TOOL_LAUNCH_PID_FILE'" || launch_rc=$?
     if wait_state "$STATE" tool_started 20; then
         if ! trex_ssh "pid=\$(cat '$TOOL_PID_FILE' 2>/dev/null || true); pgid=\$(cat '$TOOL_PGID_FILE' 2>/dev/null || true); sid=\$(cat '$TOOL_SID_FILE' 2>/dev/null || true); launch=\$(cat '$TOOL_LAUNCH_PID_FILE' 2>/dev/null || true); test \"\$pid\" = \"\$pgid\"; test \"\$pid\" = \"\$sid\"; test \"\$pid\" -gt 1; case \"\$launch\" in ''|*[!0-9]*) exit 1 ;; esac; test \"\$launch\" -gt 1; ps -o args= -p \"\$pid\" | grep -F -- '$STATE' >/dev/null; if test \"\$launch\" != \"\$pid\"; then ps -o args= -p \"\$launch\" | grep -F -- '$STATE' >/dev/null; fi"; then
             printf 'recovery_blocked_tool_identity %s\n' "$(date -Is)" > "$RUN_LOCAL/state"

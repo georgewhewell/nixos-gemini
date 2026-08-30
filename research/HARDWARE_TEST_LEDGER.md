@@ -930,3 +930,25 @@ The recovery guarantee begins only after Linux `mtk_wdt` probe/handoff; the
 Gemini LK lineage nominally arms/kicks a 10-second watchdog, but ATF-to-Linux
 persistence is unproven.  A p22 kernel/DT change cannot close that pre-probe
 window, so a pre-probe hang remains an explicit manual-reset boundary.
+
+## First durable-supervisor execute audit: unique writer/session ownership: 2026-08-30
+
+No hardware action was taken.  The boot-only XML is now copied to the unique
+per-run `RUN_SHARED/download-only-p22.xml`, hash-verified locally and on Trex,
+and that path is the argv nonce for both candidate and rescue writers.  The
+three bounded diagnostic `timeout` processes are no longer trusted through
+generic `*.pid` cleanup; only the exact systemd units and run-specific host-net
+watcher are eligible for cleanup.
+
+The flash wrapper records `/proc` starttime in addition to PID/PGID/SID.
+Cleanup requires the live attempt-unique XML in the exact session, snapshots
+every member, and revalidates each member's current starttime/SID/PGID
+immediately before both TERM and KILL.  Supervisor timeout cleanup applies the
+same checks and refuses a stale/recycled session.  A same-XML process in a
+different session is therefore not signalable by this attempt.
+
+Host-only regressions cover stale diagnostic PIDs, same-XML foreign sessions,
+leader-loss cleanup, foreground process topology, and the unique XML/starttime
+handoff; shell syntax, strict ShellCheck, and the complete harness suite pass.
+The next hardware action remains review-gated; p22-only, Download Only, and
+the p30/p31 no-write invariant are unchanged.

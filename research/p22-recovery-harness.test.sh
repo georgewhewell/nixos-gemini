@@ -199,34 +199,41 @@ test_wrapper_foreground_process_tree() {
 }
 
 test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
-    sed -n '/^stop_tool() {/,/^}/p' "$HARNESS" > "$TEST_ROOT/stop-tool-function.sh"
+    sed -n '/^stop_tool() {/,/^# shellcheck disable=SC2329 # invoked by the EXIT\/TERM cleanup trap/p' "$HARNESS" |
+        sed '$d' > "$TEST_ROOT/stop-tool-function.sh"
+    sed -n '/^stop_tool() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-tool-function.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/stop-tool-function.sh"
     test_bin=$TEST_ROOT/stop-bin
     mkdir -p "$test_bin"
     printf '%s\n' '#!/bin/sh' 'test "$1" = --foreground' 'shift 2' 'exec "$@"' > "$test_bin/timeout"
-    printf '%s\n' '#!/bin/sh' 'sleep 60' > "$test_bin/sudo"
-    chmod +x "$test_bin/timeout" "$test_bin/sudo"
+    printf '%s\n' '#!/bin/sh' 'exec "$CHILD" "$XML_PATH"' > "$test_bin/sudo"
+    printf '%s\n' '#!/bin/sh' 'sleep 60' > "$test_bin/child"
+    chmod +x "$test_bin/timeout" "$test_bin/sudo" "$test_bin/child"
     run=$TEST_ROOT/stop-run
     mkdir -p "$run"
     STATE=$run/state
     TOOL_PID_FILE=$run/pid
     TOOL_PGID_FILE=$run/pgid
     TOOL_SID_FILE=$run/sid
+    TOOL_STARTTIME_FILE=$run/starttime
     TOOL_LAUNCH_PID_FILE=$run/launch
     TOOL_LOCK_FILE=$run/lock
     RUN_SHARED=$run
     XML=stop-tool-exact.xml
+    XML_RUN_FILE=$run/stop-tool-exact.xml
+    : > "$XML_RUN_FILE"
     trex_ssh() { sh -c "$1"; }
     printf '%s\n' 'tool_started now' > "$STATE"
-    PATH="$test_bin:$PATH" setsid sh "$WRAPPER" "$STATE" "$run/log" "$XML" \
+    CHILD="$test_bin/child" XML_PATH="$XML_RUN_FILE" PATH="$test_bin:$PATH" setsid sh "$WRAPPER" "$STATE" "$run/log" "$XML" \
         "$TOOL_PID_FILE" "$TOOL_PGID_FILE" "$TOOL_LOCK_FILE" '' \
-        "$TOOL_SID_FILE" >/dev/null 2>&1 &
+        "$TOOL_SID_FILE" "$TOOL_STARTTIME_FILE" >/dev/null 2>&1 &
     launch=$!
     printf '%s\n' "$launch" > "$TOOL_LAUNCH_PID_FILE"
     sleep 1
     wrapper_pid=$(cat "$TOOL_PID_FILE")
     child_pid=$(pgrep -P "$wrapper_pid" | head -n 1)
+    setsid "$test_bin/child" "$XML_RUN_FILE" & foreign_pid=$!
     # Simulate the observed leader-loss case; the session child retains the
     # exact XML token that stop_tool uses as its ownership proof.
     kill -TERM "$wrapper_pid"
@@ -235,6 +242,36 @@ test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
     wait "$launch" 2>/dev/null
     set -e
     ! ps -p "$child_pid" -o stat= 2>/dev/null | grep -qv '^Z'
+    kill -0 "$foreign_pid" 2>/dev/null
+    kill -KILL "$foreign_pid" 2>/dev/null || true
+}
+
+test_stop_capture_does_not_trust_stale_diagnostic_pid() {
+    sed -n '/^stop_capture() {/,/^# shellcheck disable=SC2329 # invoked by the EXIT\/TERM cleanup trap/p' "$HARNESS" |
+        sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
+    sed -n '/^stop_capture() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/stop-capture-stale.sh"
+    run=$TEST_ROOT/stale-diagnostic
+    mkdir -p "$run"
+    stale_pid_file=$run/kernel.pid
+    sleep 60 & stale_pid=$!
+    printf '%s\n' "$stale_pid" > "$stale_pid_file"
+    RUN_SHARED=$run
+    TRANSACTION_UNIT=
+    SUPERVISOR_UNIT=
+    SUPERVISOR_KEEP=no
+    trex_ssh() { sh -c "$1"; }
+    stop_capture
+    kill -0 "$stale_pid" 2>/dev/null
+    kill -KILL "$stale_pid" 2>/dev/null || true
+}
+
+test_xml_is_attempt_unique_for_writer_and_supervisor() {
+    grep -Fq 'XML_RUN_FILE=$RUN_SHARED/download-only-p22.xml' "$HARNESS"
+    grep -Fq '$XML_RUN_FILE' "$HARNESS"
+    grep -Fq 'starttime_file=$RUN_SHARED/supervisor-rollback.starttime' \
+        "$ROOT/research/p22-proof-supervisor.sh"
 }
 
 test_supervisor_fake_rollback() {
@@ -416,6 +453,8 @@ test_wrapper_uses_per_attempt_pid_files
 test_wrapper_lock_rejects_duplicate
 test_wrapper_foreground_process_tree
 test_sourced_stop_tool_kills_exact_session_after_leader_exit
+test_stop_capture_does_not_trust_stale_diagnostic_pid
+test_xml_is_attempt_unique_for_writer_and_supervisor
 test_supervisor_fake_rollback
 test_supervisor_rolls_back_failed_candidate
 test_supervisor_records_unexpected_exit

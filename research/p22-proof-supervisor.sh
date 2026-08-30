@@ -91,8 +91,10 @@ rm -f "$ROLLBACK_STATE"
 pid_file=$RUN_SHARED/supervisor-rollback.pid
 pgid_file=$RUN_SHARED/supervisor-rollback.pgid
 sid_file=$RUN_SHARED/supervisor-rollback.sid
+starttime_file=$RUN_SHARED/supervisor-rollback.starttime
 setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
     "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
+    "$starttime_file" \
     </dev/null >/dev/null 2>&1 &
 launch_pid=$!
 deadline=$(( $(date +%s) + 300 ))
@@ -117,14 +119,57 @@ done
 pid=$(cat "$pid_file" 2>/dev/null || true)
 pgid=$(cat "$pgid_file" 2>/dev/null || true)
 sid=$(cat "$sid_file" 2>/dev/null || true)
-if [ "$pid" = "$launch_pid" ] && [ "$sid" = "$pid" ] && [ "$pid" -gt 1 ]; then
-    if [ "$pgid" = "$pid" ]; then
-        kill -KILL "-$pgid" 2>/dev/null || true
+starttime=$(cat "$starttime_file" 2>/dev/null || true)
+for value in "$pid" "$pgid" "$sid" "$starttime"; do
+    case "$value" in ''|*[!0-9]*) write_state supervisor_rollback_timeout; exit 1 ;; esac
+done
+# Never signal a stale/recycled supervisor session. The unique run XML must
+# be present in a live member's argv, and every member's SID/PGID/starttime is
+# snapshotted and revalidated immediately before KILL.
+owner_pid=
+if [ "$sid" = "$pid" ] && [ "$pid" -gt 1 ] && [ "$pgid" -gt 1 ]; then
+    if test -d "/proc/$pid" &&
+       test "$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null)" = "$starttime" &&
+       test "$(ps -o sid= -p "$pid" | tr -d ' ')" = "$sid" &&
+       test "$(ps -o pgid= -p "$pid" | tr -d ' ')" = "$pgid" &&
+       ps -o args= -p "$pid" | grep -F -- "$XML" >/dev/null; then
+        owner_pid=$pid
     else
-        ps -eo pid=,sid= | awk -v sid="$sid" -v self="$pid" '$2 == sid && $1 != self {print $1}' |
-            while read -r child; do kill -KILL "$child" 2>/dev/null || true; done
-        kill -KILL "$pid" 2>/dev/null || true
+        owner_pid=$(ps -eo pid=,sid=,pgid=,args= | awk -v sid="$sid" -v pgid="$pgid" -v xml="$XML" '$2 == sid && $3 == pgid && index($0, xml) {print $1; exit}')
     fi
+fi
+if [ -n "$owner_pid" ]; then
+    # Re-prove ownership after selecting the member and immediately before
+    # snapshotting; owner_pid alone is not a signal authorization.
+    ps -eo pid=,sid=,pgid=,args= | awk -v owner="$owner_pid" -v sid="$sid" -v pgid="$pgid" -v xml="$XML" '$1 == owner && $2 == sid && $3 == pgid && index($0, xml) {found=1} END {exit(found ? 0 : 1)}' || owner_pid=
+fi
+if [ -n "$owner_pid" ]; then
+    snapshot=$RUN_SHARED/supervisor-rollback.snapshot
+    ps -eo pid=,sid=,pgid= | awk -v sid="$sid" '$2 == sid {print $1, $2, $3}' |
+        while read -r member msid mpgid; do
+            mstart=$(awk '{print $22}' "/proc/$member/stat" 2>/dev/null || true)
+            case "$member:$mstart" in *[!0-9:]*|:*) exit 1 ;; esac
+            printf '%s %s %s %s\n' "$member" "$msid" "$mpgid" "$mstart"
+        done > "$snapshot" || true
+    valid=yes
+    while read -r member msid mpgid mstart; do
+        test -n "$member" || continue
+        test -d "/proc/$member" || valid=no
+        test "$(awk '{print $22}' "/proc/$member/stat" 2>/dev/null)" = "$mstart" || valid=no
+        test "$(ps -o sid= -p "$member" | tr -d ' ')" = "$msid" || valid=no
+        test "$(ps -o pgid= -p "$member" | tr -d ' ')" = "$mpgid" || valid=no
+    done < "$snapshot"
+    if [ "$valid" = yes ]; then
+        while read -r member msid mpgid mstart; do
+            test -n "$member" || continue
+            test -d "/proc/$member" || continue
+            test "$(awk '{print $22}' "/proc/$member/stat" 2>/dev/null)" = "$mstart" || continue
+            test "$(ps -o sid= -p "$member" | tr -d ' ')" = "$msid" || continue
+            test "$(ps -o pgid= -p "$member" | tr -d ' ')" = "$mpgid" || continue
+            kill -KILL "$member" 2>/dev/null || true
+        done < "$snapshot"
+    fi
+    rm -f "$snapshot"
 fi
 write_state supervisor_rollback_timeout
 exit 1
