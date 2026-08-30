@@ -115,28 +115,11 @@
     + lib.optionalString powerObserveOverlay "-power-observe"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery";
-  baseDtbSha256 =
-    if unattendedRecovery
-    then "23a36b1e5675ae6ceadcb3bb1668085e10340fbbc654f0e0c82212343e402609"
-    else if platformEnablement
-    then "87cbce082c7a6d6f67fab47527ed45b148647dd01e178864c618665af8af6d58"
-    else if consysIdentityOverlay
-    then "e6aa4b9d20360c260f313292be41f92df2deb8613ca6c665a9f045b6b4d880e7"
-    else "1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c";
-  serviceabilityBaseDtbSha256 =
-    if unattendedRecovery
-    then "643a4a4a505273f464feebc27d00c3f26e1c6a09a296bc0fd06f99afcf87d8bd"
-    else if platformEnablement
-    then "4f537ab13a1aa8f14ff96d03fd068ab552c1b0f50a8cf4bc724c939ed5b49d09"
-    else if consysIdentityOverlay
-    then "753bf1fba79ac26c401a8d7de3482ea8c91041663ec19b2254aba909dc7d8297"
-    else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
-  usbPlatformDtbSha256 =
-    if unattendedRecovery
-    then "0a4688f83e8b38a0b4b05844b7aa4e3bf20f5f8b33d2152b31464d5b1113402d"
-    else if platformEnablement
-    then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
-    else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
+  # These three inputs are generated from the same locked DTS and the same
+  # unconditional provider/USB transforms for every exported profile.
+  baseDtbSha256 = "23a36b1e5675ae6ceadcb3bb1668085e10340fbbc654f0e0c82212343e402609";
+  serviceabilityBaseDtbSha256 = "643a4a4a505273f464feebc27d00c3f26e1c6a09a296bc0fd06f99afcf87d8bd";
+  usbPlatformDtbSha256 = "0a4688f83e8b38a0b4b05844b7aa4e3bf20f5f8b33d2152b31464d5b1113402d";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -148,15 +131,15 @@
       !powerObserveOverlay
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
     if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
-    then "ee57546b97a42b22111e632113e9e409ad02ff75dc75c3aace9a9cf9eca7d773"
+    then "52251527fa1e6f413275ff6ac0f263e39a1b268c20bba13020e823e2677b15e4"
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
-    then "87b96e7af03491c4f26dd9b57f77a873019760779b7ec9d7a780f5af332974c7"
+    then "52251527fa1e6f413275ff6ac0f263e39a1b268c20bba13020e823e2677b15e4"
     else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
-    then "6b42aca0194c399c939bcb8bcada3c770e0b1a5c10954c90bca29dbe77ae0cde"
+    then "3bfd3fe1d1aacf97da0a0680f7e8f408b69c6e709e813879d1cb6e594531cde7"
     else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
     then "e3be740108d83c15829e7772bef06a19a2ff85aed68195c0b229852d956e35d0"
     else if consysIdentityOverlay && !platformEnablement
-    then "70c1b17ec8d5744ff5ac60bc7250c958dc99708e4afd463f632e45823ff1eeea"
+    then "1a2e2095dc73fa7539942efac46337c978006dfaa7298e5ef84e26816369f4bd"
     else if usbHostOverlay
     then usbPlatformDtbSha256
     else serviceabilityBaseDtbSha256;
