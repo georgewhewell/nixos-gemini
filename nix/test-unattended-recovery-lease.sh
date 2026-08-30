@@ -86,6 +86,20 @@ printf '%s\n' \
   'lease_seconds=720' > "$WORK/expected-record"
 cmp "$WORK/expected-record" "$record_root/unattended-recovery.lease-deadline"
 
+# Stage 1 must retain its own bounded timer while provisioning.  Stage 2 is a
+# continuation of the same deadline, not a replacement for pre-handoff
+# enforcement.  Record failure must also stop the petter instead of entering
+# fail() with a userspace process keeping the nowayout watchdog alive.
+grep -Fq 'sleep @WATCHDOG_LEASE_SECONDS@' "$ROOT/nix/mainline-nixos.nix"
+grep -Fq 'reason=stage1-deadline-reached' "$ROOT/nix/mainline-nixos.nix"
+grep -Fq 'reason=watchdog-lease-deadline-record-failed watchdog_userspace=stopped' \
+  "$ROOT/nix/mainline-nixos.nix"
+record_line=$(grep -n -F 'if ! /bin/unattended-recovery-lease-record @WATCHDOG_LEASE_SECONDS@; then' \
+  "$ROOT/nix/mainline-nixos.nix" | cut -d: -f1)
+timer_line=$(grep -n -F 'sleep @WATCHDOG_LEASE_SECONDS@' \
+  "$ROOT/nix/mainline-nixos.nix" | cut -d: -f1)
+[ "$record_line" -lt "$timer_line" ]
+
 # A transferred record remains live in Stage 2.  The fake clock does not
 # advance, but the enforcer must stay up until the later exact acceptance.
 continuation=$WORK/continuation

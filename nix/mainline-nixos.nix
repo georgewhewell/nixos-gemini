@@ -299,9 +299,39 @@ let
       kill -0 "$watchdog_pid" 2>/dev/null \
         || fail "watchdog-open-failed"
       echo "$watchdog_pid" > /run/unattended-recovery.watchdog-owner
-      /bin/unattended-recovery-lease-record @WATCHDOG_LEASE_SECONDS@ \
-        || fail "watchdog-lease-deadline-record-failed"
+      if ! /bin/unattended-recovery-lease-record @WATCHDOG_LEASE_SECONDS@; then
+        : > /run/unattended-recovery.lease-expired
+        log "stage1=failed reason=watchdog-lease-deadline-record-failed watchdog_userspace=stopped watchdog_reset_expected=31s"
+        kill -KILL "$watchdog_pid" 2>/dev/null || true
+        while :; do sleep 3600; done
+      fi
       log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=@WATCHDOG_LEASE_SECONDS@s deadline=monotonic handoff=stage1-to-stage2-enforcer"
+
+      # Stage 2 reconstructs this enforcement loop from the monotonic
+      # deadline after switch_root.  Keep a separate Stage-1 timer as well:
+      # provisioning may never reach Stage 2, and switch_root is observed to
+      # terminate initramfs background jobs.
+      (
+        sleep @WATCHDOG_LEASE_SECONDS@
+        if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != \
+             "unattended_recovery=healthy" ]; then
+          : > /run/unattended-recovery.lease-expired
+          log "unattended_recovery=lease-expired watchdog_userspace=stopped watchdog_reset_expected=31s reason=stage1-deadline-reached"
+          pass=0
+          while [ "$pass" -lt 5 ]; do
+            owner_pid=$(cat /run/unattended-recovery.watchdog-owner 2>/dev/null || true)
+            case "$owner_pid" in
+              *[!0-9]*) ;;
+              *)
+                [ -n "$owner_pid" ] \
+                  && kill -KILL "$owner_pid" 2>/dev/null || true
+                ;;
+            esac
+            pass=$((pass + 1))
+            sleep 1
+          done
+        fi
+      ) &
     }
 
     @START_WATCHDOG@
