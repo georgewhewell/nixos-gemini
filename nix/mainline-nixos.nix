@@ -323,7 +323,15 @@ let
             case "$owner_pid" in
               *[!0-9]*) ;;
               *)
-                [ -n "$owner_pid" ] \
+                owns_watchdog=
+                for fd in /proc/"$owner_pid"/fd/*; do
+                  [ -e "$fd" ] || [ -L "$fd" ] || continue
+                  target=$(readlink "$fd" 2>/dev/null || true)
+                  case "$target" in
+                    /dev/watchdog|/dev/watchdog0) owns_watchdog=yes ;;
+                  esac
+                done
+                [ "$owns_watchdog" = yes ] \
                   && kill -KILL "$owner_pid" 2>/dev/null || true
                 ;;
             esac

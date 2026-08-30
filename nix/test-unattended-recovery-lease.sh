@@ -94,11 +94,23 @@ grep -Fq 'sleep @WATCHDOG_LEASE_SECONDS@' "$ROOT/nix/mainline-nixos.nix"
 grep -Fq 'reason=stage1-deadline-reached' "$ROOT/nix/mainline-nixos.nix"
 grep -Fq 'reason=watchdog-lease-deadline-record-failed watchdog_userspace=stopped' \
   "$ROOT/nix/mainline-nixos.nix"
+grep -Fq 'for fd in /proc/"$owner_pid"/fd/*; do' "$ROOT/nix/mainline-nixos.nix"
+grep -Fq '/dev/watchdog|/dev/watchdog0) owns_watchdog=yes ;;' \
+  "$ROOT/nix/mainline-nixos.nix"
+grep -Fq '[ "$owns_watchdog" = yes ] \' "$ROOT/nix/mainline-nixos.nix"
 record_line=$(grep -n -F 'if ! /bin/unattended-recovery-lease-record @WATCHDOG_LEASE_SECONDS@; then' \
   "$ROOT/nix/mainline-nixos.nix" | cut -d: -f1)
 timer_line=$(grep -n -F 'sleep @WATCHDOG_LEASE_SECONDS@' \
   "$ROOT/nix/mainline-nixos.nix" | cut -d: -f1)
 [ "$record_line" -lt "$timer_line" ]
+stage1_marker_line=$(grep -n -F ': > /run/unattended-recovery.lease-expired' \
+  "$ROOT/nix/mainline-nixos.nix" | tail -n 1 | cut -d: -f1)
+stage1_verify_line=$(grep -n -F 'for fd in /proc/"$owner_pid"/fd/*; do' \
+  "$ROOT/nix/mainline-nixos.nix" | cut -d: -f1)
+stage1_kill_line=$(grep -n -F '&& kill -KILL "$owner_pid" 2>/dev/null || true' \
+  "$ROOT/nix/mainline-nixos.nix" | tail -n 1 | cut -d: -f1)
+[ "$stage1_marker_line" -lt "$stage1_verify_line" ]
+[ "$stage1_verify_line" -lt "$stage1_kill_line" ]
 
 # A transferred record remains live in Stage 2.  The fake clock does not
 # advance, but the enforcer must stay up until the later exact acceptance.
