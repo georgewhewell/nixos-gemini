@@ -104,6 +104,14 @@
     withFIDO = false;
     withKerberos = false;
   };
+
+  # This is an SSH-only recovery system. Stage2 reaches multi-user.target,
+  # but logind cannot currently address PID 1's org.freedesktop.systemd1 D-Bus
+  # name to create its optional user/session scopes. Keep PAM authentication
+  # and pam_unix session handling, but do not ask SSH to register a logind
+  # session until that separate manager-bus fault is diagnosed on hardware.
+  security.pam.services.sshd.startSession = lib.mkForce false;
+
   users.mutableUsers = false;
   users.users.root = {
     hashedPassword = "!";

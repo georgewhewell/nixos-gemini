@@ -592,6 +592,13 @@
       unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
     '';
 
+    mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
+    mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
+      grep -Fqx 'session required pam_unix.so' ${mainlineSshdPam}
+      ! grep -Fq 'pam_systemd.so' ${mainlineSshdPam}
+      touch "$out"
+    '';
+
     mainlineNixos = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
       # Extend the accepted d69 full platform with its reviewed native input
@@ -965,6 +972,7 @@
       mainlineNixosKernel = mainlineUnattendedRecoveryInputObserve.kernel;
       mainlineNixosDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;
+      mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
