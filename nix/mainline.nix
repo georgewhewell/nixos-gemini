@@ -11,6 +11,9 @@
   rootfsProbe ? false,
   usbHostOverlay ? false,
   consysIdentityOverlay ? false,
+  platformEnablement ? false,
+  displayOverlay ? false,
+  audioOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -40,7 +43,8 @@
       (ixoo-kernel + "/configs/gemini-emmc-development.fragment")
     ]
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
-    ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment];
+    ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
+    ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -65,20 +69,52 @@
     if consysIdentityOverlay
     then "bounded-0x0279-reset-held-v1"
     else "none";
+  displayLabel =
+    if displayOverlay
+    then "nt36672-lp3101-recovery-smoke-v1"
+    else "none";
+  audioLabel =
+    if audioOverlay
+    then "mt6797-mt6351-enumeration-only-v1"
+    else "none";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
     + lib.optionalString rootfsProbe "-p29-ro"
     + lib.optionalString usbHostOverlay "-usb11-host"
-    + lib.optionalString consysIdentityOverlay "-consys-identity";
+    + lib.optionalString consysIdentityOverlay "-consys-identity"
+    + lib.optionalString platformEnablement "-platform"
+    + lib.optionalString displayOverlay "-display"
+    + lib.optionalString audioOverlay "-audio";
   baseDtbSha256 =
-    if consysIdentityOverlay
+    if platformEnablement
+    then "87cbce082c7a6d6f67fab47527ed45b148647dd01e178864c618665af8af6d58"
+    else if consysIdentityOverlay
     then "e6aa4b9d20360c260f313292be41f92df2deb8613ca6c665a9f045b6b4d880e7"
     else "1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c";
   serviceabilityBaseDtbSha256 =
-    if consysIdentityOverlay
+    if platformEnablement
+    then "4f537ab13a1aa8f14ff96d03fd068ab552c1b0f50a8cf4bc724c939ed5b49d09"
+    else if consysIdentityOverlay
     then "753bf1fba79ac26c401a8d7de3482ea8c91041663ec19b2254aba909dc7d8297"
     else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
+  usbPlatformDtbSha256 =
+    if platformEnablement
+    then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
+    else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
+  finalDtbSha256 =
+    assert
+      (!displayOverlay && !audioOverlay)
+      || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
+    if platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay
+    then "6b42aca0194c399c939bcb8bcada3c770e0b1a5c10954c90bca29dbe77ae0cde"
+    else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
+    then "e3be740108d83c15829e7772bef06a19a2ff85aed68195c0b229852d956e35d0"
+    else if consysIdentityOverlay && !platformEnablement
+    then "70c1b17ec8d5744ff5ac60bc7250c958dc99708e4afd463f632e45823ff1eeea"
+    else if usbHostOverlay
+    then usbPlatformDtbSha256
+    else serviceabilityBaseDtbSha256;
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
@@ -89,7 +125,10 @@
       + lib.optionalString (!debugOverlay) "-config-control"
       + lib.optionalString storageOverlay "-emmc-probe"
       + lib.optionalString usbHostOverlay "-usb11-host"
-      + lib.optionalString consysIdentityOverlay "-consys-identity";
+      + lib.optionalString consysIdentityOverlay "-consys-identity"
+      + lib.optionalString platformEnablement "-platform"
+      + lib.optionalString displayOverlay "-display"
+      + lib.optionalString audioOverlay "-audio";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -173,6 +212,20 @@
         ''
       }
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
+      ${lib.optionalString platformEnablement ''
+        grep -Fqx 'CONFIG_DRM=y' .config
+        grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
+        grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
+        grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
+        grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
+        grep -Fqx 'CONFIG_SND=y' .config
+        grep -Fqx 'CONFIG_SND_SOC=y' .config
+        grep -Fqx 'CONFIG_SND_SOC_MT6797=y' .config
+        grep -Fqx 'CONFIG_SND_SOC_MT6797_MT6351=y' .config
+        grep -Fqx 'CONFIG_SND_SOC_MT6351=y' .config
+        grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' .config
+        ! grep -q '^CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX_KUNIT_TEST=' .config
+      ''}
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
         | grep -Fq 'status = "disabled";'
@@ -276,6 +329,14 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
           "$out/mt6797-gemini-consys-identity.dtbo"
       ''}
+      ${lib.optionalString displayOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display.dtbo \
+          "$out/mt6797-gemini-pda-display.dtbo"
+      ''}
+      ${lib.optionalString audioOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-audio.dtbo \
+          "$out/mt6797-gemini-pda-audio.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -322,7 +383,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -387,29 +448,62 @@
         then ''
           fdtoverlay \
             -i "$out/gemini-platform.dtb" \
-            -o "$out/gemini.dtb" \
+            -o "$out/gemini-consys.dtb" \
             ${kernel}/mt6797-gemini-consys-identity.dtbo
-          test "$(fdtget "$out/gemini.dtb" /consys@18070000 compatible)" = \
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
             mediatek,mt6797-consys-identity
-          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = okay
-          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 status)" = okay
+          fdtget -p "$out/gemini-consys.dtb" /consys@18070000 \
             | grep -Fqx 'mediatek,conn-power-domain'
-          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+          fdtget -p "$out/gemini-consys.dtb" /consys@18070000 \
             | grep -Fqx 'mediatek,infracfg'
-          fdtget -p "$out/gemini.dtb" /consys@18070000 \
+          fdtget -p "$out/gemini-consys.dtb" /consys@18070000 \
             | grep -Fqx 'mediatek,spm'
-          ! fdtget "$out/gemini.dtb" /consys@18070000 power-domains \
+          ! fdtget "$out/gemini-consys.dtb" /consys@18070000 power-domains \
             >/dev/null 2>&1
           test "$(sha256sum "$out/gemini-platform.dtb" | cut -d' ' -f1)" = \
-            9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff
-          test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
-            70c1b17ec8d5744ff5ac60bc7250c958dc99708e4afd463f632e45823ff1eeea
+            ${usbPlatformDtbSha256}
           echo 'consys-identity-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
-          cp "$out/gemini-platform.dtb" "$out/gemini.dtb"
+          cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
         ''
       }
+      ${
+        if displayOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-consys.dtb" \
+            -o "$out/gemini-display.dtb" \
+            ${kernel}/mt6797-gemini-pda-display.dtbo
+          test "$(fdtget "$out/gemini-display.dtb" /dsi@1401c000/panel@0 compatible)" = \
+            planet,gemini-pda-nt36672
+          test "$(fdtget "$out/gemini-display.dtb" /i2c@11008000/regulator@3e compatible)" = \
+            mediatek,i2c_lcd_bias
+          echo 'display-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else ''
+          cp "$out/gemini-consys.dtb" "$out/gemini-display.dtb"
+        ''
+      }
+      ${
+        if audioOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-display.dtb" \
+            -o "$out/gemini.dtb" \
+            ${kernel}/mt6797-gemini-pda-audio.dtbo
+          test "$(fdtget "$out/gemini.dtb" /audio-controller@11220000 status)" = okay
+          test "$(fdtget "$out/gemini.dtb" /sound compatible)" = \
+            mediatek,mt6797-mt6351-sound
+          echo 'audio-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else ''
+          cp "$out/gemini-display.dtb" "$out/gemini.dtb"
+        ''
+      }
+      test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
+        ${finalDtbSha256}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb Image.gz-dtb) > "$out/SHA256SUMS"
     '';
@@ -776,6 +870,9 @@
       echo "nix-rootfs-probe=${rootfsLabel}"
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
+      echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
+      echo "nix-display=${displayLabel}"
+      echo "nix-audio=${audioLabel}"
       echo "nix-hardening=disabled-all"
       echo "hardware-proof=ixoo-Buildbox-artifact-only"
       echo "nix-kernel-byte-match-ixoo=no"

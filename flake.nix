@@ -392,6 +392,27 @@
       consysIdentityOverlay = true;
     };
 
+    # Queued Stage-C recovery image: test the reviewed native display and
+    # MT6351 audio-card enumeration together.  Touch support is built in but
+    # its contradictory rail/EINT candidate remains disabled in the base DT.
+    mainlinePlatformSmoke = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -826,6 +847,9 @@
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
+      mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
+      mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
+      mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
