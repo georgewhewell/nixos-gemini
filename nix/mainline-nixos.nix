@@ -10,10 +10,12 @@
   bq2589xPreflight,
   unattendedRecovery ? false,
 }: let
-  # Keep every proven userspace payload available for rollback. The v2
-  # payload adds the normal system/network/USB diagnostics and is staged next
-  # to, never over, the first successful read-only NixOS payload.
-  storeFileName = "mainline-nixos-connectivity-m0.squashfs";
+  # A p22 rollback is useful only while its exact userspace payload still
+  # exists.  Derive the p29 filename from the immutable Nix store path so a
+  # new bundle can only be staged next to an older payload, never over it.
+  # The basename already ends in .squashfs.
+  storeFileName =
+    "mainline-nixos-${builtins.baseNameOf (toString squashfs)}";
 
   initramfs = buildPkgs.runCommand "gemini-mainline-nixos-initramfs.cpio.gz" {
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
@@ -279,6 +281,9 @@
     ln -s ${paddedBootImg} "$out/boot-padded-p22.img"
     {
       echo "target=Gemini default p22 plus unique p29 /nixos/${storeFileName}"
+      echo "store-file=${storeFileName}"
+      echo "store-sha256=$(sha256sum ${squashfs} | cut -d' ' -f1)"
+      echo "store-size=$(stat -c %s ${squashfs})"
       echo "kernel=$(basename ${kernel})"
       echo "system=${nixosToplevel}"
       echo "p29=ext4 ro,noload after store installation"
