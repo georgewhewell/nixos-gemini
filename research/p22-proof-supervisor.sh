@@ -98,27 +98,51 @@ pid_file=$RUN_SHARED/supervisor-rollback.pid
 pgid_file=$RUN_SHARED/supervisor-rollback.pgid
 sid_file=$RUN_SHARED/supervisor-rollback.sid
 starttime_file=$RUN_SHARED/supervisor-rollback.starttime
-setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
-    "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
-    "$starttime_file" \
-    </dev/null >/dev/null 2>&1 &
-launch_pid=$!
 deadline=$(( $(date +%s) + "$ROLLBACK_WAIT_SECONDS" ))
-while [ "$(date +%s)" -lt "$deadline" ]; do
+rollback_attempt=1
+while [ "$rollback_attempt" -le 2 ]; do
+    rm -f "$ROLLBACK_STATE"
+    setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
+        "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
+        "$starttime_file" \
+        </dev/null >/dev/null 2>&1 &
+    launch_pid=$!
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
+        case "$state" in
+            'flash_rc=0 '*)
+                # Trex has no Gemini SSH credential. This terminal state proves
+                # the exact rescue bytes were staged and the p22-only wrapper
+                # returned success; the live harness must perform device-side
+                # p22/p30/p31 readback when connectivity is available.
+                test "$(sha256sum "$STAGE_IMAGE" | cut -d' ' -f1)" = "$ROLLBACK_SHA"
+                write_state supervisor_rollback_succeeded_rescue_verified
+                exit 0 ;;
+            'flash_rc=1 '*) break ;;
+            flash_rc=*) write_state supervisor_rollback_failed; exit 1 ;;
+        esac
+        sleep 1
+    done
     state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
-    case "$state" in
-        'flash_rc=0 '*)
-            # Trex has no Gemini SSH credential. This terminal state proves
-            # the exact rescue bytes were staged and the p22-only wrapper
-            # returned success; the live harness must perform device-side
-            # p22/p30/p31 readback when connectivity is available.
-            test "$(sha256sum "$STAGE_IMAGE" | cut -d' ' -f1)" = "$ROLLBACK_SHA"
-            write_state supervisor_rollback_succeeded_rescue_verified
-            exit 0 ;;
-        flash_rc=*) write_state supervisor_rollback_failed; exit 1 ;;
-    esac
-    sleep 1
+    if [ "$rollback_attempt" -eq 1 ] &&
+       printf '%s\n' "$state" | grep -Fq 'flash_rc=1 '; then
+        # Flash Tool's own BROM scan is 120 seconds. The observed watchdog
+        # handoff can expose preloader just after that first scan expires.
+        # Reap the finished wrapper, then immediately open one final bounded
+        # scan: the exact rescue bytes, p22-only XML, global writer lock and
+        # overall rollback deadline are unchanged.
+        wait "$launch_pid" 2>/dev/null || true
+        printf '[%s] rollback attempt 1 missed/failed rc=1; retrying exact p22 once\n' \
+            "$(date -Is)" >> "$ROLLBACK_LOG"
+        rollback_attempt=2
+        continue
+    fi
+    break
 done
+
+case "$(cat "$ROLLBACK_STATE" 2>/dev/null || true)" in
+    flash_rc=*) write_state supervisor_rollback_failed; exit 1 ;;
+esac
 
 # The wrapper owns a private session and publishes its exact pgid. Kill only
 # that exact group on timeout; never use a broad process-name kill.

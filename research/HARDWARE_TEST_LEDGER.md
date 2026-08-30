@@ -1178,3 +1178,41 @@ the absent unique target, syncs, rereads hashes, and requires
 `ro,noload` before Stage2.  A failed upload may leave only the exact owned
 `.provision.tmp`; cleanup may remove only that path.  No block device, p30,
 p31, erase, format, or replacement of the Stage-A store is permitted.
+
+## Cycle 4 long-lease full-NixOS Stage1 provisioning and Stage-A rescue: 2026-08-30 12:22--12:35
+
+Root authorized the committed `7c3cef0` manifest
+`research/p22-full-nixos-stage2-4a407e4-long-lease.manifest` with candidate
+p22 `1e476816d8d4a5d913aab662d2dcc707ac994fee97c82135314a897c2a9bdf53` and
+exact Stage-A rollback
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`.
+Preflight confirmed boot/p22 only, the reviewed scatter/XML, and no competing
+writer. The candidate Download Only write completed `Download Succeeded`,
+rc=0 at 12:22:50.
+
+Candidate Stage1 was reachable over gadget and recorded literal watchdog
+ownership `watchdog=petting ... lease=180s handoff=stage1`, p29
+`ext4:ro,norecovery`, and the exact unique-store request for `100421632`
+bytes. Provisioning was attempted only after that marker. The stream stopped
+at `96096256` bytes before exact hash/size completion; no new final store
+target was created. Supervisor rollback was armed at 12:25:21, but its first
+120-second BROM search ended `S_TIMEOUT` at 12:27:21. The separately
+persistent `p22-recatch-2` Stage-A writer then caught the next preloader
+window and completed the exact rollback with rc=0 at 12:32:00.
+
+Final read-only SSH evidence over the right-port Ethernet path proved p22
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and
+p31 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+The device ended in Stage-A NixOS with p29 mounted `ro,norecovery`; the old
+Stage-A store remained regular, single-link, `100417536` bytes with SHA256
+`1aec7ab82d592e49da6e8c916d36cda097467855fdbd90a76b4d942a0b2a1da3`.
+The unique target was absent, while its owned partial temp remained regular,
+single-link, `96096256` bytes with SHA256
+`57e048e92d1663ba5a805a96cb0ac748cc66ec9c2c42b3a4a6c5ce4db9e0aa52` because
+the candidate had already rebooted and p29 was ro. No p30/p31 write, erase,
+format, firmware upgrade, or candidate acceptance occurred. The terminal run
+evidence is under
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-122238-76509`;
+the recatch evidence is in the `p22-recatch-2.*` files in that same Trex run
+directory.

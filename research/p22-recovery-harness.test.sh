@@ -327,6 +327,37 @@ test_supervisor_rolls_back_failed_candidate() {
     grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$run/supervisor.state"
 }
 
+test_supervisor_retries_one_brom_scan_timeout() {
+    run=$TEST_ROOT/supervisor-retry
+    mkdir -p "$run/bin"
+    rescue=$run/rescue.img
+    stage=$run/boot.img
+    truncate -s 16777216 "$rescue"
+    rollback_sha=$(sha256sum "$rescue" | cut -d' ' -f1)
+    printf '%s\n' 'flash_rc=0 candidate' > "$run/candidate.state"
+    fake_wrapper=$run/fake-wrapper
+    cat > "$fake_wrapper" <<'EOF'
+#!/bin/sh
+count_file=${1%/*}/wrapper.count
+count=$(cat "$count_file" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s\n' "$count" > "$count_file"
+if [ "$count" -eq 1 ]; then
+    printf 'flash_rc=1 simulated-brom-scan-timeout\n' > "$1"
+    exit 1
+fi
+printf 'flash_rc=0 simulated-second-scan-catch\n' > "$1"
+EOF
+    chmod +x "$fake_wrapper"
+    PATH="$run/bin:$PATH" timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
+        "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
+        "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
+        "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
+    test "$(cat "$run/wrapper.count")" -eq 2
+    grep -Fq 'rollback attempt 1 missed/failed rc=1' "$run/rollback.log"
+    grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$run/supervisor.state"
+}
+
 test_supervisor_records_unexpected_exit() {
     run=$TEST_ROOT/supervisor-unexpected
     mkdir -p "$run"
@@ -979,6 +1010,7 @@ test_stop_capture_does_not_trust_stale_diagnostic_pid
 test_xml_is_attempt_unique_for_writer_and_supervisor
 test_supervisor_fake_rollback
 test_supervisor_rolls_back_failed_candidate
+test_supervisor_retries_one_brom_scan_timeout
 test_supervisor_records_unexpected_exit
 test_supervisor_timeout_kills_only_owned_session
 test_supervisor_stale_metadata_does_not_kill_foreign
