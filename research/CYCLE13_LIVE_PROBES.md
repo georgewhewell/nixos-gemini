@@ -42,6 +42,21 @@ runtime DT overlays; they did not reboot or flash the device.
   fixed. A final overlay apply/remove preflight produced no OF warnings,
   errors, refcount diagnostics, or memory-leak diagnostics.
 
+## Right-port MUSB host and USB Ethernet
+
+- The MT6797 MUSB host enumerated an RTL8156 adapter at USB high speed
+  (`480M`), and the Ethernet link negotiated `1000baseT/Full`.
+- A 128 MiB TCP stream from device to host completed at 70.3 Mbit/s; the
+  reverse stream completed at 56.1 Mbit/s. These were `nc`/`dd` smoke tests,
+  so the rates include userspace and TCP overhead and are not throughput
+  limits.
+- After both transfers, `enu1` reported zero RX/TX errors and zero carrier
+  errors. The kernel log contained no MUSB babble, three-strikes, reset, or
+  disconnect event.
+- This qualifies the current high-speed configuration on this handset and
+  supersedes the older `bsg100/gemini-linux` full-speed-only workaround for
+  our build.
+
 ## What still needs a boot
 
 Runtime probing cannot replace code already built into the running kernel or
