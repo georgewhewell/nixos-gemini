@@ -298,6 +298,7 @@
         grep -Fqx 'CONFIG_DRM=y' .config
         grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
         grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
+        grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
         grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
