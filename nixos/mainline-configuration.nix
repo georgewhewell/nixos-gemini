@@ -143,13 +143,15 @@
     requires = ["dbus.service"];
   };
   systemd.services.sshd = {
+    # Order after both recovery paths have had a chance to configure, but do
+    # not make the independent right-port Ethernet SSH path depend on usb0.
+    # A failed gadget address must not suppress sshd on an RTL815x DHCP lease.
     after = [
       "gemini-mainline-usb.service"
       "gemini-watchdog-takeover.service"
       "gemian.mount"
     ];
     requires = [
-      "gemini-mainline-usb.service"
       "gemini-watchdog-takeover.service"
     ];
   };
@@ -157,8 +159,8 @@
   # Stage 1 keeps the nowayout watchdog alive while systemd starts.  Replace
   # that petter before exposing SSH.  The Stage-1 lease supervisor follows the
   # atomically replaced owner PID and kills whichever petter currently owns it
-  # after 90 seconds unless an external acceptance action explicitly records
-  # `unattended_recovery=healthy` in volatile /run state.
+  # after the Stage-1 image's configured lease unless an external acceptance
+  # action explicitly records `unattended_recovery=healthy` in volatile /run.
   systemd.services.gemini-watchdog-takeover = {
     description = "Take over the Gemini unattended recovery watchdog";
     wantedBy = ["multi-user.target"];
