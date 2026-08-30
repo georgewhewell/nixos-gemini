@@ -394,16 +394,18 @@ fi
 
 device_ssh_gadget() {
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
-        timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$SSH_DEADLINE_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
-        timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$SSH_DEADLINE_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            root@10.15.19.82 "$@"
     fi
 }
 
@@ -412,14 +414,14 @@ device_ssh_gadget_provision() {
     # ControlMaster socket: its mux can disappear while the Stage1 network is
     # still healthy and turns the upload into a local Broken pipe.
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
-        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
             -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
-        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
             -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
@@ -448,16 +450,18 @@ device_ssh_gadget_fast() {
     # Stage2 readiness is a gadget-only liveness check. A right-NIC fallback
     # here can spend another full SSH timeout and starve Stage1 provisioning.
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
-        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout="$STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS" \
             -o ConnectionAttempts=1 -o ServerAliveInterval=1 \
-            -o ServerAliveCountMax=1 -o StrictHostKeyChecking=no \
+            -o ServerAliveCountMax=1 -o ControlMaster=no -o ControlPath=none \
+            -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
-        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout="$STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS" \
             -o ConnectionAttempts=1 -o ServerAliveInterval=1 \
-            -o ServerAliveCountMax=1 root@10.15.19.82 "$@"
+            -o ServerAliveCountMax=1 -o ControlMaster=no -o ControlPath=none \
+            root@10.15.19.82 "$@"
     fi
 }
 
@@ -652,7 +656,7 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
     # log() prefixes every Stage1 line; require the complete emitted line so
     # a similarly named or embedded token cannot authorize provisioning.
     device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
-    if ! device_ssh_right_provision "set -eu
+    provision_command="set -eu
 test ! -e '$init_target'
 if test -e '$provision_tmp' || test -L '$provision_tmp'; then
   test ! -L '$provision_tmp'
@@ -684,8 +688,13 @@ test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
 test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
 test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
 printf '%s\\n' '$ready_line' > /run/store-provision.ready
-test \"\$(cat /run/store-provision.ready)\" = '$ready_line'" < "$STAGE2_STORE_SOURCE"; then
-        return 1
+test \"\$(cat /run/store-provision.ready)\" = '$ready_line'"
+    if ! device_ssh_right_provision "$provision_command" < "$STAGE2_STORE_SOURCE"; then
+        # The right RTL8156 stream has ended before this fallback starts.  The
+        # same remote transaction validates and removes only its exact owned
+        # temporary before a fresh gadget-path stream, so no writers overlap
+        # and the final target remains SHA-gated and atomically renamed.
+        device_ssh_gadget_provision "$provision_command" < "$STAGE2_STORE_SOURCE" || return 1
     fi
     device_ssh_gadget "set -eu
 test \"\$(cat /run/store-provision.ready)\" = '$ready_line'
@@ -822,12 +831,31 @@ stop_capture() {
 start_probe_capture() {
     proof_log=$RUN_LOCAL/probe-status-proof.log
     (
+        stage2_evidence_seen=no
+        transition_deadline=
         while :; do
             if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
                 printf 'stage2-evidence %s\n' "$(date -Is)"
-                if ! device_ssh 'for f in /run/stage1.log /run/stage1-handoff /run/store-provision.ready; do if test -e "$f"; then printf "--- %s ---\n" "$f"; cat "$f"; fi; done'; then
+                stage2_snapshot_rc=0
+                stage2_snapshot=$(device_ssh 'for f in /run/stage1.log /run/stage1-handoff /run/store-provision.ready /run/gemini-mainline-success /run/unattended-recovery.lease-expired; do if test -e "$f"; then printf "--- %s ---\n" "$f"; cat "$f"; fi; done') || stage2_snapshot_rc=$?
+                if [ "$stage2_snapshot_rc" -eq 0 ]; then
+                    printf '%s\n' "$stage2_snapshot"
+                    case "$stage2_snapshot" in
+                        *"$STAGE2_WATCHDOG_EVIDENCE"*) stage2_evidence_seen=yes ;;
+                    esac
+                    transition_deadline=
+                elif [ "$stage2_evidence_seen" = yes ]; then
                     printf 'stage2-disconnected %s\n' "$(date -Is)"
                     break
+                else
+                    now=$(date +%s)
+                    if [ -z "$transition_deadline" ]; then
+                        transition_deadline=$((now + RECOVERY_SSH_TIMEOUT_SECONDS))
+                        printf 'stage2-transition-pending %s deadline=%s\n' "$(date -Is)" "$transition_deadline"
+                    elif [ "$now" -ge "$transition_deadline" ]; then
+                        printf 'stage2-disconnected %s\n' "$(date -Is)"
+                        break
+                    fi
                 fi
             else
                 printf 'probe-status %s\n' "$(date -Is)"
@@ -1076,6 +1104,8 @@ wait_ssh() {
 }
 
 validate_candidate_stage2() {
+    # Keep the Stage2 path as diagnosable as the generic validator.  Without
+    # this capture a failed acceptance loop has no command-level evidence.
     device_ssh "set -eu
 accept_deadline=$ACCEPTANCE_DEADLINE
 test \"\$(date +%s)\" -lt \"\$accept_deadline\"
@@ -1150,7 +1180,7 @@ printf 'stage1_handoff_path=%s\\n' \"$STAGE1_HANDOFF_PATH\"
 printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
 printf 'stage2_success_marker=%s\\n' \"$STAGE2_SUCCESS_MARKER\"
 printf '%s\\n' \"$STAGE2_WATCHDOG_EVIDENCE\"
-"
+" > "$RUN_LOCAL/candidate-validation.log" 2>&1
 }
 
 validate_candidate() {

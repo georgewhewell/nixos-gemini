@@ -58,6 +58,7 @@ test_provision_ssh_disables_control_master() {
     test "$(cat "$argv.timeout")" = 73
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' "$argv" >/dev/null
     grep -Fx -- root@10.15.19.82 "$argv" >/dev/null
     argv=$RUN_LOCAL/right.argv
     device_ssh_right_provision 'true'
@@ -71,6 +72,7 @@ test_provision_ssh_disables_control_master() {
     device_ssh_gadget_provision 'true'
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' "$argv" >/dev/null
     grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
     argv=$RUN_LOCAL/right-candidate.argv
     device_ssh_right_provision 'true'
@@ -767,8 +769,10 @@ test_stage2_readiness_is_fast_gadget_only() (
     STAGE2_READINESS_TIMEOUT_SECONDS=5
     STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS=2
     device_ssh_gadget_fast 'test -s /proc/cmdline'
-    grep -Fq '5 ssh -J trex' "$TEST_ROOT/fast-readiness-timeout.args"
+    grep -Fq '5 ssh -o ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' "$TEST_ROOT/fast-readiness-timeout.args"
     grep -Fq 'ConnectTimeout=2' "$TEST_ROOT/fast-readiness-timeout.args"
+    grep -Fq 'ControlMaster=no' "$TEST_ROOT/fast-readiness-timeout.args"
+    grep -Fq 'ControlPath=none' "$TEST_ROOT/fast-readiness-timeout.args"
     ! grep -Fq 'root@192.168.23.70' "$TEST_ROOT/fast-readiness-timeout.args"
     accept_source=$TEST_ROOT/stage2-accept-source.sh
     sed -n '/^accept_candidate_until_deadline() {/,/^}/p' "$HARNESS" \
@@ -888,6 +892,59 @@ test_stage2_store_staging_commands_are_safe_shell() {
     ! grep -Fq "grep -Fqx -- 'store-provision=required" \
         "$RUN_LOCAL/store-command-3.sh"
     ! grep -R -Fq 'device_scp' "$RUN_LOCAL" 2>/dev/null
+}
+
+test_stage2_store_falls_back_once_to_gadget_after_right_failure() {
+    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/stage2-store-fallback-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/stage2-store-fallback-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-store-fallback-run
+    mkdir -p "$RUN_LOCAL"
+    printf 'exact stage2 payload\n' > "$TEST_ROOT/stage2-fallback.squashfs"
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-fallback.squashfs
+    STAGE2_STORE_SIZE=$(stat -Lc %s "$STAGE2_STORE_SOURCE")
+    STAGE2_STORE_SHA=$(sha256sum "$STAGE2_STORE_SOURCE" | cut -d' ' -f1)
+    STAGE2_STORE_TARGET=/nixos/next-mainline.squashfs
+    STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
+    STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+    STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE1_STORE_SIZE=1
+    gadget_checks=0
+    device_ssh_gadget() {
+        gadget_checks=$((gadget_checks + 1))
+        printf '%s\n' "$1" > "$RUN_LOCAL/gadget-check-$gadget_checks.sh"
+        case "$1" in
+            *'grep -Fqx'*) return 0 ;;
+            *'cat /run/store-provision.ready'*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+    right_streams=0
+    device_ssh_right_provision() {
+        right_streams=$((right_streams + 1))
+        cat > "$RUN_LOCAL/right-failed-stream"
+        printf '%s\n' "$1" > "$RUN_LOCAL/right-failed-command.sh"
+        return 1
+    }
+    gadget_streams=0
+    device_ssh_gadget_provision() {
+        gadget_streams=$((gadget_streams + 1))
+        cat > "$RUN_LOCAL/gadget-fallback-stream"
+        printf '%s\n' "$1" > "$RUN_LOCAL/gadget-fallback-command.sh"
+        return 0
+    }
+    provision_stage2_store
+    test "$right_streams" -eq 1
+    test "$gadget_streams" -eq 1
+    cmp "$STAGE2_STORE_SOURCE" "$RUN_LOCAL/right-failed-stream"
+    cmp "$STAGE2_STORE_SOURCE" "$RUN_LOCAL/gadget-fallback-stream"
+    sh -n "$RUN_LOCAL/right-failed-command.sh"
+    cmp "$RUN_LOCAL/right-failed-command.sh" "$RUN_LOCAL/gadget-fallback-command.sh"
+    grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/gadget-fallback-command.sh"
+    test "$STAGE2_STORE_PROVISIONED" = yes
 }
 
 test_stage2_exact_target_is_idempotent() {
@@ -1016,6 +1073,46 @@ EOF
     set -e
     test "$rc" -ne 0
 }
+
+test_stage2_probe_capture_survives_switch_root_disconnect() (
+    sed -n '/^start_probe_capture() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/start-probe-capture-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/start-probe-capture-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-probe-capture
+    mkdir -p "$RUN_LOCAL"
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_WATCHDOG_EVIDENCE='stage2=multi-user watchdog=petting acceptance=external'
+    RECOVERY_SSH_TIMEOUT_SECONDS=30
+    probe_call_file=$TEST_ROOT/stage2-probe-calls
+    printf '%s\n' 0 > "$probe_call_file"
+    device_ssh() {
+        probe_calls=$(cat "$probe_call_file")
+        probe_calls=$((probe_calls + 1))
+        printf '%s\n' "$probe_calls" > "$probe_call_file"
+        case "$probe_calls" in
+            1) printf '%s\n' 'GEMINI_MAINLINE_NIXOS: stage1=entered'; return 0 ;;
+            2) return 1 ;;
+            3) printf '%s\n' "GEMINI_MAINLINE_NIXOS: $STAGE2_WATCHDOG_EVIDENCE"; return 0 ;;
+            4) return 1 ;;
+            *) return 1 ;;
+        esac
+    }
+    sleep() { :; }
+    start_probe_capture
+    wait "$PROBE_CAPTURE_PID"
+    proof=$RUN_LOCAL/probe-status-proof.log
+    grep -Fq 'stage2-transition-pending ' "$proof"
+    grep -Fq "$STAGE2_WATCHDOG_EVIDENCE" "$proof"
+    grep -Fq 'stage2-disconnected ' "$proof"
+    pending_line=$(grep -n -F 'stage2-transition-pending ' "$proof" | cut -d: -f1)
+    evidence_line=$(grep -n -F "$STAGE2_WATCHDOG_EVIDENCE" "$proof" | cut -d: -f1)
+    disconnect_line=$(grep -n -F 'stage2-disconnected ' "$proof" | cut -d: -f1)
+    test "$pending_line" -lt "$evidence_line"
+    test "$evidence_line" -lt "$disconnect_line"
+    grep -Fq '/run/gemini-mainline-success' "$TEST_ROOT/start-probe-capture-function.sh"
+    grep -Fq '/run/unattended-recovery.lease-expired' "$TEST_ROOT/start-probe-capture-function.sh"
+)
 
 test_stage2_policy_requires_observe_lease() {
     manifest=$TEST_ROOT/stage2-policy.manifest
@@ -1237,9 +1334,11 @@ test_stage2_schema_rejects_unsafe_store_target
 test_stage2_readiness_is_fast_gadget_only
 test_recovered_stage_a_readback_retries_exactly
 test_stage2_store_staging_commands_are_safe_shell
+test_stage2_store_falls_back_once_to_gadget_after_right_failure
 test_stage2_exact_target_is_idempotent
 test_stage2_rendered_validation_requires_handoff
 test_stage2_lease_evidence_is_literal
+test_stage2_probe_capture_survives_switch_root_disconnect
 test_stage2_policy_requires_observe_lease
 test_reboot_dispatch_is_single_path_then_reachability_gated
 echo 'p22-recovery-harness tests: passed'
