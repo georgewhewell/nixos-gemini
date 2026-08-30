@@ -88,7 +88,7 @@
     else "none";
   powerObserveLabel =
     if powerObserveOverlay
-    then "bq2589x-i2c0-no-write-no-irq-v1"
+    then "bq2589x-i2c0-read-only-status-poll-30s-v2"
     else "none";
   powerObservePreflightLabel =
     if powerObservePreflight
@@ -464,8 +464,8 @@
           "$out/mt6797-gemini-pda-audio.dtbo"
       ''}
       ${lib.optionalString powerObserveOverlay ''
-        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtbo \
-          "$out/mt6797-gemini-pda-power-observe.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-status.dtbo \
+          "$out/mt6797-gemini-pda-power-status.dtbo"
       ''}
       ${lib.optionalString inputObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtbo \
@@ -670,16 +670,17 @@
           fdtoverlay \
             -i "$out/gemini-audio.dtb" \
             -o "$out/gemini.dtb" \
-            ${kernel}/mt6797-gemini-pda-power-observe.dtbo
+            ${kernel}/mt6797-gemini-pda-power-status.dtbo
           test "$(fdtget "$out/gemini.dtb" /i2c@11007000 status)" = okay
           test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b status)" = okay
           test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b compatible)" = \
             'ti,bq25896 ti,bq25890'
           fdtget -p "$out/gemini.dtb" /i2c@11007000/charger@6b \
             | grep -Fqx 'ti,read-only'
+          test "$(fdtget -t u "$out/gemini.dtb" /i2c@11007000/charger@6b ti,status-poll-interval-ms)" = 30000
           ! fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b interrupts \
             >/dev/null 2>&1
-          echo 'power-observe-overlay=passed' >> "$out/VALIDATION"
+          echo 'power-status-overlay=read-only-poll-30s-passed' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-audio.dtb" "$out/gemini.dtb"

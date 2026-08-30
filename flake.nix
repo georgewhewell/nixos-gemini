@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=e360d0c5dcf095f5247f869a6061d15aff40cf75";
+      url = "github:georgewhewell/linux-gemini/b1de7d56dedb72d970d33582bb37876629b9deca";
       flake = false;
     };
     ixoo-candidate = {
