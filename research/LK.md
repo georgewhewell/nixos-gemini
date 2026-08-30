@@ -31,6 +31,26 @@ inputs still need recovery.
 The vendor target reserves `0x03200000` (50 MiB) for kernel decompression,
 consistent with the behavior recovered from p20.
 
+## Watchdog and secure handoff
+
+The retained p20 reverse-engineering record proves that the normal LK path
+arms the MT6797 watchdog with timeout argument `10`, kicks
+`0x10007008 = 0x1971` before handoff, and enters ATF with
+`smc 0x82000200` (`artifacts/lk-analysis/REVERSE_ENGINEERING.md:7-18,47-65`).
+The exact current live p24/p25 ATF image and its static trace are recorded in
+[`ATF_WATCHDOG_HANDOFF.md`](ATF_WATCHDOG_HANDOFF.md): both labels resolve to
+5,242,880-byte partitions with SHA-256
+`82eb00d45057489a5964b14cfe534d883ed16b4ca335d80920c5e7e286160c32`, and
+both are byte-identical to the local 98,304-byte `tee.img` container followed
+by zero padding. Its normal `0x82000200` handler has no direct WDT mode,
+length, or disable write; the only direct ATF WDT access is an EL3 exception
+path restart kick at binary offsets `0x10950-0x10958`.
+
+This proves the current ATF's direct register behavior, not the elapsed
+SMC-to-Linux timing or a runtime reset. Continued counting of LK's nominal
+watchdog until Linux probes is the bounded hardware-state inference; do not
+promote it to DEVICE-TESTED recovery.
+
 ## Why not update to upstream LK
 
 Current upstream LK has only

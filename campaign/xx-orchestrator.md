@@ -19,6 +19,18 @@ Every device experiment records:
 hardware proof. In particular, the current STP KUnit tests are hardware-free;
 they do not demonstrate CONSYS, BTIF, GNSS or Bluetooth progress.
 
+## LK/ATF watchdog boundary
+
+The exact current live `tee1`/`tee2` reads, their hashes, and the bounded
+AArch64 trace are recorded in
+`research/ATF_WATCHDOG_HANDOFF.md`. LK's binary arms and kicks the watchdog
+before `smc 0x82000200`; the exact live ATF dispatches that ID without a direct
+WDT mode/length/disable write on the normal handler path. Continued watchdog
+counting until Linux probes is therefore an inference about elapsed timing and
+hardware state, not a DEVICE-TESTED reset guarantee. P22 experiments must keep
+the existing bounded wait, rollback, and manual-recovery gates; userspace
+watchdog evidence begins only after Linux has probed.
+
 ## Connectivity gate order
 
 1. Passive resource inventory: no MMIO, clocks, reset, IRQ, DMA, firmware or
