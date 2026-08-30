@@ -502,6 +502,34 @@ test_recovery_ssh_window_covers_platform_gate() {
     fi
 }
 
+test_rendered_candidate_validation_is_valid_shell() {
+    sed -n '/^validate_candidate() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/validate-candidate-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/validate-candidate-function.sh"
+    device_ssh() { sh -n -c "$1"; }
+    RUN_LOCAL=$TEST_ROOT/validate-candidate-run
+    mkdir -p "$RUN_LOCAL"
+    ACCEPTANCE_DEADLINE=2000000000
+    CANDIDATE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    ROOTFS_POLICY=enumeration-only
+    POWER_PREFLIGHT_POLICY=required
+    EXPECTED_MODEL=MT6797X
+    EXPECTED_COMPATIBLE=planet,gemini-pda
+    EXPECTED_CMDLINE=maxcpus=8
+    EXPECTED_CPU_ONLINE=0-7
+    EXPECTED_GADGET_IP=10.15.19.82
+    EXPECTED_ETHERNET_IP=192.168.23.70
+    HOST_NET_POLICY=required
+    EXPECTED_MARKER=unattended_recovery=healthy
+    FEATURE_POLICY=allow-platform
+    WATCHDOG_PROFILE=initramfs-petter
+    EXPECTED_WATCHDOG_IDENTITY=mtk-wdt
+    EXPECTED_WATCHDOG_STATE=active
+    EXPECTED_WATCHDOG_TIMEOUT=31
+    validate_candidate
+}
+
 test_wrapper_requires_transaction_owner_when_requested() {
     test_bin=$TEST_ROOT/owner-bin
     mkdir -p "$test_bin"
@@ -563,6 +591,7 @@ test_harness_waits_for_nonterminal_supervisor_states
 test_local_exit_preserves_active_supervisor
 test_supervisor_is_trex_owned_and_bounded
 test_recovery_ssh_window_covers_platform_gate
+test_rendered_candidate_validation_is_valid_shell
 test_wrapper_requires_transaction_owner_when_requested
 test_wrapper_rejects_stale_transaction_owner
 test_transaction_holder_removes_expired_owner

@@ -820,7 +820,7 @@ if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
 fi
 # The caller keeps validation marker-free and commits the lease separately
 # after every required SSH path succeeds.
-fi" > "$RUN_LOCAL/candidate-validation.log" 2>&1
+" > "$RUN_LOCAL/candidate-validation.log" 2>&1
 }
 
 commit_acceptance_marker() {
