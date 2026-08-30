@@ -31,7 +31,7 @@
       # Critical-path experiments consume a second immutable pin so the
       # accepted p22 baseline remains rebuildable byte-for-byte while newer
       # CONSYS/GPU/cellular work advances on the same maintained fork.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=733110875d2944bbbe37eba518c2b2f90c2d6f73";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=1e31c2cd45c141300d18ec0ec37d29efcbb9a2c6";
       flake = false;
     };
     ixoo-candidate = {
@@ -470,6 +470,27 @@
       sshAccess = true;
       usbHostOverlay = true;
       consysG2cPatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # G2d completes the vendor post-patch firmware initialisation inside the
+    # G2c retained full-STP lifecycle. It is a p22-only, watchdog-protected
+    # owner swap: G2c's DT node and boot gate stay disabled, and no radio
+    # function/client is exposed.
+    mainlineConsysG2dPostpatch = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
       unattendedRecovery = true;
     };
 
@@ -1208,6 +1229,10 @@
       mainlineConsysG2cPatchOnlyDtb = mainlineConsysG2cPatchOnly.serviceabilityDtb;
       mainlineConsysG2cPatchOnlyInitramfs = mainlineConsysG2cPatchOnly.probeInitramfs;
       mainlineConsysG2cPatchOnlyBundle = mainlineConsysG2cPatchOnly.bundle;
+      mainlineConsysG2dPostpatchKernel = mainlineConsysG2dPostpatch.kernel;
+      mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
+      mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
+      mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

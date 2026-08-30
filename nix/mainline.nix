@@ -13,6 +13,7 @@
   consysIdentityOverlay ? false,
   consysG2bOverlay ? false,
   consysG2cPatchOverlay ? false,
+  consysG2dPostpatchOverlay ? false,
   consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
@@ -61,6 +62,7 @@
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
     ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
     ++ lib.optionals consysG2cPatchOverlay [./mainline-consys-g2c-patch.fragment]
+    ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -106,9 +108,13 @@
     if consysG2cPatchOverlay
     then "emi-identity-postid-raw-mandatory-full-hash-pinned-patch-only-v1"
     else "none";
-  consysFirmwareAvailable = consysFirmware || consysG2cPatchOverlay;
+  consysG2dPostpatchLabel =
+    if consysG2dPostpatchOverlay
+    then "emi-identity-postid-full-wmt-hash-pinned-patch-postpatch-no-radio-client-v1"
+    else "none";
+  consysFirmwareAvailable = consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay;
   consysFirmwareLabel =
-    if consysG2cPatchOverlay
+    if consysG2cPatchOverlay || consysG2dPostpatchOverlay
     then "three-blob-exact-size-sha256-patch-manifest-enabled-v1"
     else if consysFirmware
     then "tracked-production-wmt-patch-preflight-only-v1"
@@ -173,6 +179,7 @@
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
+    + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -183,6 +190,7 @@
     + lib.optionalString consysIdentityOverlay "-consys-identity"
     + lib.optionalString consysG2bOverlay "-consys-g2b"
     + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
+    + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -210,12 +218,14 @@
   usbPlatformDtbSha256 =
     "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610";
   profileCombinationValid =
-    assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay));
-    assert !(consysG2bOverlay && consysG2cPatchOverlay);
+    assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
+    assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
+    assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
-    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay));
+    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !consysG2cPatchOverlay || unattendedRecovery;
+    assert !consysG2dPostpatchOverlay || unattendedRecovery;
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -315,6 +325,7 @@
       + lib.optionalString consysIdentityOverlay "-consys-identity"
       + lib.optionalString consysG2bOverlay "-consys-g2b"
       + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
+      + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
@@ -377,7 +388,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -434,6 +445,20 @@
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2C_PATCH_OWNER=y' .config
         ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2dPostpatchOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2C_PATCH_OWNER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2D_POSTPATCH_OWNER=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
       ''}
@@ -640,6 +665,11 @@
           "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
         test -s "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
       ''}
+      ${lib.optionalString consysG2dPostpatchOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2c-patch-only.dtbo \
+          "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+      ''}
       ${lib.optionalString gpuStagedOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-staged.dtbo \
           "$out/mt6797-gemini-pda-gpu-staged.dtbo"
@@ -767,7 +797,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -915,6 +945,37 @@
           echo 'consys-g2c-overlay=passed' >> "$out/VALIDATION"
           echo 'consys-g2c-manifest=hash-pinned-after-full-stp-only' >> "$out/VALIDATION"
           echo 'consys-g2c-radio-clients=disabled' >> "$out/VALIDATION"
+        ''
+        else if consysG2dPostpatchOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2c-patch-only.dtbo
+          # The shared overlay declares both owners.  This profile has exactly
+          # one live owner: G2c remains disabled and receives no boot gate.
+          fdtput -t s "$out/gemini-consys.dtb" /consys-g2c-patch-owner status disabled
+          fdtput -t s "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status okay
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-patch-owner status)" = disabled
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner compatible)" = \
+            mediatek,mt6797-consys-g2d-postpatch-owner
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status)" = okay
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            | grep -Fqx 'mediatek,experimental-g2d-postpatch-owner'
+          # PIO has no child endpoint and neither owner declares a function
+          # client. The kernel config also excludes BTIF transport/HCI.
+          test -z "$(fdtget -l "$out/gemini-consys.dtb" /serial@1100c000)"
+          ! fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            mediatek,function-control >/dev/null 2>&1
+          echo 'consys-g2d-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2d-owner=exclusive-g2c-disabled' >> "$out/VALIDATION"
+          echo 'consys-g2d-radio-clients=disabled' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
@@ -1861,6 +1922,7 @@
       echo "nix-consys-identity=${consysIdentityLabel}"
       echo "nix-consys-g2b=${consysG2bLabel}"
       echo "nix-consys-g2c-patch=${consysG2cPatchLabel}"
+      echo "nix-consys-g2d-postpatch=${consysG2dPostpatchLabel}"
       echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
       echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
