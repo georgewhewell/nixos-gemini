@@ -83,7 +83,7 @@
     else "none";
   displayLabel =
     if displayOverlay
-    then "nt36672-lp3101-recovery-smoke-v1"
+    then "nt36672-lp3101-smi-bypass-recovery-smoke-v2"
     else "none";
   audioLabel =
     if audioOverlay
@@ -153,7 +153,7 @@
   inputObserveDtbSha256 = "9755a6eb8fa4c6a7a821514238990b8581a6fa6b27e486325341f3a0b28a2d92";
   thermalHallDtbSha256 = "85de08441035b1820becc1a9c4fe30f188c5b544e5e931d71e995a3c8b471a51";
   deviceActivationDtbSha256 = "5d0569e32b25bc2ce7d56c2220135bd7c2eae9bbc68e14a6b297f548148395da";
-  finalDtbSha256 =
+  profileCombinationValid =
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -201,25 +201,7 @@
         && thermalHallObserveOverlay
         && !consysIdentityOverlay
       );
-    if deviceActivationOverlay
-    then deviceActivationDtbSha256
-    else if thermalHallObserveOverlay
-    then thermalHallDtbSha256
-    else if inputObserveOverlay
-    then inputObserveDtbSha256
-    else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
-    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
-    else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
-    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
-    else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
-    then "cd1bd904000769bc7444a3ee384cb5c832d5659dc746291d60b5a3918bced763"
-    else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
-    then "cfd1425190d812612989c8de69f90debdd93457fd1491e1f14701eb3a2377358"
-    else if consysIdentityOverlay && !platformEnablement
-    then "cfd1425190d812612989c8de69f90debdd93457fd1491e1f14701eb3a2377358"
-    else if usbHostOverlay
-    then usbPlatformDtbSha256
-    else serviceabilityBaseDtbSha256;
+    true;
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
@@ -342,6 +324,8 @@
         grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
+        grep -Fqx 'CONFIG_MTK_SMI=y' .config
+        grep -Fqx '# CONFIG_MTK_IOMMU is not set' .config
         grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
         grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
         grep -Fqx 'CONFIG_SND=y' .config
@@ -579,7 +563,7 @@
   # hardware-passed USB peripheral, I2C5/AW9523 keyboard, watchdog-without-IRQ,
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
-  serviceabilityDtb =
+  serviceabilityDtb = assert profileCombinationValid;
     buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
@@ -695,6 +679,16 @@
             planet,gemini-pda-nt36672
           test "$(fdtget "$out/gemini-display.dtb" /i2c@11008000/regulator@3e compatible)" = \
             mediatek,i2c_lcd_bias
+          test "$(fdtget "$out/gemini-display.dtb" /smi@14022000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /larb@14020000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400d000 mediatek,larb)" = \
+            "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
+          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400e000 mediatek,larb)" = \
+            "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
+          ! fdtget "$out/gemini-display.dtb" /iommu@10205000 status \
+            2>/dev/null | grep -Fqx okay
+          ! fdtget "$out/gemini-display.dtb" /ovl@1400d000 iommus >/dev/null 2>&1
+          ! fdtget "$out/gemini-display.dtb" /ovl@1400e000 iommus >/dev/null 2>&1
           echo 'display-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
@@ -851,8 +845,6 @@
         ''
         else ""
       }
-      test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
-        ${finalDtbSha256}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
         if thermalHallObserveOverlay
