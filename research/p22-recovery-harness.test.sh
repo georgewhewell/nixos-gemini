@@ -1055,6 +1055,113 @@ test_stage2_policy_requires_observe_lease() {
         "$TEST_ROOT/stage2-policy.log"
 }
 
+test_reboot_dispatch_is_single_path_then_reachability_gated() {
+    sed -n '/^reboot_dispatch_primary_command() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/reboot-primary-function.sh"
+    sed -n '/^reboot_dispatch_environment_command() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/reboot-environment-function.sh"
+    sed -n '/^reboot_dispatch_stage2_fallback_command() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/reboot-fallback-function.sh"
+    sed -n '/^request_reboot() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/request-reboot-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/reboot-primary-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/reboot-environment-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/reboot-fallback-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/request-reboot-function.sh"
+
+    RUN_LOCAL=$TEST_ROOT/reboot-dispatch
+    mkdir -p "$RUN_LOCAL"
+    calls=$RUN_LOCAL/calls
+    : > "$calls"
+    device_ssh_gadget() {
+        case "$1" in
+            *'reboot-path=stage2-systemctl'*)
+                printf '%s\n' primary >> "$calls"
+                printf '%s\n' 'Call to Reboot failed: Input/output error' >&2
+                return 0
+                ;;
+            *'reboot-environment=stage2-systemctl'*) printf '%s\n' probe-stage2 >> "$calls"; printf '%s\n' reboot-environment=stage2-systemctl; return 0 ;;
+            *'reboot-environment=stage1-busybox'*) printf '%s\n' probe-stage1 >> "$calls"; printf '%s\n' reboot-environment=stage1-busybox; return 0 ;;
+            *'reboot-fallback=stage2-systemctl-force'*) printf '%s\n' fallback >> "$calls"; return 255 ;;
+            *) return 99 ;;
+        esac
+    }
+
+    # An EIO-like primary result followed by an SSH disconnect is success,
+    # and must not issue a fallback reset.
+    wait_ssh_down() { printf '%s\n' down-check >> "$calls"; return 0; }
+    request_reboot
+    test "$(tr '\n' ' ' < "$calls")" = 'primary down-check '
+    grep -Fq 'primary-rc=0' "$RUN_LOCAL/reboot.log"
+    grep -Fq 'Call to Reboot failed: Input/output error' "$RUN_LOCAL/reboot.log"
+    grep -Fq 'disconnected=' "$RUN_LOCAL/reboot.log"
+    ! grep -Fq 'fallback-rc=' "$RUN_LOCAL/reboot.log"
+
+    # A fallback is permitted only after the original disconnect window has
+    # elapsed and a new successful probe proves Stage 2 still answers.
+    : > "$calls"
+    : > "$RUN_LOCAL/reboot.log"
+    wait_count=0
+    wait_ssh_down() {
+        wait_count=$((wait_count + 1))
+        printf '%s\n' "down-check-$wait_count" >> "$calls"
+        [ "$wait_count" -eq 2 ]
+    }
+    request_reboot
+    test "$(tr '\n' ' ' < "$calls")" = 'primary down-check-1 probe-stage2 fallback down-check-2 '
+    grep -Fq 'fallback-probe-rc=0 environment=reboot-environment=stage2-systemctl' "$RUN_LOCAL/reboot.log"
+    grep -Fq 'fallback-rc=255' "$RUN_LOCAL/reboot.log"
+    grep -Fq 'fallback-disconnected=' "$RUN_LOCAL/reboot.log"
+
+    # A live Stage1 is reported for manual action, never hit with a guessed
+    # second reset primitive.
+    : > "$calls"
+    : > "$RUN_LOCAL/reboot.log"
+    wait_ssh_down() { printf '%s\n' down-check >> "$calls"; return 1; }
+    device_ssh_gadget() {
+        case "$1" in
+            *'reboot-path=stage2-systemctl'*) printf '%s\n' primary >> "$calls"; return 127 ;;
+            *'reboot-environment=stage2-systemctl'*) printf '%s\n' probe-stage1 >> "$calls"; printf '%s\n' reboot-environment=stage1-busybox; return 0 ;;
+            *'reboot-fallback=stage2-systemctl-force'*) printf '%s\n' fallback >> "$calls"; return 99 ;;
+            *) return 99 ;;
+        esac
+    }
+    if request_reboot; then
+        reboot_rc=0
+    else
+        reboot_rc=$?
+    fi
+    test "$reboot_rc" -ne 0
+    test "$(tr '\n' ' ' < "$calls")" = 'primary down-check probe-stage1 '
+    grep -Fq 'fallback-unavailable=stage1-busybox' "$RUN_LOCAL/reboot.log"
+
+    # Keep the selector pinned to the evidence-backed absolute executables;
+    # a PATH lookup or /bin/reboot applet would reintroduce the two failures.
+    primary=$(reboot_dispatch_primary_command)
+    grep -Fqx 'if [ -x /run/current-system/sw/bin/systemctl ]; then' <<EOF
+$primary
+EOF
+    grep -Fqx '    exec /run/current-system/sw/bin/systemctl reboot --no-wall' <<EOF
+$primary
+EOF
+    grep -Fqx 'elif [ -x /bin/busybox ]; then' <<EOF
+$primary
+EOF
+    grep -Fqx '    exec /bin/busybox reboot -f' <<EOF
+$primary
+EOF
+    ! grep -Fq 'command -v systemctl' <<EOF
+$primary
+EOF
+    ! grep -Fq '/bin/reboot' <<EOF
+$primary
+EOF
+}
+
 test_wrapper_requires_transaction_owner_when_requested() {
     test_bin=$TEST_ROOT/owner-bin
     mkdir -p "$test_bin"
@@ -1134,4 +1241,5 @@ test_stage2_exact_target_is_idempotent
 test_stage2_rendered_validation_requires_handoff
 test_stage2_lease_evidence_is_literal
 test_stage2_policy_requires_observe_lease
+test_reboot_dispatch_is_single_path_then_reachability_gated
 echo 'p22-recovery-harness tests: passed'

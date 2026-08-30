@@ -1514,19 +1514,102 @@ wait_ssh_down() {
     return 1
 }
 
+reboot_dispatch_primary_command() {
+    # Stage 1 has a guaranteed BusyBox binary but no promise that its applet
+    # symlinks (including /bin/reboot) exist.  Stage 2's systemctl is a Nix
+    # store profile path, not a PATH lookup.  This selector execs exactly one
+    # reboot mechanism on the device.
+    cat <<'EOF'
+if [ -x /run/current-system/sw/bin/systemctl ]; then
+    echo reboot-path=stage2-systemctl
+    exec /run/current-system/sw/bin/systemctl reboot --no-wall
+elif [ -x /bin/busybox ]; then
+    echo reboot-path=stage1-busybox
+    exec /bin/busybox reboot -f
+else
+    echo reboot-path=missing
+    exit 127
+fi
+EOF
+}
+
+reboot_dispatch_environment_command() {
+    # This command is intentionally non-mutating.  Its successful SSH return
+    # is the proof required before a second, forced Stage-2 request is even
+    # considered.
+    cat <<'EOF'
+if [ -x /run/current-system/sw/bin/systemctl ]; then
+    printf '%s\n' reboot-environment=stage2-systemctl
+elif [ -x /bin/busybox ]; then
+    printf '%s\n' reboot-environment=stage1-busybox
+else
+    printf '%s\n' reboot-environment=missing
+    exit 127
+fi
+EOF
+}
+
+reboot_dispatch_stage2_fallback_command() {
+    # Reaching this command means the primary request has had the full
+    # disconnect window and a fresh gadget SSH probe still found Stage 2.
+    # Force is deliberately Stage-2-only: there is no second Stage-1 reset
+    # method in this bounded dispatcher.
+    cat <<'EOF'
+echo reboot-fallback=stage2-systemctl-force
+exec /run/current-system/sw/bin/systemctl reboot --no-wall --force --force
+EOF
+}
+
 request_reboot() {
     printf 'reboot-dispatch begin=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
     set +e
-    device_ssh_gadget 'if command -v systemctl >/dev/null 2>&1; then echo reboot-path=systemd; systemctl reboot --no-wall; elif [ -x /bin/reboot ]; then echo reboot-path=busybox; /bin/reboot -f; else echo reboot-path=missing; exit 127; fi' >> "$RUN_LOCAL/reboot.log" 2>&1
+    device_ssh_gadget "$(reboot_dispatch_primary_command)" >> "$RUN_LOCAL/reboot.log" 2>&1
     dispatch_rc=$?
     set -e
-    printf 'reboot-dispatch rc=%s\n' "$dispatch_rc" >> "$RUN_LOCAL/reboot.log"
+    printf 'reboot-dispatch primary-rc=%s\n' "$dispatch_rc" >> "$RUN_LOCAL/reboot.log"
     if wait_ssh_down 20; then
         printf 'reboot-dispatch disconnected=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
         return 0
     fi
-    printf 'reboot-dispatch ssh-still-up=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
-    return 1
+    printf 'reboot-dispatch ssh-still-up=%s fallback-probe=begin\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+
+    # Do not interpret an EIO/SSH result from the first request as a reason
+    # to send another reset.  A successful, fresh probe must first prove that
+    # the same gadget endpoint remains reachable and identify Stage 2.
+    set +e
+    fallback_environment=$(device_ssh_gadget "$(reboot_dispatch_environment_command)" 2>> "$RUN_LOCAL/reboot.log")
+    fallback_probe_rc=$?
+    set -e
+    printf 'reboot-dispatch fallback-probe-rc=%s environment=%s\n' \
+        "$fallback_probe_rc" "${fallback_environment:-none}" >> "$RUN_LOCAL/reboot.log"
+    if [ "$fallback_probe_rc" -ne 0 ]; then
+        return 1
+    fi
+
+    case "$fallback_environment" in
+        reboot-environment=stage2-systemctl)
+            set +e
+            device_ssh_gadget "$(reboot_dispatch_stage2_fallback_command)" \
+                >> "$RUN_LOCAL/reboot.log" 2>&1
+            fallback_rc=$?
+            set -e
+            printf 'reboot-dispatch fallback-rc=%s\n' "$fallback_rc" >> "$RUN_LOCAL/reboot.log"
+            if wait_ssh_down 20; then
+                printf 'reboot-dispatch fallback-disconnected=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+                return 0
+            fi
+            printf 'reboot-dispatch fallback-ssh-still-up=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+            return 1
+            ;;
+        reboot-environment=stage1-busybox)
+            printf 'reboot-dispatch fallback-unavailable=stage1-busybox\n' >> "$RUN_LOCAL/reboot.log"
+            return 1
+            ;;
+        *)
+            printf 'reboot-dispatch fallback-unavailable=unknown-environment\n' >> "$RUN_LOCAL/reboot.log"
+            return 1
+            ;;
+    esac
 }
 
 recover() {
