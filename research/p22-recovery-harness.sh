@@ -81,6 +81,7 @@ EXPECTED_WATCHDOG_STATE=
 EXPECTED_WATCHDOG_TIMEOUT=
 PROBE_CAPTURE_PID=
 P22_WRITE_MARKER=no
+PROOF_VALIDATED=no
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -478,11 +479,25 @@ if [ "$PROOF_LEASE" = yes ]; then
     # rollback tool first, then waits for the candidate lease to kill its
     # petter and expose the next watchdog/preloader window.
     if wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && validate_candidate; then
+        PROOF_VALIDATED=yes
         start_probe_capture
     else
         printf 'proof_candidate_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     fi
-    recover
+    if recover; then
+        if [ "$PROOF_VALIDATED" != yes ]; then
+            printf 'recovered_but_proof_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        if ! grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
+            "$RUN_LOCAL/probe-status-proof.log"; then
+            printf 'recovered_but_proof_failed_no_lease_expiry %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        printf 'lease_proof_passed_recovered_stage_a %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    else
+        exit 1
+    fi
 elif wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && P22_WRITE_MARKER=yes validate_candidate; then
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA

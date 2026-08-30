@@ -509,3 +509,9 @@ SIGKILL and its expected 31-second watchdog/preloader exposure.  The state
 file records `lease_proof_rollback_armed`; the normal capture, p22/p30/p31
 readbacks, and recovery checks still apply.  This path is intentionally not a
 dry-run claim or a substitute for root's separate hardware authorization.
+The proof verdict is sticky: rollback success alone is insufficient.  It also
+requires successful candidate watchdog validation and a captured
+'unattended_recovery=lease-expired watchdog_userspace=stopped' line; only then
+does the harness write 'lease_proof_passed_recovered_stage_a'.  Candidate
+validation or lease-evidence failure returns nonzero even if Stage-A rollback
+itself succeeds.
