@@ -1245,3 +1245,83 @@ regular, single-link, `96096256` bytes with SHA256
 p29 ended `ro,norecovery`. No p30/p31 write, erase, format, firmware
 upgrade, or candidate acceptance occurred. Run evidence is under
 `/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-123858-86331`.
+
+## Cycles 16--17: DSI command transport diagnosed and fixed: 2026-08-30 20:43--21:02
+
+Cycle 16 p22 image
+`c92495f401e7e5db765daa2e567a9a19a00ebbb68464bd7e578459ad0003dff0`
+booted with the MT6797 DSI timeout snapshot and measured vendor TIMCON values.
+The first panel command still timed out, but the snapshot made the boundary
+unambiguous: `INTSTA=0x792` already contained `CMD_DONE`, the command queue
+contained the expected `ff 20` packet, and `dsi->irq` was still zero.  Linux
+IRQ 228 had no interrupts.  The controller had completed the command; no IRQ
+handler existed yet.
+
+The cause was probe ordering in `mtk_dsi_probe()`: host registration can
+synchronously attach/probe the panel and assemble DRM, but the IRQ number and
+handler were installed only after `mipi_dsi_host_register()` returned.  Linux
+commit `51300a6972cda5f339d5a7d1e213649ec68cd86d` moved the still-masked
+`IRQF_NO_AUTOEN` request ahead of host registration while retaining the
+existing powered enable/disable lifecycle.
+
+Cycle 17 p22 image
+`e5ee84a933587b6a55dd36071ed7092036f351be2c8482da55c92313c9a543be`
+then completed the full NT36672E command table in about 0.38 seconds.  IRQ 228
+rose to 184; there was no FF20 timeout, Oops, panic, underflow, or call trace.
+DRM exposed connected/enabled DSI-1 at 1080x2160, `/dev/dri/card0`, and
+`/dev/fb0`; both panel-bias regulators remained enabled with one consumer.
+Writing a tty0 banner changed the complete framebuffer SHA256 from
+`030fe6a20cff595b9b8448f5b5a01c2ecaffc9529deba234bf7e91849490f849` to
+`c097535cd2a1446ffd9f875229f8049ae0f826bc1518c66dd5567c266a662bdc`.
+A greater-than-five-minute post-activation soak preserved both Ethernet
+paths, eMMC, watchdog service, the active CRTC, and the 184-interrupt count
+without a new kernel error.  Evidence is under
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/Cycle16/` and `Cycle17/`.
+
+## Cycle 18: first verified full mainline NixOS Stage2 boot: 2026-08-30 21:08
+
+The full Stage2 resolver was changed to select the whole-disk eMMC from the
+`11230000.mmc` sysfs lineage, excluding partitions, boot devices, and RPMB;
+the NixOS fallback mount now uses GPT PARTLABEL `linux`.  While Cycle 17 was
+alive, p29 mounted cleanly and the exact new SquashFS was transferred over
+right-port RTL8156 Ethernet under a temporary name, verified on-device, and
+atomically renamed:
+
+* file: `mainline-nixos-1k8dhvm46spsmnsxsnndcnhq1l9dhdnw-mainline-nixos-zlib.squashfs`
+* size: `100425728`
+* SHA256: `fec396ddb05997f935bcbdc951ee3e1b14e512cbae82e88e3986ce6acb126c01`
+
+The matching p22 image was
+`dddc5eb82952c8e597756c284c30558c2b78d6a41d3fc6357da71f4eb40084db`.
+SP Flash Tool caught BROM before reboot and completed Download Only of partition
+23 (`boot`), 16 MiB, rc=0.  Stage1 then recorded, in order, p29 mounted
+`ro,noload`, the exact SquashFS hash verified, the store mounted, and
+`stage2=multi-user watchdog=petting acceptance=external`.  It switched root
+successfully to NixOS 23.05 with systemd PID 1.  `systemctl is-system-running`
+was `running` with no failed units.  `/gemian` remained read-only ext4 and
+`/nix/store` read-only SquashFS.
+
+Both Stage2 network paths were live: gadget `usb0` at `10.15.19.82` and the
+RTL8156, renamed `enu1`, at `192.168.23.70`.  The Stage2 watchdog takeover and
+lease-enforcer units were active, `/run/gemini-mainline-success` recorded
+multi-user success and watchdog ownership, and exact external acceptance
+produced `unattended_recovery=lease-accepted lease_enforcer=holding`.  DRM was
+then activated once from Stage2: Linux IRQ 227 (GIC hwirq 229) rose to 184,
+DSI-1 was connected,
+enabled and DPMS On, both SSH paths survived, and no DSI timeout or kernel fault
+appeared.
+
+Final readback proved p22
+`dddc5eb82952c8e597756c284c30558c2b78d6a41d3fc6357da71f4eb40084db`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+No p30/p31 write, erase, format, or firmware upgrade occurred.  Persistent
+evidence is under
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/Cycle18/`, especially
+`cycle18-stage2-final.log`, `cycle18-partition-hashes.log`, and
+`cycle18-stage2-manual/flash.log`.
+
+The MT6797 DDP debugfs file was still absent in Cycle 18.  The first follow-up
+matched copied graph driver data by pointer and was therefore insufficient;
+Linux commit `28c471502` now matches the actual parent MMSYS OF node instead.
+That diagnostic-only correction is committed but not yet hardware-tested.
