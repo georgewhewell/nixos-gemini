@@ -567,3 +567,39 @@ this candidate; it awaits byte-level review before any execute authorization.
 The unavoidable pre-watchdog-probe residual boundary remains documented in
 the bundle manifest: a hang before the approximately 1.07-second MTK
 watchdog probe has no guaranteed remote actuator.
+
+## Chained p22 recovery runner and platform queue: 2026-08-30
+
+The harness SSH paths now use `BatchMode`, one connection attempt,
+`ConnectTimeout=8`, and a 3-second server-alive interval with two missed
+probes terminating the connection.  This applies equally to the Gemini
+ProxyJump, trex capture, Flash Tool launch, and wrapper staging paths.  The
+adaptive reboot dispatcher records whether systemd or BusyBox `/bin/reboot
+-f` was selected and requires the SSH session to go down within 20 seconds;
+it no longer swallows a reboot command that leaves SSH alive.
+
+`research/p22-chained-recovery-runner.sh` is a deliberately exact,
+p22-only three-phase sequence: normal candidate acceptance, lease-expiry
+proof with Stage-A rollback, then final normal candidate acceptance.  It
+hard-rejects any manifest other than the reviewed host-NIC candidate and
+accepted Stage-A rollback, checks p22/p30/p31 at every execute boundary, and
+checks trex for an idle Flash Tool before and after each phase.  Its dry-run
+completed all three phases successfully; no execute mode was run.  The
+runner adds no post-final BROM daemon: every actual reset is already wrapped
+by the harness's bounded USB capture, while a lingering watcher after final
+acceptance would introduce an unnecessary process/USB ownership race.  Any
+future post-final reset therefore remains an explicit new capture cycle.
+
+The corrected combined platform bundle was also built against the same locked
+kernel source, without hardware access:
+
+* `artifacts/mainline-unattended-recovery-platform-hostnet-p22/boot-padded-p22.img`,
+  16777216 bytes, SHA-256
+  `a359951c3c298ecbb182b5726e54d376e36fa0d794c24ae816c3d5e263b7f877`.
+* Its initramfs is byte-identical to the watchdog-control candidate at
+  `15135cb7960ba23cecc5a3f4708fa2b057f034bfd1c155c6db0301cb2efbfa52`;
+  final DT remains `58fa70641900b343c466b815bcadd0cb5269d86df0b4939f436af7c0d2bc6300`.
+
+No Flash Tool, catcher, reboot, or hardware write was performed.  Current
+live readbacks remain p22 `1b5f808e...`, p30 `122c0f461e...`, and p31
+`1fa78de9...`.

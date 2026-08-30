@@ -243,7 +243,18 @@ fi
 
 device_ssh() {
     ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-        -o ConnectTimeout=8 root@10.15.19.82 "$@"
+        -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+}
+
+trex_ssh() {
+    ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 trex "$@"
+}
+
+trex_scp() {
+    scp -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+        -o ServerAliveInterval=3 -o ServerAliveCountMax=2 "$@"
 }
 
 hash_size() {
@@ -307,14 +318,14 @@ start_capture() {
     device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
     device_ssh 'sha256sum /dev/mmcblk0p22' > "$RUN_LOCAL/p22-pre-hash"
     # shellcheck disable=SC2029
-    ssh trex "mkdir -p '$RUN_SHARED'; nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
-    scp "$ROOT/research/p22-flash-wrapper.sh" trex:"$RUN_SHARED/flash-wrapper.sh" >/dev/null
+    trex_ssh "mkdir -p '$RUN_SHARED'; nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
+    trex_scp "$ROOT/research/p22-flash-wrapper.sh" "trex:$RUN_SHARED/flash-wrapper.sh" >/dev/null
 }
 
 stop_capture() {
     [ -n "${RUN_SHARED:-}" ] || return 0
     # shellcheck disable=SC2029
-    ssh trex "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
+    trex_ssh "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
 }
 
 start_probe_capture() {
@@ -469,7 +480,7 @@ start_tool() {
     # identify the owner. The wrapper's timeout remains the final kill
     # boundary for Flash Tool itself.
     # shellcheck disable=SC2029
-    ssh trex "nohup sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
+    trex_ssh "nohup sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
     if wait_state tool_started 20; then
         return 0
     fi
