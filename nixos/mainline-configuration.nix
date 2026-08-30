@@ -6,8 +6,15 @@
   config,
   pkgs,
   lib,
+  geminiLeaseSelfAcceptToken ? null,
   ...
 }: {
+  assertions = [
+    {
+      assertion = geminiLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" geminiLeaseSelfAcceptToken != null;
+      message = "geminiLeaseSelfAcceptToken must be a versioned 64-hex baseline capability";
+    }
+  ];
   nixpkgs.overlays = [
     (final: prev: {
       util-linux = prev.util-linux.override {
@@ -288,8 +295,38 @@
         echo "watchdog-owner=$(${pkgs.busybox}/bin/busybox cat /run/unattended-recovery.watchdog-owner)"
         echo "watchdog-state=$(${pkgs.busybox}/bin/busybox cat /sys/class/watchdog/watchdog0/state)"
       } > /run/gemini-mainline-success
-      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=external" \
+      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=${if geminiLeaseSelfAcceptToken == null then "external" else "baseline-self-accept-pending"}" \
         >> /run/stage1.log
+    '';
+  };
+
+  # This intentionally exists only in the full known-good baseline.  A token
+  # is an explicit build-time capability carried by the Android boot cmdline;
+  # it is not a secret.  The helper refuses to create the existing acceptance
+  # marker unless the cmdline, Stage-1-pinned Stage-2 identity, both network
+  # paths, read-only mounts, watchdog owner, power preflight and unit health
+  # all match.  Images without this module argument retain external-only,
+  # fail-closed acceptance.
+  systemd.services.gemini-baseline-self-accept = lib.mkIf (geminiLeaseSelfAcceptToken != null) {
+    description = "Self-accept the reviewed Gemini full-NixOS watchdog lease";
+    wantedBy = ["multi-user.target"];
+    after = [
+      "gemini-mainline-success.service"
+      "gemini-watchdog-takeover.service"
+      "gemini-mainline-usb.service"
+      "gemini-input-observe.service"
+      "sshd.service"
+      "gemian.mount"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      Restart = "on-failure";
+      RestartSec = "2s";
+    };
+    script = ''
+      export GEMINI_BASELINE_ACCEPT_BUSYBOX=${pkgs.busybox}/bin/busybox
+      export GEMINI_BASELINE_ACCEPT_TOKEN=${lib.escapeShellArg geminiLeaseSelfAcceptToken}
+      exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-baseline-self-accept.sh}
     '';
   };
 

@@ -50,6 +50,13 @@
     # Target system (Gemini PDA)
     targetSystem = "aarch64-linux";
 
+    # Explicit capability for the one reviewed full-NixOS baseline. It is
+    # intentionally neither derived from nor a hash of the NixOS toplevel:
+    # feeding a toplevel hash into the config that creates that toplevel would
+    # be circular. Stage 1 carries the exact resulting system path separately.
+    # Experimental p22 outputs do not receive this argument or cmdline token.
+    mainlineNixosLeaseSelfAcceptToken = "gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052";
+
     # Native pkgs for build tools
     buildPkgs = import nixpkgs {
       system = buildSystem;
@@ -602,6 +609,9 @@
       modules = [
         ./nixos/mainline-configuration.nix
         {
+          _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+        }
+        {
           nixpkgs.hostPlatform = targetSystem;
           nixpkgs.buildPlatform = buildSystem;
         }
@@ -676,6 +686,7 @@
       # watchdog to recover a stalled installer without human intervention.
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
     #############################################

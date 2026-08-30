@@ -13,10 +13,12 @@
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
+  leaseSelfAcceptToken ? null,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
+assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 let
@@ -26,6 +28,10 @@ let
   # The basename already ends in .squashfs.
   storeFileName =
     "mainline-nixos-${builtins.baseNameOf (toString squashfs)}";
+  leaseSelfAcceptCmdline =
+    if leaseSelfAcceptToken == null
+    then ""
+    else " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
 
   initramfs = buildPkgs.runCommand "gemini-mainline-nixos-initramfs.cpio.gz" {
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
@@ -462,6 +468,7 @@ let
     mkdir -p /mnt/nixos/tmp
     mount -t tmpfs -o mode=1777 tmpfs /mnt/nixos/tmp || fail "tmpfs-tmp"
     ln -s "$nixos_system" /mnt/nixos/run/current-system
+    printf '%s\n' "$nixos_system" > /mnt/nixos/run/gemini-lease-expected-system
 
     echo "GEMINI_MAINLINE_NIXOS: stage1=switch-root system=$nixos_system" \
       > /mnt/nixos/run/stage1-handoff
@@ -494,6 +501,7 @@ let
       grep -Fq 'start_watchdog_lease' root/init
       grep -Fq 'unattended-recovery.watchdog-owner' root/init
       grep -Fq 'unattended-recovery-lease-record' root/init
+      grep -Fq 'gemini-lease-expected-system' root/init
       grep -Fq 'clock=monotonic-uptime-seconds' root/bin/unattended-recovery-lease-record
     '' else ''
       ! grep -Fq '^    start_watchdog_lease$' root/init
@@ -540,7 +548,7 @@ let
       --ramdisk-addr 0x45000000 \
       --second-addr 0x40f00000 \
       --tags-addr 0x44000000 \
-      --cmdline "bootopt=64S3,32N2,64N2" \
+      --cmdline "bootopt=64S3,32N2,64N2${leaseSelfAcceptCmdline}" \
       --output "$out"
     test "$(od -An -tx1 -N 8 "$out" | tr -d '[:space:]')" = 414e44524f494421
     test "$(stat -c %s "$out")" -le 16777216
@@ -575,7 +583,7 @@ let
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "unattended-recovery=${
         if unattendedRecovery
-        then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=external-exact"
+        then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
         else "none"
       }"
       echo "store-provision=${

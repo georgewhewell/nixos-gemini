@@ -16,6 +16,7 @@ accepted_file=$run_root/unattended-recovery.accepted
 deadline_file=$run_root/unattended-recovery.lease-deadline
 expired_file=$run_root/unattended-recovery.lease-expired
 owner_file=$run_root/unattended-recovery.watchdog-owner
+baseline_accept_lock=$run_root/unattended-recovery.baseline-self-accept.lock
 
 log() {
   line="GEMINI_MAINLINE_NIXOS: $*"
@@ -75,10 +76,12 @@ expire() {
   done
 }
 
-# An acceptance action is external to both stages.  Once it has atomically
-# recorded the exact marker, do not turn a missing/corrupt handoff record into
-# a surprise rollback.
-if accepted; then
+# An ordinary external acceptance action is external to both stages.  Once it
+# has atomically recorded the exact marker, do not turn a missing/corrupt
+# handoff record into a surprise rollback.  The reviewed baseline creates the
+# lock before its marker, which makes its marker subject to the monotonic
+# deadline below: a delayed helper must never rescue an expired lease.
+if accepted && [ ! -d "$baseline_accept_lock" ]; then
   hold_after_acceptance
 fi
 
@@ -118,7 +121,10 @@ esac
 }
 
 while :; do
-  if accepted; then
+  # Preserve the existing external-acceptance behavior, but make the baseline
+  # marker wait for a fresh deadline check.  Its helper creates the lock before
+  # publishing the shared exact marker.
+  if accepted && [ ! -d "$baseline_accept_lock" ]; then
     hold_after_acceptance
   fi
   now=$(uptime_seconds || true)
@@ -128,6 +134,9 @@ while :; do
   if [ "$now" -ge "$deadline" ]; then
     expire deadline-reached
     exit 0
+  fi
+  if accepted; then
+    hold_after_acceptance
   fi
   "$busybox" sleep 1
 done

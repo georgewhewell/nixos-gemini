@@ -176,6 +176,26 @@ grep -Fqx -- '-KILL 440' "$expired/run/kill.log"
 grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped watchdog_reset_expected=31s reason=deadline-reached' \
   "$expired/run/stage1.log"
 
+# The baseline helper creates a lock before it writes the shared exact marker.
+# Unlike an external marker, that marker must still lose to an expired lease.
+locked=$WORK/locked
+mkdir -p "$locked/run" "$locked/proc/440/fd" \
+  "$locked/run/unattended-recovery.baseline-self-accept.lock"
+write_record "$locked/run" 99 100 1
+printf '%s\n' '100.00 0.00' > "$locked/proc/uptime"
+printf '%s\n' 440 > "$locked/run/unattended-recovery.watchdog-owner"
+printf '%s\n' unattended_recovery=healthy > "$locked/run/unattended-recovery.accepted"
+ln -s /dev/watchdog "$locked/proc/440/fd/3"
+make_busybox "$locked"
+GEMINI_LEASE_BUSYBOX=$locked/fake-busybox \
+GEMINI_LEASE_RUN_ROOT=$locked/run \
+GEMINI_LEASE_PROC_ROOT=$locked/proc \
+GEMINI_LEASE_LOG_FILE=$locked/run/stage1.log \
+GEMINI_LEASE_KMSG_FILE=$locked/run/kmsg \
+  sh "$ROOT/nix/unattended-recovery-lease-enforcer.sh"
+test -e "$locked/run/unattended-recovery.lease-expired"
+grep -Fqx -- '-KILL 440' "$locked/run/kill.log"
+
 # The generated services establish the required Stage-2 ordering without
 # making their watchdog PID ownership depend on one another.
 grep -Fqx '  systemd.services.gemini-unattended-recovery-lease-enforcer = {' \
