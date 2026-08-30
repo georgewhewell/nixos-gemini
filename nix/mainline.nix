@@ -327,6 +327,7 @@
       ${lib.optionalString thermalHallObserveOverlay ''
         grep -Fqx 'CONFIG_MTK_THERMAL=y' .config
         grep -Fqx 'CONFIG_MTK_SOC_THERMAL=y' .config
+        grep -Fqx 'CONFIG_IIO=y' .config
         grep -Fqx 'CONFIG_MEDIATEK_MT6577_AUXADC=y' .config
         grep -Fqx 'CONFIG_KEYBOARD_GPIO=y' .config
       ''}

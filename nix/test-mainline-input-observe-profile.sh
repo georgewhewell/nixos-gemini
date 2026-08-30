@@ -24,6 +24,7 @@ grep -Fqx '        grep -Fqx '\''CONFIG_MTK_SCPSYS=y'\'' .config' "$ROOT/nix/mai
 grep -Fqx 'CONFIG_MTK_SCPSYS=y' "$ROOT/nix/mainline-consys-identity.fragment"
 grep -Fqx 'CONFIG_THERMAL_OF=y' "$ROOT/nix/mainline-input-observe.fragment"
 grep -Fqx 'CONFIG_MTK_SOC_THERMAL=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
+grep -Fqx 'CONFIG_IIO=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
 grep -Fqx 'CONFIG_MEDIATEK_MT6577_AUXADC=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
 grep -Fqx 'CONFIG_KEYBOARD_GPIO=y' "$ROOT/nix/mainline-thermal-hall-observe.fragment"
 grep -Fqx '          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /thermal@1100b000 status)" = okay' "$ROOT/nix/mainline.nix"
