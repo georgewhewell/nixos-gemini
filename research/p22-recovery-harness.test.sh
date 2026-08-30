@@ -527,7 +527,106 @@ test_rendered_candidate_validation_is_valid_shell() {
     EXPECTED_WATCHDOG_IDENTITY=mtk-wdt
     EXPECTED_WATCHDOG_STATE=active
     EXPECTED_WATCHDOG_TIMEOUT=31
+    STAGE2_POLICY=none
+    STAGE1_WATCHDOG_OWNER_MARKER=
+    STAGE2_WATCHDOG_OWNER_UNIT=
+    STAGE2_WATCHDOG_STATE=
+    STAGE2_SUCCESS_MARKER=
     validate_candidate
+}
+
+test_stage2_schema_requires_takeover_fields() {
+    manifest=$TEST_ROOT/stage2-missing.manifest
+    sed -e 's/^watchdog_profile=.*/watchdog_profile=initramfs-petter/' \
+        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=60/' \
+        "$ROOT/research/p22-next-experiment.manifest" > "$manifest"
+    printf '%s\n' \
+        'stage2_policy=watchdog-takeover-required' \
+        'expected_watchdog_identity=mtk-wdt' \
+        'expected_watchdog_state=active' \
+        'expected_watchdog_timeout=31' \
+        'ssh_path_policy=both' \
+        'power_preflight_policy=required' \
+        'transaction_policy=observe-always-rollback' \
+        'lease_seconds=90' >> "$manifest"
+    set +e
+    "$HARNESS" --manifest "$manifest" --dry-run \
+        > "$TEST_ROOT/stage2-missing.log" 2>&1
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    grep -Fq 'manifest field is missing: stage1_watchdog_owner_marker' \
+        "$TEST_ROOT/stage2-missing.log"
+}
+
+test_stage2_rendered_validation_requires_handoff() {
+    sed -n '/^validate_candidate() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/validate-stage2-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/validate-stage2-function.sh"
+    RUN_LOCAL=$TEST_ROOT/validate-stage2-run
+    mkdir -p "$RUN_LOCAL"
+    device_ssh() {
+        printf '%s\n' "$1" > "$RUN_LOCAL/rendered-stage2.sh"
+        sh -n -c "$1"
+    }
+    ACCEPTANCE_DEADLINE=2000000000
+    CANDIDATE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    ROOTFS_POLICY=nixos-stage2
+    POWER_PREFLIGHT_POLICY=required
+    EXPECTED_MODEL=MT6797X
+    EXPECTED_COMPATIBLE=planet,gemini-pda
+    EXPECTED_CMDLINE=maxcpus=8
+    EXPECTED_CPU_ONLINE=0-7
+    EXPECTED_GADGET_IP=10.15.19.82
+    EXPECTED_ETHERNET_IP=192.168.23.70
+    HOST_NET_POLICY=required
+    EXPECTED_MARKER=gemini-mainline-success
+    FEATURE_POLICY=allow-platform
+    WATCHDOG_PROFILE=initramfs-petter
+    EXPECTED_WATCHDOG_IDENTITY=mtk-wdt
+    EXPECTED_WATCHDOG_STATE=active
+    EXPECTED_WATCHDOG_TIMEOUT=31
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE1_WATCHDOG_OWNER_MARKER=stage1_watchdog_owner=initramfs
+    STAGE2_WATCHDOG_OWNER_UNIT=gemini-watchdog.service
+    STAGE2_WATCHDOG_STATE=active
+    STAGE2_SUCCESS_MARKER=/run/gemini-mainline-success
+    validate_candidate
+    grep -Fq 'stage2_state=$(systemctl is-active' \
+        "$RUN_LOCAL/rendered-stage2.sh"
+    grep -Fq 'systemctl show -p MainPID --value' \
+        "$RUN_LOCAL/rendered-stage2.sh"
+    grep -Fq 'test -s "/run/gemini-mainline-success"' \
+        "$RUN_LOCAL/rendered-stage2.sh"
+}
+
+test_stage2_policy_requires_observe_lease() {
+    manifest=$TEST_ROOT/stage2-policy.manifest
+    sed -e 's/^watchdog_profile=.*/watchdog_profile=initramfs-petter/' \
+        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=60/' \
+        "$ROOT/research/p22-next-experiment.manifest" > "$manifest"
+    printf '%s\n' \
+        'stage2_policy=watchdog-takeover-required' \
+        'expected_watchdog_identity=mtk-wdt' \
+        'expected_watchdog_state=active' \
+        'expected_watchdog_timeout=31' \
+        'stage1_watchdog_owner_marker=stage1_watchdog_owner=initramfs' \
+        'stage2_watchdog_owner_unit=gemini-watchdog.service' \
+        'stage2_watchdog_state=active' \
+        'stage2_success_marker=/run/gemini-mainline-success' \
+        'ssh_path_policy=both' \
+        'power_preflight_policy=required' \
+        'transaction_policy=observe-always-rollback' \
+        'lease_seconds=90' >> "$manifest"
+    set +e
+    "$HARNESS" --manifest "$manifest" --execute \
+        > "$TEST_ROOT/stage2-policy.log" 2>&1
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    grep -Fq 'observe-always-rollback requires --proof-lease' \
+        "$TEST_ROOT/stage2-policy.log"
 }
 
 test_wrapper_requires_transaction_owner_when_requested() {
@@ -595,4 +694,7 @@ test_rendered_candidate_validation_is_valid_shell
 test_wrapper_requires_transaction_owner_when_requested
 test_wrapper_rejects_stale_transaction_owner
 test_transaction_holder_removes_expired_owner
+test_stage2_schema_requires_takeover_fields
+test_stage2_rendered_validation_requires_handoff
+test_stage2_policy_requires_observe_lease
 echo 'p22-recovery-harness tests: passed'

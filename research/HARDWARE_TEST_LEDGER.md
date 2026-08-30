@@ -1122,3 +1122,25 @@ Trex cleanup left no writer, watcher, transaction, or proof unit.  No p30/p31
 write, erase, format, firmware upgrade, or second writer occurred.  Evidence
 is under `artifacts/p22-recovery-20260830-082049-348344` and the matching Trex
 run directory.
+
+## Full-NixOS Stage1-to-Stage2 harness gate: 2026-08-30 (no hardware)
+
+In isolated worktree `stage2-watchdog-harness` at source `f32de30`, the p22
+harness now has an opt-in `stage2_policy=watchdog-takeover-required` manifest
+schema.  Such a manifest must identify the Stage1 owner marker, the Stage2
+systemd watchdog unit and `active` state, and the exact
+`/run/gemini-mainline-success` marker.  It is fail-closed to
+`rootfs_policy=nixos-stage2`, both gadget and RTL8156 SSH paths, required BQ
+preflight, `observe-always-rollback`, and one external 90-second lease whose
+acceptance window is strictly shorter.  Candidate validation checks p22, p30,
+and p31 readbacks before any acceptance marker, then records Stage1 marker,
+Stage2 owner PID/device, and success-marker evidence over the remote SSH
+script.  Stage2 validation probes the gadget path explicitly before checking
+the right-NIC path; existing manifests retain their prior behavior.
+
+No bundle hash was invented and no manifest with a pending candidate was added.
+The offline shell suite and rendered-remote-script syntax regression passed;
+`sh -n` passed for the harness, supervisor, and test script.  Default
+ShellCheck still reports only the repository's pre-existing warnings/info
+(including deliberate escaped remote-script quoting); no hardware, Trex,
+network, power, or partition operation was performed.

@@ -17,6 +17,7 @@ WRAPPER=$9
 ROLLBACK_STATE=${10}
 ROLLBACK_LOG=${11}
 SUPERVISOR_STATE=${12}
+LEASE_SECONDS=${13:-90}
 SIZE=16777216
 SUPERVISOR_TERMINAL=no
 ROLLBACK_WAIT_SECONDS=${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}
@@ -44,7 +45,11 @@ case "$ACCEPTANCE_WINDOW" in
     ''|*[!0-9]*) write_state supervisor_blocked_bad_window; exit 2 ;;
 esac
 [ "$ACCEPTANCE_WINDOW" -ge 3 ] || { write_state supervisor_blocked_bad_window; exit 2; }
-[ "$ACCEPTANCE_WINDOW" -lt 90 ] || { write_state supervisor_blocked_bad_window; exit 2; }
+case "$LEASE_SECONDS" in
+    ''|*[!0-9]*) write_state supervisor_blocked_bad_lease; exit 2 ;;
+esac
+[ "$LEASE_SECONDS" -ge 3 ] || { write_state supervisor_blocked_bad_lease; exit 2; }
+[ "$ACCEPTANCE_WINDOW" -lt "$LEASE_SECONDS" ] || { write_state supervisor_blocked_bad_window; exit 2; }
 write_state supervisor_waiting_candidate
 
 deadline=$(( $(date +%s) + 300 ))

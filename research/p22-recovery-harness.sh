@@ -89,9 +89,19 @@ HOST_NET_POLICY=
 SSH_PATH_POLICY=
 POWER_PREFLIGHT_POLICY=
 TRANSACTION_POLICY=
+# Full-NixOS candidates opt into the explicit Stage1 -> switch_root -> Stage2
+# contract below.  Existing probe-only manifests leave stage2_policy=none and
+# retain their previous validation semantics.
+STAGE2_POLICY=
+STAGE1_WATCHDOG_OWNER_MARKER=
+STAGE2_WATCHDOG_OWNER_UNIT=
+STAGE2_WATCHDOG_STATE=
+STAGE2_SUCCESS_MARKER=
+LEASE_SECONDS=
 ACCEPTANCE_DEADLINE=
 HOST_NET_FALLBACK_ARMED=no
 CANDIDATE_HOSTKEY_MODE=no
+VALIDATION_GADGET_ONLY=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
 # Both known-good and candidate initramfs hold their user-visible services
@@ -152,6 +162,12 @@ load_manifest() {
             ssh_path_policy) [ -z "$SSH_PATH_POLICY" ] || die "duplicate ssh_path_policy"; SSH_PATH_POLICY=$value ;;
             power_preflight_policy) [ -z "$POWER_PREFLIGHT_POLICY" ] || die "duplicate power_preflight_policy"; POWER_PREFLIGHT_POLICY=$value ;;
             transaction_policy) [ -z "$TRANSACTION_POLICY" ] || die "duplicate transaction_policy"; TRANSACTION_POLICY=$value ;;
+            stage2_policy) [ -z "$STAGE2_POLICY" ] || die "duplicate stage2_policy"; STAGE2_POLICY=$value ;;
+            stage1_watchdog_owner_marker) [ -z "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "duplicate stage1_watchdog_owner_marker"; STAGE1_WATCHDOG_OWNER_MARKER=$value ;;
+            stage2_watchdog_owner_unit) [ -z "$STAGE2_WATCHDOG_OWNER_UNIT" ] || die "duplicate stage2_watchdog_owner_unit"; STAGE2_WATCHDOG_OWNER_UNIT=$value ;;
+            stage2_watchdog_state) [ -z "$STAGE2_WATCHDOG_STATE" ] || die "duplicate stage2_watchdog_state"; STAGE2_WATCHDOG_STATE=$value ;;
+            stage2_success_marker) [ -z "$STAGE2_SUCCESS_MARKER" ] || die "duplicate stage2_success_marker"; STAGE2_SUCCESS_MARKER=$value ;;
+            lease_seconds) [ -z "$LEASE_SECONDS" ] || die "duplicate lease_seconds"; LEASE_SECONDS=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
     done < "$MANIFEST"
@@ -213,8 +229,11 @@ require_manifest() {
             case "$EXPECTED_WATCHDOG_TIMEOUT" in *[!0-9]*|'') die "expected_watchdog_timeout must be numeric" ;; esac ;;
         *) die "unknown watchdog_profile" ;;
     esac
-    if [ "$WATCHDOG_PROFILE" = initramfs-petter ] && [ "$ACCEPTANCE_WINDOW_SECONDS" -ge 90 ]; then
-        die "watchdog acceptance_window_seconds must be less than the 90-second lease"
+    [ -n "$LEASE_SECONDS" ] || LEASE_SECONDS=90
+    case "$LEASE_SECONDS" in *[!0-9]*|'') die "lease_seconds must be numeric" ;; esac
+    [ "$LEASE_SECONDS" -ge 3 ] || die "lease_seconds must be at least 3"
+    if [ "$WATCHDOG_PROFILE" = initramfs-petter ] && [ "$ACCEPTANCE_WINDOW_SECONDS" -ge "$LEASE_SECONDS" ]; then
+        die "watchdog acceptance_window_seconds must be less than lease_seconds"
     fi
     [ "$TARGET_PARTITION" = boot/p22 ] || die "target_partition must be boot/p22"
     [ "$TARGET_DEVICE" = /dev/mmcblk0p22 ] || die "target_device must be /dev/mmcblk0p22"
@@ -258,6 +277,30 @@ require_manifest() {
     require_token "$EXPECTED_WATCHDOG_STATE"
     require_token "$ROOTFS_POLICY"
     require_token "$HOST_NET_POLICY"
+    case "$STAGE2_POLICY" in
+        none)
+            [ -z "$STAGE1_WATCHDOG_OWNER_MARKER$STAGE2_WATCHDOG_OWNER_UNIT$STAGE2_WATCHDOG_STATE$STAGE2_SUCCESS_MARKER" ] ||
+                die "stage2 watchdog fields require stage2_policy=watchdog-takeover-required" ;;
+        watchdog-takeover-required)
+            [ "$ROOTFS_POLICY" = nixos-stage2 ] || die "stage2 watchdog takeover requires rootfs_policy=nixos-stage2"
+            [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "stage2 watchdog takeover requires watchdog_profile=initramfs-petter"
+            [ "$SSH_PATH_POLICY" = both ] || die "stage2 watchdog takeover requires ssh_path_policy=both"
+            [ "$POWER_PREFLIGHT_POLICY" = required ] || die "stage2 watchdog takeover requires power_preflight_policy=required"
+            [ "$TRANSACTION_POLICY" = observe-always-rollback ] || die "stage2 watchdog takeover requires observe-always-rollback"
+            [ "$LEASE_SECONDS" -eq 90 ] || die "stage2 watchdog takeover requires lease_seconds=90"
+            [ -n "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "manifest field is missing: stage1_watchdog_owner_marker"
+            [ -n "$STAGE2_WATCHDOG_OWNER_UNIT" ] || die "manifest field is missing: stage2_watchdog_owner_unit"
+            [ -n "$STAGE2_WATCHDOG_STATE" ] || die "manifest field is missing: stage2_watchdog_state"
+            [ "$STAGE2_WATCHDOG_STATE" = active ] || die "stage2_watchdog_state must be active"
+            [ -n "$STAGE2_SUCCESS_MARKER" ] || die "manifest field is missing: stage2_success_marker"
+            [ "$STAGE2_SUCCESS_MARKER" = /run/gemini-mainline-success ] || die "stage2_success_marker must be /run/gemini-mainline-success"
+            require_token "$STAGE1_WATCHDOG_OWNER_MARKER"
+            require_token "$STAGE2_WATCHDOG_OWNER_UNIT"
+            require_token "$STAGE2_WATCHDOG_STATE"
+            require_path "$STAGE2_SUCCESS_MARKER" stage2_success_marker
+            case "$STAGE2_WATCHDOG_OWNER_UNIT" in *.service) ;; *) die "stage2_watchdog_owner_unit must end in .service" ;; esac ;;
+        *) die "unknown stage2_policy" ;;
+    esac
 }
 
 load_manifest
@@ -265,6 +308,8 @@ load_manifest
 [ -n "$SSH_PATH_POLICY" ] || SSH_PATH_POLICY=fallback
 [ -n "$POWER_PREFLIGHT_POLICY" ] || POWER_PREFLIGHT_POLICY=none
 [ -n "$TRANSACTION_POLICY" ] || TRANSACTION_POLICY=persistent-acceptance
+[ -n "$STAGE2_POLICY" ] || STAGE2_POLICY=none
+[ -n "$LEASE_SECONDS" ] || LEASE_SECONDS=90
 require_manifest
 
 if [ "$PROOF_LEASE" = yes ]; then
@@ -341,6 +386,10 @@ candidate_hostkey_allowed() {
 }
 
 device_ssh() {
+    if [ "$VALIDATION_GADGET_ONLY" = yes ]; then
+        device_ssh_gadget "$@"
+        return $?
+    fi
     if device_ssh_gadget "$@"; then
         return 0
     else
@@ -540,7 +589,7 @@ start_supervisor() {
     # This service is Trex-owned and independent of the local harness. It
     # starts before candidate reboot, then owns the always-rollback decision
     # if the harness or its SSH session disappears.
-    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML_RUN_FILE' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE'"
+    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML_RUN_FILE' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE' '$LEASE_SECONDS'"
     supervisor_ready=no
     supervisor_wait=0
     while [ "$supervisor_wait" -lt 15 ]; do
@@ -742,7 +791,22 @@ test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2
 case \"$ROOTFS_POLICY\" in
   nixos-stage2)
     grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
-    grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts ;;
+    grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
+    if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
+      test -s \"$STAGE2_SUCCESS_MARKER\"
+      grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/probe-status
+      stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+      test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
+      stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+      case \"\$stage2_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+      test \"\$stage2_pid\" -gt 1
+      test -d \"/proc/\$stage2_pid\"
+      stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+      test -n \"\$stage2_device\"
+      printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"
+      printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
+      printf 'stage2_success_marker=%s\\n' \"$STAGE2_SUCCESS_MARKER\"
+    fi ;;
   enumeration-only)
     ! grep -Eq '^/dev/mmcblk[0-9]+p[0-9]+ ' /proc/mounts
     ! grep -Eq '[[:space:]]/(gemian|nix/store)([[:space:]]|/)' /proc/mounts
@@ -808,15 +872,19 @@ esac
 if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
   grep -Fq -- 'panic=5' /proc/cmdline
   grep -Fq -- 'mtk_wdt.start_at_boot=1' /proc/cmdline
-  watchdog_pid=\$(sed -n 's/.*watchdog_pid=\([0-9][0-9]*\).*/\1/p' /run/probe-status | tail -n 1)
-  test -n \"\$watchdog_pid\"
-  test -d \"/proc/\$watchdog_pid\"
   test \"\$(cat /sys/class/watchdog/watchdog0/identity)\" = \"$EXPECTED_WATCHDOG_IDENTITY\"
   test \"\$(cat /sys/class/watchdog/watchdog0/state)\" = \"$EXPECTED_WATCHDOG_STATE\"
   test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
   test -r /sys/class/watchdog/watchdog0/bootstatus
-  owner_device=\$(for fd in /proc/\$watchdog_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
-  test -n \"\$owner_device\"
+  if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
+    grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/probe-status
+  else
+    watchdog_pid=\$(sed -n 's/.*watchdog_pid=\([0-9][0-9]*\).*/\1/p' /run/probe-status | tail -n 1)
+    test -n \"\$watchdog_pid\"
+    test -d \"/proc/\$watchdog_pid\"
+    owner_device=\$(for fd in /proc/\$watchdog_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+    test -n \"\$owner_device\"
+  fi
 fi
 # The caller keeps validation marker-free and commits the lease separately
 # after every required SSH path succeeds.
@@ -859,7 +927,19 @@ accept_candidate_until_deadline() {
                 # arms rollback, preserving the lease-expiry evidence window.
                 start_probe_capture
             fi
-            if validate_candidate && validate_candidate_right_path; then
+            old_validation_gadget_only=$VALIDATION_GADGET_ONLY
+            if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+                # Full-NixOS acceptance must prove the gadget path itself;
+                # right-NIC success alone is not a substitute.
+                VALIDATION_GADGET_ONLY=yes
+            fi
+            validation_rc=0
+            validate_candidate || validation_rc=1
+            if [ "$validation_rc" -eq 0 ]; then
+                validate_candidate_right_path || validation_rc=1
+            fi
+            VALIDATION_GADGET_ONLY=$old_validation_gadget_only
+            if [ "$validation_rc" -eq 0 ]; then
                 if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
                     ACCEPTANCE_COMMITTED=yes
                 elif [ "$marker_requested" = yes ]; then
