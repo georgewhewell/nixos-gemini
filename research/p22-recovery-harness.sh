@@ -639,10 +639,13 @@ snapshot='$RUN_SHARED/stop-session.snapshot'
 ps -eo pid=,sid=,pgid= | awk -v sid=\"\$sid\" '\$2 == sid {print \$1, \$2, \$3}' |
 while read -r member msid mpgid; do
   case \"\$member\" in ''|*[!0-9]*) exit 1 ;; esac
+  test \"\$msid\" = \"\$sid\" || exit 1
+  test \"\$mpgid\" = \"\$pgid\" || exit 1
   mstart=\$(awk '{print \$22}' /proc/\$member/stat 2>/dev/null || true)
   case \"\$mstart\" in ''|*[!0-9]*) exit 1 ;; esac
   printf '%s %s %s %s\\n' \"\$member\" \"\$msid\" \"\$mpgid\" \"\$mstart\" >> \"\$snapshot\"
 done || exit 0
+test -s \"\$snapshot\" || exit 0
 validate_snapshot() {
   while read -r member msid mpgid mstart; do
     test -n \"\$member\" || continue
@@ -675,23 +678,6 @@ terminate_snapshot() {
 terminate_snapshot || exit 0
 rm -f "\$snapshot"
 exit 0
-# Legacy loops below are deliberately inert; do not issue a group kill after
-# the validated per-member pass because that could race PID/PGID reuse.
-pgid=disabled
-session_pids() { :; }
-for child in \$(session_pids); do
-  case \"\$child\" in ''|*[!0-9]*) ;; *) kill -TERM \"\$child\" 2>/dev/null || true ;; esac
-done
-if test \"\$pgid\" = \"\$pid\" && kill -0 \"-\$pgid\" 2>/dev/null; then
-  kill -TERM \"-\$pgid\" 2>/dev/null || true
-fi
-sleep 2
-for child in \$(session_pids); do
-  case \"\$child\" in ''|*[!0-9]*) ;; *) kill -KILL \"\$child\" 2>/dev/null || true ;; esac
-done
-if test \"\$pgid\" = \"\$pid\"; then
-  kill -KILL \"-\$pgid\" 2>/dev/null || true
-validate_snapshot || exit 0
 fi" 2>/dev/null || true
 }
 

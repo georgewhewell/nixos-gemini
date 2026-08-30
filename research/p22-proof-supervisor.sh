@@ -19,6 +19,7 @@ ROLLBACK_LOG=${11}
 SUPERVISOR_STATE=${12}
 SIZE=16777216
 SUPERVISOR_TERMINAL=no
+ROLLBACK_WAIT_SECONDS=${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}
 
 write_state() {
     printf '%s %s\n' "$1" "$(date -Is)" > "$SUPERVISOR_STATE"
@@ -97,7 +98,7 @@ setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
     "$starttime_file" \
     </dev/null >/dev/null 2>&1 &
 launch_pid=$!
-deadline=$(( $(date +%s) + 300 ))
+deadline=$(( $(date +%s) + "$ROLLBACK_WAIT_SECONDS" ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
     state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
     case "$state" in
@@ -135,7 +136,11 @@ if [ "$sid" = "$pid" ] && [ "$pid" -gt 1 ] && [ "$pgid" -gt 1 ]; then
        ps -o args= -p "$pid" | grep -F -- "$XML" >/dev/null; then
         owner_pid=$pid
     else
-        owner_pid=$(ps -eo pid=,sid=,pgid=,args= | awk -v sid="$sid" -v pgid="$pgid" -v xml="$XML" '$2 == sid && $3 == pgid && index($0, xml) {print $1; exit}')
+        candidate_owner=$(ps -eo pid=,sid=,pgid=,args= | awk -v sid="$sid" -v pgid="$pgid" -v xml="$XML" '$2 == sid && $3 == pgid && index($0, xml) {print $1; exit}')
+        if [ -n "$candidate_owner" ] &&
+           test "$(awk '{print $22}' "/proc/$candidate_owner/stat" 2>/dev/null)" = "$starttime"; then
+            owner_pid=$candidate_owner
+        fi
     fi
 fi
 if [ -n "$owner_pid" ]; then

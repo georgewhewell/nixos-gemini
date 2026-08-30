@@ -199,8 +199,6 @@ test_wrapper_foreground_process_tree() {
 }
 
 test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
-    sed -n '/^stop_tool() {/,/^# shellcheck disable=SC2329 # invoked by the EXIT\/TERM cleanup trap/p' "$HARNESS" |
-        sed '$d' > "$TEST_ROOT/stop-tool-function.sh"
     sed -n '/^stop_tool() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-tool-function.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/stop-tool-function.sh"
@@ -234,6 +232,12 @@ test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
     wrapper_pid=$(cat "$TOOL_PID_FILE")
     child_pid=$(pgrep -P "$wrapper_pid" | head -n 1)
     setsid "$test_bin/child" "$XML_RUN_FILE" & foreign_pid=$!
+    recorded_start=$(cat "$TOOL_STARTTIME_FILE")
+    printf '%s\n' 1 > "$TOOL_STARTTIME_FILE"
+    stop_tool
+    kill -0 "$child_pid" 2>/dev/null
+    kill -0 "$foreign_pid" 2>/dev/null
+    printf '%s\n' "$recorded_start" > "$TOOL_STARTTIME_FILE"
     # Simulate the observed leader-loss case; the session child retains the
     # exact XML token that stop_tool uses as its ownership proof.
     kill -TERM "$wrapper_pid"
@@ -243,12 +247,10 @@ test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
     set -e
     ! ps -p "$child_pid" -o stat= 2>/dev/null | grep -qv '^Z'
     kill -0 "$foreign_pid" 2>/dev/null
-    kill -KILL "$foreign_pid" 2>/dev/null || true
+    kill -KILL "-$foreign_pid" 2>/dev/null || kill -KILL "$foreign_pid" 2>/dev/null || true
 }
 
 test_stop_capture_does_not_trust_stale_diagnostic_pid() {
-    sed -n '/^stop_capture() {/,/^# shellcheck disable=SC2329 # invoked by the EXIT\/TERM cleanup trap/p' "$HARNESS" |
-        sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
     sed -n '/^stop_capture() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/stop-capture-stale.sh"
@@ -341,6 +343,94 @@ test_supervisor_records_unexpected_exit() {
     set -e
     test "$rc" -ne 0
     grep -Fq 'supervisor_blocked_unexpected_exit ' "$run/supervisor.state"
+}
+
+test_supervisor_timeout_kills_only_owned_session() {
+    run=$TEST_ROOT/supervisor-timeout
+    mkdir -p "$run"
+    rescue=$run/rescue.img
+    stage=$run/boot.img
+    truncate -s 16777216 "$rescue"
+    rollback_sha=$(sha256sum "$rescue" | cut -d' ' -f1)
+    printf '%s\n' 'flash_rc=0 candidate' > "$run/candidate.state"
+    fake_wrapper=$run/fake-wrapper
+    cat > "$fake_wrapper" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$$" > "$4"
+ps -o pgid= -p "$$" | tr -d ' ' > "$5"
+ps -o sid= -p "$$" | tr -d ' ' > "$8"
+awk '{print $22}' "/proc/$$/stat" > "$9"
+printf 'tool_started fake\n' > "$1"
+while :; do sleep 60; done
+EOF
+    chmod +x "$fake_wrapper"
+    setsid sh -c 'while :; do sleep 60; done' sh "$run/download.xml" &
+    foreign_pid=$!
+    set +e
+    P22_SUPERVISOR_ROLLBACK_TIMEOUT=2 timeout 15 \
+        "$ROOT/research/p22-proof-supervisor.sh" \
+        "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
+        "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
+        "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
+    supervisor_rc=$?
+    set -e
+    test "$supervisor_rc" -ne 0
+    grep -Fq 'supervisor_rollback_timeout ' "$run/supervisor.state"
+    kill -0 "$foreign_pid" 2>/dev/null
+    kill -KILL "-$foreign_pid" 2>/dev/null || kill -KILL "$foreign_pid" 2>/dev/null || true
+}
+
+test_supervisor_stale_metadata_does_not_kill_foreign() {
+    run=$TEST_ROOT/supervisor-stale
+    mkdir -p "$run"
+    rescue=$run/rescue.img
+    stage=$run/boot.img
+    truncate -s 16777216 "$rescue"
+    rollback_sha=$(sha256sum "$rescue" | cut -d' ' -f1)
+    printf '%s\n' 'flash_rc=0 candidate' > "$run/candidate.state"
+    fake_wrapper=$run/fake-wrapper
+    cat > "$fake_wrapper" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$$" > "$4"
+ps -o pgid= -p "$$" | tr -d ' ' > "$5"
+ps -o sid= -p "$$" | tr -d ' ' > "$8"
+awk '{print $22}' "/proc/$$/stat" > "$9"
+printf 'tool_started fake\n' > "$1"
+while :; do sleep 60; done
+EOF
+    chmod +x "$fake_wrapper"
+    P22_SUPERVISOR_ROLLBACK_TIMEOUT=8 timeout 20 \
+        "$ROOT/research/p22-proof-supervisor.sh" \
+        "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
+        "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
+        "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state" &
+    supervisor_pid=$!
+    rollback_pid=
+    wait_for_pid=0
+    while [ "$wait_for_pid" -lt 8 ] && [ -z "$rollback_pid" ]; do
+        rollback_pid=$(cat "$run/supervisor-rollback.pid" 2>/dev/null || true)
+        sleep 1
+        wait_for_pid=$((wait_for_pid + 1))
+    done
+    test -n "$rollback_pid"
+    owned_pgid=$(cat "$run/supervisor-rollback.pgid")
+    owned_start=$(cat "$run/supervisor-rollback.starttime")
+    setsid sh -c 'while :; do sleep 60; done' sh "$run/download.xml" &
+    foreign_pid=$!
+    foreign_pgid=$(ps -o pgid= -p "$foreign_pid" | tr -d ' ')
+    foreign_sid=$(ps -o sid= -p "$foreign_pid" | tr -d ' ')
+    printf '%s\n' "$foreign_pid" > "$run/supervisor-rollback.pid"
+    printf '%s\n' "$foreign_pgid" > "$run/supervisor-rollback.pgid"
+    printf '%s\n' "$foreign_sid" > "$run/supervisor-rollback.sid"
+    printf '%s\n' "$owned_start" > "$run/supervisor-rollback.starttime"
+    set +e
+    wait "$supervisor_pid"
+    supervisor_rc=$?
+    set -e
+    test "$supervisor_rc" -ne 0
+    kill -0 "$foreign_pid" 2>/dev/null
+    kill -KILL "-$foreign_pid" 2>/dev/null || kill -KILL "$foreign_pid" 2>/dev/null || true
+    kill -KILL "-$owned_pgid" 2>/dev/null || true
 }
 
 test_harness_waits_for_nonterminal_supervisor_states() {
@@ -458,6 +548,8 @@ test_xml_is_attempt_unique_for_writer_and_supervisor
 test_supervisor_fake_rollback
 test_supervisor_rolls_back_failed_candidate
 test_supervisor_records_unexpected_exit
+test_supervisor_timeout_kills_only_owned_session
+test_supervisor_stale_metadata_does_not_kill_foreign
 test_harness_waits_for_nonterminal_supervisor_states
 test_local_exit_preserves_active_supervisor
 test_supervisor_is_trex_owned_and_bounded
