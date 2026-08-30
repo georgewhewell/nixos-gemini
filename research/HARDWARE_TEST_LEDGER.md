@@ -214,3 +214,98 @@ USB/kernel journal window, and the target partition's post-failure hash.
 
 The detailed p30 procedure remains [BOOT_PROBE.md](BOOT_PROBE.md); default-p22
 preboot flashing restrictions remain [README.md](../README.md).
+
+## Stage A hardware attempt: 2026-08-30 03:38--03:44 CEST
+
+The exact handoff was independently rechecked immediately before the attempt:
+candidate `boot-padded-p22.img`, 16777216 bytes, SHA-256
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`; shared
+scatter `boot.img` matched that digest; the MT6797 XML selected `BromUSB`,
+checksum level `both`, and `download-only/da-download-all`.  The scatter had
+only `boot`/SYS23 enabled (`0xb100000`, `0x1000000`, `EMMC_USER`); `boot2`,
+`boot3`, and recovery were not downloadable.  Fresh pre-write p22 backup
+`artifacts/stage-a-20260830/p22-before-stage-a.img` was 16777216 bytes and
+SHA-256 `08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3`.
+
+The trex catcher was armed before reboot and recorded the first catchable
+window at `03:41:16+02:00`: `0e8d:2000`, `MT65xx Preloader`, `ttyACM2`.
+The bounded workstation loop issued seven `sync; reboot` requests and stopped
+when that state was recorded.  The exact console Flash Tool was started once;
+its log confirms `rom list:Index(23)` with only the staged `boot.img`, then the
+preloader disappeared and BROM search ended `S_TIMEOUT`/exit status 1 at
+`03:43:17+02:00`.  No retry, format, firmware-upgrade, erase, or p31 access
+was performed.  Because the tool returned before a connection/write, this is
+not a candidate flash and is not a Stage-A acceptance.
+
+The device did reboot and returned to the known-good gadget at `03:41:25+02:00`;
+trex captured the complete disconnect, `0e8d:2000` attach/detach, and
+`0525:a4a2` reconnect.  The host interface came back DOWN and was restored
+host-side only (`10.15.19.81/24`); SSH then reached the device.  Post-attempt
+read-back proves no storage change: p22 remained
+`08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3`, p30
+remained `122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`,
+and p31 remained `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+The returned system reported Linux `7.1.3-gemini-da921x-lkro`, model `MT6797X`,
+compatible `planet,gemini-pda mediatek,mt6797`, `cpus=0-7`, USB `10.15.19.82`,
+Ethernet `192.168.23.70`, and the expected baseline command line.  Current
+post-attempt evidence is in `artifacts/stage-a-20260830/device-postattempt.txt`,
+`device-dmesg-postattempt.txt`, `device-journal-postattempt.txt`,
+`console-ramoops-0-postattempt`, and the trex capture files.  pstore retained
+the orderly shutdown record; its post-attempt SHA-256 is
+`9ba0397a528753fccb950cb4417cd8a141b7686152159b2629c750d546fd15c2`.
+
+**Verdict: Stage A write attempt failed before write; candidate not accepted.**
+The unchanged p22 digest verifies the rollback/known-good path, and p31 was
+untouched.  Stage B remains build-complete but explicitly unauthorized.
+
+## Stage A corrected retry and acceptance: 2026-08-30 03:49--03:54 CEST
+
+The failed attempt was compared with the available successful deployment
+record `artifacts/mainline-default-first-boot-20260829.txt`.  Both use the
+same MT6797 DA, `BromUSB`, checksum level `both`, and
+`download-only/da-download-all`; the successful record ends `100% of image data
+has been sent (16.00M of 16.00M)` and `Download Succeeded.`  The failed log had
+already loaded the XML/scatter and image (`rom list:Index(23)`), but showed
+`Connecting to BROM...`, `Search usb, timeout set as 120000 ms`, then removal
+of `ttyACM2` with blank VID/PID and `S_TIMEOUT`.  It never reached
+`USB port is obtained`, `Downloading & Connecting to DA`, or any image/write
+phase.  This rules out an absolute-path, scatter-target, DA-permission, or
+checksum problem.  The supported correction was to start the console Flash
+Tool before reboot, allowing its documented 120-second BROM wait to catch the
+short preloader window.  Plain BusyBox `reboot` was also observed to return 0
+without promptly restarting; the already evidenced `systemctl reboot --no-wall`
+actuator returned `Input/output error` but did trigger the preloader sequence,
+so it was used once within the bounded retry.
+
+The same candidate and exact boot-only scatter/XML were reverified, with a
+fresh p22 pre-write readback/backup at
+`artifacts/stage-a-20260830/p22-before-retry1.img`: 16777216 bytes,
+SHA-256 `08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3`.
+The pre-armed Flash Tool acquired `/dev/ttyACM2` at `03:50:33+02:00` with
+`vid is 0e8d`, `pid is 2000`, and `USB port is obtained`; it logged
+`Downloading & Connecting to DA...`, `Download DA now...`, `Downloading
+images...`, `Download Succeeded.` and exited 0 at `03:50:37+02:00`.  The
+bounded reboot loop stopped after its four-request cap; no retry, erase,
+format, firmware-upgrade, or p31 operation occurred.
+
+Trex captured preloader at `03:50:33` and `03:50:43`, then gadget
+`0525:a4a2` at `03:50:52`; the host interface was restored host-side and SSH
+returned.  At post-boot validation, p22 read back the exact candidate
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+remained `122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`,
+and p31 remained `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+The boot reported Linux `7.1.3-gemini-da921x-lkro`, `MT6797X`, compatible
+`planet,gemini-pda mediatek,mt6797`, CPU `0-7`, USB `10.15.19.82`, and Ethernet
+`192.168.23.70`.  `/dev/mmcblk0p29` was mounted `/gemian` read-only with
+`norecovery`; `/nix/store` was read-only SquashFS.  No WMT/BTIF/CONSYS platform
+devices or firmware requests appeared; only the expected built-in initcalls
+and reserved-memory identity were present.  Evidence is in
+`artifacts/stage-a-20260830/retry1/flash-tool.log`,
+`device-retry1.txt`, `device-retry1-acceptance.txt`,
+`device-feature-negative-retry1.txt`, `device-dmesg-retry1.txt`,
+`device-journal-retry1.txt`, `console-ramoops-0-retry1`, and the trex capture
+files.  The retained pstore record SHA-256 is
+`cf77d164ff734affb1626c8b4fb318541d4c3d79594262e5cef411135f23f703`.
+
+**Verdict: Stage A accepted after the timing/actuator correction.**  Stage B
+remains closed pending its separate explicit handoff and authorization.
