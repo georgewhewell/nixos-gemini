@@ -577,12 +577,12 @@
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
       provisionStore = true;
-      # The gadget/Dropbear path reproducibly delivered 96,096,256 bytes in
-      # the former 110-second upload bound.  Give the exact 100,421,632-byte
-      # image 230 seconds, while retaining a full minute between the Stage1
-      # provisioning timeout and watchdog lease expiry.
-      provisionWaitSeconds = 240;
-      watchdogLeaseSeconds = 300;
+      # Cycle 7 proved the RTL8156 Stage1 path but the one-time 100,421,632-byte
+      # p29 install still exceeded 230 seconds.  Give the complete write,
+      # digest and journal sync ten minutes, with two minutes left for the
+      # watchdog to recover a stalled installer without human intervention.
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
     };
 
     #############################################
