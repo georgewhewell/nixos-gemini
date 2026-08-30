@@ -250,6 +250,44 @@ test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
     kill -KILL "-$foreign_pid" 2>/dev/null || kill -KILL "$foreign_pid" 2>/dev/null || true
 }
 
+test_fresh_checkout_creates_capture_parent() (
+    sed -n '/^prepare_local_capture_dir() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/prepare-local-capture-dir.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/prepare-local-capture-dir.sh"
+    ROOT=$TEST_ROOT/fresh-checkout
+    mkdir "$ROOT"
+    RUN_LOCAL=$ROOT/artifacts/first-run
+    prepare_local_capture_dir
+    test -d "$ROOT/artifacts"
+    test -d "$RUN_LOCAL"
+
+    symlink_root=$TEST_ROOT/symlink-checkout
+    symlink_target=$TEST_ROOT/symlink-target
+    mkdir "$symlink_root" "$symlink_target"
+    ln -s "$symlink_target" "$symlink_root/artifacts"
+    ROOT=$symlink_root
+    RUN_LOCAL=$ROOT/artifacts/rejected-run
+    set +e
+    prepare_local_capture_dir
+    rc=$?
+    set -e
+    test "$rc" -ne 0
+    test ! -e "$symlink_target/rejected-run"
+)
+
+test_stop_tool_before_state_initialization_is_noop() (
+    sed -n '/^stop_tool() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' \
+        > "$TEST_ROOT/early-stop-tool-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/early-stop-tool-function.sh"
+    RUN_SHARED=$TEST_ROOT/early-stop-run
+    unset STATE XML XML_RUN_FILE
+    trex_ssh() { : > "$TEST_ROOT/early-stop-called"; }
+    stop_tool
+    test ! -e "$TEST_ROOT/early-stop-called"
+)
+
 test_stop_capture_does_not_trust_stale_diagnostic_pid() {
     sed -n '/^stop_capture() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
     # shellcheck disable=SC1091
@@ -1020,6 +1058,8 @@ test_wrapper_uses_per_attempt_pid_files
 test_wrapper_lock_rejects_duplicate
 test_wrapper_foreground_process_tree
 test_sourced_stop_tool_kills_exact_session_after_leader_exit
+test_fresh_checkout_creates_capture_parent
+test_stop_tool_before_state_initialization_is_noop
 test_stop_capture_does_not_trust_stale_diagnostic_pid
 test_xml_is_attempt_unique_for_writer_and_supervisor
 test_supervisor_fake_rollback

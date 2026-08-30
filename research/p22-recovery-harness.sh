@@ -675,16 +675,33 @@ test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SH
     STAGE2_STORE_PROVISIONED=yes
 }
 
+prepare_local_capture_dir() {
+    artifacts_root=$ROOT/artifacts
+    # artifacts/ is intentionally ignored, so a fresh checkout will not have
+    # it.  Refuse a symlink or non-directory, but create the missing parent
+    # before using a no--p mkdir as the per-attempt collision guard.
+    if [ -L "$artifacts_root" ]; then
+        return 1
+    fi
+    if [ ! -e "$artifacts_root" ]; then
+        if ! mkdir "$artifacts_root" 2>/dev/null; then
+            [ -d "$artifacts_root" ] && [ ! -L "$artifacts_root" ] || return 1
+        fi
+    fi
+    [ -d "$artifacts_root" ] || return 1
+    mkdir "$RUN_LOCAL"
+}
+
 start_capture() {
     run_name=p22-recovery-$(date +%Y%m%d-%H%M%S)
     run_name=$run_name-$$
     RUN_LOCAL=$ROOT/artifacts/$run_name
     RUN_SHARED=$TREX_CAPTURE_ROOT/$run_name
+    STATE=$RUN_SHARED/state
     # The pid suffix prevents ordinary same-second collisions; mkdir without
     # -p is the final guard against a reused pid or a stale run directory.
-    mkdir "$RUN_LOCAL"
+    prepare_local_capture_dir
     trex_ssh "test -d '$TREX_CAPTURE_ROOT'; mkdir '$RUN_SHARED'"
-    STATE=$RUN_SHARED/state
     FLASH_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-flash-writer.lock
     TRANSACTION_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-transaction.lock
     TRANSACTION_UNIT=p22-transaction-$run_name
@@ -896,6 +913,7 @@ sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" \
 # shellcheck disable=SC2329 # reached through the EXIT/INT/TERM cleanup trap
 stop_tool() {
     [ -n "${RUN_SHARED:-}" ] || return 0
+    [ -n "${STATE:-}" ] || return 0
     # The wrapper runs in a private session. Validate PID/PGID/SID, starttime,
     # and the attempt-unique XML before taking a process snapshot.
     xml_owner=${XML_RUN_FILE:-${XML:-}}
