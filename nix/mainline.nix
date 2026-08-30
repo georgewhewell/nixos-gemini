@@ -117,7 +117,7 @@
     + lib.optionalString unattendedRecovery "-unattended-recovery";
   baseDtbSha256 =
     if unattendedRecovery
-    then "7e6bd77e10a6a58b772455643d26e5d495ec35b7aa81e070672bf3a701ea300c"
+    then "23a36b1e5675ae6ceadcb3bb1668085e10340fbbc654f0e0c82212343e402609"
     else if platformEnablement
     then "87cbce082c7a6d6f67fab47527ed45b148647dd01e178864c618665af8af6d58"
     else if consysIdentityOverlay
@@ -125,7 +125,7 @@
     else "1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c";
   serviceabilityBaseDtbSha256 =
     if unattendedRecovery
-    then "235c17ebc0653f48c0a4c1215a384a90217856aacde85db44710ec43f2040044"
+    then "643a4a4a505273f464feebc27d00c3f26e1c6a09a296bc0fd06f99afcf87d8bd"
     else if platformEnablement
     then "4f537ab13a1aa8f14ff96d03fd068ab552c1b0f50a8cf4bc724c939ed5b49d09"
     else if consysIdentityOverlay
@@ -133,7 +133,7 @@
     else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
   usbPlatformDtbSha256 =
     if unattendedRecovery
-    then "58fa70641900b343c466b815bcadd0cb5269d86df0b4939f436af7c0d2bc6300"
+    then "0a4688f83e8b38a0b4b05844b7aa4e3bf20f5f8b33d2152b31464d5b1113402d"
     else if platformEnablement
     then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
     else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
