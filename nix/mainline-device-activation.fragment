@@ -1,0 +1,13 @@
+# Hardware states that have now been proven on the live recovery kernel.
+#
+# The DT profile owns all opt-in peripheral activation.  Keep these drivers
+# built in: the unattended initramfs deliberately has no general module
+# loader, and neither touch nor the fuel gauge should depend on one.
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
+CONFIG_INPUT_TOUCHSCREEN=y
+CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y
+CONFIG_POWER_SUPPLY=y
+CONFIG_BATTERY_MT6351_FGADC=y
+CONFIG_MMC=y
+CONFIG_MMC_MTK=y

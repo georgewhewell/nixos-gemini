@@ -19,6 +19,7 @@
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
+  deviceActivationOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -53,7 +54,8 @@
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
-    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment];
+    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
+    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -104,6 +106,10 @@
     else if inputObserveOverlay
     then "aw9523-matrix-poll-and-nt36772-i2c4-client-disabled-v1"
     else "none";
+  deviceActivationLabel =
+    if deviceActivationOverlay
+    then "nt36772-fgadc-microsd-3v-live-proven-v1"
+    else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
@@ -126,19 +132,21 @@
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
     + lib.optionalString inputObserveOverlay "-input-observe"
-    + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe";
+    + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
+    + lib.optionalString deviceActivationOverlay "-device-activation";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
-  baseDtbSha256 = "d8339bbfee7d75f3823eb3c11e6eabb4ddb09c73e43e77fafa99499177ee6fc4";
-  serviceabilityBaseDtbSha256 = "dcbdcbc80136fa8f54bfc132201d47388de786d7ea390f1e14564429edb04f94";
-  usbPlatformDtbSha256 = "c38495c961512c66dacd9e9c4e79a04c538df120096e042d6ab300d0fc7298c0";
+  baseDtbSha256 = "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
+  serviceabilityBaseDtbSha256 = "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
+  usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   # The frozen serviceability transform already enables the reviewed AW9523
   # polling keyboard.  Applying the native overlay is therefore deliberately
   # idempotent; retain its intermediate fingerprint so future base-DT drift is
   # still detected before the touchscreen bus-only observer is composed.
-  keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";
-  inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";
-  thermalHallDtbSha256 = "f0e80f8bc94029b894f42526239f3c5342ef657b22b0caacff7ccbb607fc5de5";
+  keyboardDtbSha256 = "e2f3fc2a803e2263a41d6860160bdb9a9a082c1716a125a8f9bd2d36bc79e543";
+  inputObserveDtbSha256 = "9755a6eb8fa4c6a7a821514238990b8581a6fa6b27e486325341f3a0b28a2d92";
+  thermalHallDtbSha256 = "85de08441035b1820becc1a9c4fe30f188c5b544e5e931d71e995a3c8b471a51";
+  deviceActivationDtbSha256 = "5d0569e32b25bc2ce7d56c2220135bd7c2eae9bbc68e14a6b297f548148395da";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -162,7 +170,25 @@
       );
     assert
       !thermalHallObserveOverlay || inputObserveOverlay;
-    if thermalHallObserveOverlay
+    assert
+      !deviceActivationOverlay
+      || (
+        storageOverlay
+        && sshAccess
+        && usbHostOverlay
+        && platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && powerObserveOverlay
+        && powerObservePreflight
+        && unattendedRecovery
+        && inputObserveOverlay
+        && thermalHallObserveOverlay
+        && !consysIdentityOverlay
+      );
+    if deviceActivationOverlay
+    then deviceActivationDtbSha256
+    else if thermalHallObserveOverlay
     then thermalHallDtbSha256
     else if inputObserveOverlay
     then inputObserveDtbSha256
@@ -197,7 +223,8 @@
       + lib.optionalString powerObservePreflight "-power-preflight"
       + lib.optionalString unattendedRecovery "-unattended-recovery"
       + lib.optionalString inputObserveOverlay "-input-observe"
-      + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe";
+      + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
+      + lib.optionalString deviceActivationOverlay "-device-activation";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -527,7 +554,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -750,6 +777,54 @@
         ''
         else ""
       }
+      ${
+        if deviceActivationOverlay
+        then ''
+          # These three activation overlays were proved independently against
+          # the running Gemini rescue kernel.  Compose them only after the
+          # existing unattended observation chain has completed, so this
+          # profile has one clear, auditable ownership transition per device.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-touchscreen-active.dtb" \
+            ${kernel}/mt6797-gemini-pda-touchscreen-activation.dtbo
+          test "$(fdtget "$out/gemini-touchscreen-active.dtb" /i2c@11011000 status)" = okay
+          test "$(fdtget "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 status)" = okay
+          ! fdtget -p "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 \
+            | grep -Fqx 'reset-gpios'
+          ! fdtget -p "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 \
+            | grep -Fqx 'novatek,identity-only'
+
+          fdtoverlay \
+            -i "$out/gemini-touchscreen-active.dtb" \
+            -o "$out/gemini-fgadc-active.dtb" \
+            ${kernel}/mt6797-gemini-pda-fuel-gauge-active.dtbo
+          test "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge status)" = disabled
+          test "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active status)" = okay
+          test "$(fdtget -t x "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active mediatek,fgadc-init-control)" = 28
+          test "$(fdtget -t i "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active mediatek,fgadc-osr)" = 8
+          fdtget -p "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active \
+            | grep -Fqx 'mediatek,initialize-fgadc'
+
+          fdtoverlay \
+            -i "$out/gemini-fgadc-active.dtb" \
+            -o "$out/gemini-device-activation.dtb" \
+            ${kernel}/mt6797-gemini-pda-microsd-bringup.dtbo
+          test "$(fdtget "$out/gemini-device-activation.dtb" /mmc@11240000 status)" = okay
+          test "$(fdtget -t i "$out/gemini-device-activation.dtb" /mmc@11240000 bus-width)" = 4
+          test "$(fdtget -t i "$out/gemini-device-activation.dtb" /mmc@11240000 max-frequency)" = 25000000
+          fdtget -p "$out/gemini-device-activation.dtb" /mmc@11240000 \
+            | grep -Fqx 'no-1-8-v'
+          test "$(fdtget "$out/gemini-device-activation.dtb" /pwrap@1000d000/pmic/regulators/ldo-vmch regulator-name)" = vmch
+          test "$(fdtget "$out/gemini-device-activation.dtb" /pwrap@1000d000/pmic/regulators/ldo-vmc regulator-name)" = vmc
+          cp "$out/gemini-device-activation.dtb" "$out/gemini.dtb"
+          echo 'touchscreen-activation=nt36772-i2c4-0x62-live-proven-passed' >> "$out/VALIDATION"
+          echo 'fgadc-activation=mt6351-exact-0x28-osr8-live-proven-passed' >> "$out/VALIDATION"
+          echo 'microsd-activation=mmc1-4bit-25mhz-3v-no-uhs-live-proven-passed' >> "$out/VALIDATION"
+          echo 'display-activation=deferred-until-userspace-writes-activate_drm' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
       test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
         ${finalDtbSha256}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
@@ -759,7 +834,7 @@
         else if inputObserveOverlay
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
-      }Image.gz-dtb) > "$out/SHA256SUMS"
+      }${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is intentionally smaller and less privileged than a NixOS stage 1.
@@ -1290,6 +1365,8 @@
       echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
       echo "nix-input-observe=${inputObserveLabel}"
       echo "nix-thermal-hall-observe=${if thermalHallObserveOverlay then "auxadc-thermal-gpio66-no-wake-v1" else "none"}"
+      echo "nix-device-activation=${deviceActivationLabel}"
+      echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery

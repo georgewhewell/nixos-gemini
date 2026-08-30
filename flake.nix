@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=e360d0c5dcf095f5247f869a6061d15aff40cf75";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=75fe4b7c24762fe398ea22a45df2e931df8b3776";
       flake = false;
     };
     ixoo-candidate = {
@@ -524,6 +524,35 @@
       thermalHallObserveOverlay = true;
     };
 
+    # First combined unattended hardware image. It retains the full
+    # display/audio/power/input observation chain, then enables only the
+    # touchscreen, FGADC, and conservative 3.0V MicroSD contracts that were
+    # proven on the live rescue kernel. Native DRM remains behind the kernel's
+    # one-way userspace activation gate; this image never writes it itself.
+    mainlineUnattendedRecoveryDeviceActivation = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      deviceActivationOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -998,6 +1027,10 @@
       mainlineUnattendedRecoveryInputObserveDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
       mainlineUnattendedRecoveryInputObserveInitramfs = mainlineUnattendedRecoveryInputObserve.probeInitramfs;
       mainlineUnattendedRecoveryInputObserveBundle = mainlineUnattendedRecoveryInputObserve.bundle;
+      mainlineUnattendedRecoveryDeviceActivationKernel = mainlineUnattendedRecoveryDeviceActivation.kernel;
+      mainlineUnattendedRecoveryDeviceActivationDtb = mainlineUnattendedRecoveryDeviceActivation.serviceabilityDtb;
+      mainlineUnattendedRecoveryDeviceActivationInitramfs = mainlineUnattendedRecoveryDeviceActivation.probeInitramfs;
+      mainlineUnattendedRecoveryDeviceActivationBundle = mainlineUnattendedRecoveryDeviceActivation.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
