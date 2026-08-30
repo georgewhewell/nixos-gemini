@@ -479,7 +479,7 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-thermal-hall-observe.dtbo \
           "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo"
         test "$(sha256sum "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo" | cut -d' ' -f1)" = \
-          81c3523a460b9e7d5c83965130cc311eca457ed7bfbc4d4dca1f5f749842f9e9
+          2fd591269a217634cc9bd6b1aa3afa7702f08c2bbef0dad2f673e278f2cda28d
       ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
