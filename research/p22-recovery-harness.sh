@@ -350,14 +350,48 @@ stop_probe_capture() {
     PROBE_CAPTURE_PID=
 }
 
+stop_tool() {
+    [ -n "${RUN_SHARED:-}" ] || return 0
+    # The wrapper runs in a private session.  Prefer its recorded process
+    # group, but only when the wrapper proved that its PID is also the PGID;
+    # otherwise kill only the wrapper PID rather than risking an unrelated
+    # process group.  This closes the interrupted-harness orphan window for
+    # timeout/sudo/flash_tool while remaining fail-closed on stale metadata.
+    # shellcheck disable=SC2029
+    trex_ssh "
+pid=; pgid=
+case \"\$(cat '$RUN_SHARED/state' 2>/dev/null || true)\" in
+  flash_rc=*) exit 0 ;;
+esac
+test -s '$RUN_SHARED/tool.pid' && pid=\$(cat '$RUN_SHARED/tool.pid') || true
+test -s '$RUN_SHARED/tool.pgid' && pgid=\$(cat '$RUN_SHARED/tool.pgid') || true
+case \"\$pid\" in ''|*[!0-9]*) exit 0 ;; esac
+case \"\$pgid\" in
+  \"\$pid\")
+    test \"\$pid\" -gt 1 || exit 0
+    if kill -0 \"-\$pgid\" 2>/dev/null; then
+      kill -TERM \"-\$pgid\" 2>/dev/null || true
+      sleep 2
+      kill -KILL \"-\$pgid\" 2>/dev/null || true
+    fi ;;
+  *)
+    if kill -0 \"\$pid\" 2>/dev/null; then
+      kill -TERM \"\$pid\" 2>/dev/null || true
+      sleep 2
+      kill -KILL \"\$pid\" 2>/dev/null || true
+    fi ;;
+esac" 2>/dev/null || true
+}
+
 cleanup() {
     rc=$?
     trap - EXIT INT TERM
     stop_probe_capture
+    stop_tool
     stop_capture
     if [ "$rc" -ne 0 ] && [ -n "${RUN_LOCAL:-}" ] && [ -f "$RUN_LOCAL/state" ]; then
         case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
-            accepted_p22*|recovered_known_good_p22*|recovery_failed*|recovery_flash_failed*) ;;
+            accepted_p22*|recovered_known_good_p22*|recovery_failed*|recovery_flash_failed*|recovery_validation_failed*|manual_reset_required_*|recovery_blocked_*|recovered_but_proof_failed_*|lease_proof_passed_recovered_stage_a*) ;;
             *) printf 'harness_failed rc=%s %s\n' "$rc" "$(date -Is)" > "$RUN_LOCAL/state" ;;
         esac
     fi
@@ -476,11 +510,10 @@ accept_candidate_until_deadline() {
 
 start_tool() {
     log=$1
-    # Keep the wrapper PID (no setsid fork) so a future bounded abort can
-    # identify the owner. The wrapper's timeout remains the final kill
-    # boundary for Flash Tool itself.
+    # A private session lets cleanup terminate timeout, sudo, and flash_tool
+    # together.  The wrapper publishes its actual PID/PGID after launch.
     # shellcheck disable=SC2029
-    trex_ssh "nohup sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
+    trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/launch.pid'"
     if wait_state tool_started 20; then
         return 0
     fi
@@ -548,10 +581,13 @@ recover() {
     state=$(cat "$STATE")
     case "$state" in flash_rc=0*) ;; *) printf 'recovery_flash_failed %s\n' "$state" > "$RUN_LOCAL/state"; return 1;; esac
     if ! wait_ssh 40; then printf 'manual_reset_required_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
-    device_ssh "set -eu
+    if ! device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513"
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513"; then
+        printf 'recovery_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        return 1
+    fi
     printf 'recovered_known_good_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
 }
 
@@ -568,8 +604,11 @@ stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"
 if ! request_reboot; then
-    recover
-    exit $?
+    if recover; then
+        exit 1
+    else
+        exit $?
+    fi
 fi
 if [ "$PROOF_LEASE" = yes ]; then
     # Deliberately do not write the acceptance marker. recover() starts the
@@ -593,7 +632,8 @@ if [ "$PROOF_LEASE" = yes ]; then
         fi
         printf 'lease_proof_passed_recovered_stage_a %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     else
-        exit 1
+        recovery_rc=$?
+        exit "$recovery_rc"
     fi
 elif P22_WRITE_MARKER=yes accept_candidate_until_deadline; then
     device_ssh "set -eu
@@ -604,4 +644,8 @@ sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" > "$RUN_LOCAL/final-p
     printf 'accepted_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     exit 0
 fi
-recover
+if recover; then
+    exit 1
+else
+    exit $?
+fi

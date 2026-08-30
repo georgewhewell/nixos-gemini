@@ -603,3 +603,41 @@ kernel source, without hardware access:
 No Flash Tool, catcher, reboot, or hardware write was performed.  Current
 live readbacks remain p22 `1b5f808e...`, p30 `122c0f461e...`, and p31
 `1fa78de9...`.
+
+## Pre-probe reset boundary and harness transaction hardening: 2026-08-30
+
+The retained LK reverse-engineering record provides a concrete, but bounded,
+watchdog handoff trace.  `FUN_46001e0c` calls the WDT setup at file offset
+`0x1e3c`, which programs `0x10007000`, sets length argument `10`, and kicks
+`0x10007008` with `0x1971`; the normal final handoff kicks again at `0x27380`
+without a nearby disable call.  The explicit reboot helpers do disable WDT,
+delay 8000 ms, and enter their reset loop.  The 64-bit handoff instead enters
+ATF through `smc 0x82000200` and LK does not return, so this binary cannot
+prove what ATF does to WDT state.  See
+`artifacts/lk-analysis/REVERSE_ENGINEERING.md:7-18,47-65`.
+
+This makes the boundary precise: p22 kernel/DT/cmdline changes can enable and
+service Linux `mtk_wdt` only after the kernel has begun probing.  They cannot
+execute before LK/ATF handoff or guarantee a reset during a pre-probe hang.
+The live baseline recorded watchdog probe/enable at approximately 1.07 s and
+then showed watchdog0 inactive with `nowayout=0`; that is Linux state, not
+proof of the earlier LK/ATF state.  No exact Gemini preloader source or ATF
+handoff proof is present locally.  Closing this gap requires a separately
+reviewed LK/preloader/ATF artifact that proves WDT persistence, or manual
+reset; no such bootloader change is being made here.
+
+Trex has proven USB observation, SSH, and Flash Tool ownership only.  The
+retained reset experiments document owner-attended power-key recovery and no
+remote GPIO, relay, or power actuator.  Therefore a dead pre-probe device
+cannot be made catchable by a host watcher alone; the runner correctly stops
+at a manual-reset boundary rather than escalating to erase/format.
+
+The harness now launches the wrapper in a private `setsid` session.  The
+wrapper records its PID and PGID, and cleanup sends signals to the group only
+when PID equals PGID, otherwise falling back to the wrapper PID.  This bounds
+orphaned `timeout`/`sudo`/Flash Tool children on interruption.  Recovered
+candidate failures always remain nonzero, even when rollback succeeds, and
+terminal `manual_reset_required_*`, `recovery_blocked_*`, and
+`recovered_but_proof_failed_*` states are preserved by cleanup.  `sh -n`,
+ShellCheck, and the existing three-phase dry-run passed; no Flash Tool,
+reboot, catcher, or hardware write was performed.
