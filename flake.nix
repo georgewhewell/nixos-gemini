@@ -567,11 +567,15 @@
 
     mainlineNixos = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
-      kernel = mainlineNixosPlatform.kernel;
-      serviceabilityDtb = mainlineNixosPlatform.serviceabilityDtb;
+      # Reuse the exact d69 kernel/DT profile already accepted with BQ2589x,
+      # USB11 and RTL8156.  Only the initramfs and Stage-2 userspace change.
+      kernel = mainlineUnattendedRecoveryPowerPreflight.kernel;
+      serviceabilityDtb = mainlineUnattendedRecoveryPowerPreflight.serviceabilityDtb;
       squashfs = mainlineNixosSquashfs;
       nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
       authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
     };
 
     #############################################

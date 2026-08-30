@@ -7,6 +7,8 @@
   squashfs,
   nixosToplevel,
   authorizedKeys,
+  bq2589xPreflight,
+  unattendedRecovery ? false,
 }: let
   # Keep every proven userspace payload available for rollback. The v2
   # payload adds the normal system/network/USB diagnostics and is staged next
@@ -25,6 +27,7 @@
     cp "$busybox/bin/busybox" root/bin/busybox
     cp "$dropbear/bin/dropbear" root/bin/dropbear
     cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey
+    cp ${bq2589xPreflight} root/bin/bq2589x-preflight
     cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
     test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
@@ -95,6 +98,61 @@
       while :; do sleep 3600; done
     }
 
+    start_watchdog_lease() {
+      watchdog_device=
+      attempt=0
+      while [ -z "$watchdog_device" ] && [ "$attempt" -lt 10 ]; do
+        for candidate in /dev/watchdog /dev/watchdog0; do
+          if [ -c "$candidate" ]; then
+            watchdog_device=$candidate
+            break
+          fi
+        done
+        [ -n "$watchdog_device" ] || sleep 1
+        attempt=$((attempt + 1))
+      done
+      [ -n "$watchdog_device" ] || fail "watchdog-device-missing"
+
+      /bin/watchdog -F -t 10 -T 31 "$watchdog_device" \
+        > /run/watchdog.log 2>&1 &
+      watchdog_pid=$!
+      sleep 1
+      kill -0 "$watchdog_pid" 2>/dev/null \
+        || fail "watchdog-open-failed"
+      echo "$watchdog_pid" > /run/unattended-recovery.watchdog-owner
+      log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=90s handoff=stage1"
+
+      # /run is moved into the new root, so this supervisor survives
+      # switch_root and follows whichever petter owns the watchdog.  Mark the
+      # lease expired before killing: a racing Stage-2 takeover must observe
+      # the marker and refuse to reopen the device.  Re-read the owner for a
+      # few seconds to close the remaining PID-file handoff race.
+      (
+        sleep 90
+        if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != \
+             "unattended_recovery=healthy" ]; then
+          : > /run/unattended-recovery.lease-expired
+          log "unattended_recovery=lease-expired watchdog_userspace=stopped watchdog_reset_expected=31s"
+          pass=0
+          while [ "$pass" -lt 5 ]; do
+            owner_pid=$(cat /run/unattended-recovery.watchdog-owner 2>/dev/null || true)
+            case "$owner_pid" in
+              *[!0-9]*) ;;
+              *)
+                [ -n "$owner_pid" ] \
+                  && kill -KILL "$owner_pid" 2>/dev/null || true
+                ;;
+            esac
+            pass=$((pass + 1))
+            sleep 1
+          done
+        fi
+      ) &
+    }
+
+    @START_WATCHDOG@
+    /bin/bq2589x-preflight &
+    log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
     /bin/usb-net &
     /bin/ssh-server &
     log "stage1=entered p29=ro,noload store-compression=gzip"
@@ -160,8 +218,22 @@
     substituteInPlace root/init \
       --replace-fail @STORE_FILE@ ${storeFileName} \
       --replace-fail @STORE_SHA256@ "$(sha256sum ${squashfs} | cut -d' ' -f1)" \
-      --replace-fail @SYSTEM_BASENAME@ "$(basename ${nixosToplevel})"
+      --replace-fail @SYSTEM_BASENAME@ "$(basename ${nixosToplevel})" \
+      --replace-fail @START_WATCHDOG@ ${
+        if unattendedRecovery
+        then "start_watchdog_lease"
+        else ":"
+      }
+    ${if unattendedRecovery then ''
+      grep -a -Fq watchdog "$busybox/bin/busybox"
+      grep -Fq 'start_watchdog_lease' root/init
+      grep -Fq 'unattended-recovery.watchdog-owner' root/init
+    '' else ''
+      ! grep -Fq '^    start_watchdog_lease$' root/init
+    ''}
+    bash -n root/init
     chmod 0755 root/init root/bin/usb-net root/bin/ssh-server \
+      root/bin/bq2589x-preflight \
       root/bin/dropbear root/bin/dropbearkey
     find root -exec touch -h -d @0 {} +
     (
@@ -215,6 +287,12 @@
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in NixOS"
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
+      echo "unattended-recovery=${
+        if unattendedRecovery
+        then "stage1-to-stage2-owner-handoff; lease=90s; timeout=31s; acceptance=external"
+        else "none"
+      }"
+      echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \
         ${serviceabilityDtb}/gemini.dtb \

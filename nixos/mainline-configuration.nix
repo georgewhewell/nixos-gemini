@@ -143,8 +143,82 @@
     requires = ["dbus.service"];
   };
   systemd.services.sshd = {
-    after = ["gemini-mainline-usb.service" "gemian.mount"];
-    requires = ["gemini-mainline-usb.service"];
+    after = [
+      "gemini-mainline-usb.service"
+      "gemini-watchdog-takeover.service"
+      "gemian.mount"
+    ];
+    requires = [
+      "gemini-mainline-usb.service"
+      "gemini-watchdog-takeover.service"
+    ];
+  };
+
+  # Stage 1 keeps the nowayout watchdog alive while systemd starts.  Replace
+  # that petter before exposing SSH.  The Stage-1 lease supervisor follows the
+  # atomically replaced owner PID and kills whichever petter currently owns it
+  # after 90 seconds unless an external acceptance action explicitly records
+  # `unattended_recovery=healthy` in volatile /run state.
+  systemd.services.gemini-watchdog-takeover = {
+    description = "Take over the Gemini unattended recovery watchdog";
+    wantedBy = ["multi-user.target"];
+    before = ["sshd.service" "gemini-mainline-success.service"];
+    serviceConfig = {
+      Type = "forking";
+      PIDFile = "/run/unattended-recovery.watchdog-owner";
+      Restart = "no";
+      TimeoutStartSec = "20s";
+      KillSignal = "SIGKILL";
+    };
+    script = ''
+      owner_file=/run/unattended-recovery.watchdog-owner
+      expired=/run/unattended-recovery.lease-expired
+      test ! -e "$expired"
+      old_pid=$(${pkgs.busybox}/bin/busybox cat "$owner_file")
+      test -n "$old_pid"
+      case "$old_pid" in
+        *[!0-9]*) exit 1 ;;
+      esac
+
+      owns_watchdog=
+      for fd in /proc/"$old_pid"/fd/*; do
+        target=$(${pkgs.busybox}/bin/busybox readlink "$fd" 2>/dev/null || true)
+        case "$target" in
+          /dev/watchdog|/dev/watchdog0) owns_watchdog=yes ;;
+        esac
+      done
+      test "$owns_watchdog" = yes
+      ${pkgs.busybox}/bin/busybox kill -KILL "$old_pid" 2>/dev/null || true
+      attempt=0
+      while [ -d /proc/"$old_pid" ] && [ "$attempt" -lt 50 ]; do
+        attempt=$((attempt + 1))
+        ${pkgs.busybox}/bin/busybox sleep 0.1
+      done
+      test ! -d /proc/"$old_pid"
+      test ! -e "$expired"
+
+      ${pkgs.busybox}/bin/busybox watchdog \
+        -F -t 10 -T 31 /dev/watchdog \
+        > /run/watchdog-stage2.log 2>&1 &
+      new_pid=$!
+      ${pkgs.busybox}/bin/busybox sleep 1
+      ${pkgs.busybox}/bin/busybox kill -0 "$new_pid"
+
+      owns_watchdog=
+      for fd in /proc/"$new_pid"/fd/*; do
+        target=$(${pkgs.busybox}/bin/busybox readlink "$fd" 2>/dev/null || true)
+        case "$target" in
+          /dev/watchdog|/dev/watchdog0) owns_watchdog=yes ;;
+        esac
+      done
+      if [ "$owns_watchdog" != yes ] || [ -e "$expired" ]; then
+        ${pkgs.busybox}/bin/busybox kill -KILL "$new_pid" 2>/dev/null || true
+        exit 1
+      fi
+      echo "$new_pid" > "$owner_file.new"
+      test ! -e "$expired"
+      ${pkgs.busybox}/bin/busybox mv "$owner_file.new" "$owner_file"
+    '';
   };
 
   systemd.services.gemini-mainline-success = {
@@ -157,7 +231,11 @@
         echo "mainline NixOS reached multi-user.target"
         uname -a
         ${pkgs.gnugrep}/bin/grep -F ' /gemian ' /proc/mounts
+        echo "watchdog-owner=$(${pkgs.busybox}/bin/busybox cat /run/unattended-recovery.watchdog-owner)"
+        echo "watchdog-state=$(${pkgs.busybox}/bin/busybox cat /sys/class/watchdog/watchdog0/state)"
       } > /run/gemini-mainline-success
+      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=external" \
+        >> /run/stage1.log
     '';
   };
 
