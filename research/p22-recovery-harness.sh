@@ -119,6 +119,8 @@ SCP_DEADLINE_SECONDS=30
 # Stage1 waits up to 65s for the host stream. Keep the upload itself bounded
 # but long enough for the full SquashFS over gadget SSH.
 PROVISION_UPLOAD_TIMEOUT_SECONDS=55
+STAGE2_READINESS_TIMEOUT_SECONDS=5
+STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS=2
 # Both known-good and candidate initramfs hold their user-visible services
 # behind the approximately 48-second DVFSP late-validation gate.  Trex may
 # finish restoring p22 before that boot reaches SSH, so recovery readback must
@@ -405,6 +407,23 @@ device_ssh_gadget_provision() {
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
             -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+    fi
+}
+
+device_ssh_gadget_fast() {
+    # Stage2 readiness is a gadget-only liveness check. A right-NIC fallback
+    # here can spend another full SSH timeout and starve Stage1 provisioning.
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout="$STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS" \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=1 \
+            -o ServerAliveCountMax=1 -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
+    else
+        timeout "$STAGE2_READINESS_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout="$STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS" \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=1 \
+            -o ServerAliveCountMax=1 root@10.15.19.82 "$@"
     fi
 }
 
@@ -822,12 +841,20 @@ wait_supervisor_rollback() {
 
 verify_recovered_stage_a() {
     CANDIDATE_HOSTKEY_MODE=no
-    wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS" || return 1
-    device_ssh "set -eu
+    recovery_deadline=$(( $(date +%s) + RECOVERY_SSH_TIMEOUT_SECONDS ))
+    : > "$RUN_LOCAL/recovered-partition-hashes"
+    while [ "$(date +%s)" -lt "$recovery_deadline" ]; do
+        if device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513" \
-        > "$RUN_LOCAL/recovered-partition-hashes" 2>&1
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" \
+            > "$RUN_LOCAL/recovered-partition-hashes" 2>&1; then
+            return 0
+        fi
+        sleep 3
+    done
+    return 1
 }
 
 # shellcheck disable=SC2329 # reached through the EXIT/INT/TERM cleanup trap
@@ -1311,39 +1338,46 @@ accept_candidate_until_deadline() {
     P22_WRITE_MARKER=no
     ACCEPTANCE_DEADLINE=$(( $(date +%s) + ACCEPTANCE_WINDOW_SECONDS ))
     while [ "$(date +%s)" -lt "$ACCEPTANCE_DEADLINE" ]; do
-        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1; then
-            if [ "$PROOF_LEASE" = yes ] && [ -z "${PROBE_CAPTURE_PID:-}" ]; then
-                # Capture probe status before validation can fail or recovery
-                # arms rollback, preserving the lease-expiry evidence window.
-                start_probe_capture
+        if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+            device_ssh_gadget_fast 'test -s /proc/cmdline' >/dev/null 2>&1 || {
+                sleep 1
+                continue
+            }
+        elif ! device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1; then
+            sleep 1
+            continue
+        fi
+        if [ "$PROOF_LEASE" = yes ] && [ -z "${PROBE_CAPTURE_PID:-}" ]; then
+            # Capture probe status before validation can fail or recovery
+            # arms rollback, preserving the lease-expiry evidence window.
+            start_probe_capture
+        fi
+        if [ "$STAGE2_POLICY" = watchdog-takeover-required ] &&
+            [ "$STAGE2_STORE_PROVISIONED" != yes ]; then
+            if ! provision_stage2_store; then
+                sleep 1
+                continue
             fi
-            if [ "$STAGE2_POLICY" = watchdog-takeover-required ] &&
-                [ "$STAGE2_STORE_PROVISIONED" != yes ]; then
-                if ! provision_stage2_store; then
-                    sleep 1
-                    continue
-                fi
+        fi
+        old_validation_gadget_only=$VALIDATION_GADGET_ONLY
+        if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+            # Full-NixOS acceptance must prove the gadget path itself;
+            # right-NIC success alone is not a substitute.
+            VALIDATION_GADGET_ONLY=yes
+        fi
+        validation_rc=0
+        validate_candidate || validation_rc=1
+        if [ "$validation_rc" -eq 0 ]; then
+            validate_candidate_right_path || validation_rc=1
+        fi
+        VALIDATION_GADGET_ONLY=$old_validation_gadget_only
+        if [ "$validation_rc" -eq 0 ]; then
+            if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
+                ACCEPTANCE_COMMITTED=yes
+            elif [ "$marker_requested" = yes ]; then
+                continue
             fi
-            old_validation_gadget_only=$VALIDATION_GADGET_ONLY
-            if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
-                # Full-NixOS acceptance must prove the gadget path itself;
-                # right-NIC success alone is not a substitute.
-                VALIDATION_GADGET_ONLY=yes
-            fi
-            validation_rc=0
-            validate_candidate || validation_rc=1
-            if [ "$validation_rc" -eq 0 ]; then
-                validate_candidate_right_path || validation_rc=1
-            fi
-            VALIDATION_GADGET_ONLY=$old_validation_gadget_only
-            if [ "$validation_rc" -eq 0 ]; then
-                if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
-                    ACCEPTANCE_COMMITTED=yes
-                elif [ "$marker_requested" = yes ]; then
-                    continue
-                fi
-                return 0
-            fi
+            return 0
         fi
         sleep 2
     done

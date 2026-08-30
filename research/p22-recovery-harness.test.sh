@@ -496,7 +496,9 @@ test_supervisor_is_trex_owned_and_bounded() {
 
 test_recovery_ssh_window_covers_platform_gate() {
     grep -Fq 'RECOVERY_SSH_TIMEOUT_SECONDS=90' "$HARNESS"
-    test "$(grep -Fc 'wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS"' "$HARNESS")" -eq 2
+    # Final recovery readback has its own absolute retry loop; only the
+    # recover() precondition still uses wait_ssh directly.
+    test "$(grep -Fc 'wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS"' "$HARNESS")" -eq 1
     if grep -Fq 'wait_ssh 40' "$HARNESS"; then
         echo 'stale pre-DVFSP recovery SSH window returned' >&2
         return 1
@@ -630,6 +632,79 @@ test_stage2_schema_rejects_unsafe_store_target() {
     grep -Fq 'stage2_store_target must be a unique /nixos/*.squashfs path' \
         "$TEST_ROOT/stage2-store-target.log"
 }
+
+test_stage2_readiness_is_fast_gadget_only() (
+    sed -n '/^device_ssh_gadget_fast() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/stage2-fast-readiness-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/stage2-fast-readiness-function.sh"
+    timeout() {
+        printf '%s\n' "$*" > "$TEST_ROOT/fast-readiness-timeout.args"
+        shift
+        "$@"
+    }
+    ssh() {
+        printf '%s\n' "$*" > "$TEST_ROOT/fast-readiness-ssh.args"
+        return 0
+    }
+    CANDIDATE_HOSTKEY_MODE=no
+    STAGE2_READINESS_TIMEOUT_SECONDS=5
+    STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS=2
+    device_ssh_gadget_fast 'test -s /proc/cmdline'
+    grep -Fq '5 ssh -J trex' "$TEST_ROOT/fast-readiness-timeout.args"
+    grep -Fq 'ConnectTimeout=2' "$TEST_ROOT/fast-readiness-timeout.args"
+    ! grep -Fq 'root@192.168.23.70' "$TEST_ROOT/fast-readiness-timeout.args"
+    accept_source=$TEST_ROOT/stage2-accept-source.sh
+    sed -n '/^accept_candidate_until_deadline() {/,/^}/p' "$HARNESS" \
+        > "$accept_source"
+    grep -Fq "device_ssh_gadget_fast 'test -s /proc/cmdline'" \
+        "$accept_source"
+    ! grep -Fq 'root@192.168.23.70' \
+        "$TEST_ROOT/stage2-fast-readiness-function.sh"
+)
+
+test_recovered_stage_a_readback_retries_exactly() (
+    sed -n '/^verify_recovered_stage_a() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/recovered-stage-a-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/recovered-stage-a-function.sh"
+    RUN_LOCAL=$TEST_ROOT/recovered-stage-a-run
+    mkdir -p "$RUN_LOCAL"
+    RECOVERY_SSH_TIMEOUT_SECONDS=5
+    ROLLBACK_SHA=08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3
+    calls=0
+    wait_ssh() {
+        echo 'wait_ssh must not be used for the final readback' >&2
+        return 1
+    }
+    sleep() { :; }
+    device_ssh() {
+        calls=$((calls + 1))
+        case "$calls" in
+            1) return 1 ;;
+            2)
+                case "$1" in
+                    *"= $ROLLBACK_SHA"*'122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'*'1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'*)
+                        printf '%s\n' \
+                            "p22 $ROLLBACK_SHA" \
+                            'p30 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159' \
+                            'p31 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
+                        return 0
+                        ;;
+                esac
+                ;;
+        esac
+        return 1
+    }
+    verify_recovered_stage_a
+    test "$calls" -eq 2
+    test -s "$RUN_LOCAL/recovered-partition-hashes"
+    grep -Fq "p22 $ROLLBACK_SHA" "$RUN_LOCAL/recovered-partition-hashes"
+    grep -Fq 'p30 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159' \
+        "$RUN_LOCAL/recovered-partition-hashes"
+    grep -Fq 'p31 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513' \
+        "$RUN_LOCAL/recovered-partition-hashes"
+)
 
 test_stage2_store_staging_commands_are_safe_shell() {
     sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
@@ -908,6 +983,8 @@ test_transaction_holder_removes_expired_owner
 test_stage2_schema_requires_takeover_fields
 test_stage2_schema_requires_store_fields
 test_stage2_schema_rejects_unsafe_store_target
+test_stage2_readiness_is_fast_gadget_only
+test_recovered_stage_a_readback_retries_exactly
 test_stage2_store_staging_commands_are_safe_shell
 test_stage2_exact_target_is_idempotent
 test_stage2_rendered_validation_requires_handoff
