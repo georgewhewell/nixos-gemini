@@ -40,6 +40,8 @@ let
     cp "$dropbear/bin/dropbear" root/bin/dropbear
     cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey
     cp ${bq2589xPreflight} root/bin/bq2589x-preflight
+    cp ${./unattended-recovery-lease-record.sh} \
+      root/bin/unattended-recovery-lease-record
     ${if inputDiagnostics then ''
       cp ${./input-observe.sh} root/bin/input-observe
     '' else ""}
@@ -297,34 +299,9 @@ let
       kill -0 "$watchdog_pid" 2>/dev/null \
         || fail "watchdog-open-failed"
       echo "$watchdog_pid" > /run/unattended-recovery.watchdog-owner
-      log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=@WATCHDOG_LEASE_SECONDS@s handoff=stage1"
-
-      # /run is moved into the new root, so this supervisor survives
-      # switch_root and follows whichever petter owns the watchdog.  Mark the
-      # lease expired before killing: a racing Stage-2 takeover must observe
-      # the marker and refuse to reopen the device.  Re-read the owner for a
-      # few seconds to close the remaining PID-file handoff race.
-      (
-        sleep @WATCHDOG_LEASE_SECONDS@
-        if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != \
-             "unattended_recovery=healthy" ]; then
-          : > /run/unattended-recovery.lease-expired
-          log "unattended_recovery=lease-expired watchdog_userspace=stopped watchdog_reset_expected=31s"
-          pass=0
-          while [ "$pass" -lt 5 ]; do
-            owner_pid=$(cat /run/unattended-recovery.watchdog-owner 2>/dev/null || true)
-            case "$owner_pid" in
-              *[!0-9]*) ;;
-              *)
-                [ -n "$owner_pid" ] \
-                  && kill -KILL "$owner_pid" 2>/dev/null || true
-                ;;
-            esac
-            pass=$((pass + 1))
-            sleep 1
-          done
-        fi
-      ) &
+      /bin/unattended-recovery-lease-record @WATCHDOG_LEASE_SECONDS@ \
+        || fail "watchdog-lease-deadline-record-failed"
+      log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=@WATCHDOG_LEASE_SECONDS@s deadline=monotonic handoff=stage1-to-stage2-enforcer"
     }
 
     @START_WATCHDOG@
@@ -423,6 +400,8 @@ let
       grep -a -Fq watchdog "$busybox/bin/busybox"
       grep -Fq 'start_watchdog_lease' root/init
       grep -Fq 'unattended-recovery.watchdog-owner' root/init
+      grep -Fq 'unattended-recovery-lease-record' root/init
+      grep -Fq 'clock=monotonic-uptime-seconds' root/bin/unattended-recovery-lease-record
     '' else ''
       ! grep -Fq '^    start_watchdog_lease$' root/init
     ''}
@@ -435,10 +414,11 @@ let
       ! grep -Fq '^      provision_store$' root/init
     ''}
     bash -n root/init
-    bash -n root/bin/usb-host-net root/bin/usb-host-net-udhcpc
+    bash -n root/bin/usb-host-net root/bin/usb-host-net-udhcpc \
+      root/bin/unattended-recovery-lease-record
     chmod 0755 root/init root/bin/usb-net root/bin/usb-host-net \
       root/bin/usb-host-net-udhcpc root/bin/ssh-server \
-      root/bin/bq2589x-preflight \
+      root/bin/bq2589x-preflight root/bin/unattended-recovery-lease-record \
       root/bin/dropbear root/bin/dropbearkey
     ${if inputDiagnostics then ''
       chmod 0755 root/bin/input-observe
@@ -502,7 +482,7 @@ let
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "unattended-recovery=${
         if unattendedRecovery
-        then "stage1-to-stage2-owner-handoff; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=external"
+        then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=external-exact"
         else "none"
       }"
       echo "store-provision=${

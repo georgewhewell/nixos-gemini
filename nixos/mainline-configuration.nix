@@ -148,6 +148,7 @@
     # A failed gadget address must not suppress sshd on an RTL815x DHCP lease.
     after = [
       "gemini-mainline-usb.service"
+      "gemini-unattended-recovery-lease-enforcer.service"
       "gemini-watchdog-takeover.service"
       "gemian.mount"
     ];
@@ -156,15 +157,35 @@
     ];
   };
 
+  # Stage 1 writes a monotonic deadline into /run before switch_root.  This
+  # service owns no watchdog descriptor, so it survives the Stage-2 takeover
+  # and can independently stop whichever atomically-published PID owns it.
+  # The only bypass is the exact external acceptance marker in volatile /run.
+  systemd.services.gemini-unattended-recovery-lease-enforcer = {
+    description = "Enforce the Gemini unattended recovery watchdog deadline";
+    wantedBy = ["multi-user.target"];
+    before = ["gemini-watchdog-takeover.service" "sshd.service" "gemini-mainline-success.service"];
+    serviceConfig = {
+      Type = "simple";
+      Restart = "on-failure";
+      RestartSec = "1s";
+      KillMode = "process";
+    };
+    script = ''
+      exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-lease-enforcer.sh}
+    '';
+  };
+
   # Stage 1 keeps the nowayout watchdog alive while systemd starts.  Replace
-  # that petter before exposing SSH.  The Stage-1 lease supervisor follows the
-  # atomically replaced owner PID and kills whichever petter currently owns it
-  # after the Stage-1 image's configured lease unless an external acceptance
-  # action explicitly records `unattended_recovery=healthy` in volatile /run.
+  # that petter before exposing SSH.  The independent lease enforcer is
+  # ordered first, so it can publish expiry before this service opens a new
+  # watchdog descriptor.
   systemd.services.gemini-watchdog-takeover = {
     description = "Take over the Gemini unattended recovery watchdog";
     wantedBy = ["multi-user.target"];
     before = ["sshd.service" "gemini-mainline-success.service"];
+    after = ["gemini-unattended-recovery-lease-enforcer.service"];
+    requires = ["gemini-unattended-recovery-lease-enforcer.service"];
     serviceConfig = {
       Type = "forking";
       PIDFile = "/run/unattended-recovery.watchdog-owner";
