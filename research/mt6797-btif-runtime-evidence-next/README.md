@@ -111,7 +111,7 @@ WIFI_RAM_CODE_6797       451904
 WMT_SOC.cfg                   80
 ```
 
-The image copy and the checked-in firmware files have these hashes:
+The public system-image copy has these hashes:
 
 ```text
 WMT_SOC.cfg                 f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
@@ -129,11 +129,21 @@ ROMv3_patch_1_0_hdr.bin     450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b
 ROMv3_patch_1_1_hdr.bin     5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
 ```
 
-The WMT config and Wi-Fi blob do match.  Therefore the exact production
-Gemini patch payload is **not present in Git**; the sanitized live archive
-records its identity but deliberately does not redistribute it.  A test using
-the public image must be labelled a replacement-firmware experiment, not
-“the known-good device firmware”.
+The WMT config and Wi-Fi blob match, but the two public-image patches do not.
+The exact production Gemini patches are nevertheless present in this Git
+repository under `blobs/`, introduced by commit `b0ad2bb2317c7b819a09d0e9c657010c50e744bf`:
+
+```text
+blobs/ROMv3_patch_1_0_hdr.bin  450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+blobs/ROMv3_patch_1_1_hdr.bin  5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+```
+
+They compare byte-for-byte equal to both archived initramfs copies and match
+the retained live Gemian measurements.  Their original acquisition medium is
+not recorded, so only that historical source detail remains unknown.  See
+`firmware-provenance.md` for the complete hash, extraction, and static launcher
+proof.  Any use of the different public-system-image payloads must still be
+labelled a replacement-firmware experiment.
 
 ## Patch address and EMI layout
 
@@ -164,10 +174,21 @@ comment calls them “MT6797 patch RAM base”; they are **not** proof that the
 patch body belongs in AP EMI.  The second command receives the four-byte
 `addressByte` returned by the `srh_patch` owner (`wmt_ic_soc.c:2194-2200`).
 
-The numeric per-image load addresses and the helper's algorithm which chooses
-them are **could not determine** from the checked-in source or sanitized
-artifacts.  Do not promote `08 05`, `2c 0b`, `0xf0080000`, or the runtime AP
-reservation address into a guessed universal firmware load address.
+The preserved production `wmt_launcher` closes the four-byte metadata gate.
+It reads header bytes 24--27, derives the patch count and download sequence
+from the first byte, clears that byte, and submits these exact vectors in
+download order:
+
+```text
+ROMv3_patch_1_1_hdr.bin  sequence 1  00 00 0a f0
+ROMv3_patch_1_0_hdr.bin  sequence 2  00 00 09 00
+```
+
+The vendor kernel copies those four bytes verbatim into the WMT command.  This
+proves byte vectors, not host-endian scalar addresses.  Do not promote `08 05`,
+`2c 0b`, `0xf0080000`, or the runtime AP reservation address into a guessed
+universal firmware load address.  The binary-offset and source proof is in
+`firmware-provenance.md`.
 
 ## Ownership and handshake state machine
 
@@ -257,24 +278,25 @@ Do not proceed to a live patch transfer unless all of these are true:
   no HCI, Wi-Fi, GPS, or arbitrary TX consumer may bypass this owner.
 * The chip query returns `0x0279` and the SOC version check accepts the E1
   tuple `0x8a00/0x8a00` (or a newly evidenced tuple).
-* `srh_patch`-equivalent discovery returns each canonical filename **and its
-  four address bytes**.  Missing address metadata is a hard stop.
+* Patch discovery returns the two canonical filenames, exact production
+  hashes, order, and evidenced four-byte vectors recorded in
+  `firmware-provenance.md`. Missing or different metadata is a hard stop.
 * Each patch-address command receives the expected event, every fragment is
   acknowledged, and only then is STP marked ready.
-* The exact device patch hashes are either supplied privately for the test or
-  the public-image substitution is explicitly recorded as unvalidated.  The
-  checked-in public patch bytes are not the hashes observed on Gemian.
+* The exact tracked production hashes are used. Any public-system-image or
+  other substitution is explicitly recorded as unvalidated.
 * No GPIO83/84, GPIO224–233, GPS LNA, or UART pin is assigned to BTIF by
   analogy.  External mux work requires a separate board-level artifact.
 
 ## Exact next implementation/hardware gate
 
-Implementation may begin against the internal BTIF register path and the
-vendor state machine, with firmware loading abstracted behind a strict
-`name + 4-byte address` discovery interface.  The next decisive gate is a
-read-only artifact or controlled lab trace that reveals the two production
-patch `addressByte[4]` values returned after `srh_patch`, and establishes
-whether the public 20180615 payload can replace the observed 20180307 payload.
-Until that gate closes, a safe RX-only test may validate register/clock/STP
-parser plumbing only; it must not send patch data, HCI commands, or radio
-traffic.
+Implementation may proceed against the internal BTIF register path and vendor
+state machine using only the exact production filenames, hashes, order, and
+four-byte vectors proved in `firmware-provenance.md`. The next decisive gate is
+a hardware-neutral controller/KUnit test that reproduces the bounded vendor
+patch-info and acknowledged fragment sequence through the existing WMT/STP
+transaction APIs. A later live attempt still requires explicit DT and cmdline
+opt-in, the CONSYS/BTIF ownership gates above, watchdog recovery, and strict
+event validation. It must not enable HCI, Wi-Fi, GNSS, FM, or other radio
+traffic. The different public 20180615 payload remains an unvalidated
+replacement and is unnecessary for the production-path experiment.
