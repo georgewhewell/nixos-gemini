@@ -641,3 +641,34 @@ terminal `manual_reset_required_*`, `recovery_blocked_*`, and
 `recovered_but_proof_failed_*` states are preserved by cleanup.  `sh -n`,
 ShellCheck, and the existing three-phase dry-run passed; no Flash Tool,
 reboot, catcher, or hardware write was performed.
+
+## Authorized chained p22 attempt: 2026-08-30 05:37--05:39 CEST
+
+The exact command was authorized and run once:
+
+```text
+research/p22-chained-recovery-runner.sh --manifest research/p22-unattended-recovery-watchdog-hostnet.manifest --execute
+```
+
+Read-only preflight passed: candidate `a0bc87d21227158e2e925a6f05affdfdec773a5e44e248d41f8b6684e2bd37eb`, Stage-A rollback `1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, scatter `19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8`, XML `90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605`, and Trex Flash Tool idle. Live p22/p30/p31 pre-state matched the exact expected hashes.
+
+Phase 1 candidate Flash Tool log reports BROM/DA connection and
+`Download Succeeded`, `[23] WRITE TO PARTITION [ boot ]`, and `flash_rc=0`.
+The candidate did not satisfy the 60-second acceptance window.  The harness
+then armed the exact Stage-A rollback.  Trex captured candidate disconnect,
+preloader `0e8d:2000` at 05:38:37, a second preloader window at 05:38:47, and
+gadget `0525:a4a2` at 05:38:56.  Rollback Flash Tool also reports
+`[23] WRITE TO PARTITION [ boot ]`, `Download Succeeded`, and `flash_rc=0`.
+Evidence is under Trex capture directory
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-053725/`
+and local state `artifacts/p22-recovery-20260830-053725/`.
+
+The transaction stopped fail-closed as
+`manual_reset_required_no_ssh` at 05:39:32.  Gadget `0525:a4a2` remained
+enumerated, but Trex `enp232s0f4u2` remained `DOWN`, so SSH and post-rollback
+partition readback could not be obtained.  No phase 2 lease proof or phase 3
+candidate reinstall was attempted.  No p30/p31 write, erase, format, or
+firmware upgrade was issued.  All harness, wrapper, probe-capture, and Flash
+Tool processes from this run exited; unrelated pre-existing Trex monitors were
+not disturbed.  Further progress requires the explicitly reported manual
+network/reset intervention and a fresh read-only invariant check.
