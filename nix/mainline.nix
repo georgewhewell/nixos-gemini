@@ -735,13 +735,18 @@
             ${kernel}/mt6797-gemini-pda-thermal-hall-observe.dtbo
           test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /adc@11001000 status)" = okay
           test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /thermal@1100b000 status)" = okay
+          test "$(fdtget -t u "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal polling-delay)" = 1000
+          test "$(fdtget -t u "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal polling-delay-passive)" = 1000
+          test "$(fdtget -t x "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal thermal-sensors)" = \
+            "$(fdtget -t x "$out/gemini-thermal-hall-observe.dtb" /thermal@1100b000 phandle)"
+          test -z "$(fdtget -l "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal)"
           test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /gpio-keys status)" = okay
           ! fdtget -p "$out/gemini-thermal-hall-observe.dtb" /gpio-keys \
             | grep -Fqx 'wakeup-source'
           test "$(sha256sum "$out/gemini-thermal-hall-observe.dtb" | cut -d' ' -f1)" = \
             ${thermalHallDtbSha256}
           cp "$out/gemini-thermal-hall-observe.dtb" "$out/gemini.dtb"
-          echo 'thermal-hall-observer=auxadc-thermal-gpio66-no-wake-passed' >> "$out/VALIDATION"
+          echo 'thermal-hall-observer=auxadc-soc-zone-no-trips-gpio66-no-wake-passed' >> "$out/VALIDATION"
         ''
         else ""
       }
