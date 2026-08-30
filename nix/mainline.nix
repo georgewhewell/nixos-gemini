@@ -533,7 +533,7 @@
       ''}
       ${lib.optionalString usbHostOverlay ''
         # This overlay is built and reviewed with the locked kernel source.
-        # Do not replace it with the retired repository-local DTS: that file
+        # Do not replace it with a repository-local DTS: the retired version
         # asserted GPIO72 at probe time and used the wrong regulator sequence.
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtbo \
           "$out/mt6797-gemini-pda-usb11-host.dtbo"
