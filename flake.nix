@@ -430,6 +430,27 @@
       unattendedRecovery = true;
     };
 
+    # Critical-path GPU identity experiment. It keeps the accepted recovery
+    # substrate, then exclusively votes RT5735 and all four MFG domains,
+    # enables BG3D, reads immutable Mali-T880 identity/features, and unwinds.
+    # The real GPU node remains disabled, so Panfrost cannot bind or submit.
+    mainlineGpuStaged = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      gpuStagedOverlay = true;
+      unattendedRecovery = true;
+    };
+
     # Queued Stage-C recovery image: test the reviewed native display and
     # MT6351 audio-card enumeration together.  Touch support is built in but
     # its contradictory rail/EINT candidate remains disabled in the base DT.
@@ -1115,6 +1136,10 @@
       mainlineConsysG2bNoFirmwareDtb = mainlineConsysG2bNoFirmware.serviceabilityDtb;
       mainlineConsysG2bNoFirmwareInitramfs = mainlineConsysG2bNoFirmware.probeInitramfs;
       mainlineConsysG2bNoFirmwareBundle = mainlineConsysG2bNoFirmware.bundle;
+      mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
+      mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
+      mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;
+      mainlineGpuStagedBundle = mainlineGpuStaged.bundle;
       mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
       mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
       mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
