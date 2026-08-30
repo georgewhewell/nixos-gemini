@@ -1,0 +1,16 @@
+# First real Panfrost bind, constrained to the captured LK clock and the
+# vendor type-12 voltage.  No other OPP exists, so devfreq cannot change the
+# clock or rail while the initial binding and idle tests are performed.
+CONFIG_PM=y
+CONFIG_PM_GENERIC_DOMAINS=y
+CONFIG_PM_GENERIC_DOMAINS_OF=y
+CONFIG_PM_OPP=y
+CONFIG_REGULATOR=y
+CONFIG_REGULATOR_RT5735=y
+CONFIG_MTK_SCPSYS=y
+CONFIG_COMMON_CLK_MT6797_MFGSYS=y
+CONFIG_DRM=y
+CONFIG_DRM_PANFROST=y
+CONFIG_PM_DEVFREQ=y
+CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y
+# CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC is not set

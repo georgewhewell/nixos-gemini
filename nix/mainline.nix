@@ -13,6 +13,7 @@
   consysIdentityOverlay ? false,
   consysG2bOverlay ? false,
   gpuStagedOverlay ? false,
+  gpuFixedOppOverlay ? false,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -58,6 +59,7 @@
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
     ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
+    ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
@@ -97,6 +99,10 @@
   gpuStagedLabel =
     if gpuStagedOverlay
     then "rt5735-mfg-four-domain-bg3d-readonly-id-stage2-v1"
+    else "none";
+  gpuFixedOppLabel =
+    if gpuFixedOppOverlay
+    then "panfrost-single-500500000hz-975000uv-type12-v1"
     else "none";
   displayLabel =
     if displayOverlay
@@ -159,6 +165,7 @@
     + lib.optionalString consysIdentityOverlay "-consys-identity"
     + lib.optionalString consysG2bOverlay "-consys-g2b"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
+    + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -173,12 +180,22 @@
     + lib.optionalString deviceActivationOverlay "-device-activation";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
-  baseDtbSha256 = "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
-  serviceabilityBaseDtbSha256 = "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
-  usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+  baseDtbSha256 =
+    if kernelRevision == "a78c248119dc0a0be191d103dd236a53db64cf0e"
+    then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
+    else "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
+  serviceabilityBaseDtbSha256 =
+    if kernelRevision == "a78c248119dc0a0be191d103dd236a53db64cf0e"
+    then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
+    else "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
+  usbPlatformDtbSha256 =
+    if kernelRevision == "a78c248119dc0a0be191d103dd236a53db64cf0e"
+    then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
+    else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert !(consysIdentityOverlay && consysG2bOverlay);
-    assert !(gpuStagedOverlay && (consysIdentityOverlay || consysG2bOverlay));
+    assert !(gpuStagedOverlay && gpuFixedOppOverlay);
+    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay));
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -278,6 +295,7 @@
       + lib.optionalString consysIdentityOverlay "-consys-identity"
       + lib.optionalString consysG2bOverlay "-consys-g2b"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
+      + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
@@ -338,7 +356,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || gpuStagedOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -392,6 +410,16 @@
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=y' .config
         ! grep -q '^CONFIG_DRM_PANFROST=' .config
+      ''}
+      ${lib.optionalString gpuFixedOppOverlay ''
+        grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
+        grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
+        grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
+        grep -Fqx 'CONFIG_DRM=y' .config
+        grep -Fqx 'CONFIG_DRM_PANFROST=y' .config
+        grep -Fqx 'CONFIG_PM_DEVFREQ=y' .config
+        grep -Fqx 'CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=' .config
       ''}
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
@@ -579,6 +607,11 @@
           "$out/mt6797-gemini-pda-gpu-staged.dtbo"
         test -s "$out/mt6797-gemini-pda-gpu-staged.dtbo"
       ''}
+      ${lib.optionalString gpuFixedOppOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-fixed-opp.dtbo \
+          "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
+        test -s "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
+      ''}
       ${lib.optionalString usbHostOverlay ''
         # This overlay is built and reviewed with the locked kernel source.
         # Do not replace it with a repository-local DTS: the retired version
@@ -696,7 +729,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -844,6 +877,28 @@
           fdtget -p "$out/gemini-gpu.dtb" /gpu-staged | grep -Fqx 'power-domains'
           echo 'gpu-staged-overlay=rt5735-mfg-bg3d-readonly-id-passed' >> "$out/VALIDATION"
           echo 'gpu-target=disabled-no-panfrost-bind' >> "$out/VALIDATION"
+        ''
+        else if gpuFixedOppOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-consys.dtb" \
+            -o "$out/gemini-gpu.dtb" \
+            ${kernel}/mt6797-gemini-pda-gpu-fixed-opp.dtbo
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c status)" = okay
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c regulator-min-microvolt)" = 975000
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c regulator-max-microvolt)" = 975000
+          fdtget -p "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c \
+            | grep -Fqx 'regulator-boot-on'
+          test "$(fdtget "$out/gemini-gpu.dtb" /syscon@13000000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /gpu@13040000 status)" = okay
+          fdtget -p "$out/gemini-gpu.dtb" /gpu@13040000 \
+            | grep -Fqx 'operating-points-v2'
+          test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-hz)" = \
+            '0 1dd50620'
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-microvolt)" = 975000
+          echo 'gpu-fixed-opp=panfrost-500500000hz-975000uv-passed' >> "$out/VALIDATION"
+          echo 'gpu-dvfs=disabled-single-opp' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-consys.dtb" "$out/gemini-gpu.dtb"
@@ -1722,6 +1777,7 @@
       echo "nix-consys-identity=${consysIdentityLabel}"
       echo "nix-consys-g2b=${consysG2bLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
+      echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"

@@ -31,7 +31,7 @@
       # Critical-path experiments consume a second immutable pin so the
       # accepted p22 baseline remains rebuildable byte-for-byte while newer
       # CONSYS/GPU/cellular work advances on the same maintained fork.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=4ffa70b709ce296992c729a0570870e61f9b22d3";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=a78c248119dc0a0be191d103dd236a53db64cf0e";
       flake = false;
     };
     ixoo-candidate = {
@@ -448,6 +448,27 @@
       sshAccess = true;
       usbHostOverlay = true;
       gpuStagedOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # First real Panfrost binding experiment.  Keep the boot-proven recovery,
+    # eMMC, SSH and dual-USB substrate, but expose exactly one GPU OPP: the
+    # already-programmed 500.5 MHz clock at the vendor type-12 975 mV voltage.
+    # There is deliberately no DVFS table and no staged diagnostic transaction.
+    mainlineGpuFixedOpp = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      gpuFixedOppOverlay = true;
       unattendedRecovery = true;
     };
 
@@ -1140,6 +1161,10 @@
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;
       mainlineGpuStagedBundle = mainlineGpuStaged.bundle;
+      mainlineGpuFixedOppKernel = mainlineGpuFixedOpp.kernel;
+      mainlineGpuFixedOppDtb = mainlineGpuFixedOpp.serviceabilityDtb;
+      mainlineGpuFixedOppInitramfs = mainlineGpuFixedOpp.probeInitramfs;
+      mainlineGpuFixedOppBundle = mainlineGpuFixedOpp.bundle;
       mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
       mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
       mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
