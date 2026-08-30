@@ -1093,3 +1093,32 @@ The complete run evidence is under
 `artifacts/p22-recovery-20260830-081412-326018` and the corresponding Trex
 directory under `/mnt/Home/src/nixos-gemini-flash-p22-20260829/`; this is a
 successful automatic rescue with a harness-validation defect requiring review.
+
+## d69d558 second proof-lease execute and automatic rescue: 2026-08-30 08:20--08:26
+
+After commit `35ff604` removed the rendered validation `fi` defect and the
+full host harness suite passed, root authorized one identical repeat using the
+same immutable candidate and manifest.  Dry-run and all preflight invariants
+passed at 08:20:35.  Candidate p22 Download Only write completed with
+`Download Succeeded`, rc=0 at 08:21:00.  Corrected candidate validation then
+passed, including both SSH paths, exact model/cmdline, watchdog identity/state/
+timeout/owner, enumeration-only storage, r8152/RTL8156 host net, and BQ
+preflight PASS.
+
+The proof deliberately withheld the acceptance marker.  Supervisor rollback
+was armed at 08:22:21.  Lease expiry was recorded at 08:24:06 with
+`unattended_recovery=lease-expired watchdog_userspace=stopped`; the watchdog
+reset eventually exposed BROM and exact Stage-A rollback completed with
+`Download Succeeded`, rc=0 at 08:24:10.  Supervisor state became
+`supervisor_rollback_succeeded_rescue_verified`; the harness terminal state
+was `lease_proof_passed_recovered_stage_a` at 08:25:32 and exited 0.
+
+Independent final SSH readback over both gadget `10.15.19.82` and right-NIC
+`192.168.23.70` proved p22
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+Trex cleanup left no writer, watcher, transaction, or proof unit.  No p30/p31
+write, erase, format, firmware upgrade, or second writer occurred.  Evidence
+is under `artifacts/p22-recovery-20260830-082049-348344` and the matching Trex
+run directory.
