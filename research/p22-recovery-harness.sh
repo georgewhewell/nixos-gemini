@@ -593,6 +593,12 @@ provision_stage2_store() {
     init_target=/mnt$STAGE2_STORE_TARGET_LIVE
     init_stage1_target=/mnt$STAGE1_STORE_TARGET
     provision_tmp=$init_target.provision.tmp
+    # The manifest schema and source preflight already prove this is the exact,
+    # positive Stage2 byte count.  df -Pk reports 1024-byte blocks, so round
+    # the payload up before comparing it with p29's non-root-available space.
+    # No source establishes an ext4 metadata allowance for this transaction;
+    # do not invent a magic headroom value here.
+    required_kib=$(((STAGE2_STORE_SIZE + 1023) / 1024))
     STAGE2_STORE_TEMP=$provision_tmp
     required_line="store-provision=required target=$init_target temp=$provision_tmp sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
     ready_line="store-provision=ready sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
@@ -637,6 +643,13 @@ if test -e '$provision_tmp' || test -L '$provision_tmp'; then
   test ! -e '$provision_tmp'
   test ! -L '$provision_tmp'
 fi
+# BusyBox df supports POSIX -P output and -k 1024-byte blocks.  Pin both the
+# backing device and mountpoint: a nested mount must not authorize a p29 write.
+available_kib=\$(df -Pk /mnt/gemian/nixos | awk 'NR == 2 && \$1 == \"/dev/mmcblk0p29\" && \$6 == \"/mnt/gemian\" { print \$4; exit }')
+case \"\$available_kib\" in
+  ''|*[!0-9]*) exit 1 ;;
+esac
+test \"\$available_kib\" -ge '$required_kib'
 cat > '$provision_tmp'
 test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
 test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'

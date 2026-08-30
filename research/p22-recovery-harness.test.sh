@@ -759,7 +759,9 @@ test_stage2_store_staging_commands_are_safe_shell() {
     device_ssh_gadget_provision() { device_ssh_gadget "$@"; }
     STAGE2_POLICY=watchdog-takeover-required
     STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-test.squashfs
-    STAGE2_STORE_SIZE=1
+    # Exercise byte-to-df-block rounding: 1025 bytes needs two 1024-byte
+    # blocks before the stream is allowed to open its temporary.
+    STAGE2_STORE_SIZE=1025
     STAGE2_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
     STAGE2_STORE_TARGET=/nixos/next-mainline.squashfs
     STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
@@ -780,10 +782,22 @@ test_stage2_store_staging_commands_are_safe_shell() {
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "stat -Lc %h '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq "test \"\$stale_size\" -le '1'" \
+    grep -Fq "test \"\$stale_size\" -le '1025'" \
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'df -Pk /mnt/gemian/nixos' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq '/dev/mmcblk0p29' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'case "$available_kib" in' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq '"$available_kib" -ge '\''2'\''' "$RUN_LOCAL/store-command-4.sh"
+    stale_remove_line=$(grep -n -F "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
+    free_space_line=$(grep -n -F 'df -Pk /mnt/gemian/nixos' \
+        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
+    stream_line=$(grep -n -F "cat > '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
+    test "$free_space_line" -gt "$stale_remove_line"
+    test "$free_space_line" -lt "$stream_line"
     grep -Fq "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs" \
         "$RUN_LOCAL/store-command-3.sh"
     ! grep -Fq "grep -Fqx -- 'store-provision=required" \
