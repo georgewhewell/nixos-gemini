@@ -831,3 +831,74 @@ rollback before lease expiry, and verify recovery; it must never certify the
 power candidate.  The new per-attempt Flash Tool state paths prevent stale
 candidate `flash_rc=0` from satisfying rollback waits.  No v3 flash, reboot,
 erase, format, upgrade, p30 write, or p31 write has occurred.
+
+## Durable Trex-owned observe/rollback preparation: 2026-08-30
+
+The observe-always-rollback path now acquires a Trex-global transaction flock
+(`.p22-transaction.lock`) before image staging and keeps it in a bounded,
+systemd-owned transaction-holder service.  Each Flash Tool wrapper separately
+uses the Trex-global writer flock (`.p22-flash-writer.lock`), while its state,
+PID, and PGID files remain per-attempt.  A reused run directory is rejected by
+`mkdir` rather than reused, and the wrapper verifies the transaction-owner
+marker before it can write.
+
+Before candidate reboot, the harness stores and re-hashes an immutable
+Stage-A p22 rescue copy and starts the Trex-owned
+`p22-proof-supervisor.sh` transient service.  For
+`transaction_policy=observe-always-rollback`, this supervisor waits the exact
+manifest acceptance window, then stages only the verified rescue image and
+launches the reviewed boot-only Download Only wrapper.  It never writes an
+acceptance marker.  Therefore loss of the workstation harness or Trex SSH
+session does not remove the rollback owner; all supervisor and wrapper waits
+are bounded and exact process groups are the only timeout kill target.
+
+The supervisor also treats a candidate Flash Tool failure or missing completion
+state as potentially partial p22 and enters the same bounded rescue path; it
+does not assume that a nonzero writer result means the old image is intact.
+Its ready handshake is `supervisor_waiting_candidate`, and the harness requires
+that state plus an active Trex unit before dispatching reboot.  Local EXIT/TERM
+after that handshake preserves the Trex supervisor, transaction holder, and
+watcher so recovery is not cancelled by loss of the workstation process.
+
+The host-only regressions cover fake supervisor rollback (including a failed or
+partial candidate), unexpected supervisor exit, nonterminal timing states,
+local-exit preservation, different attempt directories contending on one
+writer lock, stale owner/state rejection, bounded hanging SSH, duplicate-owner
+rejection, and the observe-policy gate.  `sh -n`, ShellCheck at `-S error`, and
+`research/p22-recovery-harness.test.sh` pass.
+No hardware action was taken while adding this durability layer.  The latest
+power-preflight candidate handoff is now v2, padded SHA
+`81c1d01bba849ddfd48574739b54d67910a6501c21dcd1755e60916fe7c1a286`; it
+remains dry-run/review-only.
+
+The Trex supervisor's terminal proof is intentionally narrower than device
+readback: Trex has no Gemini SSH credential, so it proves exact rescue-image
+hash, p22-only wrapper completion, and serialized ownership.  The surviving
+host harness must then prove device p22/p30/p31 hashes over SSH; inability to
+perform that readback remains a manual-reset/readback failure, never an
+acceptance.
+
+The prepared command, to be run only after a fresh root execute authorization,
+is:
+
+```text
+research/p22-recovery-harness.sh --manifest research/p22-unattended-recovery-power-preflight-v1.manifest --execute --proof-lease
+```
+
+Expected sequence is: local artifact/scatter/XML checks; Trex transaction
+holder and exact-MAC watcher; rescue-copy hash; supervisor ready handshake;
+candidate boot-only Download Only p22 write; bounded candidate/BQ/watchdog/
+host-net evidence; supervisor-owned always-rollback; preloader/USB capture;
+local Stage-A p22/p30/p31 readback; and terminal cleanup.  The runner must stop
+on any missing supervisor, tool-owner, preloader, or readback proof.  This
+remains a preparation record, not an execution authorization.
+
+The recovery guarantee begins only after Linux `mtk_wdt` probe/handoff; the
+Gemini LK lineage nominally arms/kicks a 10-second watchdog, but ATF-to-Linux
+persistence is unproven.  A p22 kernel/DT change cannot close this pre-probe
+window, so a pre-probe hang remains an explicit manual-reset boundary.
+
+The recovery guarantee begins only after Linux `mtk_wdt` probe/handoff; the
+Gemini LK lineage nominally arms/kicks a 10-second watchdog, but ATF-to-Linux
+persistence is unproven.  A p22 kernel/DT change cannot close that pre-probe
+window, so a pre-probe hang remains an explicit manual-reset boundary.

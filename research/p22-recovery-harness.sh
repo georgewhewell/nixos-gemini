@@ -95,6 +95,17 @@ SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
 ACCEPTANCE_COMMITTED=no
 ATTEMPT_COUNTER=0
+TOOL_PID_FILE=
+TOOL_PGID_FILE=
+TOOL_LAUNCH_PID_FILE=
+TOOL_LOCK_FILE=
+FLASH_LOCK_FILE=
+TRANSACTION_LOCK_FILE=
+TRANSACTION_UNIT=
+SUPERVISOR_UNIT=
+SUPERVISOR_STATE=
+ROLLBACK_RESCUE_IMAGE=
+SUPERVISOR_KEEP=no
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -398,16 +409,53 @@ stage_image() {
 
 start_capture() {
     run_name=p22-recovery-$(date +%Y%m%d-%H%M%S)
+    run_name=$run_name-$$
     RUN_LOCAL=$ROOT/artifacts/$run_name
     RUN_SHARED=$TREX_CAPTURE_ROOT/$run_name
-    mkdir -p "$RUN_LOCAL" "$RUN_SHARED"
+    # The pid suffix prevents ordinary same-second collisions; mkdir without
+    # -p is the final guard against a reused pid or a stale run directory.
+    mkdir "$RUN_LOCAL"
+    trex_ssh "test -d '$TREX_CAPTURE_ROOT'; mkdir '$RUN_SHARED'"
     STATE=$RUN_SHARED/state
+    FLASH_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-flash-writer.lock
+    TRANSACTION_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-transaction.lock
+    TRANSACTION_UNIT=p22-transaction-$run_name
+    SUPERVISOR_UNIT=p22-proof-$run_name
+    ROLLBACK_RESCUE_IMAGE=$RUN_SHARED/rollback-rescue.img
     printf 'preflight %s mode=%s\n' "$(date -Is)" "$MODE" > "$RUN_LOCAL/state"
     device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
     device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
     device_ssh 'sha256sum /dev/mmcblk0p22' > "$RUN_LOCAL/p22-pre-hash"
+    # Acquire a Trex-owned transaction lease before staging any image.  The
+    # service is bounded by its holder script and survives loss of this SSH
+    # session; a second harness cannot enter the writer lane concurrently.
+    trex_scp "$ROOT/research/p22-trex-transaction-holder.sh" "trex:$RUN_SHARED/p22-trex-transaction-holder.sh" >/dev/null
+    trex_ssh "chmod 700 '$RUN_SHARED/p22-trex-transaction-holder.sh'; systemd-run --user --unit='$TRANSACTION_UNIT' --collect --quiet '$RUN_SHARED/p22-trex-transaction-holder.sh' '$TRANSACTION_LOCK_FILE' '$RUN_SHARED/transaction-owner' 900"
+    transaction_ready=no
+    transaction_wait=0
+    while [ "$transaction_wait" -lt 15 ]; do
+        if trex_ssh "systemctl --user is-active --quiet '$TRANSACTION_UNIT' && test -s '$RUN_SHARED/transaction-owner'"; then
+            transaction_ready=yes
+            break
+        fi
+        sleep 1
+        transaction_wait=$((transaction_wait + 1))
+    done
+    if [ "$transaction_ready" != yes ]; then
+        printf 'recovery_blocked_transaction_owner %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        return 1
+    fi
+    # These are diagnostics only; the holder above owns the transaction lock.
     # shellcheck disable=SC2029
-    trex_ssh "mkdir -p '$RUN_SHARED'; nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
+    trex_ssh "nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
+    # Preserve an immutable rescue copy before candidate staging.  The
+    # supervisor can therefore restore the known-good p22 even if this host
+    # process dies after candidate flash and before recover().
+    cp "$ROLLBACK" "$ROLLBACK_RESCUE_IMAGE"
+    test "$(stat -Lc %s "$ROLLBACK_RESCUE_IMAGE")" -eq "$SIZE"
+    test "$(sha256sum "$ROLLBACK_RESCUE_IMAGE" | cut -d' ' -f1)" = "$ROLLBACK_SHA"
+    trex_ssh "test \"\$(stat -Lc %s '$ROLLBACK_RESCUE_IMAGE')\" -eq '$SIZE'; test \"\$(sha256sum '$ROLLBACK_RESCUE_IMAGE' | cut -d' ' -f1)\" = '$ROLLBACK_SHA'"
+    trex_scp "$ROOT/research/p22-proof-supervisor.sh" "trex:$RUN_SHARED/p22-proof-supervisor.sh" >/dev/null
     trex_scp "$ROOT/research/p22-flash-wrapper.sh" "trex:$RUN_SHARED/flash-wrapper.sh" >/dev/null
     trex_scp "$ROOT/research/trex-gadget-net-watcher.sh" "trex:$RUN_SHARED/trex-gadget-net-watcher.sh" >/dev/null
     # This watcher starts before Flash Tool/reboot and repairs only the exact
@@ -419,6 +467,25 @@ start_capture() {
 
 stop_capture() {
     [ -n "${RUN_SHARED:-}" ] || return 0
+    if [ "$SUPERVISOR_KEEP" = yes ]; then
+        supervisor_state=$(trex_ssh "cat '$RUN_SHARED/supervisor.state'" 2>/dev/null || true)
+        case "$supervisor_state" in
+            supervisor_rollback_succeeded_rescue_verified\ *|supervisor_rollback_failed\ *|supervisor_rollback_unverified\ *|supervisor_rollback_timeout\ *|supervisor_candidate_flash_failed\ *|supervisor_blocked_*) SUPERVISOR_KEEP=no ;;
+        esac
+    fi
+    if [ "$SUPERVISOR_KEEP" = yes ]; then
+        # Local EXIT/TERM must not strand recovery: leave the Trex-owned
+        # supervisor, transaction lease, watcher, and any rollback child alive.
+        return 0
+    fi
+    if [ -n "${SUPERVISOR_UNIT:-}" ]; then
+        # A terminal supervisor has completed or failed its bounded work;
+        # stopping the transient unit merely releases its service record.
+        trex_ssh "systemctl --user stop '$SUPERVISOR_UNIT'" 2>/dev/null || true
+    fi
+    if [ -n "${TRANSACTION_UNIT:-}" ]; then
+        trex_ssh "systemctl --user stop '$TRANSACTION_UNIT'" 2>/dev/null || true
+    fi
     # shellcheck disable=SC2029
     trex_ssh "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
 }
@@ -445,6 +512,63 @@ stop_probe_capture() {
     PROBE_CAPTURE_PID=
 }
 
+start_supervisor() {
+    [ "$TRANSACTION_POLICY" = observe-always-rollback ] || return 0
+    SUPERVISOR_STATE=$RUN_SHARED/supervisor.state
+    rm -f "$SUPERVISOR_STATE"
+    # This service is Trex-owned and independent of the local harness. It
+    # starts before candidate reboot, then owns the always-rollback decision
+    # if the harness or its SSH session disappears.
+    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE'"
+    supervisor_ready=no
+    supervisor_wait=0
+    while [ "$supervisor_wait" -lt 15 ]; do
+        if trex_ssh "systemctl --user is-active --quiet '$SUPERVISOR_UNIT' && grep -Fq 'supervisor_waiting_candidate ' '$SUPERVISOR_STATE'"; then
+            supervisor_ready=yes
+            break
+        fi
+        sleep 1
+        supervisor_wait=$((supervisor_wait + 1))
+    done
+    if [ "$supervisor_ready" != yes ]; then
+        printf 'recovery_blocked_supervisor_launch %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        return 1
+    fi
+    SUPERVISOR_KEEP=yes
+}
+
+wait_supervisor_rollback() {
+    [ -n "${SUPERVISOR_STATE:-}" ] || return 1
+    deadline=$(( $(date +%s) + 360 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        supervisor_state=$(trex_ssh "cat '$SUPERVISOR_STATE'" 2>/dev/null || true)
+        case "$supervisor_state" in
+            supervisor_rollback_succeeded_rescue_verified\ *) SUPERVISOR_KEEP=no; return 0 ;;
+            supervisor_waiting_candidate\ *|supervisor_rollback_armed\ *) ;;
+            supervisor_rollback_failed\ *|supervisor_rollback_unverified\ *|supervisor_rollback_timeout\ *|supervisor_blocked_*|supervisor_candidate_flash_failed\ *) SUPERVISOR_KEEP=no; return 1 ;;
+        esac
+        case "$supervisor_state" in
+            supervisor_waiting_candidate\ *|supervisor_rollback_armed\ *)
+                unit_state=$(trex_ssh "systemctl --user is-active '$SUPERVISOR_UNIT'" 2>/dev/null || true)
+                case "$unit_state" in
+                    inactive|failed|deactivating) SUPERVISOR_KEEP=no; return 1 ;;
+                esac ;;
+        esac
+        sleep 2
+    done
+    return 1
+}
+
+verify_recovered_stage_a() {
+    CANDIDATE_HOSTKEY_MODE=no
+    wait_ssh 40 || return 1
+    device_ssh "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513" \
+        > "$RUN_LOCAL/recovered-partition-hashes" 2>&1
+}
+
 stop_tool() {
     [ -n "${RUN_SHARED:-}" ] || return 0
     # The wrapper runs in a private session.  Prefer its recorded process
@@ -454,13 +578,17 @@ stop_tool() {
     # timeout/sudo/flash_tool while remaining fail-closed on stale metadata.
     # shellcheck disable=SC2029
     trex_ssh "
-pid=; pgid=
+pid=; pgid=; launch=
 case \"\$(cat '$STATE' 2>/dev/null || true)\" in
   flash_rc=*) exit 0 ;;
 esac
-test -s '$RUN_SHARED/tool.pid' && pid=\$(cat '$RUN_SHARED/tool.pid') || true
-test -s '$RUN_SHARED/tool.pgid' && pgid=\$(cat '$RUN_SHARED/tool.pgid') || true
+test -s '$TOOL_PID_FILE' && pid=\$(cat '$TOOL_PID_FILE') || true
+test -s '$TOOL_PGID_FILE' && pgid=\$(cat '$TOOL_PGID_FILE') || true
+test -s '$TOOL_LAUNCH_PID_FILE' && launch=\$(cat '$TOOL_LAUNCH_PID_FILE') || true
 case \"\$pid\" in ''|*[!0-9]*) exit 0 ;; esac
+case \"\$launch\" in ''|*[!0-9]*) exit 0 ;; esac
+test \"\$launch\" -gt 1 || exit 0
+if test \"\$launch\" != \"\$pid\" && ! ps -o args= -p \"\$launch\" | grep -F -- '$STATE' >/dev/null; then exit 0; fi
 case \"\$pgid\" in
   \"\$pid\")
     test \"\$pid\" -gt 1 || exit 0
@@ -482,7 +610,9 @@ cleanup() {
     rc=$?
     trap - EXIT INT TERM
     stop_probe_capture
-    stop_tool
+    if [ "$SUPERVISOR_KEEP" != yes ]; then
+        stop_tool
+    fi
     stop_capture
     if [ "$rc" -ne 0 ] && [ -n "${RUN_LOCAL:-}" ] && [ -f "$RUN_LOCAL/state" ]; then
         case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
@@ -641,14 +771,20 @@ accept_candidate_until_deadline() {
     P22_WRITE_MARKER=no
     ACCEPTANCE_DEADLINE=$(( $(date +%s) + ACCEPTANCE_WINDOW_SECONDS ))
     while [ "$(date +%s)" -lt "$ACCEPTANCE_DEADLINE" ]; do
-        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1 &&
-            validate_candidate && validate_candidate_right_path; then
-            if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
-                ACCEPTANCE_COMMITTED=yes
-            elif [ "$marker_requested" = yes ]; then
-                continue
+        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1; then
+            if [ "$PROOF_LEASE" = yes ] && [ -z "${PROBE_CAPTURE_PID:-}" ]; then
+                # Capture probe status before validation can fail or recovery
+                # arms rollback, preserving the lease-expiry evidence window.
+                start_probe_capture
             fi
-            return 0
+            if validate_candidate && validate_candidate_right_path; then
+                if [ "$marker_requested" = yes ] && commit_acceptance_marker; then
+                    ACCEPTANCE_COMMITTED=yes
+                elif [ "$marker_requested" = yes ]; then
+                    continue
+                fi
+                return 0
+            fi
         fi
         sleep 2
     done
@@ -660,19 +796,40 @@ start_tool() {
     ATTEMPT_COUNTER=$((ATTEMPT_COUNTER + 1))
     attempt_tag=$(date +%s)-$$-$ATTEMPT_COUNTER
     attempt_state=$RUN_SHARED/flash-attempt-$attempt_tag.state
+    TOOL_PID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.pid
+    TOOL_PGID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.pgid
+    TOOL_LAUNCH_PID_FILE=$RUN_SHARED/flash-attempt-$attempt_tag.launch.pid
+    # This pathname is intentionally outside RUN_SHARED. Every run and every
+    # candidate/rollback attempt therefore contends for the same Trex-global
+    # writer lock; state/PID/PGID files remain per-attempt.
+    TOOL_LOCK_FILE=$FLASH_LOCK_FILE
     STATE=$attempt_state
     # A private session lets cleanup terminate timeout, sudo, and flash_tool
     # together.  The wrapper publishes its actual PID/PGID after launch.
     # shellcheck disable=SC2029
-    trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/launch.pid'"
+    launch_rc=0
+    trex_ssh "nohup setsid sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' '$TOOL_PID_FILE' '$TOOL_PGID_FILE' '$TOOL_LOCK_FILE' '$RUN_SHARED/transaction-owner' </dev/null > '$log' 2>&1 & echo \$! > '$TOOL_LAUNCH_PID_FILE'" || launch_rc=$?
     if wait_state "$STATE" tool_started 20; then
+        if ! trex_ssh "pid=\$(cat '$TOOL_PID_FILE' 2>/dev/null || true); pgid=\$(cat '$TOOL_PGID_FILE' 2>/dev/null || true); launch=\$(cat '$TOOL_LAUNCH_PID_FILE' 2>/dev/null || true); test \"\$pid\" = \"\$pgid\"; test \"\$pid\" -gt 1; case \"\$launch\" in ''|*[!0-9]*) exit 1 ;; esac; test \"\$launch\" -gt 1; ps -o args= -p \"\$pid\" | grep -F -- '$STATE' >/dev/null; if test \"\$launch\" != \"\$pid\"; then ps -o args= -p \"\$launch\" | grep -F -- '$STATE' >/dev/null; fi"; then
+            printf 'recovery_blocked_tool_identity %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            return 1
+        fi
         return 0
     fi
     # A fast tool failure is still a valid transaction state: let the caller
     # enter the rollback path instead of aborting before it can recover.
     case "$(cat "$STATE" 2>/dev/null || true)" in
+        flash_rc=75*|flash_rc=76*)
+            printf 'recovery_blocked_tool_lock_or_owner %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            return 1 ;;
         flash_rc=*) return 0 ;;
-        *) return 1 ;;
+        *)
+            if [ "$launch_rc" -ne 0 ] && trex_ssh "ps -eo args= | grep -F -- '$STATE' | grep -v grep >/dev/null"; then
+                printf 'recovery_blocked_tool_launch_uncertain rc=%s %s\n' "$launch_rc" "$(date -Is)" > "$RUN_LOCAL/state"
+            else
+                printf 'recovery_blocked_tool_launch rc=%s %s\n' "$launch_rc" "$(date -Is)" > "$RUN_LOCAL/state"
+            fi
+            return 1 ;;
     esac
 }
 
@@ -717,7 +874,13 @@ recover() {
     fi
     stage_image "$ROLLBACK" "$ROLLBACK_SHA"
     rollback_log=$RUN_SHARED/rollback-flash.log
-    start_tool "$rollback_log"
+    if ! start_tool "$rollback_log"; then
+        case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
+            recovery_blocked_*) ;;
+            *) printf 'recovery_blocked_rollback_tool_launch %s\n' "$(date -Is)" > "$RUN_LOCAL/state" ;;
+        esac
+        return 1
+    fi
     if [ "$PROOF_LEASE" = yes ]; then
         printf 'lease_proof_rollback_armed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     fi
@@ -773,9 +936,28 @@ trap cleanup EXIT INT TERM
 start_capture
 stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
-start_tool "$candidate_log"
+if ! start_tool "$candidate_log"; then
+    # A launch/owner failure is terminal: the wrapper may be alive despite a
+    # lost Trex SSH ACK, so never guess and start a second writer or reboot.
+    case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
+        recovery_blocked_*) ;;
+        *) printf 'recovery_blocked_candidate_tool_launch %s\n' "$(date -Is)" > "$RUN_LOCAL/state" ;;
+    esac
+    exit 1
+fi
+if ! start_supervisor; then
+    # Do not reboot into a candidate without the durable rollback owner.
+    printf 'recovery_blocked_supervisor_not_armed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    exit 1
+fi
 if ! request_reboot; then
-    if recover; then
+    if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+        if ! wait_supervisor_rollback || ! verify_recovered_stage_a; then
+            printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        exit 1
+    elif recover; then
         exit 1
     else
         exit $?
@@ -788,11 +970,16 @@ if [ "$PROOF_LEASE" = yes ]; then
     # petter and expose the next watchdog/preloader window.
     if accept_candidate_until_deadline; then
         PROOF_VALIDATED=yes
-        start_probe_capture
     else
         printf 'proof_candidate_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     fi
-    if recover; then
+    if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+        if ! wait_supervisor_rollback || ! verify_recovered_stage_a; then
+            printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        recovery_rc=1
+    elif recover; then
         if [ "$PROOF_VALIDATED" != yes ]; then
             printf 'recovered_but_proof_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
@@ -807,6 +994,19 @@ if [ "$PROOF_LEASE" = yes ]; then
         recovery_rc=$?
         exit "$recovery_rc"
     fi
+    if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+        if [ "$PROOF_VALIDATED" != yes ]; then
+            printf 'recovered_but_proof_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        if ! grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
+            "$RUN_LOCAL/probe-status-proof.log"; then
+            printf 'recovered_but_proof_failed_no_lease_expiry %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            exit 1
+        fi
+        printf 'lease_proof_passed_recovered_stage_a %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        exit 0
+    fi
 elif P22_WRITE_MARKER=yes accept_candidate_until_deadline; then
     if finalize_accepted_candidate; then
         exit 0
@@ -817,7 +1017,13 @@ if [ "$ACCEPTANCE_COMMITTED" = yes ]; then
     # can never fall through to automatic recovery.
     exit 0
 fi
-if recover; then
+if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+    if ! wait_supervisor_rollback || ! verify_recovered_stage_a; then
+        printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        exit 1
+    fi
+    exit 1
+elif recover; then
     exit 1
 else
     exit $?

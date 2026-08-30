@@ -1,8 +1,8 @@
 # Dry-run-only handoff for the reviewed power-observe/preflight p22 bundle.
 # This manifest is not an execution authorization; root must independently
 # review the immutable artifact and add any future execute allowlist entry.
-candidate=/home/grw/src/nixos-gemini/artifacts/mainline-unattended-recovery-power-preflight-p22-v1/boot-padded-p22.img
-candidate_sha256=2a0fe82213e5e549d12acde3a920427323ccd6d0458d59682b9847b7bf8f4802
+candidate=/home/grw/src/nixos-gemini/artifacts/mainline-unattended-recovery-power-preflight-p22-v2/boot-padded-p22.img
+candidate_sha256=81c1d01bba849ddfd48574739b54d67910a6501c21dcd1755e60916fe7c1a286
 candidate_size=16777216
 rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
 rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
