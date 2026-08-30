@@ -28,3 +28,4 @@ watchdog_profile=initramfs-petter
 expected_watchdog_identity=mtk-wdt
 expected_watchdog_state=active
 expected_watchdog_timeout=31
+rootfs_policy=enumeration-only

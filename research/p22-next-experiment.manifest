@@ -24,3 +24,4 @@ expected_marker=stage=initramfs-entered
 feature_policy=connectivity-no-radio
 acceptance_window_seconds=120
 watchdog_profile=none
+rootfs_policy=nixos-stage2

@@ -82,6 +82,7 @@ EXPECTED_WATCHDOG_TIMEOUT=
 PROBE_CAPTURE_PID=
 P22_WRITE_MARKER=no
 PROOF_VALIDATED=no
+ROOTFS_POLICY=
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -115,6 +116,7 @@ load_manifest() {
             expected_watchdog_identity) [ -z "$EXPECTED_WATCHDOG_IDENTITY" ] || die "duplicate expected_watchdog_identity"; EXPECTED_WATCHDOG_IDENTITY=$value ;;
             expected_watchdog_state) [ -z "$EXPECTED_WATCHDOG_STATE" ] || die "duplicate expected_watchdog_state"; EXPECTED_WATCHDOG_STATE=$value ;;
             expected_watchdog_timeout) [ -z "$EXPECTED_WATCHDOG_TIMEOUT" ] || die "duplicate expected_watchdog_timeout"; EXPECTED_WATCHDOG_TIMEOUT=$value ;;
+            rootfs_policy) [ -z "$ROOTFS_POLICY" ] || die "duplicate rootfs_policy"; ROOTFS_POLICY=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
     done < "$MANIFEST"
@@ -145,6 +147,7 @@ require_manifest() {
     [ -n "$FEATURE_POLICY" ] || die "manifest field is missing: feature_policy"
     [ -n "$ACCEPTANCE_WINDOW_SECONDS" ] || die "manifest field is missing: acceptance_window_seconds"
     [ -n "$WATCHDOG_PROFILE" ] || die "manifest field is missing: watchdog_profile"
+    [ -n "$ROOTFS_POLICY" ] || die "manifest field is missing: rootfs_policy"
     require_sha() {
         sha=$1
         label=$2
@@ -160,6 +163,7 @@ require_manifest() {
     case "$ACCEPTANCE_WINDOW_SECONDS" in *[!0-9]*|'') die "acceptance_window_seconds must be numeric" ;; esac
     [ "$ACCEPTANCE_WINDOW_SECONDS" -ge 3 ] || die "acceptance_window_seconds must be at least 3"
     case "$FEATURE_POLICY" in connectivity-no-radio|allow-platform) ;; *) die "unknown feature_policy" ;; esac
+    case "$ROOTFS_POLICY" in nixos-stage2|enumeration-only) ;; *) die "unknown rootfs_policy" ;; esac
     case "$WATCHDOG_PROFILE" in
         none)
             [ -z "$EXPECTED_WATCHDOG_IDENTITY$EXPECTED_WATCHDOG_STATE$EXPECTED_WATCHDOG_TIMEOUT" ] || die "watchdog fields are forbidden for watchdog_profile=none" ;;
@@ -210,6 +214,7 @@ require_manifest() {
     require_token "$EXPECTED_MARKER"
     require_token "$EXPECTED_WATCHDOG_IDENTITY"
     require_token "$EXPECTED_WATCHDOG_STATE"
+    require_token "$ROOTFS_POLICY"
 }
 
 load_manifest
@@ -365,8 +370,23 @@ wait_ssh() {
 validate_candidate() {
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
-grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
+case \"$ROOTFS_POLICY\" in
+  nixos-stage2)
+    grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
+    grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts ;;
+  enumeration-only)
+    ! grep -Eq '^/dev/mmcblk[0-9]+p[0-9]+ ' /proc/mounts
+    ! grep -Eq '[[:space:]]/(gemian|nix/store)([[:space:]]|/)' /proc/mounts
+    storage_attempt=0
+    while ! grep -Fq 'emmc=present' /run/probe-status 2>/dev/null ||
+          ! grep -Fq 'userspace_block_reads=none' /run/probe-status 2>/dev/null ||
+          ! grep -Fq 'mounts=none' /run/probe-status 2>/dev/null; do
+      [ \"$storage_attempt\" -lt 35 ] || exit 1
+      sleep 1
+      storage_attempt=$((storage_attempt + 1))
+    done ;;
+  *) exit 1 ;;
+esac
 grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
 grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
 grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline

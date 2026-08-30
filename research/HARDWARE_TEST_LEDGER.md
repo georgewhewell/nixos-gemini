@@ -492,8 +492,12 @@ and no watchdog IRQ/pretimeout reset is assumed.
 Acceptance is fail-closed and profile-specific: exact p22 hash, model,
 compatible, `maxcpus=8`, `panic=5`, `mtk_wdt.start_at_boot=1`, CPU `0-7`,
 the expected IPs resolved to whichever interfaces own those addresses,
-read-only p29/store, and the exact `/run/probe-status` marker.  The watchdog
-profile additionally requires watchdog identity `mtk-wdt`, sysfs state
+and the exact `/run/probe-status` marker.  The manifest's `rootfs_policy`
+selects the mount contract: `nixos-stage2` requires read-only p29 `/gemian`
+and loop-backed `/nix/store`; `enumeration-only` rejects all mmcblk, `/gemian`,
+and `/nix/store` mounts, then polls up to 35 seconds for
+`emmc=present userspace_block_reads=none mounts=none`.  The watchdog profile
+additionally requires watchdog identity `mtk-wdt`, sysfs state
 `active`, timeout `31`, a live marker PID, and a `/proc/$pid/fd/*` link to the
 watchdog character device.  The combined platform profile explicitly allows
 its scoped platform logs; it does not inherit the connectivity profile's
