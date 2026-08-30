@@ -403,15 +403,15 @@ device_ssh_gadget() {
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
         timeout "$SSH_DEADLINE_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
-            -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=40 -o ControlMaster=no -o ControlPath=none \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
         timeout "$SSH_DEADLINE_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
-            -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=40 -o ControlMaster=no -o ControlPath=none \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
             root@10.15.19.82 "$@"
     fi
 }
@@ -440,15 +440,15 @@ device_ssh_right_provision() {
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
-            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=40 -o ControlMaster=no -o ControlPath=none \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null "root@$EXPECTED_ETHERNET_IP" "$@"
     else
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
-            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=40 -o ControlMaster=no -o ControlPath=none \
             "root@$EXPECTED_ETHERNET_IP" "$@"
     fi
 }
