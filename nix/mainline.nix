@@ -147,7 +147,9 @@
     assert
       !powerObserveOverlay
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
-    if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
+    if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
+    then "ee57546b97a42b22111e632113e9e409ad02ff75dc75c3aace9a9cf9eca7d773"
+    else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
     then "87b96e7af03491c4f26dd9b57f77a873019760779b7ec9d7a780f5af332974c7"
     else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
     then "6b42aca0194c399c939bcb8bcada3c770e0b1a5c10954c90bca29dbe77ae0cde"
