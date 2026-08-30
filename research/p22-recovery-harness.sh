@@ -609,7 +609,9 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
         STAGE2_STORE_PROVISIONED=yes
         return 0
     fi
-    device_ssh_gadget "grep -Fqx -- '$required_line' /run/stage1.log" || return 1
+    # log() prefixes every Stage1 line; require the complete emitted line so
+    # a similarly named or embedded token cannot authorize provisioning.
+    device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
     if ! device_ssh_gadget_provision "set -eu
 test ! -e '$init_target'
 test ! -e '$provision_tmp'

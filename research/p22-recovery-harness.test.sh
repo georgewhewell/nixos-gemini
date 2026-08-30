@@ -745,7 +745,9 @@ test_stage2_store_staging_commands_are_safe_shell() {
     grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "test ! -L '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs' \
+    grep -Fq "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs" \
+        "$RUN_LOCAL/store-command-3.sh"
+    ! grep -Fq "grep -Fqx -- 'store-provision=required" \
         "$RUN_LOCAL/store-command-3.sh"
     ! grep -R -Fq 'device_scp' "$RUN_LOCAL" 2>/dev/null
 }
