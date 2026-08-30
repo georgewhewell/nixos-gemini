@@ -20,3 +20,7 @@ expected_cmdline_token=maxcpus=8
 expected_cpu_online=0-7
 expected_gadget_ip=10.15.19.82
 expected_ethernet_ip=192.168.23.70
+expected_marker=stage=initramfs-entered
+feature_policy=connectivity-no-radio
+acceptance_window_seconds=120
+watchdog_profile=none

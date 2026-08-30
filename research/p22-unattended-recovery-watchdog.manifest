@@ -1,0 +1,29 @@
+# Exact p22 watchdog-control handoff.  This is Stage-A USB/SSH/storage plus
+# only the opt-in watchdog/start-at-probe/initramfs petter recovery substrate.
+candidate=/home/grw/src/nixos-gemini/artifacts/mainline-unattended-recovery-watchdog-p22/boot-padded-p22.img
+candidate_sha256=0d99e17867d8621b9a309209f88abc2a27e06039a342b0fcd26ac168e8c82d03
+candidate_size=16777216
+rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
+rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=unattended_recovery=healthy
+feature_policy=connectivity-no-radio
+acceptance_window_seconds=60
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31

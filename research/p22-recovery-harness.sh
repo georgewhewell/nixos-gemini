@@ -63,6 +63,13 @@ EXPECTED_CMDLINE=
 EXPECTED_CPU_ONLINE=
 EXPECTED_GADGET_IP=
 EXPECTED_ETHERNET_IP=
+EXPECTED_MARKER=
+FEATURE_POLICY=
+ACCEPTANCE_WINDOW_SECONDS=
+WATCHDOG_PROFILE=
+EXPECTED_WATCHDOG_IDENTITY=
+EXPECTED_WATCHDOG_STATE=
+EXPECTED_WATCHDOG_TIMEOUT=
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -89,6 +96,13 @@ load_manifest() {
             expected_cpu_online) [ -z "$EXPECTED_CPU_ONLINE" ] || die "duplicate expected_cpu_online"; EXPECTED_CPU_ONLINE=$value ;;
             expected_gadget_ip) [ -z "$EXPECTED_GADGET_IP" ] || die "duplicate expected_gadget_ip"; EXPECTED_GADGET_IP=$value ;;
             expected_ethernet_ip) [ -z "$EXPECTED_ETHERNET_IP" ] || die "duplicate expected_ethernet_ip"; EXPECTED_ETHERNET_IP=$value ;;
+            expected_marker) [ -z "$EXPECTED_MARKER" ] || die "duplicate expected_marker"; EXPECTED_MARKER=$value ;;
+            feature_policy) [ -z "$FEATURE_POLICY" ] || die "duplicate feature_policy"; FEATURE_POLICY=$value ;;
+            acceptance_window_seconds) [ -z "$ACCEPTANCE_WINDOW_SECONDS" ] || die "duplicate acceptance_window_seconds"; ACCEPTANCE_WINDOW_SECONDS=$value ;;
+            watchdog_profile) [ -z "$WATCHDOG_PROFILE" ] || die "duplicate watchdog_profile"; WATCHDOG_PROFILE=$value ;;
+            expected_watchdog_identity) [ -z "$EXPECTED_WATCHDOG_IDENTITY" ] || die "duplicate expected_watchdog_identity"; EXPECTED_WATCHDOG_IDENTITY=$value ;;
+            expected_watchdog_state) [ -z "$EXPECTED_WATCHDOG_STATE" ] || die "duplicate expected_watchdog_state"; EXPECTED_WATCHDOG_STATE=$value ;;
+            expected_watchdog_timeout) [ -z "$EXPECTED_WATCHDOG_TIMEOUT" ] || die "duplicate expected_watchdog_timeout"; EXPECTED_WATCHDOG_TIMEOUT=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
     done < "$MANIFEST"
@@ -115,6 +129,10 @@ require_manifest() {
     [ -n "$EXPECTED_CPU_ONLINE" ] || die "manifest field is missing: expected_cpu_online"
     [ -n "$EXPECTED_GADGET_IP" ] || die "manifest field is missing: expected_gadget_ip"
     [ -n "$EXPECTED_ETHERNET_IP" ] || die "manifest field is missing: expected_ethernet_ip"
+    [ -n "$EXPECTED_MARKER" ] || die "manifest field is missing: expected_marker"
+    [ -n "$FEATURE_POLICY" ] || die "manifest field is missing: feature_policy"
+    [ -n "$ACCEPTANCE_WINDOW_SECONDS" ] || die "manifest field is missing: acceptance_window_seconds"
+    [ -n "$WATCHDOG_PROFILE" ] || die "manifest field is missing: watchdog_profile"
     require_sha() {
         sha=$1
         label=$2
@@ -127,6 +145,19 @@ require_manifest() {
     require_sha "$ROLLBACK_SHA" rollback_sha256
     require_sha "$SCATTER_SHA" scatter_sha256
     require_sha "$XML_SHA" xml_sha256
+    case "$ACCEPTANCE_WINDOW_SECONDS" in *[!0-9]*|'') die "acceptance_window_seconds must be numeric" ;; esac
+    [ "$ACCEPTANCE_WINDOW_SECONDS" -ge 3 ] || die "acceptance_window_seconds must be at least 3"
+    case "$FEATURE_POLICY" in connectivity-no-radio|allow-platform) ;; *) die "unknown feature_policy" ;; esac
+    case "$WATCHDOG_PROFILE" in
+        none)
+            [ -z "$EXPECTED_WATCHDOG_IDENTITY$EXPECTED_WATCHDOG_STATE$EXPECTED_WATCHDOG_TIMEOUT" ] || die "watchdog fields are forbidden for watchdog_profile=none" ;;
+        initramfs-petter)
+            [ -n "$EXPECTED_WATCHDOG_IDENTITY" ] || die "manifest field is missing: expected_watchdog_identity"
+            [ -n "$EXPECTED_WATCHDOG_STATE" ] || die "manifest field is missing: expected_watchdog_state"
+            [ -n "$EXPECTED_WATCHDOG_TIMEOUT" ] || die "manifest field is missing: expected_watchdog_timeout"
+            case "$EXPECTED_WATCHDOG_TIMEOUT" in *[!0-9]*|'') die "expected_watchdog_timeout must be numeric" ;; esac ;;
+        *) die "unknown watchdog_profile" ;;
+    esac
     [ "$TARGET_PARTITION" = boot/p22 ] || die "target_partition must be boot/p22"
     [ "$TARGET_DEVICE" = /dev/mmcblk0p22 ] || die "target_device must be /dev/mmcblk0p22"
     [ "$CANDIDATE_SIZE" = "$SIZE" ] || die "candidate_size must be $SIZE"
@@ -164,10 +195,19 @@ require_manifest() {
     require_token "$EXPECTED_CPU_ONLINE"
     require_token "$EXPECTED_GADGET_IP"
     require_token "$EXPECTED_ETHERNET_IP"
+    require_token "$EXPECTED_MARKER"
+    require_token "$EXPECTED_WATCHDOG_IDENTITY"
+    require_token "$EXPECTED_WATCHDOG_STATE"
 }
 
 load_manifest
 require_manifest
+
+if [ "$WATCHDOG_PROFILE" = initramfs-petter ]; then
+    LEASE_MARKER=unattended_recovery=healthy
+else
+    LEASE_MARKER=$EXPECTED_MARKER
+fi
 
 device_ssh() {
     ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
@@ -274,11 +314,10 @@ wait_state() {
 
 wait_ssh() {
     limit=$1
-    i=0
-    while [ "$i" -lt "$limit" ]; do
+    deadline=$(( $(date +%s) + limit ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
         if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1; then return 0; fi
         sleep 3
-        i=$((i + 1))
     done
     return 1
 }
@@ -292,10 +331,36 @@ grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
 grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
 grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
 test \"\$(cat /sys/devices/system/cpu/online)\" = $EXPECTED_CPU_ONLINE
-test -n \"\$(ip -4 -o addr show dev usb0 | grep -F -- $EXPECTED_GADGET_IP)\"
-test -n \"\$(ip -4 -o addr show dev enu1 | grep -F -- $EXPECTED_ETHERNET_IP)\"
-! dmesg | grep -Eiq 'request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem|afe'
-! ls /sys/bus/platform/devices | grep -Eiq 'consys|btif|wmt'"
+gadget_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_GADGET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+test -n \"\$gadget_if\"
+test -n \"\$ethernet_if\"
+grep -Fq -- \"$EXPECTED_MARKER\" /run/probe-status
+! grep -Fq -- 'unattended_recovery=failed' /run/probe-status
+case \"$FEATURE_POLICY\" in
+  connectivity-no-radio)
+    ! dmesg | grep -Eiq 'request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem'
+    ! ls /sys/bus/platform/devices | grep -Eiq 'consys|btif|wmt' ;;
+  allow-platform) : ;;
+  *) exit 1 ;;
+esac
+if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
+  grep -Fq -- 'panic=5' /proc/cmdline
+  grep -Fq -- 'mtk_wdt.start_at_boot=1' /proc/cmdline
+  watchdog_pid=\$(sed -n 's/.*watchdog_pid=\([0-9][0-9]*\).*/\1/p' /run/probe-status | tail -n 1)
+  test -n \"\$watchdog_pid\"
+  test -d \"/proc/\$watchdog_pid\"
+  test \"\$(cat /sys/class/watchdog/watchdog0/identity)\" = \"$EXPECTED_WATCHDOG_IDENTITY\"
+  test \"\$(cat /sys/class/watchdog/watchdog0/state)\" = \"$EXPECTED_WATCHDOG_STATE\"
+  test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
+  test -r /sys/class/watchdog/watchdog0/bootstatus
+  owner_device=\$(for fd in /proc/\$watchdog_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+  test -n \"\$owner_device\"
+fi
+accept_tmp=/run/unattended-recovery.accepted.tmp.\$\$
+printf '%s\\n' \"$LEASE_MARKER\" > \"\$accept_tmp\"
+mv -f \"\$accept_tmp\" /run/unattended-recovery.accepted
+test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\""
 }
 
 start_tool() {
@@ -362,7 +427,7 @@ stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"
 request_reboot
-if wait_ssh 40 && accept_candidate; then
+if wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && accept_candidate; then
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159

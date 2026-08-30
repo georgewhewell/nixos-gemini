@@ -396,7 +396,8 @@ downloadable entry at offset `0xb100000`/size `0x1000000` in `EMMC_USER`, and
 the current p22/p30/p31 readbacks.  The execute state machine captures pstore,
 dmesg, p22 pre-hash, trex USB/kernel/IP logs, and a state file; stages only
 `boot.img`; starts Flash Tool Download Only before requesting reboot; allows a
-fixed 120-second SSH/acceptance window; and, on failed acceptance, stages the
+manifest-selected SSH/acceptance window (120 seconds for the original
+Stage-A manifest, 60 seconds for watchdog profiles); and, on failed acceptance, stages the
 exact known-good p22 rollback, pre-arms the same boot-only tool, and permits a
 clean reboot or natural watchdog/preloader transition within bounded waits.
 There is no force reset, erase, format, firmware upgrade, p30 target, or p31
@@ -440,3 +441,61 @@ watchdog recovery, never writes p30/p31, and never erases/formats/upgrades
 firmware.  Validation performed without flashing: `sh -n`,
 `shellcheck -S error -s sh` (no errors), default dry-run, explicit manifest
 dry-run, missing-manifest rejection (rc 2), and missing-mode rejection (rc 2).
+
+## Unattended p22 recovery bundles: build-only handoff 2026-08-30
+
+Two opt-in p22-only bundles were cross-built against the clean local platform
+tree `/home/grw/src/linux-gemini-platform` at commit
+`581fed2ea3e2d13ddaaae5679f8c798bf7d28601`, whose ancestry contains the
+reviewed watchdog `start_at_boot` commit `31d677ba3`.  The local input NAR is
+`sha256-5M9rjBPOfHMePbJ0/TeXg6oEKy3iIvXLWGrGHeTbEBc=`.  The watchdog-control
+bundle is Stage-A USB/SSH/storage plus only the watchdog delta, while the
+combined bundle additionally enables the already reviewed platform overlay.
+Neither bundle has been flashed or boot-tested.
+
+The immutable candidate handoffs are:
+
+* `artifacts/mainline-unattended-recovery-watchdog-p22/boot-padded-p22.img`,
+  16777216 bytes, SHA-256
+  `0d99e17867d8621b9a309209f88abc2a27e06039a342b0fcd26ac168e8c82d03`;
+  manifest `research/p22-unattended-recovery-watchdog.manifest`.
+* `artifacts/mainline-unattended-recovery-platform-p22/boot-padded-p22.img`,
+  16777216 bytes, SHA-256
+  `e8bfdf8a7488279f972a7fdd64e86ab8048b13280457d8c6ba07392c01efe579`;
+  manifest `research/p22-unattended-recovery-platform.manifest`.
+
+Both use the currently accepted Stage-A p22 image as rollback
+(`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`) and
+retain p30 `122c0f46...` and p31 `1fa78de9...` as read-only invariants.  Their
+current-source DT identities are base
+`7e6bd77e10a6a58b772455643d26e5d495ec35b7aa81e070672bf3a701ea300c`,
+serviceability
+`235c17ebc0653f48c0a4c1215a384a90217856aacde85db44710ec43f2040044`,
+and USB-host composition
+`cd5c0e688aeaf33d9e61c4b9df57a82b6a97f7017f16f6eaf373a7fc38044705`.
+
+The recovery substrate is explicit in each bundle and config assertions:
+built-in `CONFIG_MEDIATEK_WATCHDOG=y`, `CONFIG_WATCHDOG_NOWAYOUT=y`,
+`CONFIG_WATCHDOG_OPEN_TIMEOUT=45`, `CONFIG_PANIC_ON_OOPS=y`,
+`CONFIG_PANIC_TIMEOUT=5`, and cmdline `panic=5 mtk_wdt.start_at_boot=1`.
+`/init` selects `/dev/watchdog` or `/dev/watchdog0`, starts BusyBox watchdog
+in foreground mode with `-t 10 -T 31`, and records a healthy marker only if
+the process survives its first second.  A separate 90-second lease worker
+SIGKILLs that exact PID unless the acceptance command atomically writes
+`/run/unattended-recovery.accepted` containing exactly
+`unattended_recovery=healthy`; with the 31-second hardware timeout this gives
+the already-running rollback Flash Tool a subsequent preloader window when
+network/USB acceptance is lost.  The residual boundary remains the interval
+before the MTK watchdog probe (observed around 1.07s on the live baseline),
+and no watchdog IRQ/pretimeout reset is assumed.
+
+Acceptance is fail-closed and profile-specific: exact p22 hash, model,
+compatible, `maxcpus=8`, `panic=5`, `mtk_wdt.start_at_boot=1`, CPU `0-7`,
+the expected IPs resolved to whichever interfaces own those addresses,
+read-only p29/store, and the exact `/run/probe-status` marker.  The watchdog
+profile additionally requires watchdog identity `mtk-wdt`, sysfs state
+`active`, timeout `31`, a live marker PID, and a `/proc/$pid/fd/*` link to the
+watchdog character device.  The combined platform profile explicitly allows
+its scoped platform logs; it does not inherit the connectivity profile's
+AFE/radio blacklist.  No hardware test is authorized by these build results;
+the next handoff must separately authorize one p22 Download Only cycle.

@@ -1,0 +1,12 @@
+# Opt-in only: start MT6797's built-in watchdog during driver probe so the
+# watchdog core protects the initramfs handoff.  /init opens /dev/watchdog and
+# keeps it alive; this does not cover a hang before the MTK driver probes.
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_CORE=y
+CONFIG_WATCHDOG_NOWAYOUT=y
+CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y
+CONFIG_WATCHDOG_OPEN_TIMEOUT=45
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_MEDIATEK_WATCHDOG=y
+CONFIG_PANIC_ON_OOPS=y
+CONFIG_PANIC_TIMEOUT=5

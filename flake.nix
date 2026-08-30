@@ -434,6 +434,44 @@
       powerObserveOverlay = true;
     };
 
+    # Unattended p22 recovery control: retain the boot-proven storage/SSH
+    # baseline and add only the built-in MTK watchdog plus initramfs petter.
+    # This isolates recovery validation from display/audio/power/keyboard.
+    mainlineUnattendedRecoveryWatchdog = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # Combined platform queue: the same unattended recovery substrate, with
+    # the already reviewed right-port platform enablement layered on top.
+    mainlineUnattendedRecoveryPlatform = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      unattendedRecovery = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -874,6 +912,12 @@
       mainlinePlatformRecoveryKernel = mainlinePlatformRecovery.kernel;
       mainlinePlatformRecoveryDtb = mainlinePlatformRecovery.serviceabilityDtb;
       mainlinePlatformRecoveryBundle = mainlinePlatformRecovery.bundle;
+      mainlineUnattendedRecoveryWatchdogKernel = mainlineUnattendedRecoveryWatchdog.kernel;
+      mainlineUnattendedRecoveryWatchdogDtb = mainlineUnattendedRecoveryWatchdog.serviceabilityDtb;
+      mainlineUnattendedRecoveryWatchdogBundle = mainlineUnattendedRecoveryWatchdog.bundle;
+      mainlineUnattendedRecoveryKernel = mainlineUnattendedRecoveryPlatform.kernel;
+      mainlineUnattendedRecoveryDtb = mainlineUnattendedRecoveryPlatform.serviceabilityDtb;
+      mainlineUnattendedRecoveryBundle = mainlineUnattendedRecoveryPlatform.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;

@@ -15,6 +15,7 @@
   displayOverlay ? false,
   audioOverlay ? false,
   powerObserveOverlay ? false,
+  unattendedRecovery ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -46,7 +47,8 @@
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
-    ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment];
+    ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
+    ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -83,6 +85,19 @@
     if powerObserveOverlay
     then "bq2589x-i2c0-no-write-no-irq-v1"
     else "none";
+  unattendedRecoveryLabel =
+    if unattendedRecovery
+    then "mtk-wdt-probe-start-45s-open-timeout-initramfs-pet-v1"
+    else "none";
+  panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
+  baseCmdline =
+    if debugOverlay
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+  kernelCmdline =
+    baseCmdline
+    + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
+    + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
@@ -92,21 +107,28 @@
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
-    + lib.optionalString powerObserveOverlay "-power-observe";
+    + lib.optionalString powerObserveOverlay "-power-observe"
+    + lib.optionalString unattendedRecovery "-unattended-recovery";
   baseDtbSha256 =
-    if platformEnablement
+    if unattendedRecovery
+    then "7e6bd77e10a6a58b772455643d26e5d495ec35b7aa81e070672bf3a701ea300c"
+    else if platformEnablement
     then "87cbce082c7a6d6f67fab47527ed45b148647dd01e178864c618665af8af6d58"
     else if consysIdentityOverlay
     then "e6aa4b9d20360c260f313292be41f92df2deb8613ca6c665a9f045b6b4d880e7"
     else "1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c";
   serviceabilityBaseDtbSha256 =
-    if platformEnablement
+    if unattendedRecovery
+    then "235c17ebc0653f48c0a4c1215a384a90217856aacde85db44710ec43f2040044"
+    else if platformEnablement
     then "4f537ab13a1aa8f14ff96d03fd068ab552c1b0f50a8cf4bc724c939ed5b49d09"
     else if consysIdentityOverlay
     then "753bf1fba79ac26c401a8d7de3482ea8c91041663ec19b2254aba909dc7d8297"
     else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
   usbPlatformDtbSha256 =
-    if platformEnablement
+    if unattendedRecovery
+    then "cd5c0e688aeaf33d9e61c4b9df57a82b6a97f7017f16f6eaf373a7fc38044705"
+    else if platformEnablement
     then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
     else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
   finalDtbSha256 =
@@ -141,7 +163,8 @@
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
-      + lib.optionalString powerObserveOverlay "-power-observe";
+      + lib.optionalString powerObserveOverlay "-power-observe"
+      + lib.optionalString unattendedRecovery "-unattended-recovery";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -191,9 +214,9 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString consysIdentityOverlay ''
+      ${lib.optionalString (consysIdentityOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
-          "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm mt6797_consys_live.identity_experiment=1"
+          "${kernelCmdline}"
       ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
 
@@ -252,6 +275,17 @@
       grep -A12 -F 'btif: serial@1100c000 {' \
         arch/arm64/boot/dts/mediatek/mt6797.dtsi \
         | grep -Fq 'status = "disabled";'
+      ${lib.optionalString unattendedRecovery ''
+        grep -Fqx 'CONFIG_WATCHDOG=y' .config
+        grep -Fqx 'CONFIG_WATCHDOG_CORE=y' .config
+        grep -Fqx 'CONFIG_WATCHDOG_NOWAYOUT=y' .config
+        grep -Fqx 'CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y' .config
+        grep -Fqx 'CONFIG_WATCHDOG_OPEN_TIMEOUT=45' .config
+        grep -Fqx 'CONFIG_WATCHDOG_SYSFS=y' .config
+        grep -Fqx 'CONFIG_MEDIATEK_WATCHDOG=y' .config
+        grep -Fqx 'CONFIG_PANIC_ON_OOPS=y' .config
+        grep -Fqx 'CONFIG_PANIC_TIMEOUT=5' .config
+      ''}
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
       grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
       grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
@@ -310,12 +344,12 @@
         then ''
           grep -Fqx '# CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER is not set' .config
           grep -Fqx 'CONFIG_PSTORE_GEMINI_POST_RAMOOPS_CHECKPOINT=y' .config
-          grep -Fqx 'CONFIG_CMDLINE="console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm${lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"}"' .config
+          grep -Fqx 'CONFIG_CMDLINE="${kernelCmdline}"' .config
         ''
         else ''
           grep -Fqx 'CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER=y' .config
           grep -Fqx '# CONFIG_PSTORE_GEMINI_POST_RAMOOPS_CHECKPOINT is not set' .config
-          grep -Fqx 'CONFIG_CMDLINE="console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init panic=0 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"' .config
+          grep -Fqx 'CONFIG_CMDLINE="${kernelCmdline}"' .config
         ''
       }
       runHook postConfigure
@@ -404,7 +438,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString unattendedRecovery "-unattended-recovery"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -418,10 +452,15 @@
         --replace-fail \
           'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
           'OUTPUT_DTB_SHA256=${serviceabilityBaseDtbSha256}'
+      substituteInPlace "$providerBuilder" \
+        --replace-fail \
+          $'\tfdtput -d "$temporary" "$AW9523" "$property"' \
+          $'\tif fdtget "$temporary" "$AW9523" "$property" >/dev/null 2>&1; then\n\t\tfdtput -d "$temporary" "$AW9523" "$property"\n\tfi'
       bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
         > "$out/VALIDATION"
+      chmod 0644 "$out/gemini-base.dtb"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
         ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
@@ -569,6 +608,11 @@
     ) ''
       mkdir -p root/bin root/dev root/etc root/mnt/linux root/proc root/run root/sys/fs/pstore
       cp "$busybox/bin/busybox" root/bin/busybox
+      ${lib.optionalString unattendedRecovery ''
+        # busybox is an aarch64 target binary; inspect it, never execute it on
+        # the x86_64 builder.  The applet is then exposed by --install below.
+        grep -a -Fq watchdog "$busybox/bin/busybox"
+      ''}
       ${lib.optionalString sshAccess ''
         mkdir -p root/etc/dropbear root/root/.ssh
         cp "$dropbear/bin/dropbear" root/bin/dropbear
@@ -617,10 +661,38 @@
       }"
       note "kernel=$(uname -r 2>/dev/null || echo unknown)"
       if [ -c /dev/watchdog0 ]; then
-        note "watchdog0=present identity=$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null || echo unknown) timeout=$(cat /sys/class/watchdog/watchdog0/timeout 2>/dev/null || echo unknown) userspace_open=none"
+        note "watchdog0=present identity=$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null || echo unknown) timeout=$(cat /sys/class/watchdog/watchdog0/timeout 2>/dev/null || echo unknown)"
       else
-        note "watchdog0=missing userspace_open=none"
+        note "watchdog0=missing"
       fi
+      ${lib.optionalString unattendedRecovery ''
+      watchdog_device=
+      for candidate in /dev/watchdog /dev/watchdog0; do
+        if [ -c "$candidate" ]; then
+          watchdog_device=$candidate
+          break
+        fi
+      done
+      if [ -n "$watchdog_device" ]; then
+        /bin/watchdog -F -t 10 -T 31 "$watchdog_device" >/run/watchdog.log 2>&1 &
+        watchdog_pid=$!
+        sleep 1
+        if kill -0 "$watchdog_pid" 2>/dev/null; then
+          note "unattended_recovery=healthy watchdog_userspace=petting watchdog_device=$watchdog_device watchdog_pid=$watchdog_pid watchdog_lifecycle=initramfs-through-ssh"
+          (
+            sleep 90
+            if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != "unattended_recovery=healthy" ]; then
+              note "unattended_recovery=lease-expired watchdog_userspace=stopped watchdog_reset_expected=31s"
+              kill -KILL "$watchdog_pid" 2>/dev/null || true
+            fi
+          ) &
+        else
+          note "unattended_recovery=failed watchdog_userspace=open-failed"
+        fi
+      else
+        note "unattended_recovery=failed watchdog_userspace=device-missing"
+      fi
+      ''}
       udc_names=
       for udc in /sys/class/udc/*; do
         [ -e "$udc" ] || continue
@@ -901,6 +973,9 @@
     ln -s ${probeInitramfs} "$out/probe-initramfs.cpio.gz"
     ln -s ${probeBootImg} "$out/probe-raw.boot.img"
     ln -s ${probeBoot2Img} "$out/probe-padded-boot2.img"
+    ${lib.optionalString unattendedRecovery ''
+      ln -s ${probeBoot2Img} "$out/boot-padded-p22.img"
+    ''}
     {
       echo "linux-gemini-revision=${kernelRevision}"
       echo "ixoo-baseline-revision=${ixooRevision}"
@@ -916,6 +991,22 @@
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"
       echo "nix-power-observe=${powerObserveLabel}"
+      echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
+      echo "watchdog-config=${
+        if unattendedRecovery
+        then "CONFIG_MEDIATEK_WATCHDOG=y CONFIG_WATCHDOG_OPEN_TIMEOUT=45 CONFIG_PANIC_ON_OOPS=y CONFIG_PANIC_TIMEOUT=5"
+        else "none"
+      }"
+      echo "watchdog-userspace=${
+        if unattendedRecovery
+        then "initramfs-/dev/watchdog-open-and-pet-through-ssh"
+        else "none"
+      }"
+      echo "unattended-recovery-residual=${
+        if unattendedRecovery
+        then "pre-mtk-wdt-probe-unprotected; kernel-probe-observed-at-about-1.07s-on-live-baseline"
+        else "none"
+      }"
       echo "nix-hardening=disabled-all"
       echo "hardware-proof=ixoo-Buildbox-artifact-only"
       echo "nix-kernel-byte-match-ixoo=no"
@@ -962,7 +1053,7 @@
         ${probeBootImg} \
         ${probeBoot2Img}
       stat -c '%n size=%s' ${probeBootImg} ${probeBoot2Img}
-    } > "$out/MANIFEST"
+      } > "$out/MANIFEST"
   '';
 in {
   inherit kernel serviceabilityDtb probeInitramfs probeBootImg probeBoot2Img bundle;
