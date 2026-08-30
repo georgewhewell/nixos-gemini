@@ -45,7 +45,9 @@
     options = ["mode=0755" "size=768M"];
   };
   fileSystems."/gemian" = {
-    device = "/dev/mmcblk0p29";
+    # p29 is GPT PARTLABEL=linux; the initramfs resolves its mmcblk index by
+    # controller lineage before moving this already-mounted filesystem here.
+    device = "/dev/disk/by-partlabel/linux";
     fsType = "ext4";
     options = ["ro" "noload" "nosuid" "nodev" "noexec" "nofail"];
     noCheck = true;

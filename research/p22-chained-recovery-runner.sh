@@ -12,6 +12,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 HARNESS=$ROOT/research/p22-recovery-harness.sh
 MANIFEST=$ROOT/research/p22-unattended-recovery-watchdog-hostnet-v2.manifest
+EMMC_RESOLVER=$(cat "$ROOT/research/p22-emmc-lineage.sh")
 MODE=
 SSH_DEADLINE_SECONDS=15
 
@@ -92,20 +93,28 @@ check_partitions() {
     else
         check_ssh=device_ssh
     fi
-    "$check_ssh" "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $expected
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+    "$check_ssh" "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $expected
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 echo \"$label p22=$expected p30=122c0f461e... p31=1fa78de9...\""
 }
 
 check_allowed_partitions() {
     # shellcheck disable=SC2016
-    device_ssh 'set -eu
-p22=$(sha256sum /dev/mmcblk0p22 | cut -d" " -f1)
-test "$p22" = a0bc87d21227158e2e925a6f05affdfdec773a5e44e248d41f8b6684e2bd37eb || test "$p22" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
-test "$(sha256sum /dev/mmcblk0p30 | cut -d" " -f1)" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test "$(sha256sum /dev/mmcblk0p31 | cut -d" " -f1)" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
+    device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+p22_hash=\$(sha256sum \"\$p22\" | cut -d\" \" -f1)
+test \"\$p22_hash\" = a0bc87d21227158e2e925a6f05affdfdec773a5e44e248d41f8b6684e2bd37eb || test \"\$p22_hash\" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+test \"\$(sha256sum \"\$p30\" | cut -d\" \" -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d\" \" -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513"
 }
 
 run_phase() {

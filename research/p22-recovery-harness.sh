@@ -18,6 +18,10 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MANIFEST=$ROOT/research/p22-next-experiment.manifest
 SIZE=16777216
+# Inject the shared, side-effect-free resolver into every target-side
+# validation command.  The eMMC can be mmcblk0 or mmcblk1; its identity is the
+# fixed 11230000.mmc controller lineage, never the first MMC device.
+EMMC_RESOLVER=$(cat "$ROOT/research/p22-emmc-lineage.sh")
 
 die() {
     echo "p22-recovery-harness: $*" >&2
@@ -267,7 +271,10 @@ require_manifest() {
         die "watchdog acceptance_window_seconds must be less than lease_seconds"
     fi
     [ "$TARGET_PARTITION" = boot/p22 ] || die "target_partition must be boot/p22"
-    [ "$TARGET_DEVICE" = /dev/mmcblk0p22 ] || die "target_device must be /dev/mmcblk0p22"
+    case "$TARGET_DEVICE" in
+        /dev/mmcblk0p22|/dev/mmcblk1p22|by-partlabel:boot) ;;
+        *) die "target_device must identify boot p22" ;;
+    esac
     [ "$CANDIDATE_SIZE" = "$SIZE" ] || die "candidate_size must be $SIZE"
     [ "$ROLLBACK_SIZE" = "$SIZE" ] || die "rollback_size must be $SIZE"
     require_path() {
@@ -587,16 +594,21 @@ if test -e '$STAGE2_STORE_TARGET_LIVE'; then
 fi"
     fi
     device_ssh "set -eu
-target=\$(readlink -f /dev/disk/by-partlabel/boot)
-test \"\$target\" = $TARGET_DEVICE
-test \"\$target\" != /dev/mmcblk0p29
+$EMMC_RESOLVER
+target=\$(resolve_emmc_partition boot)
+test \"\$target\" = \"\$(resolve_emmc_partition boot)\"
+case \"\$target\" in /dev/mmcblk*p22) ;; *) exit 1 ;; esac
+emmc=\$(resolve_emmc_device)
+test \"\$target\" != \"\$emmc\"p29
 ! grep -q \"^\$target \" /proc/mounts
 test \"\$(blockdev --getsize64 \"\$target\")\" -eq 16777216
 p22=\$(sha256sum \"\$target\" | cut -d' ' -f1)
 test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum \"\$target\" /dev/mmcblk0p30 /dev/mmcblk0p31"
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+sha256sum \"\$target\" \"\$p30\" \"\$p31\""
     if [ -n "$stage2_store_checks" ]; then
         device_ssh "set -eu
 $stage2_store_checks"
@@ -657,6 +669,7 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
     # a similarly named or embedded token cannot authorize provisioning.
     device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
     provision_command="set -eu
+$EMMC_RESOLVER
 test ! -e '$init_target'
 if test -e '$provision_tmp' || test -L '$provision_tmp'; then
   test ! -L '$provision_tmp'
@@ -671,7 +684,9 @@ if test -e '$provision_tmp' || test -L '$provision_tmp'; then
 fi
 # BusyBox df supports POSIX -P output and -k 1024-byte blocks.  Pin both the
 # backing device and mountpoint: a nested mount must not authorize a p29 write.
-available_kib=\$(df -Pk /mnt/gemian/nixos | awk 'NR == 2 && \$1 == \"/dev/mmcblk0p29\" && \$6 == \"/mnt/gemian\" { print \$4; exit }')
+emmc=\$(resolve_emmc_device)
+p29=\"\$emmc\"p29
+available_kib=\$(df -Pk /mnt/gemian/nixos | awk -v source=\"\$p29\" 'NR == 2 && \$1 == source && \$6 == \"/mnt/gemian\" { print \$4; exit }')
 case \"\$available_kib\" in
   ''|*[!0-9]*) exit 1 ;;
 esac
@@ -742,7 +757,9 @@ start_capture() {
     printf 'preflight %s mode=%s\n' "$(date -Is)" "$MODE" > "$RUN_LOCAL/state"
     device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
     device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
-    device_ssh 'sha256sum /dev/mmcblk0p22' > "$RUN_LOCAL/p22-pre-hash"
+    device_ssh "$EMMC_RESOLVER
+p22=\$(resolve_emmc_partition boot)
+sha256sum \"\$p22\"" > "$RUN_LOCAL/p22-pre-hash"
     # Acquire a Trex-owned transaction lease before staging any image.  The
     # service is bounded by its holder script and survives loss of this SSH
     # session; a second harness cannot enter the writer lane concurrently.
@@ -947,11 +964,15 @@ verify_recovered_stage_a() {
     recovery_deadline=$(( $(date +%s) + RECOVERY_SSH_TIMEOUT_SECONDS ))
     : > "$RUN_LOCAL/recovered-partition-hashes"
     while [ "$(date +%s)" -lt "$recovery_deadline" ]; do
-        if device_ssh "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" \
+        if device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $ROLLBACK_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+sha256sum \"\$p22\" \"\$p30\" \"\$p31\"" \
             > "$RUN_LOCAL/recovered-partition-hashes" 2>&1; then
             return 0
         fi
@@ -1106,13 +1127,18 @@ wait_ssh() {
 validate_candidate_stage2() {
     # Keep the Stage2 path as diagnosable as the generic validator.  Without
     # this capture a failed acceptance loop has no command-level evidence.
-    device_ssh "set -eu
+    device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+p29=\$(resolve_emmc_device)p29
 accept_deadline=$ACCEPTANCE_DEADLINE
 test \"\$(date +%s)\" -lt \"\$accept_deadline\"
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+grep -Fq -- \"\$p29 /gemian\" /proc/mounts
 grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
 while ! test -s /run/bq2589x-preflight.pass; do
   test ! -e /run/bq2589x-preflight.fail
@@ -1156,7 +1182,7 @@ success_first=\$(sed -n '1p' \"$STAGE2_SUCCESS_MARKER\")
 test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
 grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
-grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
 test -s \"$STAGE1_HANDOFF_PATH\"
 grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
@@ -1188,15 +1214,20 @@ validate_candidate() {
         validate_candidate_stage2
         return $?
     fi
-    device_ssh "set -eu
+    device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+p29=\$(resolve_emmc_device)p29
 accept_deadline=$ACCEPTANCE_DEADLINE
 test \"\$(date +%s)\" -lt \"\$accept_deadline\"
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 case \"$ROOTFS_POLICY\" in
   nixos-stage2)
-    grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
+    grep -Fq -- \"\$p29 /gemian\" /proc/mounts
     grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
     if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
       test -s \"$STAGE2_SUCCESS_MARKER\"
@@ -1295,7 +1326,7 @@ if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
   test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
   grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
   grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
-  grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+  grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
   grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
 else
   grep -Fq -- \"$EXPECTED_MARKER\" /run/probe-status
@@ -1343,10 +1374,15 @@ test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\""
 
 validate_candidate_right_path_stage2() {
     [ "$SSH_PATH_POLICY" = both ] || return 0
-    device_ssh_right "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+    device_ssh_right "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+p29=\$(resolve_emmc_device)p29
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
 grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
 grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
@@ -1379,7 +1415,7 @@ success_first=\$(sed -n '1p' \"$STAGE2_SUCCESS_MARKER\")
 test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
 grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
-grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
 test -s \"$STAGE1_HANDOFF_PATH\"
 grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
@@ -1395,10 +1431,15 @@ validate_candidate_right_path() {
     # The gadget path performs the full profile validation.  This independent
     # right-NIC session proves the second SSH transport reaches the same exact
     # candidate before the lease marker is committed.
-    device_ssh_right "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+    device_ssh_right "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+p29=\$(resolve_emmc_device)p29
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
 grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
 grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
@@ -1684,10 +1725,14 @@ recover() {
     state=$(trex_ssh "cat '$STATE'")
     case "$state" in flash_rc=0*) ;; *) printf 'recovery_flash_failed %s\n' "$state" > "$RUN_LOCAL/state"; return 1;; esac
     if ! wait_ssh "$RECOVERY_SSH_TIMEOUT_SECONDS"; then printf 'manual_reset_required_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
-    if ! device_ssh "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+    if ! device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $ROLLBACK_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 $(if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
     printf '%s\n' "test \"\$(stat -Lc %s '$STAGE1_STORE_TARGET')\" -eq '$STAGE1_STORE_SIZE'" \
         "test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'"
@@ -1703,8 +1748,12 @@ finalize_accepted_candidate() {
     # Marker creation is the irreversible commit point.  This readback is
     # evidence only; a transient host-plane failure must not enter recover and
     # cannot revoke a candidate whose remote p22/p30/p31 validation committed.
-    device_ssh "set -eu
-sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" \
+    device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+sha256sum \"\$p22\" \"\$p30\" \"\$p31\"" \
         > "$RUN_LOCAL/final-partition-hashes" 2>&1 || final_record_rc=$?
     printf 'post-marker-final-record rc=%s\n' "$final_record_rc" \
         > "$RUN_LOCAL/final-record-status"

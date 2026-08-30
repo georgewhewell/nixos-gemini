@@ -198,6 +198,53 @@ let
       while :; do sleep 3600; done
     }
 
+    # The kernel may number the eMMC mmcblk0 or mmcblk1 depending on which
+    # other MMC host registered first. Resolve it by the board's fixed
+    # 11230000.mmc controller lineage, and fail closed on ambiguity.
+    resolve_emmc_device() {
+      controller=
+      for candidate in \
+        /sys/devices/platform/11230000.mmc \
+        /sys/devices/platform/*/11230000.mmc \
+        /sys/devices/platform/*/*/11230000.mmc; do
+        [ -d "$candidate" ] || continue
+        resolved=$(readlink -f "$candidate" 2>/dev/null || true)
+        [ -n "$resolved" ] || continue
+        if [ -n "$controller" ] && [ "$controller" != "$resolved" ]; then
+          return 1
+        fi
+        controller=$resolved
+      done
+      [ -n "$controller" ] || return 1
+      found=
+      for node in /sys/class/block/mmcblk*; do
+        [ -e "$node" ] || continue
+        name=''${node##*/}
+        case "$name" in
+          mmcblk[0-9]*) suffix=''${name#mmcblk}; case "$suffix" in *[!0-9]*|"") continue ;; esac ;;
+          *) continue ;;
+        esac
+        [ ! -e "$node/partition" ] || continue
+        parent=$(readlink -f "$node/device" 2>/dev/null || true)
+        matched=no
+        while [ -n "$parent" ] && [ "$parent" != / ]; do
+          if [ "$parent" = "$controller" ]; then
+            matched=yes
+            break
+          fi
+          next_parent=''${parent%/*}
+          [ "$next_parent" != "$parent" ] || break
+          parent=$next_parent
+        done
+        if [ "$matched" = yes ]; then
+          [ -z "$found" ] || return 1
+          found=/dev/''${node##*/}
+        fi
+      done
+      [ -n "$found" ] || return 1
+      printf '%s\n' "$found"
+    }
+
     restore_store_readonly() {
       sync
       attempt=0
@@ -207,11 +254,13 @@ let
         [ "$attempt" -lt 10 ] || return 1
         sleep 1
       done
+      emmc_device=$(resolve_emmc_device) || return 1
+      p29="''${emmc_device}p29"
       mount -t ext4 -o ro,noload,nosuid,nodev,noexec \
-        /dev/mmcblk0p29 /mnt/gemian || return 1
+        "$p29" /mnt/gemian || return 1
       mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
       case ",$mounted," in
-        *,/dev/mmcblk0p29:ext4:ro,*) return 0 ;;
+        *,''${p29}:ext4:ro,*) return 0 ;;
         *) return 1 ;;
       esac
     }
@@ -231,12 +280,14 @@ let
       # ext4's journal, so unmount the read-only/noload view and mount it rw
       # normally.  Never remount the noload superblock writable.
       umount /mnt/gemian || fail "store-provision-ro-unmount"
+      emmc_device=$(resolve_emmc_device) || provision_abort "store-provision-emmc-missing"
+      p29="''${emmc_device}p29"
       mount -t ext4 -o rw,nosuid,nodev,noexec \
-        /dev/mmcblk0p29 /mnt/gemian \
+        "$p29" /mnt/gemian \
         || provision_abort "store-provision-rw-mount"
       mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
       case ",$mounted," in
-        *,/dev/mmcblk0p29:ext4:rw,*) ;;
+        *,''${p29}:ext4:rw,*) ;;
         *) provision_abort "store-provision-rw-contract observed=''${mounted:-unknown}" ;;
       esac
       case ",$mounted," in
@@ -354,13 +405,17 @@ let
     /bin/ssh-server &
     log "stage1=entered p29=ro,noload store-compression=gzip"
 
+    emmc_device=$(resolve_emmc_device 2>/dev/null || true)
     attempt=0
-    while [ ! -b /dev/mmcblk0p29 ] && [ "$attempt" -lt 30 ]; do
+    while [ -z "$emmc_device" ] && [ "$attempt" -lt 30 ]; do
       attempt=$((attempt + 1))
       sleep 1
+      emmc_device=$(resolve_emmc_device 2>/dev/null || true)
     done
-    [ -b /dev/mmcblk0p29 ] || fail "p29-missing"
-    mount -t ext4 -o ro,noload,nosuid,nodev,noexec /dev/mmcblk0p29 /mnt/gemian \
+    [ -n "$emmc_device" ] || fail "p29-missing"
+    p29="''${emmc_device}p29"
+    [ -b "$p29" ] || fail "p29-missing"
+    mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
     log "p29=mounted observed=''${mounted:-unknown}"

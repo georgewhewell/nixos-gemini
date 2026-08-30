@@ -8,8 +8,45 @@ HARNESS=$ROOT/research/p22-recovery-harness.sh
 RUNNER=$ROOT/research/p22-chained-recovery-runner.sh
 WRAPPER=$ROOT/research/p22-flash-wrapper.sh
 MANIFEST=$ROOT/research/p22-unattended-recovery-watchdog-hostnet-v2.manifest
+# Functions are also extracted and sourced individually below; keep the
+# injected target helper defined for those host-only unit tests.
+EMMC_RESOLVER=
 TEST_ROOT=$(mktemp -d /mnt/Home/src/p22-recovery-harness-test.XXXXXX)
 trap 'rm -rf "$TEST_ROOT"' EXIT INT TERM
+
+test_emmc_lineage_resolves_mmcbLK0_and_mmcbLK1() {
+    # Exercise the resolver on synthetic sysfs/dev trees for both assignments.
+    resolver=$ROOT/research/p22-emmc-lineage.sh
+    for block in mmcblk0 mmcblk1; do
+        fake=$TEST_ROOT/emmc-$block
+        controller=$fake/sys/devices/platform/soc/11230000.mmc
+        mkdir -p "$controller" "$fake/sys/class/block" "$fake/dev/disk/by-partlabel"
+        mkdir -p "$controller/mmc_host/mmc0/$block"
+        ln -s "$controller/mmc_host/mmc0/$block" \
+            "$fake/sys/class/block/$block"
+        ln -s "$controller/mmc_host/mmc0/$block" \
+            "$fake/sys/class/block/$block/device"
+        mkdir -p "$fake/sys/class/block/$block"p22 \
+            "$fake/sys/class/block/$block"p29 \
+            "$fake/sys/class/block/$block"p30 \
+            "$fake/sys/class/block/$block"p31
+        for part in 22 29 30 31; do
+            : > "$fake/sys/class/block/$block"p$part/partition
+            ln -s "$fake/sys/class/block/$block" \
+                "$fake/sys/class/block/$block"p$part/device
+            : > "$fake/dev/$block"p$part
+        done
+        ln -s "../../$block"p22 "$fake/dev/disk/by-partlabel/boot"
+        ln -s "../../$block"p30 "$fake/dev/disk/by-partlabel/boot2"
+        ln -s "../../$block"p31 "$fake/dev/disk/by-partlabel/boot3"
+        resolved=$(EMMC_SYSFS_ROOT=$fake/sys EMMC_DEV_ROOT=$fake/dev \
+            sh -c '. "$1"; resolve_emmc_device' sh "$resolver")
+        test "$resolved" = "$fake/dev/$block"
+        resolved=$(EMMC_SYSFS_ROOT=$fake/sys EMMC_DEV_ROOT=$fake/dev \
+            sh -c '. "$1"; resolve_emmc_partition boot' sh "$resolver")
+        test "$resolved" = "$fake/dev/$block"p22
+    done
+}
 
 test_ssh_timeout() {
     test_bin=$TEST_ROOT/hanging-bin
@@ -909,7 +946,8 @@ test_stage2_store_staging_commands_are_safe_shell() {
     grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq 'df -Pk /mnt/gemian/nixos' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq '/dev/mmcblk0p29' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'resolve_emmc_device' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'p29="$emmc"p29' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq 'case "$available_kib" in' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq '"$available_kib" -ge '\''2'\''' "$RUN_LOCAL/store-command-4.sh"
     stale_remove_line=$(grep -n -F "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
@@ -1074,7 +1112,7 @@ test_stage2_rendered_validation_requires_handoff() {
     }
     SSH_PATH_POLICY=both
     validate_candidate_right_path_stage2
-    grep -Fq '/dev/mmcblk0p31' "$RUN_LOCAL/rendered-stage2-right.sh"
+    grep -Fq 'resolve_emmc_partition boot3' "$RUN_LOCAL/rendered-stage2-right.sh"
     grep -Fq 'idVendor' "$RUN_LOCAL/rendered-stage2-right.sh"
     grep -Fq 'watchdog-owner=$stage2_pid' "$RUN_LOCAL/rendered-stage2-right.sh"
     ! grep -Fq '/run/probe-status' "$RUN_LOCAL/rendered-stage2-right.sh"
@@ -1375,4 +1413,5 @@ test_stage2_lease_evidence_is_literal
 test_stage2_probe_capture_survives_switch_root_disconnect
 test_stage2_policy_requires_observe_lease
 test_reboot_dispatch_is_single_path_then_reachability_gated
+test_emmc_lineage_resolves_mmcbLK0_and_mmcbLK1
 echo 'p22-recovery-harness tests: passed'

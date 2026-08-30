@@ -1224,31 +1224,60 @@
           echo "<6>GEMINI_NIX_IXOO_STORAGE: $*" > /dev/kmsg 2>/dev/null || true
         }
 
-        find_emmc() {
+        # Resolve the data eMMC by the board's fixed controller lineage.  The
+        # block class also exposes boot0/boot1/RPMB and partitions; only the
+        # whole disk (mmcblkN) is accepted.
+        resolve_emmc_device() {
+          controller=
+          for candidate in \
+            /sys/devices/platform/11230000.mmc \
+            /sys/devices/platform/*/11230000.mmc \
+            /sys/devices/platform/*/*/11230000.mmc; do
+            [ -d "$candidate" ] || continue
+            resolved=$(readlink -f "$candidate" 2>/dev/null || true)
+            [ -n "$resolved" ] || continue
+            if [ -n "$controller" ] && [ "$controller" != "$resolved" ]; then
+              return 1
+            fi
+            controller=$resolved
+          done
+          [ -n "$controller" ] || return 1
+          found=
           for node in /sys/class/block/mmcblk*; do
             [ -e "$node" ] || continue
             name=''${node##*/}
-            # Ignore partitions, boot areas and RPMB. The kernel-assigned
-            # mmcblk index is not stable when the removable-SD host is also
-            # enabled, but the Gemini eMMC controller address is.
             case "$name" in
-              mmcblk*[!0-9]*) continue ;;
-            esac
-            target=$(readlink -f "$node" 2>/dev/null || true)
-            case "$target" in
-              */11230000.mmc/*)
-                echo "$name"
-                return 0
+              mmcblk[0-9]*)
+                suffix=''${name#mmcblk}
+                case "$suffix" in *[!0-9]*|"") continue ;; esac
                 ;;
+              *) continue ;;
             esac
+            [ ! -e "$node/partition" ] || continue
+            parent=$(readlink -f "$node/device" 2>/dev/null || true)
+            matched=no
+            while [ -n "$parent" ] && [ "$parent" != / ]; do
+              if [ "$parent" = "$controller" ]; then
+                matched=yes
+                break
+              fi
+              next_parent=''${parent%/*}
+              [ "$next_parent" != "$parent" ] || break
+              parent=$next_parent
+            done
+            if [ "$matched" = yes ]; then
+              [ -z "$found" ] || return 1
+              found=$name
+            fi
           done
-          return 1
+          [ -n "$found" ] || return 1
+          printf '%s\n' "$found"
         }
 
         attempt=0
         emmc=
         while [ "$attempt" -lt 30 ]; do
-          emmc=$(find_emmc 2>/dev/null || true)
+          emmc=$(resolve_emmc_device 2>/dev/null || true)
           [ -n "$emmc" ] && break
           attempt=$((attempt + 1))
           sleep 1
