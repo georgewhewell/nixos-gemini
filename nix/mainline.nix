@@ -1305,7 +1305,7 @@
 
         emmc=$(cat /run/emmc-block-device 2>/dev/null || true)
         case "$emmc" in
-          mmcblk*[!0-9]*|'')
+          ""|mmcblk*[!0-9]*)
             record "mount=skipped reason=invalid-emmc-device value=''${emmc:-missing}"
             exit 1
             ;;
