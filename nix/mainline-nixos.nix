@@ -10,7 +10,14 @@
   bq2589xPreflight,
   unattendedRecovery ? false,
   provisionStore ? false,
-}: let
+  provisionWaitSeconds ? 65,
+  watchdogLeaseSeconds ? 90,
+}:
+assert builtins.isInt provisionWaitSeconds;
+assert builtins.isInt watchdogLeaseSeconds;
+assert provisionWaitSeconds >= 30;
+assert watchdogLeaseSeconds > provisionWaitSeconds;
+let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists.  Derive the p29 filename from the immutable Nix store path so a
   # new bundle can only be staged next to an older payload, never over it.
@@ -155,7 +162,7 @@
       printf '%s\n' "$required" > /run/store-provision.required
       log "$required"
       attempt=0
-      while [ "$attempt" -lt 65 ]; do
+      while [ "$attempt" -lt @PROVISION_WAIT_SECONDS@ ]; do
         ready=$(cat /run/store-provision.ready 2>/dev/null || true)
         [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] && break
         attempt=$((attempt + 1))
@@ -202,7 +209,7 @@
       kill -0 "$watchdog_pid" 2>/dev/null \
         || fail "watchdog-open-failed"
       echo "$watchdog_pid" > /run/unattended-recovery.watchdog-owner
-      log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=90s handoff=stage1"
+      log "watchdog=petting device=$watchdog_device pid=$watchdog_pid lease=@WATCHDOG_LEASE_SECONDS@s handoff=stage1"
 
       # /run is moved into the new root, so this supervisor survives
       # switch_root and follows whichever petter owns the watchdog.  Mark the
@@ -210,7 +217,7 @@
       # the marker and refuse to reopen the device.  Re-read the owner for a
       # few seconds to close the remaining PID-file handoff race.
       (
-        sleep 90
+        sleep @WATCHDOG_LEASE_SECONDS@
         if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != \
              "unattended_recovery=healthy" ]; then
           : > /run/unattended-recovery.lease-expired
@@ -306,6 +313,8 @@
       --replace-fail @STORE_FILE@ ${storeFileName} \
       --replace-fail @STORE_SHA256@ "$(sha256sum ${squashfs} | cut -d' ' -f1)" \
       --replace-fail @STORE_SIZE@ "$(stat -c %s ${squashfs})" \
+      --replace-fail @PROVISION_WAIT_SECONDS@ ${toString provisionWaitSeconds} \
+      --replace-fail @WATCHDOG_LEASE_SECONDS@ ${toString watchdogLeaseSeconds} \
       --replace-fail @PROVISION_STORE@ ${
         if provisionStore
         then ''"provision_store"''
@@ -393,12 +402,12 @@
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "unattended-recovery=${
         if unattendedRecovery
-        then "stage1-to-stage2-owner-handoff; lease=90s; timeout=31s; acceptance=external"
+        then "stage1-to-stage2-owner-handoff; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=external"
         else "none"
       }"
       echo "store-provision=${
         if provisionStore
-        then "stage1-journaled-unique-target"
+        then "stage1-journaled-unique-target; wait=${toString provisionWaitSeconds}s"
         else "disabled"
       }"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"

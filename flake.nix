@@ -577,6 +577,11 @@
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
       provisionStore = true;
+      # A measured 100 MiB eMMC write took longer than the original 55-second
+      # host upload bound. Keep provisioning and recovery independently
+      # bounded, with a full minute between Stage1 timeout and lease expiry.
+      provisionWaitSeconds = 120;
+      watchdogLeaseSeconds = 180;
     };
 
     #############################################

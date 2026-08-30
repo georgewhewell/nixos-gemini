@@ -107,6 +107,7 @@ STAGE2_STORE_TARGET_LIVE=
 STAGE1_STORE_TARGET=
 STAGE1_STORE_SHA=
 STAGE1_STORE_SIZE=
+STAGE1_PROVISION_WAIT_SECONDS=
 STAGE2_STORE_TEMP=
 STAGE2_STORE_PROVISIONED=no
 LEASE_SECONDS=
@@ -116,9 +117,8 @@ CANDIDATE_HOSTKEY_MODE=no
 VALIDATION_GADGET_ONLY=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
-# Stage1 waits up to 65s for the host stream. Keep the upload itself bounded
-# but long enough for the full SquashFS over gadget SSH.
-PROVISION_UPLOAD_TIMEOUT_SECONDS=55
+# Derived from the exact manifest timing profile after schema validation.
+PROVISION_UPLOAD_TIMEOUT_SECONDS=
 STAGE2_READINESS_TIMEOUT_SECONDS=5
 STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS=2
 # Both known-good and candidate initramfs hold their user-visible services
@@ -194,6 +194,7 @@ load_manifest() {
             stage1_store_target) [ -z "$STAGE1_STORE_TARGET" ] || die "duplicate stage1_store_target"; STAGE1_STORE_TARGET=$value ;;
             stage1_store_sha256) [ -z "$STAGE1_STORE_SHA" ] || die "duplicate stage1_store_sha256"; STAGE1_STORE_SHA=$value ;;
             stage1_store_size) [ -z "$STAGE1_STORE_SIZE" ] || die "duplicate stage1_store_size"; STAGE1_STORE_SIZE=$value ;;
+            stage1_provision_wait_seconds) [ -z "$STAGE1_PROVISION_WAIT_SECONDS" ] || die "duplicate stage1_provision_wait_seconds"; STAGE1_PROVISION_WAIT_SECONDS=$value ;;
             lease_seconds) [ -z "$LEASE_SECONDS" ] || die "duplicate lease_seconds"; LEASE_SECONDS=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
@@ -257,8 +258,11 @@ require_manifest() {
         *) die "unknown watchdog_profile" ;;
     esac
     [ -n "$LEASE_SECONDS" ] || LEASE_SECONDS=90
+    [ -n "$STAGE1_PROVISION_WAIT_SECONDS" ] || STAGE1_PROVISION_WAIT_SECONDS=65
     case "$LEASE_SECONDS" in *[!0-9]*|'') die "lease_seconds must be numeric" ;; esac
+    case "$STAGE1_PROVISION_WAIT_SECONDS" in *[!0-9]*|'') die "stage1_provision_wait_seconds must be numeric" ;; esac
     [ "$LEASE_SECONDS" -ge 3 ] || die "lease_seconds must be at least 3"
+    [ "$STAGE1_PROVISION_WAIT_SECONDS" -ge 30 ] || die "stage1_provision_wait_seconds must be at least 30"
     if [ "$WATCHDOG_PROFILE" = initramfs-petter ] && [ "$ACCEPTANCE_WINDOW_SECONDS" -ge "$LEASE_SECONDS" ]; then
         die "watchdog acceptance_window_seconds must be less than lease_seconds"
     fi
@@ -314,7 +318,6 @@ require_manifest() {
             [ "$SSH_PATH_POLICY" = both ] || die "stage2 watchdog takeover requires ssh_path_policy=both"
             [ "$POWER_PREFLIGHT_POLICY" = required ] || die "stage2 watchdog takeover requires power_preflight_policy=required"
             [ "$TRANSACTION_POLICY" = observe-always-rollback ] || die "stage2 watchdog takeover requires observe-always-rollback"
-            [ "$LEASE_SECONDS" -eq 90 ] || die "stage2 watchdog takeover requires lease_seconds=90"
             [ -n "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "manifest field is missing: stage1_watchdog_owner_marker"
             [ "$STAGE1_WATCHDOG_OWNER_MARKER" = watchdog=petting ] || die "stage1_watchdog_owner_marker must be watchdog=petting"
             [ "$STAGE1_HANDOFF_PATH" = /run/stage1-handoff ] || die "stage1_handoff_path must be /run/stage1-handoff"
@@ -351,7 +354,11 @@ require_manifest() {
             require_path "$STAGE2_STORE_TARGET_LIVE" stage2_store_target_live
             require_path "$STAGE1_STORE_TARGET" stage1_store_target
             require_path "$STAGE2_SUCCESS_MARKER" stage2_success_marker
-            case "$STAGE2_WATCHDOG_OWNER_UNIT" in *.service) ;; *) die "stage2_watchdog_owner_unit must end in .service" ;; esac ;;
+            case "$STAGE2_WATCHDOG_OWNER_UNIT" in *.service) ;; *) die "stage2_watchdog_owner_unit must end in .service" ;; esac
+            case "$STAGE1_PROVISION_WAIT_SECONDS:$LEASE_SECONDS:$ACCEPTANCE_WINDOW_SECONDS" in
+                65:90:80|120:180:150) ;;
+                *) die "unknown Stage1 provision/watchdog/acceptance timing profile" ;;
+            esac ;;
         *) die "unknown stage2_policy" ;;
     esac
 }
@@ -363,7 +370,12 @@ load_manifest
 [ -n "$TRANSACTION_POLICY" ] || TRANSACTION_POLICY=persistent-acceptance
 [ -n "$STAGE2_POLICY" ] || STAGE2_POLICY=none
 [ -n "$LEASE_SECONDS" ] || LEASE_SECONDS=90
+[ -n "$STAGE1_PROVISION_WAIT_SECONDS" ] || STAGE1_PROVISION_WAIT_SECONDS=65
 require_manifest
+
+# Leave ten seconds for the remote size/hash/move/sync contract after the
+# bounded stream exits. The two accepted profiles yield 55s and 110s.
+PROVISION_UPLOAD_TIMEOUT_SECONDS=$((STAGE1_PROVISION_WAIT_SECONDS - 10))
 
 if [ "$PROOF_LEASE" = yes ]; then
     [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
@@ -614,8 +626,17 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
     device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
     if ! device_ssh_gadget_provision "set -eu
 test ! -e '$init_target'
-test ! -e '$provision_tmp'
-test ! -L '$provision_tmp'
+if test -e '$provision_tmp' || test -L '$provision_tmp'; then
+  test ! -L '$provision_tmp'
+  test -f '$provision_tmp'
+  test ! -b '$provision_tmp'
+  test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
+  stale_size=\$(stat -Lc %s '$provision_tmp')
+  test \"\$stale_size\" -le '$STAGE2_STORE_SIZE'
+  rm -- '$provision_tmp'
+  test ! -e '$provision_tmp'
+  test ! -L '$provision_tmp'
+fi
 cat > '$provision_tmp'
 test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
 test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'

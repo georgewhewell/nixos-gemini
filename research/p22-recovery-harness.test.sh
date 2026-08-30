@@ -719,9 +719,9 @@ test_stage2_store_staging_commands_are_safe_shell() {
         n=$((n + 1))
         printf '%s\n' "$1" > "$RUN_LOCAL/store-command-$n.sh"
         case "$1" in
+            *'cat >'*) cat > "$RUN_LOCAL/store-stream-$n"; return 0 ;;
             *'test -f'*) return 1 ;;
             *'grep -Fqx'*) return 0 ;;
-            *'cat >'*) cat > "$RUN_LOCAL/store-stream-$n"; return 0 ;;
             *) return 0 ;;
         esac
     }
@@ -744,6 +744,14 @@ test_stage2_store_staging_commands_are_safe_shell() {
     grep -Fq 'sync' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "test ! -L '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "test -f '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "stat -Lc %h '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "test \"\$stale_size\" -le '1'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs" \
         "$RUN_LOCAL/store-command-3.sh"
@@ -882,7 +890,7 @@ EOF
 test_stage2_policy_requires_observe_lease() {
     manifest=$TEST_ROOT/stage2-policy.manifest
     sed -e 's/^watchdog_profile=.*/watchdog_profile=initramfs-petter/' \
-        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=60/' \
+        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=80/' \
         "$ROOT/research/p22-next-experiment.manifest" > "$manifest"
     printf '%s\n' \
         'stage2_policy=watchdog-takeover-required' \
