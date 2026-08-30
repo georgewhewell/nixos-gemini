@@ -129,16 +129,16 @@
     + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
-  baseDtbSha256 = "d8339bbfee7d75f3823eb3c11e6eabb4ddb09c73e43e77fafa99499177ee6fc4";
-  serviceabilityBaseDtbSha256 = "dcbdcbc80136fa8f54bfc132201d47388de786d7ea390f1e14564429edb04f94";
-  usbPlatformDtbSha256 = "c38495c961512c66dacd9e9c4e79a04c538df120096e042d6ab300d0fc7298c0";
+  baseDtbSha256 = "9717c57091945d15eac80a0a7cc00435942bb71b604498a7a7f2c13fb81ea84f";
+  serviceabilityBaseDtbSha256 = "24b5af6078a542eefb422bc27bf30f2e16e05b2605f9c1c2fd5ab3db0f7cc1ac";
+  usbPlatformDtbSha256 = "de5b0ab3644ccd1b46803e39555f1252b28b78991b78885e5172e9e8dc2e948b";
   # The frozen serviceability transform already enables the reviewed AW9523
   # polling keyboard.  Applying the native overlay is therefore deliberately
   # idempotent; retain its intermediate fingerprint so future base-DT drift is
   # still detected before the touchscreen bus-only observer is composed.
-  keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";
-  inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";
-  thermalHallDtbSha256 = "f0e80f8bc94029b894f42526239f3c5342ef657b22b0caacff7ccbb607fc5de5";
+  keyboardDtbSha256 = "47594858ecbede80c81fb8667566ad15523628584d862ee82e6fe07c1e7b40d5";
+  inputObserveDtbSha256 = "a3b4497b274d9b7723204e80555de02ce0641577baf3d72a3573d65b6f6924f1";
+  thermalHallDtbSha256 = "36dec40167e02a4e557e57c7eb985a4a549fe64a4e6727dcc21498387f2d87c5";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -167,11 +167,11 @@
     else if inputObserveOverlay
     then inputObserveDtbSha256
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
-    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
+    then "47594858ecbede80c81fb8667566ad15523628584d862ee82e6fe07c1e7b40d5"
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
-    then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
+    then "47594858ecbede80c81fb8667566ad15523628584d862ee82e6fe07c1e7b40d5"
     else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
-    then "cd1bd904000769bc7444a3ee384cb5c832d5659dc746291d60b5a3918bced763"
+    then "d01d613a58e5395785a95801a7b6aa9cc387dfc668e817b8d653fa9a83fb4c87"
     else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
     then "cfd1425190d812612989c8de69f90debdd93457fd1491e1f14701eb3a2377358"
     else if consysIdentityOverlay && !platformEnablement
