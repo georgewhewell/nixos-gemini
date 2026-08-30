@@ -537,8 +537,10 @@ let
     ${if displayActivation then ''
       grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
       grep -Fq 'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' root/init
-      activation_line=$(grep -n -F '    activate_display' root/init | tail -n 1 | cut -d: -f1)
-      watchdog_line=$(grep -n -F 'start_watchdog_lease' root/init | tail -n 1 | cut -d: -f1)
+      # Nix strips the common heredoc indentation, so match the substituted
+      # call sites exactly rather than assuming they retain source whitespace.
+      activation_line=$(grep -n -Fx 'activate_display' root/init | tail -n 1 | cut -d: -f1)
+      watchdog_line=$(grep -n -Fx 'start_watchdog_lease' root/init | tail -n 1 | cut -d: -f1)
       test "$watchdog_line" -lt "$activation_line"
     '' else ''
       ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
