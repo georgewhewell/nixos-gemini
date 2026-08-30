@@ -13,7 +13,7 @@ therefore makes no touch I2C transfer or EINT request
 (`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-observe.dtso:3-33`).
 
 Vendor DTS text records GPIO85/EINT8 and a selectable GPIO68 reset state
-(`vendor/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:579-638`).
+(`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:579-638`).
 It does not determine reset polarity/timing, VTOUCH regulator identity or
 voltage, controller revision, or a safe read transaction. The later read-only
 VTOUCH collector exists at `linux-gemini-platform@2fcd32294`, but it is not in

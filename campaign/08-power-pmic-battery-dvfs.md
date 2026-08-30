@@ -5,7 +5,7 @@ fuel-gauge, charging policy, DVFS and DEVICE-TESTED power management are
 **UNKNOWN**.
 
 The board DWS routes `SW_CHARGER` to I2C0/0x6b
-(`vendor/gemini-linux-kernel-3.18/drivers/misc/mediatek/dws/mt6797/aeon6797_6m_n.dws:3679-3683`),
+(`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/dws/mt6797/aeon6797_6m_n.dws:3679-3683`),
 and the retained vendor capture reports a bound `bq25890` at that address while
 explicitly not logging the exact part number
 (`research/mt6797-bq25896-routing-evidence/README.md:138-151`). The Nix-pinned

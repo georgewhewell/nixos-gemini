@@ -14,7 +14,7 @@ their composed-DT properties (`nix/mainline.nix:560-577`). Those are source and
 composition facts, not pixels.
 
 Vendor panel wiring text remains useful only as source evidence:
-`vendor/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:1043-1102`
+`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:1043-1102`
 and its LCM driver. It does not establish a safe current panel power sequence,
 mode, backlight, or display-device result.
 
