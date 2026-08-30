@@ -249,7 +249,8 @@ device_ssh_gadget() {
 }
 
 device_ssh_right() {
-    ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+    ssh -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+        -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
         -o ServerAliveInterval=3 -o ServerAliveCountMax=2 \
         "root@$EXPECTED_ETHERNET_IP" "$@"
 }

@@ -87,7 +87,7 @@
     else "none";
   unattendedRecoveryLabel =
     if unattendedRecovery
-    then "mtk-wdt-probe-start-45s-open-timeout-initramfs-pet-v1"
+    then "mtk-wdt-probe-start-90s-open-timeout-initramfs-pet-v2"
     else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
@@ -280,7 +280,7 @@
         grep -Fqx 'CONFIG_WATCHDOG_CORE=y' .config
         grep -Fqx 'CONFIG_WATCHDOG_NOWAYOUT=y' .config
         grep -Fqx 'CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y' .config
-        grep -Fqx 'CONFIG_WATCHDOG_OPEN_TIMEOUT=45' .config
+        grep -Fqx 'CONFIG_WATCHDOG_OPEN_TIMEOUT=90' .config
         grep -Fqx 'CONFIG_WATCHDOG_SYSFS=y' .config
         grep -Fqx 'CONFIG_MEDIATEK_WATCHDOG=y' .config
         grep -Fqx 'CONFIG_PANIC_ON_OOPS=y' .config
@@ -1124,7 +1124,7 @@
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery
-        then "CONFIG_MEDIATEK_WATCHDOG=y CONFIG_WATCHDOG_OPEN_TIMEOUT=45 CONFIG_PANIC_ON_OOPS=y CONFIG_PANIC_TIMEOUT=5"
+        then "CONFIG_MEDIATEK_WATCHDOG=y CONFIG_WATCHDOG_OPEN_TIMEOUT=90 CONFIG_PANIC_ON_OOPS=y CONFIG_PANIC_TIMEOUT=5"
         else "none"
       }"
       echo "watchdog-userspace=${

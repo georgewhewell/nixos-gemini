@@ -11,7 +11,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 HARNESS=$ROOT/research/p22-recovery-harness.sh
-MANIFEST=$ROOT/research/p22-unattended-recovery-watchdog-hostnet.manifest
+MANIFEST=$ROOT/research/p22-unattended-recovery-watchdog-hostnet-v2.manifest
 MODE=
 
 die() {
@@ -44,7 +44,7 @@ manifest_value() {
 
 CANDIDATE_SHA=$(manifest_value candidate_sha256)
 ROLLBACK_SHA=$(manifest_value rollback_sha256)
-[ "$CANDIDATE_SHA" = a0bc87d21227158e2e925a6f05affdfdec773a5e44e248d41f8b6684e2bd37eb ] ||
+[ "$CANDIDATE_SHA" = 567ac4302dda7c12f734306af56ad8fba04986fadcd6f70d53ad3b89df747638 ] ||
     die "manifest is not the reviewed hostnet candidate"
 [ "$ROLLBACK_SHA" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc ] ||
     die "manifest rollback is not accepted Stage A"

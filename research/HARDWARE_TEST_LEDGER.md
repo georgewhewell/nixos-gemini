@@ -699,3 +699,43 @@ The old `a0bc87d...` artifact and manifest remain immutable and will not be
 rerun.  A rebuilt v2 candidate with `CONFIG_WATCHDOG_OPEN_TIMEOUT=90` is being
 reviewed separately; its new manifest/runner identity and acceptance/lease
 values are outside this watcher commit.
+
+## Watchdog-control v1 diagnosis and v2 rebuild: 2026-08-30
+
+Root recovered the failed candidate's console record after the automatic
+Stage-A rollback as
+`artifacts/p22-recovery-20260830-053725/console-ramoops-0-post-rollback`.
+It proves that `mtk-wdt` registered running with timeout 31 and nowayout 1 at
+kernel time 1.059 seconds.  It also records the 45,000-ms DVFSP late-validation
+delay and kernel work through 31.752 seconds, but no retained
+`stage=initramfs-entered` marker.  Trex saw the candidate gadget enumerate at
+05:37:50 and disconnect for the watchdog reset at 05:38:35: exactly the old
+45-second `CONFIG_WATCHDOG_OPEN_TIMEOUT` boundary.  The old candidate is
+therefore rejected and will not be retried.
+
+The rebuilt immutable v2 control is
+`artifacts/mainline-unattended-recovery-watchdog-hostnet-p22-v2`.  Its exact
+identities are:
+
+* padded p22 image
+  `567ac4302dda7c12f734306af56ad8fba04986fadcd6f70d53ad3b89df747638`;
+* raw Android-v0 boot image
+  `52faeadef939c815cd70dfc3b1f98c857491adbb672b7fe23568612be590d19e`;
+* kernel `Image`
+  `4f503590ed6accc0f82b8dfa4e894759706f45ec3c8451fb1c5613d75dce8651`;
+* initramfs
+  `15135cb7960ba23cecc5a3f4708fa2b057f034bfd1c155c6db0301cb2efbfa52`;
+* final DT
+  `58fa70641900b343c466b815bcadd0cb5269d86df0b4939f436af7c0d2bc6300`.
+
+The initramfs and final DT are byte-identical to v1.  The kernel configuration
+changes only the pre-userspace ownership deadline to
+`CONFIG_WATCHDOG_OPEN_TIMEOUT=90`; the 31-second hardware timeout, nowayout,
+boot-enabled handler, 90-second `/init` lease and five-second panic policy are
+unchanged.  The padded image is the exact 6,991,872-byte raw prefix followed
+only by zeroes to 16 MiB.  The new fail-closed manifest is
+`research/p22-unattended-recovery-watchdog-hostnet-v2.manifest`: its normal
+acceptance window is 80 seconds, still strictly shorter than the separate
+90-second initramfs lease.  `nix flake check --no-build`, the full Nix image
+build and the independent byte-contract checks passed; no v2 hardware action
+had occurred at this point.
