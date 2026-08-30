@@ -225,6 +225,8 @@
       ! grep -q '^CONFIG_MTK_STP_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_WMT=y' .config
       ! grep -q '^CONFIG_MTK_WMT_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
