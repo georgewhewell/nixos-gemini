@@ -898,6 +898,34 @@ Gemini LK lineage nominally arms/kicks a 10-second watchdog, but ATF-to-Linux
 persistence is unproven.  A p22 kernel/DT change cannot close this pre-probe
 window, so a pre-probe hang remains an explicit manual-reset boundary.
 
+## First durable-supervisor execute audit: Trex state cache and timeout process tree: 2026-08-30
+
+The first durable-supervisor execute attempt failed closed before reboot: local polling did not observe
+Trex's `tool_started` state within 20 seconds despite the remote state being
+written.  The same run recorded wrapper PID/PGID/SID `1604285`, while GNU
+`timeout` created child PGID `1604297`; cleanup therefore killed the wrong
+negative-PID group.  Root manually killed the exact child group and reverified
+Stage-A p22 plus unchanged p30/p31.
+
+The harness now polls all Trex-owned attempt state through bounded Trex SSH
+`cat`, verifies the staged candidate/rollback bytes from Trex immediately
+before each writer, and records a per-attempt SID.  The wrapper uses GNU
+`timeout --foreground`, keeping normal descendants in the wrapper session;
+cleanup validates the exact PID=SID and terminates all processes enumerated in
+that SID, with the expected PGID fast path.  The supervisor rollback wrapper
+also carries an explicit SID file.
+
+Host-only tests include a real `setsid` + `timeout --foreground` process-tree
+topology, Trex-state polling mock, duplicate writer lock, and stale owner/state
+cases.  No retry, reboot, or flash was performed for this fix.
+
+The follow-up containment fix records a per-attempt SID for both candidate and
+supervisor rollback wrappers.  Cleanup requires an exact session-owner argv
+match (the run state or reviewed XML) before enumerating that SID; this avoids
+terminating a recycled SID.  Trex state waits now use wall-clock deadlines
+around authoritative SSH reads, so a slow/cache-stale shared mount cannot
+silently convert `tool_started` into a false launch failure.
+
 The recovery guarantee begins only after Linux `mtk_wdt` probe/handoff; the
 Gemini LK lineage nominally arms/kicks a 10-second watchdog, but ATF-to-Linux
 persistence is unproven.  A p22 kernel/DT change cannot close that pre-probe

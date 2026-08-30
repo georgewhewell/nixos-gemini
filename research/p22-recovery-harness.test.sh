@@ -81,6 +81,10 @@ test_stale_attempt_state_not_reused() {
         > "$TEST_ROOT/wait-state-function.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/wait-state-function.sh"
+    trex_ssh() {
+        state_path=$(printf '%s\n' "$1" | sed "s/^cat '//; s/'$//")
+        cat "$state_path"
+    }
     stale=$TEST_ROOT/stale.state
     fresh=$TEST_ROOT/fresh.state
     printf '%s\n' 'flash_rc=0 old-attempt' > "$stale"
@@ -157,6 +161,82 @@ EOF
     grep -Fq 'flash_rc=75' "$second_state"
 }
 
+test_wrapper_foreground_process_tree() {
+    test_bin=$TEST_ROOT/foreground-bin
+    mkdir -p "$test_bin"
+    printf '%s\n' '#!/bin/sh' 'test "$1" = --foreground' 'shift 2' 'exec "$@"' > "$test_bin/timeout"
+    printf '%s\n' '#!/bin/sh' 'printf "%s\\n" "$$" > "$CHILD_PID_FILE"' 'sleep 60' > "$test_bin/sudo"
+    chmod +x "$test_bin/timeout" "$test_bin/sudo"
+    state=$TEST_ROOT/foreground.state
+    CHILD_PID_FILE=$TEST_ROOT/foreground-child.pid \
+        PATH="$test_bin:$PATH" setsid sh "$WRAPPER" "$state" \
+        "$TEST_ROOT/foreground.log" unused.xml "$TEST_ROOT/foreground.pid" \
+        "$TEST_ROOT/foreground.pgid" "$TEST_ROOT/foreground.lock" \
+        '' "$TEST_ROOT/foreground.sid" &
+    wrapper_launcher=$!
+    sleep 1
+    wrapper_pid=$(cat "$TEST_ROOT/foreground.pid")
+    child_pid=$(cat "$TEST_ROOT/foreground-child.pid")
+    test "$wrapper_pid" = "$(cat "$TEST_ROOT/foreground.pgid")"
+    test "$wrapper_pid" = "$(cat "$TEST_ROOT/foreground.sid")"
+    test "$wrapper_pid" = "$(ps -o pgid= -p "$child_pid" | tr -d ' ')"
+    test "$wrapper_pid" = "$(ps -o sid= -p "$child_pid" | tr -d ' ')"
+    kill -KILL "-$wrapper_pid"
+    set +e
+    wait "$wrapper_launcher"
+    set -e
+    child_gone=no
+    child_wait=0
+    while [ "$child_wait" -lt 2 ]; do
+        if ! ps -p "$child_pid" -o stat= 2>/dev/null | grep -qv '^Z'; then
+            child_gone=yes
+            break
+        fi
+        sleep 1
+        child_wait=$((child_wait + 1))
+    done
+    test "$child_gone" = yes
+}
+
+test_sourced_stop_tool_kills_exact_session_after_leader_exit() {
+    sed -n '/^stop_tool() {/,/^}/p' "$HARNESS" > "$TEST_ROOT/stop-tool-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/stop-tool-function.sh"
+    test_bin=$TEST_ROOT/stop-bin
+    mkdir -p "$test_bin"
+    printf '%s\n' '#!/bin/sh' 'test "$1" = --foreground' 'shift 2' 'exec "$@"' > "$test_bin/timeout"
+    printf '%s\n' '#!/bin/sh' 'sleep 60' > "$test_bin/sudo"
+    chmod +x "$test_bin/timeout" "$test_bin/sudo"
+    run=$TEST_ROOT/stop-run
+    mkdir -p "$run"
+    STATE=$run/state
+    TOOL_PID_FILE=$run/pid
+    TOOL_PGID_FILE=$run/pgid
+    TOOL_SID_FILE=$run/sid
+    TOOL_LAUNCH_PID_FILE=$run/launch
+    TOOL_LOCK_FILE=$run/lock
+    RUN_SHARED=$run
+    XML=stop-tool-exact.xml
+    trex_ssh() { sh -c "$1"; }
+    printf '%s\n' 'tool_started now' > "$STATE"
+    PATH="$test_bin:$PATH" setsid sh "$WRAPPER" "$STATE" "$run/log" "$XML" \
+        "$TOOL_PID_FILE" "$TOOL_PGID_FILE" "$TOOL_LOCK_FILE" '' \
+        "$TOOL_SID_FILE" >/dev/null 2>&1 &
+    launch=$!
+    printf '%s\n' "$launch" > "$TOOL_LAUNCH_PID_FILE"
+    sleep 1
+    wrapper_pid=$(cat "$TOOL_PID_FILE")
+    child_pid=$(pgrep -P "$wrapper_pid" | head -n 1)
+    # Simulate the observed leader-loss case; the session child retains the
+    # exact XML token that stop_tool uses as its ownership proof.
+    kill -TERM "$wrapper_pid"
+    stop_tool
+    set +e
+    wait "$launch" 2>/dev/null
+    set -e
+    ! ps -p "$child_pid" -o stat= 2>/dev/null | grep -qv '^Z'
+}
+
 test_supervisor_fake_rollback() {
     run=$TEST_ROOT/supervisor
     mkdir -p "$run"
@@ -194,6 +274,7 @@ test_supervisor_rolls_back_failed_candidate() {
     rollback_sha=$(sha256sum "$rescue" | cut -d' ' -f1)
     printf '%s\n' 'flash_rc=1 candidate-partial' > "$run/candidate.state"
     fake_wrapper=$run/fake-wrapper
+    # shellcheck disable=SC2016 # fake script must expand $1 when it runs
     printf '%s\n' '#!/bin/sh' 'printf "flash_rc=0 fake\\n" > "$1"' > "$fake_wrapper"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "$run/bin/ssh"
     printf '%s\n' '#!/bin/sh' 'printf "link/ether 42:00:15:19:82:00\\n"' > "$run/bin/ip"
@@ -234,8 +315,10 @@ test_harness_waits_for_nonterminal_supervisor_states() {
     printf '%s\n' 'supervisor_waiting_candidate now' > "$state_file"
     (sleep 1; printf '%s\n' 'supervisor_rollback_armed now' > "$state_file"; sleep 1; printf '%s\n' 'supervisor_rollback_succeeded_rescue_verified now' > "$state_file") &
     SUPERVISOR_STATE=$state_file
+    # shellcheck disable=SC2034 # consumed by the sourced function
     SUPERVISOR_UNIT=unused
     SUPERVISOR_KEEP=yes
+    # shellcheck disable=SC2329 # called by the sourced wait function
     trex_ssh() { cat "$SUPERVISOR_STATE"; }
     wait_supervisor_rollback
     test "$SUPERVISOR_KEEP" = no
@@ -252,19 +335,33 @@ test_local_exit_preserves_active_supervisor() {
     stop_log=$TEST_ROOT/term-stop.log
     trex_ssh() { printf '%s\n' "$*" >> "$stop_log"; return 1; }
     stop_capture
-    ! grep -Fq 'systemctl --user stop' "$stop_log"
-    ! grep -Fq 'kill' "$stop_log"
+    if grep -Fq 'systemctl --user stop' "$stop_log"; then
+        echo 'active supervisor was stopped' >&2
+        return 1
+    fi
+    if grep -Fq 'kill' "$stop_log"; then
+        echo 'active supervisor child was killed' >&2
+        return 1
+    fi
 }
 
 test_supervisor_is_trex_owned_and_bounded() {
     grep -Fq 'systemd-run --user --unit=' "$HARNESS"
     grep -Fq 'p22-proof-supervisor.sh' "$HARNESS"
+    # shellcheck disable=SC2016 # matching literal shell source
     grep -Fq 'FLASH_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-flash-writer.lock' "$HARNESS"
+    # shellcheck disable=SC2016 # matching literal shell source
     grep -Fq 'TRANSACTION_LOCK_FILE=$TREX_CAPTURE_ROOT/.p22-transaction.lock' "$HARNESS"
-    ! grep -Fq 'flash-attempt-$attempt_tag.lock' "$HARNESS"
+    # shellcheck disable=SC2016 # matching literal shell source
+    if grep -Fq 'flash-attempt-$attempt_tag.lock' "$HARNESS"; then
+        echo 'per-attempt writer lock returned' >&2
+        return 1
+    fi
     grep -Fq 'transaction_policy=observe-always-rollback' "$ROOT/research/p22-unattended-recovery-power-preflight-v1.manifest"
+    # shellcheck disable=SC2016 # matching literal shell source
     grep -Fq 'LIFETIME=${3:-900}' "$ROOT/research/p22-trex-transaction-holder.sh"
     grep -Fq 'SUPERVISOR_KEEP=yes' "$HARNESS"
+    # shellcheck disable=SC2016 # matching literal shell source
     grep -Fq 'if [ "$SUPERVISOR_KEEP" != yes ]; then' "$HARNESS"
     grep -Fq 'supervisor_waiting_candidate' "$ROOT/research/p22-proof-supervisor.sh"
 }
@@ -317,6 +414,8 @@ test_stale_attempt_state_not_reused
 test_observe_policy_disables_persistent_execute
 test_wrapper_uses_per_attempt_pid_files
 test_wrapper_lock_rejects_duplicate
+test_wrapper_foreground_process_tree
+test_sourced_stop_tool_kills_exact_session_after_leader_exit
 test_supervisor_fake_rollback
 test_supervisor_rolls_back_failed_candidate
 test_supervisor_records_unexpected_exit

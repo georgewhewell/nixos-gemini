@@ -28,6 +28,7 @@ write_state() {
     esac
 }
 
+# shellcheck disable=SC2329 # invoked by the EXIT trap below
 on_exit() {
     rc=$?
     trap - EXIT
@@ -89,9 +90,10 @@ write_state supervisor_rollback_armed
 rm -f "$ROLLBACK_STATE"
 pid_file=$RUN_SHARED/supervisor-rollback.pid
 pgid_file=$RUN_SHARED/supervisor-rollback.pgid
+sid_file=$RUN_SHARED/supervisor-rollback.sid
 setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
-    "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" \
-    </dev/null > "$ROLLBACK_LOG" 2>&1 &
+    "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
+    </dev/null >/dev/null 2>&1 &
 launch_pid=$!
 deadline=$(( $(date +%s) + 300 ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -114,8 +116,15 @@ done
 # that exact group on timeout; never use a broad process-name kill.
 pid=$(cat "$pid_file" 2>/dev/null || true)
 pgid=$(cat "$pgid_file" 2>/dev/null || true)
-if [ "$pid" = "$launch_pid" ] && [ "$pgid" = "$pid" ] && [ "$pid" -gt 1 ]; then
-    kill -KILL "-$pgid" 2>/dev/null || true
+sid=$(cat "$sid_file" 2>/dev/null || true)
+if [ "$pid" = "$launch_pid" ] && [ "$sid" = "$pid" ] && [ "$pid" -gt 1 ]; then
+    if [ "$pgid" = "$pid" ]; then
+        kill -KILL "-$pgid" 2>/dev/null || true
+    else
+        ps -eo pid=,sid= | awk -v sid="$sid" -v self="$pid" '$2 == sid && $1 != self {print $1}' |
+            while read -r child; do kill -KILL "$child" 2>/dev/null || true; done
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
 fi
 write_state supervisor_rollback_timeout
 exit 1
