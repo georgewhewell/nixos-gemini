@@ -63,6 +63,22 @@ trex_ssh() {
         -o ServerAliveCountMax=2 trex "$@"
 }
 
+candidate_hostkey_allowed() {
+    # The runner has no per-harness marker path, so prove the physical identity
+    # directly before allowing the candidate's per-boot host key.  This check
+    # is read-only and is never used for preflight or Stage-A rollback.
+    trex_ssh 'lsusb -d 0525:a4a2 >/dev/null 2>&1 && ip -o link show | grep -Eq "link/ether 42:00:15:19:82:00 "'
+}
+
+candidate_device_ssh() {
+    candidate_hostkey_allowed || return 1
+    timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+        -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
+}
+
 check_tool_idle() {
     # shellcheck disable=SC2016
     trex_ssh 'ps -eo comm=,args= | awk '\''$1 != "awk" && ($1 == "flash_tool" || $0 ~ /\/flash-wrapper.sh( |$)/) {found=1} END {exit found}'\'''
@@ -71,7 +87,12 @@ check_tool_idle() {
 check_partitions() {
     expected=$1
     label=$2
-    device_ssh "set -eu
+    if [ "$expected" = "$CANDIDATE_SHA" ]; then
+        check_ssh=candidate_device_ssh
+    else
+        check_ssh=device_ssh
+    fi
+    "$check_ssh" "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $expected
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
 test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
