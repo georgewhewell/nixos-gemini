@@ -560,6 +560,36 @@
       deviceActivationOverlay = true;
     };
 
+    # Cycle 18 full-NixOS baseline candidate. Keep the accepted Stage-2/eMMC
+    # lineage, both USB paths, BQ observer and watchdog self-accept intact.
+    # The DSI gate is released by the corresponding Stage-1 constructor only
+    # after watchdog ownership is established. Touchscreen and FGADC are
+    # explicit independent components; MicroSD is deliberately absent.
+    mainlineP22Baseline = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+    };
+
     # Manual-only headphone DPCM exercise over the existing fully observable
     # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
     # never invokes it: an operator must explicitly run
@@ -669,16 +699,18 @@
 
     mainlineNixos = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
-      # Extend the accepted d69 full platform with its reviewed native input
-      # overlays. Stage 1/2 only record read-only input/I2C/thermal metadata.
-      kernel = mainlineUnattendedRecoveryInputObserve.kernel;
-      serviceabilityDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
+      # Cycle 18's full Stage-2/eMMC substrate with explicit active display,
+      # NT36772 and FGADC components. The profile cannot pull MicroSD from the
+      # retired all-or-nothing device-activation overlay.
+      kernel = mainlineP22Baseline.kernel;
+      serviceabilityDtb = mainlineP22Baseline.serviceabilityDtb;
       squashfs = mainlineNixosSquashfs;
       nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
       authorizedKeys = ./nixos/authorized_keys;
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
       inputDiagnostics = true;
+      displayActivation = true;
       provisionStore = true;
       # Cycle 7 proved the RTL8156 Stage1 path but the one-time 100,421,632-byte
       # p29 install still exceeded 230 seconds.  Give the complete write,
@@ -1038,12 +1070,14 @@
       mainlineStorageSshBundle = mainlineStorageSsh.bundle;
       mainlineRootfsProbeInitramfs = mainlineRootfsProbe.probeInitramfs;
       mainlineRootfsProbeBundle = mainlineRootfsProbe.bundle;
-      mainlineNixosKernel = mainlineUnattendedRecoveryInputObserve.kernel;
-      mainlineNixosDtb = mainlineUnattendedRecoveryInputObserve.serviceabilityDtb;
+      mainlineNixosKernel = mainlineP22Baseline.kernel;
+      mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
+      mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
