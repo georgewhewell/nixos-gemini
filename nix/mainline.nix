@@ -14,6 +14,7 @@
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
+  audioHeadphoneTest ? false,
   powerObserveOverlay ? false,
   powerObservePreflight ? false,
   unattendedRecovery ? false,
@@ -88,6 +89,10 @@
     if audioOverlay
     then "mt6797-mt6351-enumeration-only-v1"
     else "none";
+  audioHeadphoneTestLabel =
+    if audioHeadphoneTest
+    then "manual-dpcm-headphone-440hz-750ms-restoring-v1"
+    else "none";
   powerObserveLabel =
     if powerObserveOverlay
     then "bq2589x-i2c0-no-write-no-irq-v1"
@@ -128,6 +133,7 @@
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
+    + lib.optionalString audioHeadphoneTest "-audio-headphone-test"
     + lib.optionalString powerObserveOverlay "-power-observe"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
@@ -154,6 +160,15 @@
     assert
       (!displayOverlay && !audioOverlay)
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
+    assert
+      !audioHeadphoneTest
+      || (
+        platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && sshAccess
+        && !consysIdentityOverlay
+      );
     assert
       !powerObserveOverlay
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
@@ -848,6 +863,37 @@
       }${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
+  # This is deliberately a small standalone ALSA-UAPI client, not a partial
+  # userspace audio stack.  Its source only opens the named MT6797/MT6351 card,
+  # changes the four hardware-proven headphone DPCM controls temporarily, and
+  # restores them before exit.  Keeping it static avoids adding a dynamic
+  # loader or libasound to the diagnostic initramfs.
+  audioHeadphoneExercise = crossPkgs.pkgsStatic.stdenv.mkDerivation {
+    pname = "gemini-audio-headphone";
+    version = "1";
+    src = ./gemini-audio-headphone.c;
+    dontUnpack = true;
+    dontPatchELF = true;
+    hardeningDisable = ["all"];
+    nativeBuildInputs = [buildPkgs.binutils];
+    buildPhase = ''
+      runHook preBuild
+      "$CC" -std=c11 -Wall -Wextra -Werror -Wpedantic -O2 -static \
+        "$src" -o gemini-audio-headphone
+      runHook postBuild
+    '';
+    installPhase = ''
+      runHook preInstall
+      install -Dm0755 gemini-audio-headphone "$out/bin/gemini-audio-headphone"
+      readelf -h "$out/bin/gemini-audio-headphone" | \
+        grep -Fq 'Machine:                           AArch64'
+      ! readelf -l "$out/bin/gemini-audio-headphone" | \
+        grep -Fq 'Requesting program interpreter'
+      ! readelf -d "$out/bin/gemini-audio-headphone" | grep -Fq '(NEEDED)'
+      runHook postInstall
+    '';
+  };
+
   # This is intentionally smaller and less privileged than a NixOS stage 1.
   # The baseline has no storage drivers at all.  The storage variant adds only
   # ixoo's already hardware-passed 25 MHz eMMC enumeration fragment: userspace
@@ -857,9 +903,12 @@
   probeInitramfs =
     buildPkgs.runCommand "gemini-ixoo-probe-initramfs${variantSuffix}.cpio.gz" (
       {
-        nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
+        nativeBuildInputs = [buildPkgs.binutils buildPkgs.cpio buildPkgs.gzip];
         busybox = crossPkgs.pkgsStatic.busybox;
         rtlFirmware = buildPkgs.linux-firmware;
+      }
+      // lib.optionalAttrs audioHeadphoneTest {
+        inherit audioHeadphoneExercise;
       }
       // lib.optionalAttrs sshAccess {
         dropbear = crossPkgs.pkgsStatic.dropbear;
@@ -875,6 +924,15 @@
           5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
       ''}
       cp "$busybox/bin/busybox" root/bin/busybox
+      ${lib.optionalString audioHeadphoneTest ''
+        cp "$audioHeadphoneExercise/bin/gemini-audio-headphone" \
+          root/bin/gemini-audio-headphone
+        readelf -h root/bin/gemini-audio-headphone | \
+          grep -Fq 'Machine:                           AArch64'
+        ! readelf -l root/bin/gemini-audio-headphone | \
+          grep -Fq 'Requesting program interpreter'
+        ! readelf -d root/bin/gemini-audio-headphone | grep -Fq '(NEEDED)'
+      ''}
       ${lib.optionalString powerObservePreflight ''
         cp ${./bq2589x-preflight.sh} root/bin/bq2589x-preflight
         chmod 0755 root/bin/bq2589x-preflight
@@ -1355,6 +1413,10 @@
     ln -s ${probeInitramfs} "$out/probe-initramfs.cpio.gz"
     ln -s ${probeBootImg} "$out/probe-raw.boot.img"
     ln -s ${probeBoot2Img} "$out/probe-padded-boot2.img"
+    ${lib.optionalString audioHeadphoneTest ''
+      ln -s ${audioHeadphoneExercise}/bin/gemini-audio-headphone \
+        "$out/gemini-audio-headphone"
+    ''}
     ${lib.optionalString unattendedRecovery ''
       ln -s ${probeBoot2Img} "$out/boot-padded-p22.img"
     ''}
@@ -1372,6 +1434,7 @@
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"
+      echo "nix-audio-headphone-test=${audioHeadphoneTestLabel}"
       echo "nix-power-observe=${powerObserveLabel}"
       echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
       echo "nix-input-observe=${inputObserveLabel}"
@@ -1454,9 +1517,12 @@
         ${probeInitramfs} \
         ${probeBootImg} \
         ${probeBoot2Img}
+      ${lib.optionalString audioHeadphoneTest ''
+        sha256sum ${audioHeadphoneExercise}/bin/gemini-audio-headphone
+      ''}
       stat -c '%n size=%s' ${probeBootImg} ${probeBoot2Img}
       } > "$out/MANIFEST"
   '';
 in {
-  inherit kernel serviceabilityDtb probeInitramfs probeBootImg probeBoot2Img bundle;
+  inherit audioHeadphoneExercise kernel serviceabilityDtb probeInitramfs probeBootImg probeBoot2Img bundle;
 }

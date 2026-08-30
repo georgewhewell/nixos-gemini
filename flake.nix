@@ -553,6 +553,35 @@
       deviceActivationOverlay = true;
     };
 
+    # Manual-only headphone DPCM exercise over the existing fully observable
+    # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
+    # never invokes it: an operator must explicitly run
+    # /bin/gemini-audio-headphone after confirming the target card.
+    mainlineUnattendedRecoveryDeviceActivationAudioHeadphone = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      audioHeadphoneTest = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      deviceActivationOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -1031,6 +1060,9 @@
       mainlineUnattendedRecoveryDeviceActivationDtb = mainlineUnattendedRecoveryDeviceActivation.serviceabilityDtb;
       mainlineUnattendedRecoveryDeviceActivationInitramfs = mainlineUnattendedRecoveryDeviceActivation.probeInitramfs;
       mainlineUnattendedRecoveryDeviceActivationBundle = mainlineUnattendedRecoveryDeviceActivation.bundle;
+      mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneHelper = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.audioHeadphoneExercise;
+      mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneInitramfs = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.probeInitramfs;
+      mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneBundle = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
