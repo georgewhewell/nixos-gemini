@@ -9,6 +9,7 @@
   authorizedKeys,
   bq2589xPreflight,
   unattendedRecovery ? false,
+  provisionStore ? false,
 }: let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists.  Derive the p29 filename from the immutable Nix store path so a
@@ -100,6 +101,85 @@
       while :; do sleep 3600; done
     }
 
+    restore_store_readonly() {
+      sync
+      attempt=0
+      while awk '$2 == "/mnt/gemian" { found=1 } END { exit !found }' /proc/mounts; do
+        umount /mnt/gemian 2>/dev/null && break
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 10 ] || return 1
+        sleep 1
+      done
+      mount -t ext4 -o ro,noload,nosuid,nodev,noexec \
+        /dev/mmcblk0p29 /mnt/gemian || return 1
+      mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
+      case ",$mounted," in
+        *,/dev/mmcblk0p29:ext4:ro,*) return 0 ;;
+        *) return 1 ;;
+      esac
+    }
+
+    provision_abort() {
+      reason=$1
+      if restore_store_readonly; then
+        fail "$reason p29=restored-ro,noload"
+      fi
+      fail "$reason p29=readonly-restore-failed"
+    }
+
+    provision_store() {
+      store_temp=$store_image.provision.tmp
+
+      # The normal boot path never writes p29.  First provisioning must load
+      # ext4's journal, so unmount the read-only/noload view and mount it rw
+      # normally.  Never remount the noload superblock writable.
+      umount /mnt/gemian || fail "store-provision-ro-unmount"
+      mount -t ext4 -o rw,nosuid,nodev,noexec \
+        /dev/mmcblk0p29 /mnt/gemian \
+        || provision_abort "store-provision-rw-mount"
+      mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
+      case ",$mounted," in
+        *,/dev/mmcblk0p29:ext4:rw,*) ;;
+        *) provision_abort "store-provision-rw-contract observed=''${mounted:-unknown}" ;;
+      esac
+      case ",$mounted," in
+        *,noload,*|*,norecovery,*)
+          provision_abort "store-provision-journal-disabled observed=$mounted" ;;
+      esac
+      [ -d /mnt/gemian/nixos ] \
+        || provision_abort "store-provision-directory-missing"
+      [ ! -e "$store_image" ] \
+        || provision_abort "store-provision-target-exists"
+
+      required="store-provision=required target=$store_image temp=$store_temp sha256=$expected size=$expected_size"
+      printf '%s\n' "$required" > /run/store-provision.required
+      log "$required"
+      attempt=0
+      while [ "$attempt" -lt 65 ]; do
+        ready=$(cat /run/store-provision.ready 2>/dev/null || true)
+        [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] && break
+        attempt=$((attempt + 1))
+        sleep 1
+      done
+      [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] \
+        || provision_abort "store-provision-timeout"
+      [ -f "$store_image" ] \
+        || provision_abort "store-provision-target-missing"
+      [ ! -L "$store_image" ] \
+        || provision_abort "store-provision-target-symlink"
+      [ "$(stat -c %s "$store_image")" -eq "$expected_size" ] \
+        || provision_abort "store-provision-size"
+      actual=$(sha256sum "$store_image" | awk '{print $1}')
+      [ "$actual" = "$expected" ] \
+        || provision_abort "store-provision-hash actual=$actual"
+
+      # Dropbear children which delivered the marker may need a moment to
+      # leave the filesystem.  The watchdog remains the bounded fallback.
+      restore_store_readonly \
+        || fail "store-provision-ro-restore-failed"
+      log "store-provision=complete sha256=$actual p29=ro,noload"
+    }
+
     start_watchdog_lease() {
       watchdog_device=
       attempt=0
@@ -171,8 +251,12 @@
     log "p29=mounted observed=''${mounted:-unknown}"
 
     store_image=/mnt/gemian/nixos/@STORE_FILE@
-    [ -f "$store_image" ] || fail "store-image-missing"
     expected=@STORE_SHA256@
+    expected_size=@STORE_SIZE@
+    if [ ! -f "$store_image" ]; then
+      @PROVISION_STORE@
+    fi
+    [ -f "$store_image" ] || fail "store-image-missing"
     actual=$(sha256sum "$store_image" | awk '{print $1}')
     [ "$actual" = "$expected" ] || fail "store-image-hash expected=$expected actual=$actual"
     log "store-image=verified sha256=$actual"
@@ -220,6 +304,12 @@
     substituteInPlace root/init \
       --replace-fail @STORE_FILE@ ${storeFileName} \
       --replace-fail @STORE_SHA256@ "$(sha256sum ${squashfs} | cut -d' ' -f1)" \
+      --replace-fail @STORE_SIZE@ "$(stat -c %s ${squashfs})" \
+      --replace-fail @PROVISION_STORE@ ${
+        if provisionStore
+        then ''"provision_store"''
+        else ''"fail \"store-image-missing\""''
+      } \
       --replace-fail @SYSTEM_BASENAME@ "$(basename ${nixosToplevel})" \
       --replace-fail @START_WATCHDOG@ ${
         if unattendedRecovery
@@ -296,6 +386,11 @@
         if unattendedRecovery
         then "stage1-to-stage2-owner-handoff; lease=90s; timeout=31s; acceptance=external"
         else "none"
+      }"
+      echo "store-provision=${
+        if provisionStore
+        then "stage1-journaled-unique-target"
+        else "disabled"
       }"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
       sha256sum \

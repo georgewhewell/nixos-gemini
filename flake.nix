@@ -576,6 +576,7 @@
       authorizedKeys = ./nixos/authorized_keys;
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
+      provisionStore = true;
     };
 
     #############################################
