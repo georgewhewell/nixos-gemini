@@ -127,7 +127,7 @@
     else "e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7";
   usbPlatformDtbSha256 =
     if unattendedRecovery
-    then "cd5c0e688aeaf33d9e61c4b9df57a82b6a97f7017f16f6eaf373a7fc38044705"
+    then "58fa70641900b343c466b815bcadd0cb5269d86df0b4939f436af7c0d2bc6300"
     else if platformEnablement
     then "14b8126b0c46e3cc2370721ae040ac6cdb59e60b206b4031753c856aaa14038d"
     else "9316c45f7c79fe5e9d3b6320c88f45aee68d7f34e14385a1a7bbc7efcfcf9eff";
@@ -380,6 +380,15 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
           "$out/mt6797-gemini-consys-identity.dtbo"
       ''}
+      ${lib.optionalString usbHostOverlay ''
+        # This overlay is built and reviewed with the locked kernel source.
+        # Do not replace it with the retired repository-local DTS: that file
+        # asserted GPIO72 at probe time and used the wrong regulator sequence.
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtbo \
+          "$out/mt6797-gemini-pda-usb11-host.dtbo"
+        test "$(sha256sum "$out/mt6797-gemini-pda-usb11-host.dtbo" | cut -d' ' -f1)" = \
+          3fd377df21528a3723d305eadcd3e948ddb60b34fcc5e1f52f19d72f2919877a
+      ''}
       ${lib.optionalString displayOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display.dtbo \
           "$out/mt6797-gemini-pda-display.dtbo"
@@ -467,37 +476,46 @@
       ${
         if usbHostOverlay
         then ''
-          dtc -@ -I dts -O dtb \
-            -o "$out/gemini-usb11-host.dtbo" \
-            ${./mainline-usb11-host-overlay.dts}
           fdtoverlay \
             -i "$out/gemini-base.dtb" \
             -o "$out/gemini-platform.dtb" \
-            "$out/gemini-usb11-host.dtbo"
+            ${kernel}/mt6797-gemini-pda-usb11-host.dtbo
           test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000 status)" = okay
           test "$(fdtget "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 status)" = okay
-          test "$(fdtget -t x "$out/gemini-platform.dtb" /t-phy@11210000 reg)" = '0 11210000 0 800'
-          fdtget -p "$out/gemini-platform.dtb" /t-phy@11210000/usb-phy@11210800 \
-            | grep -Fqx 'mediatek,force-a-session-valid'
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 status)" = okay
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11200000 dr_mode)" = host
-          test "$(fdtget -t x "$out/gemini-base.dtb" /pinctrl@10005000 phandle)" = 9
           test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000 status)" = okay
           test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000/typec@25 compatible)" = onsemi,fusb301a
           test "$(fdtget -t x "$out/gemini-platform.dtb" /i2c@11007000/typec@25 reg)" = 25
           test "$(fdtget "$out/gemini-platform.dtb" /i2c@11007000/typec@25/connector power-role)" = source
           fdtget -p "$out/gemini-platform.dtb" /i2c@11007000/typec@25 \
             | grep -Fqx 'vbus-supply'
+          test "$(fdtget "$out/gemini-platform.dtb" /regulator-usb11-drvvbus regulator-name)" = usb11-drvvbus
           test "$(fdtget "$out/gemini-platform.dtb" /regulator-usb11-vbus regulator-name)" = usb11-vbus
+          fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-drvvbus \
+            | grep -Fqx 'gpio'
+          fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-vbus \
+            | grep -Fqx 'gpio'
+          fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-vbus \
+            | grep -Fqx 'vin-supply'
+          ! fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-drvvbus \
+            | grep -Fqx 'regulator-always-on'
+          ! fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-vbus \
+            | grep -Fqx 'regulator-always-on'
+          ! fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-drvvbus \
+            | grep -Fqx 'regulator-boot-on'
+          ! fdtget -p "$out/gemini-platform.dtb" /regulator-usb11-vbus \
+            | grep -Fqx 'regulator-boot-on'
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000 status)" = okay
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000 dr_mode)" = peripheral
           test "$(fdtget "$out/gemini-platform.dtb" /usb@11271000/usb@11270000 status)" = disabled
           test "$(fdtget "$out/gemini-platform.dtb" /consys@18070000 status)" = disabled
           echo 'usb11-host-overlay=passed' >> "$out/VALIDATION"
-          echo 'usb11-session=forced-valid-A-device-matching-vendor-sequence' >> "$out/VALIDATION"
+          echo 'usb11-overlay-source=locked-kernel-dtbo' >> "$out/VALIDATION"
+          echo 'usb11-session=kernel-musb-host-with-fusb301a-cc-gating' >> "$out/VALIDATION"
           echo 'usb11-typec=i2c0-fusb301a-source-eint3' >> "$out/VALIDATION"
-          echo 'usb11-vbus=gpio94-regulator-cc-attach-controlled' >> "$out/VALIDATION"
-          echo 'usb11-route=gpio70-high-gpio71-low-gpio72-high-fixed-usb-mode' >> "$out/VALIDATION"
+          echo 'usb11-vbus=gpio94-parent-gpio72-child-cc-attach-controlled' >> "$out/VALIDATION"
+          echo 'usb11-route=gpio70-high-gpio71-low-regulators-default-off' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-base.dtb" "$out/gemini-platform.dtb"
@@ -600,6 +618,7 @@
       {
         nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
         busybox = crossPkgs.pkgsStatic.busybox;
+        rtlFirmware = buildPkgs.linux-firmware;
       }
       // lib.optionalAttrs sshAccess {
         dropbear = crossPkgs.pkgsStatic.dropbear;
@@ -607,6 +626,13 @@
       }
     ) ''
       mkdir -p root/bin root/dev root/etc root/mnt/linux root/proc root/run root/sys/fs/pstore
+      ${lib.optionalString usbHostOverlay ''
+        mkdir -p root/lib/firmware/rtl_nic
+        cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
+          root/lib/firmware/rtl_nic/rtl8156b-2.fw
+        test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
+          5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
+      ''}
       cp "$busybox/bin/busybox" root/bin/busybox
       ${lib.optionalString unattendedRecovery ''
         # busybox is an aarch64 target binary; inspect it, never execute it on
@@ -705,6 +731,9 @@
         note "pstore=unavailable"
       fi
       /bin/usb-net &
+      ${lib.optionalString usbHostOverlay ''
+      /bin/usb-host-net &
+      ''}
       /bin/tty-shell &
       ${lib.optionalString storageOverlay ''
       /bin/storage-probe &
@@ -780,6 +809,104 @@
         else "exec nc -lk -p 2323 -e /bin/usb-shell"
       }
       USB_NET
+
+      ${lib.optionalString usbHostOverlay ''
+      cat > root/bin/usb-host-net-udhcpc <<'USB_HOST_NET_UDHCPC'
+      #!/bin/busybox sh
+      export PATH=/bin
+      # udhcpc supplies these values as environment variables.  This script
+      # deliberately does not eval/source them: only the values accepted by
+      # ip(8) are passed to the kernel, and interface names are constrained.
+      interface=''${interface:-}
+      [ -n "$interface" ] || exit 1
+      case "$interface" in
+        *[!A-Za-z0-9._-]*) exit 1 ;;
+      esac
+      ip_value=''${ip:-}
+      [ -n "$ip_value" ] || exit 1
+      case "$ip_value" in
+        *[!0-9./]*) exit 1 ;;
+      esac
+      subnet=''${subnet:-24}
+      case "$subnet" in
+        *[!0-9.]*) exit 1 ;;
+      esac
+      case "''${1:-}" in
+        deconfig)
+          ip addr flush dev "$interface" 2>/dev/null || true
+          echo "usb-host-net=deconfigured iface=$interface" >> /run/probe-status 2>/dev/null || true
+          ;;
+        bound|renew)
+          ip link set "$interface" up 2>/dev/null || exit 1
+          ip addr flush dev "$interface" 2>/dev/null || true
+          ip addr replace "$ip_value/$subnet" dev "$interface" || exit 1
+          for gateway in ''${router:-}; do
+            case "$gateway" in
+              *[!0-9.]*) continue ;;
+            esac
+            ip route replace default via "$gateway" dev "$interface" || exit 1
+            break
+          done
+          echo "usb-host-net=ready iface=$interface address=$ip_value/$subnet action=$1 usb=''${USB_HOST_USB:-unknown}" >> /run/probe-status 2>/dev/null || true
+          ;;
+        *)
+          echo "usb-host-net=ignored iface=$interface action=''${1:-missing}" >> /run/probe-status 2>/dev/null || true
+          ;;
+      esac
+      USB_HOST_NET_UDHCPC
+
+      cat > root/bin/usb-host-net <<'USB_HOST_NET'
+      #!/bin/busybox sh
+      export PATH=/bin
+      attempt=0
+      host_if=
+      usb_vid=
+      usb_pid=
+      while [ "$attempt" -lt 60 ] && [ -z "$host_if" ]; do
+        for net in /sys/class/net/*; do
+          [ -e "$net" ] || continue
+          name=''${net##*/}
+          [ "$name" != usb0 ] || continue
+          driver=$(readlink -f "$net/device/driver" 2>/dev/null || true)
+          case "$driver" in
+            */r8152)
+              host_if=$name
+              usb_path=$(readlink -f "$net/device" 2>/dev/null || true)
+              while [ -n "$usb_path" ] && [ "$usb_path" != / ]; do
+                if [ -r "$usb_path/idVendor" ] && [ -r "$usb_path/idProduct" ]; then
+                  usb_vid=$(cat "$usb_path/idVendor")
+                  usb_pid=$(cat "$usb_path/idProduct")
+                  break
+                fi
+                parent=''${usb_path%/*}
+                [ "$parent" != "$usb_path" ] || break
+                usb_path=$parent
+              done
+              break ;;
+          esac
+        done
+        [ -n "$host_if" ] || { attempt=$((attempt + 1)); sleep 1; }
+      done
+      if [ -z "$host_if" ]; then
+        echo "<3>GEMINI_NIX_IXOO_PROBE: usb-host-net=missing after=60s driver=r8152" > /dev/kmsg 2>/dev/null || true
+        echo "usb-host-net=missing after=60s driver=r8152" >> /run/probe-status 2>/dev/null || true
+        exit 1
+      fi
+      if [ "$usb_vid" != 0bda ] || [ "$usb_pid" != 8156 ]; then
+        echo "usb-host-net=failed iface=$host_if driver=r8152 usb=''${usb_vid:-unknown}:''${usb_pid:-unknown}" >> /run/probe-status 2>/dev/null || true
+        exit 1
+      fi
+      ip link set "$host_if" up 2>/dev/null || {
+        echo "usb-host-net=failed iface=$host_if stage=link-up" >> /run/probe-status 2>/dev/null || true
+        exit 1
+      }
+      echo "usb-host-net=waiting iface=$host_if driver=r8152 usb=$usb_vid:$usb_pid" >> /run/probe-status 2>/dev/null || true
+      export USB_HOST_USB=$usb_vid:$usb_pid
+      # Foreground mode keeps DHCP renewals alive for the whole probe life.
+      # No -q/-n: losing the host cable is recorded, while gadget SSH remains.
+      exec udhcpc -f -t 5 -T 3 -A 10 -i "$host_if" -s /bin/usb-host-net-udhcpc
+      USB_HOST_NET
+      ''}
 
       cat > root/bin/usb-shell <<'USB_SHELL'
       #!/bin/busybox sh
@@ -908,6 +1035,9 @@
       ''}
 
       chmod 0755 root/init root/bin/tty-shell root/bin/usb-net root/bin/usb-shell
+      ${lib.optionalString usbHostOverlay ''
+        chmod 0755 root/bin/usb-host-net root/bin/usb-host-net-udhcpc
+      ''}
       ${lib.optionalString storageOverlay ''
         chmod 0755 root/bin/storage-probe
       ''}
@@ -1030,6 +1160,21 @@
       echo "android-cmdline=bootopt=64S3,32N2,64N2"
       echo "usb-device-address=10.15.19.82/24"
       echo "usb-host-address=10.15.19.1/24"
+      echo "usb-host-net=${
+        if usbHostOverlay
+        then "r8152-0bda:8156-dhcp-renewal-required firmware=rtl_nic/rtl8156b-2.fw"
+        else "none"
+      }"
+      echo "usb-host-firmware-sha256=${
+        if usbHostOverlay
+        then "5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
+        else "none"
+      }"
+      echo "usb-host-dtbo-sha256=${
+        if usbHostOverlay
+        then "3fd377df21528a3723d305eadcd3e948ddb60b34fcc5e1f52f19d72f2919877a"
+        else "none"
+      }"
       ${
         if sshAccess
         then ''

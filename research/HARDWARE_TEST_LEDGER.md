@@ -519,3 +519,51 @@ requires successful candidate watchdog validation and a captured
 does the harness write 'lease_proof_passed_recovered_stage_a'.  Candidate
 validation or lease-evidence failure returns nonzero even if Stage-A rollback
 itself succeeds.
+
+## Locked-source host-NIC watchdog candidate: build-only 2026-08-30
+
+At the hardware owner's request, a replacement watchdog-control bundle was
+cross-built without touching the device. It uses the locked `linux-gemini`
+source `1bb2a9863d9a1e6d59e513eddbec68e2866310cd` from `flake.lock`; no local
+source override was used. The old `0d99e178...` artifact and its manifest
+remain immutable. The new p22 image is:
+
+* `artifacts/mainline-unattended-recovery-watchdog-hostnet-p22/boot-padded-p22.img`,
+  16777216 bytes, SHA-256
+  `a0bc87d21227158e2e925a6f05affdfdec773a5e44e248d41f8b6684e2bd37eb`;
+  handoff `research/p22-unattended-recovery-watchdog-hostnet.manifest`.
+* Exact rollback is the accepted Stage-A p22 image
+  `1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`.
+
+The kernel-built `mt6797-gemini-pda-usb11-host.dtbo` is packaged directly and
+composed into the serviceability DT; the retired repository-local USB11 DTS
+is not used. The resulting final DT SHA-256 is
+`58fa70641900b343c466b815bcadd0cb5269d86df0b4939f436af7c0d2bc6300`.
+The DT validation proves both `regulator-usb11-drvvbus` and
+`regulator-usb11-vbus` have GPIOs and no `regulator-always-on` or
+`regulator-boot-on`; the child has `vin-supply` from the parent. Thus an
+unattached cable does not get a DT-implied VBUS assertion.
+
+The initramfs contains only the required RTL8156 firmware
+`lib/firmware/rtl_nic/rtl8156b-2.fw`, SHA-256
+`5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f`.
+`usb-host-net` waits up to 60 seconds for a non-gadget `r8152` interface,
+requires USB VID:PID `0bda:8156`, brings it up, and runs BusyBox `udhcpc`
+with a non-evaluating callback that records bound/renewed address state in
+`/run/probe-status`. The new manifest's `host_net_policy=required` accepts
+only the expected `192.168.23.70` address plus the ready marker carrying the
+driver and VID:PID; gadget SSH remains the fallback transport. Target
+BusyBox 1.37 accepts both CIDR and dotted-netmask forms for this `ip` syntax
+(the qemu read-only negative-device probe returned only `can't find device`,
+not a prefix parse error).
+
+The harness now uses one absolute acceptance deadline, waits for SSH to go
+down after dispatch, and adapts reboot dispatch between systemd and BusyBox
+`/bin/reboot -f`, recording path and return code. It retains the 90-second
+lease, 31-second watchdog expiry, exact p22 Download-Only gates, and p30/p31
+read-only invariants. `shellcheck`, `sh -n`, and the new manifest dry-run
+passed. No Flash Tool, reboot, catcher, or hardware write was performed for
+this candidate; it awaits byte-level review before any execute authorization.
+The unavoidable pre-watchdog-probe residual boundary remains documented in
+the bundle manifest: a hang before the approximately 1.07-second MTK
+watchdog probe has no guaranteed remote actuator.

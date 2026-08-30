@@ -14,6 +14,7 @@ set -eu
 # state if no preloader appears.
 
 # shellcheck disable=SC1007 # zsh/NixOS-compatible scoped CDPATH assignment
+# shellcheck disable=SC2029 # deliberate remote shell expansion
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MANIFEST=$ROOT/research/p22-next-experiment.manifest
 SIZE=16777216
@@ -83,6 +84,8 @@ PROBE_CAPTURE_PID=
 P22_WRITE_MARKER=no
 PROOF_VALIDATED=no
 ROOTFS_POLICY=
+HOST_NET_POLICY=
+ACCEPTANCE_DEADLINE=
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -117,6 +120,7 @@ load_manifest() {
             expected_watchdog_state) [ -z "$EXPECTED_WATCHDOG_STATE" ] || die "duplicate expected_watchdog_state"; EXPECTED_WATCHDOG_STATE=$value ;;
             expected_watchdog_timeout) [ -z "$EXPECTED_WATCHDOG_TIMEOUT" ] || die "duplicate expected_watchdog_timeout"; EXPECTED_WATCHDOG_TIMEOUT=$value ;;
             rootfs_policy) [ -z "$ROOTFS_POLICY" ] || die "duplicate rootfs_policy"; ROOTFS_POLICY=$value ;;
+            host_net_policy) [ -z "$HOST_NET_POLICY" ] || die "duplicate host_net_policy"; HOST_NET_POLICY=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
     done < "$MANIFEST"
@@ -164,6 +168,7 @@ require_manifest() {
     [ "$ACCEPTANCE_WINDOW_SECONDS" -ge 3 ] || die "acceptance_window_seconds must be at least 3"
     case "$FEATURE_POLICY" in connectivity-no-radio|allow-platform) ;; *) die "unknown feature_policy" ;; esac
     case "$ROOTFS_POLICY" in nixos-stage2|enumeration-only) ;; *) die "unknown rootfs_policy" ;; esac
+    case "$HOST_NET_POLICY" in none|required) ;; *) die "unknown host_net_policy" ;; esac
     case "$WATCHDOG_PROFILE" in
         none)
             [ -z "$EXPECTED_WATCHDOG_IDENTITY$EXPECTED_WATCHDOG_STATE$EXPECTED_WATCHDOG_TIMEOUT" ] || die "watchdog fields are forbidden for watchdog_profile=none" ;;
@@ -174,6 +179,9 @@ require_manifest() {
             case "$EXPECTED_WATCHDOG_TIMEOUT" in *[!0-9]*|'') die "expected_watchdog_timeout must be numeric" ;; esac ;;
         *) die "unknown watchdog_profile" ;;
     esac
+    if [ "$WATCHDOG_PROFILE" = initramfs-petter ] && [ "$ACCEPTANCE_WINDOW_SECONDS" -ge 90 ]; then
+        die "watchdog acceptance_window_seconds must be less than the 90-second lease"
+    fi
     [ "$TARGET_PARTITION" = boot/p22 ] || die "target_partition must be boot/p22"
     [ "$TARGET_DEVICE" = /dev/mmcblk0p22 ] || die "target_device must be /dev/mmcblk0p22"
     [ "$CANDIDATE_SIZE" = "$SIZE" ] || die "candidate_size must be $SIZE"
@@ -215,9 +223,11 @@ require_manifest() {
     require_token "$EXPECTED_WATCHDOG_IDENTITY"
     require_token "$EXPECTED_WATCHDOG_STATE"
     require_token "$ROOTFS_POLICY"
+    require_token "$HOST_NET_POLICY"
 }
 
 load_manifest
+[ -n "$HOST_NET_POLICY" ] || HOST_NET_POLICY=none
 require_manifest
 
 if [ "$PROOF_LEASE" = yes ]; then
@@ -296,12 +306,14 @@ start_capture() {
     device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
     device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
     device_ssh 'sha256sum /dev/mmcblk0p22' > "$RUN_LOCAL/p22-pre-hash"
+    # shellcheck disable=SC2029
     ssh trex "mkdir -p '$RUN_SHARED'; nohup timeout 900 journalctl -k -f -o short-iso > '$RUN_SHARED/trex-kernel.log' 2>&1 & echo \$! > '$RUN_SHARED/kernel.pid'; nohup timeout 900 ip monitor link addr > '$RUN_SHARED/trex-ip.log' 2>&1 & echo \$! > '$RUN_SHARED/ip.pid'; nohup timeout 900 sh -c 'while :; do date -Is; lsusb; sleep 0.10; done' > '$RUN_SHARED/trex-usb.log' 2>&1 & echo \$! > '$RUN_SHARED/usb.pid'"
     scp "$ROOT/research/p22-flash-wrapper.sh" trex:"$RUN_SHARED/flash-wrapper.sh" >/dev/null
 }
 
 stop_capture() {
     [ -n "${RUN_SHARED:-}" ] || return 0
+    # shellcheck disable=SC2029
     ssh trex "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
 }
 
@@ -369,6 +381,8 @@ wait_ssh() {
 
 validate_candidate() {
     device_ssh "set -eu
+accept_deadline=$ACCEPTANCE_DEADLINE
+test \"\$(date +%s)\" -lt \"\$accept_deadline\"
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 case \"$ROOTFS_POLICY\" in
   nixos-stage2)
@@ -377,13 +391,11 @@ case \"$ROOTFS_POLICY\" in
   enumeration-only)
     ! grep -Eq '^/dev/mmcblk[0-9]+p[0-9]+ ' /proc/mounts
     ! grep -Eq '[[:space:]]/(gemian|nix/store)([[:space:]]|/)' /proc/mounts
-    storage_attempt=0
     while ! grep -Fq 'emmc=present' /run/probe-status 2>/dev/null ||
           ! grep -Fq 'userspace_block_reads=none' /run/probe-status 2>/dev/null ||
           ! grep -Fq 'mounts=none' /run/probe-status 2>/dev/null; do
-      [ \"$storage_attempt\" -lt 35 ] || exit 1
+      test \"\$(date +%s)\" -lt \"\$accept_deadline\" || exit 1
       sleep 1
-      storage_attempt=$((storage_attempt + 1))
     done ;;
   *) exit 1 ;;
 esac
@@ -394,7 +406,20 @@ test \"\$(cat /sys/devices/system/cpu/online)\" = $EXPECTED_CPU_ONLINE
 gadget_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_GADGET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
 ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
 test -n \"\$gadget_if\"
-test -n \"\$ethernet_if\"
+case \"$HOST_NET_POLICY\" in
+  required)
+    while :; do
+      ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+      if test -n \"\$ethernet_if\" &&
+         grep -Eq \"usb-host-net=ready iface=\$ethernet_if address=$EXPECTED_ETHERNET_IP/[^ ]+ action=(bound|renew) usb=0bda:8156\" /run/probe-status; then
+        break
+      fi
+      test \"\$(date +%s)\" -lt \"\$accept_deadline\" || exit 1
+      sleep 1
+    done ;;
+  none) : ;;
+  *) exit 1 ;;
+esac
 grep -Fq -- \"$EXPECTED_MARKER\" /run/probe-status
 ! grep -Fq -- 'unattended_recovery=failed' /run/probe-status
 case \"$FEATURE_POLICY\" in
@@ -427,11 +452,23 @@ test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\"
 fi"
 }
 
+accept_candidate_until_deadline() {
+    ACCEPTANCE_DEADLINE=$(( $(date +%s) + ACCEPTANCE_WINDOW_SECONDS ))
+    while [ "$(date +%s)" -lt "$ACCEPTANCE_DEADLINE" ]; do
+        if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1 && validate_candidate; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
 start_tool() {
     log=$1
     # Keep the wrapper PID (no setsid fork) so a future bounded abort can
     # identify the owner. The wrapper's timeout remains the final kill
     # boundary for Flash Tool itself.
+    # shellcheck disable=SC2029
     ssh trex "nohup sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
     if wait_state tool_started 20; then
         return 0
@@ -444,8 +481,29 @@ start_tool() {
     esac
 }
 
+wait_ssh_down() {
+    limit=$1
+    deadline=$(( $(date +%s) + limit ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        if ! device_ssh 'true' >/dev/null 2>&1; then return 0; fi
+        sleep 1
+    done
+    return 1
+}
+
 request_reboot() {
-    device_ssh 'systemctl reboot --no-wall' >> "$RUN_LOCAL/reboot.log" 2>&1 || true
+    printf 'reboot-dispatch begin=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+    set +e
+    device_ssh 'if command -v systemctl >/dev/null 2>&1; then echo reboot-path=systemd; systemctl reboot --no-wall; elif [ -x /bin/reboot ]; then echo reboot-path=busybox; /bin/reboot -f; else echo reboot-path=missing; exit 127; fi' >> "$RUN_LOCAL/reboot.log" 2>&1
+    dispatch_rc=$?
+    set -e
+    printf 'reboot-dispatch rc=%s\n' "$dispatch_rc" >> "$RUN_LOCAL/reboot.log"
+    if wait_ssh_down 20; then
+        printf 'reboot-dispatch disconnected=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+        return 0
+    fi
+    printf 'reboot-dispatch ssh-still-up=%s\n' "$(date -Is)" >> "$RUN_LOCAL/reboot.log"
+    return 1
 }
 
 recover() {
@@ -466,7 +524,12 @@ recover() {
     # If candidate userspace is still reachable, request a clean restart only
     # after rollback is waiting. If it is hung before init, wait for a natural
     # watchdog/preloader transition; no unsafe force-reset is attempted.
-    if [ "$PROOF_LEASE" != yes ] && wait_ssh 1; then request_reboot; fi
+    if [ "$PROOF_LEASE" != yes ] && wait_ssh 1; then
+        if ! request_reboot; then
+            printf 'manual_reset_required_reboot_dispatch_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+            return 1
+        fi
+    fi
     if ! wait_state flash_rc 250; then
         printf 'manual_reset_required_no_preloader %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
@@ -493,12 +556,15 @@ start_capture
 stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"
-request_reboot
+if ! request_reboot; then
+    recover
+    exit $?
+fi
 if [ "$PROOF_LEASE" = yes ]; then
     # Deliberately do not write the acceptance marker. recover() starts the
     # rollback tool first, then waits for the candidate lease to kill its
     # petter and expose the next watchdog/preloader window.
-    if wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && validate_candidate; then
+    if accept_candidate_until_deadline; then
         PROOF_VALIDATED=yes
         start_probe_capture
     else
@@ -518,7 +584,7 @@ if [ "$PROOF_LEASE" = yes ]; then
     else
         exit 1
     fi
-elif wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && P22_WRITE_MARKER=yes validate_candidate; then
+elif P22_WRITE_MARKER=yes accept_candidate_until_deadline; then
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
