@@ -1,0 +1,42 @@
+# Cycle 12 display-regression bisect.  The MT6797 MMSYS clock provider is
+# built and its on-demand controller is present, while every display, DSI,
+# SMI, and LARB consumer remains disabled.  Audio, thermal/Hall, BQ status,
+# keyboard observation, both USB network paths, and watchdog recovery remain.
+# This distinguishes provider registration from display-consumer activation.
+# Linux source: b1de7d56dedb72d970d33582bb37876629b9deca.
+# Image=3e3f94fea3de611f44df44d24d9db50a14c98c68b17a4535e9a7cde2cedbe343
+# Image.gz=8eea91fa8906e832ed96cc25a26caea3722444ce4a76f450437f686937cc105e
+# initramfs=31e331fa7cee16297e9f3ce1ede3ede7cb3c2b4ae444c7eba8042580d9eab890
+# DT=c99bc25d1006c5aae3b935bbb1e5f5927f6bb912010ed4a531336b385c6ee882
+candidate=/mnt/Home/src/nixos-gemini-cycle12-mmsys-provider-only-artifacts/boot-padded-p22.img
+candidate_sha256=53d9b040c207dd6654ecabb5fe72e332634d502aa95028ca3a5eace41f312e5a
+candidate_size=16777216
+rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
+rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=unattended_recovery=healthy
+feature_policy=allow-platform
+acceptance_window_seconds=80
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31
+rootfs_policy=enumeration-only
+host_net_policy=required
+ssh_path_policy=both
+power_preflight_policy=required
+transaction_policy=observe-always-rollback
