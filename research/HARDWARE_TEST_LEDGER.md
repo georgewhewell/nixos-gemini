@@ -1,0 +1,216 @@
+# Gemini hardware test ledger
+
+This is a handoff checklist and live-state record for hardware flashing.  It
+does not approve a candidate, a target, or any write.  Only the campaign owner
+may provide those explicitly.
+
+## Observed baseline: 2026-08-30
+
+Host time is authoritative; the Gemini RTC reported 2023-02-15 and must not be
+used to timestamp a test.
+
+| Item | Observed value |
+|---|---|
+| Host path | workstation `ssh -J trex -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes root@10.15.19.82` |
+| Left USB gadget | high-speed `0525:a4a2`, `gemini-pda-mainline` / `Gemini-L-DA921x-Bind`, serial `GEMINI_DA921X_BIND_20260729`; host driver `cdc_ether` |
+| USB network | Gemini `usb0` `10.15.19.82/24`; trex `enp232s0f4u2` `10.15.19.81/24`, host MAC `42:00:15:19:82:00` |
+| SSH | OpenSSH 9.6 listening on all IPv4 addresses; key-only root login works through `trex` |
+| Right-port network | `enu1` UP, `192.168.23.70/24` |
+| Running system | NixOS 23.05, Linux `7.1.3-gemini-da921x-lkro`, GCC 12.2.0 / binutils 2.40 |
+| Root/store | p29 mounted read-only with `norecovery`; loop-mounted SquashFS hash `1aec7ab82d592e49da6e8c916d36cda097467855fdbd90a76b4d942a0b2a1da3` |
+| p22 / `boot` | `/dev/mmcblk0p22`, 16 MiB, SHA-256 `08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3` |
+| p30 / `boot2` | `/dev/mmcblk0p30`, 16 MiB, SHA-256 `122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159` |
+| p31 / `boot3` | `/dev/mmcblk0p31`, 16 MiB, SHA-256 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513` |
+| Persistent failure evidence | pstore mounted read-only; device dmesg and persistent journal are available (the independent recheck found a retained `console-ramoops-0` record) |
+
+The p22 hash and stage-1 store hash match the locally retained
+`artifacts/mainline-nixos-connectivity-m0/MANIFEST`; its kernel image hash is
+`782091be243b37b12f0b8f0991629ff18dfdfd6862a4fbd2c34bde1678ddfbc7`.
+Together with the distinct p30 and p31 hashes, this proves the observed running
+image is p22.  It does not make p22 an experimental target.
+
+## Independent recheck: 2026-08-30 02:30--02:41 CEST
+
+This read-only recheck was performed by the hardware-test owner.  Host time is
+authoritative; the device RTC was `2023-02-15T20:40:42+00:00`.
+
+| Item | Independently observed value |
+|---|---|
+| Host path | Workstation reached `10.15.19.82` through `trex`; `trex` had `enp232s0f4u2` UP at `10.15.19.81/24`, MAC `42:00:15:19:82:00`; key-only SSH succeeded with the documented jump command |
+| Host USB observation | `trex lsusb` currently shows `0525:a4a2` Linux-USB Ethernet/RNDIS Gadget; workstation USB logs retain the 2026-08-29 high-speed enumeration/disconnect/reconnect sequence for `0e8d:2000` preloader, `0525:a4a2` gadget, and failed `0e8d:20ff` tethering identity |
+| Running system | `gemini-mainline-nixos`; NixOS 23.05; Linux `7.1.3-gemini-da921x-lkro`; GCC 12.2.0 / binutils 2.40 |
+| Device identity | model `MT6797X`; compatible `planet,gemini-pda mediatek,mt6797`; online CPUs `0-7`, offline `8-9` |
+| Cmdline identity | `console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 ... rdinit=/init ... initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm`; gadget addresses `42:00:15:19:82:01` / `42:00:15:19:82:00` and serial `GEMINI_DA921X_BIND_20260729` |
+| Network/SSH | `usb0` `10.15.19.82/24`; `enu1` `192.168.23.70/24`; `0.0.0.0:22` listening; SSH source observed as `10.15.19.81` |
+| Root/store | `/dev/mmcblk0p29` mounted `/gemian` read-only with `norecovery`; `/dev/loop0` mounted `/nix/store` read-only SquashFS; `/sys/fs/pstore` mounted read-only |
+| Boot targets | Live GPT labels resolve `boot -> /dev/mmcblk0p22`, `boot2 -> /dev/mmcblk0p30`, `boot3 -> /dev/mmcblk0p31`; each reports 32768 sectors / 16777216 bytes and none appears in `/proc/mounts` |
+| Boot hashes | p22 `08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3`; p30 `122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`; p31 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513` |
+| pstore | `console-ramoops-0` exists, 65524 bytes, SHA-256 `1daf7da673a9ead3301f67e8c8bf074abe5c38dda84e85e8844abc5255339971`; its tail records an earlier orderly reboot, so pstore is not empty and must be captured before any failure reboot |
+| Boot progress | `/gemian/nixos-boot.log` exists (272 bytes) and records persistent-partition mount, NixOS store discovery/mount, and stage-2 switch |
+
+The observed p30 hash is the current live value and agrees with the current
+mainline bundle identity.  Older narrative text in `research/BOOT_PROBE.md`
+describes a prior failed p30 image (`d25799…`); that historical hash is not
+evidence about the current device and must not be used for a write or restore.
+The current trex USB path is live; the workstation itself does not currently
+have a Gemini USB interface, so future flash observation must be armed on trex
+and the workstation/jump route must be rechecked immediately before power
+changes.
+
+## Gate before any write
+
+1. Record the review handoff: candidate path, expected SHA-256, exact byte
+   size, intended partition label, purpose, and explicit authorization.  Stop
+   if any item is absent or mismatches the bundle manifest.
+2. Re-hash and size-check the local candidate.  Confirm Android header/layout
+   and padding are appropriate for its target; a p30 candidate must be at most
+   16 MiB and a padded p30 image exactly 16 MiB.
+3. Re-establish the host observation path before power changes: `trex` kernel
+   journal/dmesg, USB interface state, `10.15.19.82` reachability, and the
+   current SSH route.  Save an initial timestamp from the host.
+4. On a known-good running Gemini, resolve the target from
+   `/dev/disk/by-partlabel`, require a `/dev/mmcblk0p*` target, require 32768
+   sectors (16 MiB), and prove that it is not mounted.  Never substitute a
+   remembered partition number.
+5. For p30 only, read back a new full 16 MiB backup to the host, check its size
+   and SHA-256, and preserve it as the sole restore source.  Re-check the
+   candidate hash after transfer and re-check the resolved target immediately
+   before the authorized write.
+6. p31 is recovery only: never write it and never use it as a restore source.
+   Runtime `dd` is never valid for p22.  A p22 write requires the exact scatter
+   with only `boot` selected, offset `0xb100000`, size `0x1000000`, and Flash
+   Tool **Download Only** in the preboot left-port environment.
+
+## Prepared two-stage acceptance matrix
+
+No candidate is accepted by this preparation record.  The campaign owner must
+fill the handoff fields below for each stage and explicitly authorize the
+corresponding slot/write path.
+
+| Gate | Stage A: hardware-neutral connectivity/Nix baseline | Stage B: opt-in CONSYS identity |
+|---|---|---|
+| Candidate handoff | Absolute image path; SHA-256; exact bytes; Android header/layout; kernel/DTB/config/initramfs hashes; source/build provenance; target label; review link; explicit authorization | All Stage A fields, plus exact CONSYS patch/DT overlay, expected ID `0x0279`, register/rail trace format, and explicit opt-in authorization |
+| Slot/write | `boot`/p22 only through exact scatter, `Download Only`, `boot` entry only; or `boot2`/p30 runtime write if explicitly selected | `boot2`/p30 only; never p22/p31; runtime write only after fresh p30 backup and live-GPT re-resolution |
+| Pre-write stop conditions | Missing field, hash/size mismatch, wrong header, target mounted/wrong size, absent rollback image, or p31 touched | Any Stage A failure, plus missing bounded resource/sequence proof or any consumer/firmware enablement |
+| Host capture | Arm `trex` `journalctl -kf`/`dmesg -w`, `lsusb`, `ip monitor`, timestamp, and `script` transcript before power/boot selection | Keep the same capture continuously; mark identity-probe start/end and every USB loss/re-enumeration |
+| Boot acceptance | Within 120 s: expected gadget identity (`0525:a4a2`), `usb0`/SSH or declared probe shell; collect uname, cmdline, DT model/compatible, CPUs, routes, dmesg/journal, pstore, and target read-back hash | Same boot evidence; within 5 s of probe start: bounded ID read returns `0x0279` and records before/after registers/resources |
+| Safety acceptance | No unexpected storage writes, no CONSYS/WMT/radio/firmware activity, p22/p31 hashes unchanged unless p22 was the explicitly authorized target | Reset asserted on success and every timeout/error; no AFE/radio/firmware access; report unresolved vendor off-path writes as failure/unknown |
+| Failure/rollback | Stop after one failed boot; capture pstore before another boot, device logs, `/gemian/nixos-boot.log`, trex USB journal, and post-failure target hash; recover via p31/known-good path | Same; restore only from the fresh stage-specific backup and verify its hash; p31 remains untouched |
+
+Capture tooling is ready on both workstation and `trex`: `ssh`, `scp`,
+`date`, `ip`, `lsusb`, `journalctl`, `dmesg`, `tee`, `script`, `stdbuf`,
+`sha256sum`, `stat`, `od`, `nc`, and `screen`.  `picocom`, `minicom`, and
+`socat` are absent; if a serial node appears, use `screen` or a controlled
+`stty`/`cat` capture.  The current trex USB sysfs identity is
+`/sys/bus/usb/devices/1-2` (`0525:a4a2`, `gemini-pda-mainline`,
+`Gemini-L-DA921x-Bind`, serial `GEMINI_DA921X_BIND_20260729`).
+
+## Stage A transaction readiness: 2026-08-30 03:02--03:03 CEST
+
+The exact authorized candidate was staged as the scatter's `boot.img` and
+verified at SHA-256 `1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`,
+size 16777216 bytes.  `trex` journal, USB polling, udev, and IP captures were
+armed.  A bounded 60-second monitor saw no MediaTek preloader `0e8d:2000`;
+`trex` remained on gadget `0525:a4a2`, so the Flash Tool process was not
+started and no device write occurred.  The preloader transition remains the
+sole physical blocker; captures are still armed for the next explicit reboot
+or cable action.
+
+The later trex journal records a preloader window at 02:57:34--02:57:37 CEST
+(`0e8d:2000`, `ttyACM2`), followed by gadget `0525:a4a2` at 02:57:43.  The
+Stage-A flash monitor was not yet running during that window; no Flash Tool
+log or return code exists, so this is a reboot/re-enumeration observation, not
+evidence of a write.  At the next check the gadget was enumerated but
+`enp232s0f4u2` was DOWN and SSH timed out.
+
+## Stage B source preflight: 2026-08-30 03:02--03:06 CEST
+
+Read-only audit of `/home/grw/src/linux-gemini-platform` at clean commit
+`0da60c35b` found the explicitly gated
+`mt6797-consys-live` backend and
+`mt6797-gemini-consys-identity.dtso` overlay.  The candidate contract must
+identify the final DTB containing that overlay and boot with
+`mt6797_consys_live.identity_experiment=1`; the base board node remains
+disabled.  The source declares the following bounded identity sequence:
+
+```text
+VCN18=1.8 V -> 240 us -> VCN28=2.8 V -> INFRACFG offset 0x350 bit 8
+-> assert CONMCU reset -> SPM PWRON_CONFG_EN=0x0b160001
+-> SCPSYS CONN power-domain vote -> 30 us
+-> read MCU+0x8 until 0x0279 (20 ms interval, 200 ms cap)
+```
+
+Acceptance requires `pre-identity`, `identity 0x0279 observed`, and
+`post-identity` state records; reset must remain asserted and VCN votes must be
+released.  A timeout or read error is a failed identity attempt, not a retry
+permission.  The trace must show no AFE, WMT, radio, or firmware activity.
+The source's cleanup cannot restore its persistent sleep-mask and PWRON
+configuration writes; those residuals must be reported as an explicit
+restoration gap, never described as a clean full off path.  This source audit
+does not authorize deployment.  Review commits `41f987351` and `938803bed`
+corrected provider ownership/runtime-PM teardown and GNSS endpoint publication
+before the integrated source was built.
+
+### Stage B immutable build: 2026-08-30
+
+The Stage-B image is build-complete but not flash-authorized.  It is queued
+behind Stage A and a fresh p30 backup:
+
+| Field | Exact value |
+|---|---|
+| Bundle | `/home/grw/src/nixos-gemini/artifacts/mainline-consys-identity-p30` |
+| Padded p30 image | `probe-padded-boot2.img`, 16777216 bytes, SHA-256 `59b9febf7b397a3cca0ef82407af1c1d347f1751550ab7006aa29f0429e90716` |
+| Bundle manifest | `MANIFEST`, SHA-256 `f9aac2db3fe38a33109b2747c6ed8245b3fb1c6478db2b65534e19dd4dd0505a` |
+| Source | `/home/grw/src/linux-gemini-platform`, commit `0da60c35b`, NAR `sha256-V7BMwHlvvKF4HRP/wHaCc3Ma+rmlWVBaOYpIARbKZdI=` |
+| Kernel | `Image` SHA-256 `aaec346961cffa397e8181e1c3983752f0c1125628e61ea68e9218672d539f03`; `Image.gz` SHA-256 `015a6c2b037245223b90e98ee459ef3fb6d950f78c174fa3cf973fc29034c490` |
+| Device trees | base SHA-256 `e6aa4b9d20360c260f313292be41f92df2deb8613ca6c665a9f045b6b4d880e7`; final SHA-256 `70c1b17ec8d5744ff5ac60bc7250c958dc99708e4afd463f632e45823ff1eeea`; identity DTBO SHA-256 `4a94c3dbbb4249badf1ee526d7b467fc3103f8c08f694d44f77488b50d652ba0` |
+| Config/initramfs | config SHA-256 `9336f23d5c9047a27b5f4c635e7c865d73ec73049211de57ec7fee4be591dbf1`; initramfs SHA-256 `076a87ecef49ca534bff73e504c3b3f7673e3a79477caf64d2cd8f9411899460` |
+| Required parameter | `mt6797_consys_live.identity_experiment=1` is enforced in the built-in command line |
+
+Nix evaluation, kernel/config assertions, exact base/intermediate/final DT
+hash assertions, Android-v0 image construction, and 16 MiB padding all passed.
+This record still lacks a fresh p30 backup and explicit p30 authorization, so
+the write gate remains closed.
+
+### Stage B handoff fields and verdicts
+
+Before any Stage-B p30 write, the campaign owner must provide one immutable
+bundle record containing: absolute padded-image path, SHA-256 and exact byte
+size; manifest path and matching digest; source commit
+`0da60c35b`; kernel `Image`/`Image.gz`, base
+DTB, final DTB with the overlay, config, and initramfs hashes; exact cmdline
+including `mt6797_consys_live.identity_experiment=1`; fresh p30 backup path,
+size, and SHA-256; and explicit authorization for `boot2`/p30 only.  A Stage B
+image is rejected if the overlay, parameter, or config enables any radio,
+firmware, WMT, BTIF, GNSS, Wi-Fi, FM, modem, AFE, or A72 path.
+
+The single hardware attempt is accepted only if the captured boot reaches the
+normal gadget/SSH baseline and dmesg contains the ordered state records
+`pre-identity`, a successful `identity 0x0279 observed`, and `post-identity`.
+The post-state must show reset asserted, VCN18/VCN28 votes released, and no
+cleanup error; the probe must complete its 20 ms polling loop within the
+200 ms cap.  Any timeout, missing ID, reset/vote cleanup error, unexpected
+consumer/firmware activity, USB loss without recovery, or absent pstore/log
+evidence is a failed attempt.  On failure, stop and recover once through the
+known-good path; capture pstore before another boot and never retry the
+identity probe on the same boot.
+
+## Acceptance and failure collection
+
+Start host log capture before the boot selection.  Record the preloader and
+gadget USB identities, interface MAC/address, enumeration time, first reachable
+SSH or probe-shell time, and loss/re-enumeration events.
+
+For a successful candidate, collect its `uname -a`, `/proc/cmdline`, CPU
+online/offline state where relevant, network addresses/routes, required service
+or feature result, dmesg/journal, and the declared candidate hash read back
+from its target.  Do not change drivers or configuration simply to turn a test
+green.
+
+On failure, stop rather than retrying.  Recover through p31 or the existing
+known-good path, then capture `/sys/fs/pstore` before another experimental
+boot, device dmesg/journal, `/gemian/nixos-boot.log` when applicable, the trex
+USB/kernel journal window, and the target partition's post-failure hash.
+
+The detailed p30 procedure remains [BOOT_PROBE.md](BOOT_PROBE.md); default-p22
+preboot flashing restrictions remain [README.md](../README.md).
