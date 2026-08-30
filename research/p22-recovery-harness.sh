@@ -6,9 +6,12 @@ set -eu
 # or p31 and rejects any XML/scatter that does not prove boot-only operation.
 # The handoff manifest is data, never shell: unknown keys and unsafe values
 # fail closed before the device is contacted.
-# IMPORTANT: watchdog0 is inactive/nowayout=0 on this device. If Linux hangs
-# before init and no preloader appears, this harness cannot reset the device;
-# it stops with manual_reset_required_* and requires an owner-attended reset.
+# The accepted Stage-A image has watchdog0 inactive/nowayout=0, so its dry-run
+# cannot prove pre-init recovery. Unattended manifests add a nowayout watchdog
+# and a bounded initramfs lease; --proof-lease is the explicit opt-in path for
+# proving that rollback is armed before the lease kills its petter. Any
+# pre-MTK-probe hang remains outside this guarantee and stops at a manual-reset
+# state if no preloader appears.
 
 # shellcheck disable=SC1007 # zsh/NixOS-compatible scoped CDPATH assignment
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -21,11 +24,12 @@ die() {
 }
 
 usage() {
-    echo "usage: $0 [--manifest PATH] --dry-run | --execute" >&2
+    echo "usage: $0 [--manifest PATH] [--proof-lease] --dry-run | --execute" >&2
     exit 2
 }
 
 MODE=
+PROOF_LEASE=no
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --manifest)
@@ -36,6 +40,11 @@ while [ "$#" -gt 0 ]; do
         --dry-run|--execute)
             [ -z "$MODE" ] || usage
             MODE=$1
+            shift
+            ;;
+        --proof-lease)
+            [ "$PROOF_LEASE" = no ] || usage
+            PROOF_LEASE=yes
             shift
             ;;
         *) usage ;;
@@ -202,6 +211,11 @@ require_manifest() {
 
 load_manifest
 require_manifest
+
+if [ "$PROOF_LEASE" = yes ]; then
+    [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
+    [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "--proof-lease requires initramfs-petter manifest"
+fi
 
 if [ "$WATCHDOG_PROFILE" = initramfs-petter ]; then
     LEASE_MARKER=unattended_recovery=healthy
@@ -396,10 +410,13 @@ recover() {
     stage_image "$ROLLBACK" "$ROLLBACK_SHA"
     rollback_log=$RUN_SHARED/rollback-flash.log
     start_tool "$rollback_log"
+    if [ "$PROOF_LEASE" = yes ]; then
+        printf 'lease_proof_rollback_armed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    fi
     # If candidate userspace is still reachable, request a clean restart only
     # after rollback is waiting. If it is hung before init, wait for a natural
     # watchdog/preloader transition; no unsafe force-reset is attempted.
-    if wait_ssh 1; then request_reboot; fi
+    if [ "$PROOF_LEASE" != yes ] && wait_ssh 1; then request_reboot; fi
     if ! wait_state flash_rc 250; then
         printf 'manual_reset_required_no_preloader %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
@@ -427,7 +444,13 @@ stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"
 request_reboot
-if wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && accept_candidate; then
+if [ "$PROOF_LEASE" = yes ]; then
+    # Deliberately do not write the acceptance marker. recover() starts the
+    # rollback tool first, then waits for the candidate lease to kill its
+    # petter and expose the next watchdog/preloader window.
+    wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" || true
+    recover
+elif wait_ssh "$ACCEPTANCE_WINDOW_SECONDS" && accept_candidate; then
     device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159

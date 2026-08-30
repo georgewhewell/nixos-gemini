@@ -499,3 +499,13 @@ watchdog character device.  The combined platform profile explicitly allows
 its scoped platform logs; it does not inherit the connectivity profile's
 AFE/radio blacklist.  No hardware test is authorized by these build results;
 the next handoff must separately authorize one p22 Download Only cycle.
+
+The deliberate hardware proof path is explicit but not run here:
+`research/p22-recovery-harness.sh --manifest research/p22-unattended-recovery-watchdog.manifest --execute --proof-lease`.
+It requires the watchdog manifest, flashes only p22 using Download Only, does
+not create the acceptance marker, waits up to the manifest's 60-second SSH
+window, then arms the exact Stage-A rollback before the 90-second lease
+SIGKILL and its expected 31-second watchdog/preloader exposure.  The state
+file records `lease_proof_rollback_armed`; the normal capture, p22/p30/p31
+readbacks, and recovery checks still apply.  This path is intentionally not a
+dry-run claim or a substitute for root's separate hardware authorization.
