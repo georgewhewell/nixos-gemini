@@ -3,8 +3,8 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=a280c8bef7e9cfbc588ce64e6cb803ae7c79939c";' "$ROOT/flake.nix"
-grep -Fqx '        "rev": "a280c8bef7e9cfbc588ce64e6cb803ae7c79939c",' "$ROOT/flake.lock"
+grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=e360d0c5dcf095f5247f869a6061d15aff40cf75";' "$ROOT/flake.nix"
+grep -Fqx '        "rev": "e360d0c5dcf095f5247f869a6061d15aff40cf75",' "$ROOT/flake.lock"
 grep -Fqx '      thermalHallObserveOverlay = true;' "$ROOT/flake.nix"
 grep -Fqx '      provisionWaitSeconds = 600;' "$ROOT/flake.nix"
 grep -Fqx '      watchdogLeaseSeconds = 720;' "$ROOT/flake.nix"
