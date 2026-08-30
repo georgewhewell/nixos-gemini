@@ -1,7 +1,11 @@
-# Hardware-free MT6797 connectivity foundations.  The CONSYS node remains
-# disabled and no BTIF node is described, so these options cannot touch the
-# device in the M0 image.
+# Hardware-free MT6797 connectivity foundations.  CONSYS and BTIF nodes remain
+# disabled, so these codecs, lifecycle logic, and resource inventories cannot
+# touch the device in the reviewed baseline image.
 CONFIG_MTK_STP=y
 # CONFIG_MTK_STP_KUNIT_TEST is not set
+CONFIG_MTK_WMT=y
+# CONFIG_MTK_WMT_KUNIT_TEST is not set
 CONFIG_MTK_MT6797_CONSYS_INVENTORY=y
+CONFIG_MTK_MT6797_CONSYS_CORE=y
+# CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST is not set
 CONFIG_MTK_MT6797_BTIF_INVENTORY=y

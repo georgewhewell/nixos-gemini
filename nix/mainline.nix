@@ -13,7 +13,13 @@
 }: let
   lib = buildPkgs.lib;
 
-  kernelRevision = "6191785e643cb6397255eb417342ede9ed7fdc3f";
+  # A locked Git input carries rev; a deliberate local-path override carries
+  # only its content hash.  Record whichever identity Nix actually consumed so
+  # a local reviewed build can never masquerade as the old locked commit.
+  kernelRevision =
+    if linux-gemini ? rev
+    then linux-gemini.rev
+    else "nar:${linux-gemini.narHash}";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -58,8 +64,6 @@
     + lib.optionalString sshAccess "-ssh"
     + lib.optionalString rootfsProbe "-p29-ro"
     + lib.optionalString usbHostOverlay "-usb11-host";
-  shellWords = paths: lib.concatMapStringsSep " " lib.escapeShellArg paths;
-
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
@@ -72,6 +76,11 @@
       + lib.optionalString usbHostOverlay "-usb11-host";
     version = "7.1.3";
     src = linux-gemini;
+    # Keep every fragment in the derivation input closure.  Rendering paths
+    # through escapeShellArg preserves their spelling but loses Nix string
+    # context, which made a fresh sandbox unable to see this repository's
+    # connectivity fragment.
+    fragmentInputs = finalFragmentFiles;
     # Kbuild is not userspace.  The modern stdenv exposed stack-clash and
     # zero-call-used-register policy to the compiler wrapper, unlike ixoo's
     # plain GCC 12.2 build.  Eliminate that uncontrolled input and let the
@@ -113,7 +122,7 @@
       )
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
-        -m -O . .config ${shellWords finalFragmentFiles}
+        -m -O . .config $fragmentInputs
       make "''${kernelMakeFlags[@]}" olddefconfig
 
       test -z "''${NIX_HARDENING_ENABLE:-}"
@@ -124,12 +133,21 @@
       grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
       grep -Fqx 'CONFIG_MTK_STP=y' .config
       ! grep -q '^CONFIG_MTK_STP_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_WMT=y' .config
+      ! grep -q '^CONFIG_MTK_WMT_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
         | grep -Fq 'status = "disabled";'
-      ! grep -Rqs 'mediatek,mt6797-btif' arch/arm64/boot/dts/mediatek
+      grep -A12 -F 'btif: serial@1100c000 {' \
+        arch/arm64/boot/dts/mediatek/mt6797.dtsi \
+        | grep -Fq 'compatible = "mediatek,mt6797-btif",'
+      grep -A12 -F 'btif: serial@1100c000 {' \
+        arch/arm64/boot/dts/mediatek/mt6797.dtsi \
+        | grep -Fq 'status = "disabled";'
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
       grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
       grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
@@ -224,9 +242,9 @@
       cp System.map vmlinux "$out/"
 
       # Device Tree output is compiler-independent and must match the reviewed
-      # M0 tree: ixoo's hardware-passed DT plus the disabled CONSYS inventory.
+      # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        a004d7a83b2d0d6a1a07a5ebfce302d04f98112ccc1695a80f8391a14ab22e35
+        1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c
 
       if strings "$out/Image" | grep -Fq /nix/store/; then
         echo "Nix store path leaked into mainline Image" >&2
@@ -276,16 +294,16 @@
       substituteInPlace "$providerBuilder" \
         --replace-fail \
           'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
-          'BASE_DTB_SHA256=a004d7a83b2d0d6a1a07a5ebfce302d04f98112ccc1695a80f8391a14ab22e35' \
+          'BASE_DTB_SHA256=1ea78817645989e45c9466209a2a0f7b6ee1cbdf342675a5d650f0fd4e25c21c' \
         --replace-fail \
           'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
-          'OUTPUT_DTB_SHA256=5373db46efda4dd61b32950972a35dd162ee3b3a322453197365d3e8a94a3d3c'
+          'OUTPUT_DTB_SHA256=e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7'
       bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
         > "$out/VALIDATION"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-        5373db46efda4dd61b32950972a35dd162ee3b3a322453197365d3e8a94a3d3c
+        e0b8294f79f78d4a9c62d8449a5e59cd2a783b37f9ea9bc33bde59b3e593d3d7
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay
