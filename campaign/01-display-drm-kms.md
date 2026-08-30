@@ -1,19 +1,26 @@
 # Display and DRM/KMS
 
-Status: SOURCE EXISTS; GENERIC UPSTREAM DRIVER EXISTS; MT6797 APPLICABILITY
-PROVEN for the SoC display blocks; DT ENABLED **NO**; DEVICE-TESTED **UNKNOWN**.
+Status: SOURCE EXISTS; DT is INERT by default; an OPT-IN display overlay is in
+the Nix-pinned input; BUILD-TESTED only where a named build manifest says so;
+DEVICE-TESTED **UNKNOWN**.
 
-The current DRM driver has an MT6797 match and selects the twelve-component
-`mt6797_mtk_ddp_main` path
-(`/home/grw/src/linux-gemini-push/drivers/gpu/drm/mediatek/mtk_drm_drv.c:125-138,355-365`). The DSI driver also has an MT6797 match (`mtk_dsi.c:1312-1321`). Those lines establish reusable source and SoC applicability, not a panel link.
+The base board DT does not apply the display overlay. The overlay is explicitly
+described as recovery-slot-only and not device-tested
+(`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display.dtso:3-10`);
+it supplies the I2C bias device, GPIO60/GPIO251 enables, display blocks, panel,
+and GPIO180 reset (`:17-121`). Nix defines a `mainlinePlatformSmoke` output
+which selects display and audio overlays (`flake.nix:396-415`) and validates
+their composed-DT properties (`nix/mainline.nix:560-577`). Those are source and
+composition facts, not pixels.
 
-Vendor evidence identifies a 1080x2160, four-lane NT36672 panel and reset/TE
-GPIO descriptions (`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:1043-1102`; panel parameters are explicit in `drivers/misc/mediatek/lcm/aeon_nt36672_fhd_dsi_vdo_x600_xinli/aeon_nt36672_fhd_dsi_vdo_x600_xinli.c:656-704`). This is board-wiring evidence only. It does not prove that the panel name, timings, bias controller, or power sequence can be expressed safely in current DRM.
+Vendor panel wiring text remains useful only as source evidence:
+`vendor/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:1043-1102`
+and its LCM driver. It does not establish a safe current panel power sequence,
+mode, backlight, or display-device result.
 
-The SoC display nodes are disabled in the shared DT
-(`/home/grw/src/linux-gemini-push/arch/arm64/boot/dts/mediatek/mt6797.dtsi:851-1000`), and the Gemini board file has no panel node. The former “full pipeline” and `modetest` acceptance claim is removed.
-
-Next validation: add only a reviewed panel binding and overlay; boot from the
-recovery slot; capture component binding, regulator/clock errors, and one
-physical mode-set. A successful driver probe without pixels is not
-DEVICE-TESTED.
+No retained Gemini display mode-set or physical image is cited by the hardware
+ledger. The gate is therefore: retain a build manifest and composed DT for the
+exact image; recover the read-only baseline first; then boot the opt-in overlay
+through the recovery procedure and capture component binding, regulator/clock
+errors, `modetest`, and a physical panel observation. A successful probe alone
+is not DEVICE-TESTED.

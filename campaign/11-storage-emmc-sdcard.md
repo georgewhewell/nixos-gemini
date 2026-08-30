@@ -1,20 +1,17 @@
 # Storage: eMMC and MicroSD
 
-Status: GENERIC UPSTREAM MediaTek MMC driver EXISTS; MT6797 APPLICABILITY
-PROVEN; MMC0 DT ENABLED at a conservative speed; eMMC DEVICE-TESTED in the
-recorded baseline; HS200/HS400 and MicroSD **UNKNOWN**.
+Status: MMC0/eMMC was DEVICE-TESTED in the earlier bounded baseline; its state
+after the latest p22 transaction, high-speed modes and MicroSD are **UNKNOWN**.
 
-The current DT has `mediatek,mt6797-mmc` matches for MMC0 at `0x11230000`/SPI79
-and MMC1 at `0x11240000`/SPI80
-(`/home/grw/src/linux-gemini-push/arch/arm64/boot/dts/mediatek/mt6797.dtsi:804-824`); `mtk-sd.c:733` selects the MT6797 variant. The Gemini board enables only MMC0, 8-bit, 25 MHz, non-removable (`mt6797-gemini-pda.dts:277-289`).
+The independent recheck recorded `boot`, `boot2`, and `boot3` resolved to p22,
+p30 and p31 with exact sizes/hashes; p29 and the store were read-only
+(`research/HARDWARE_TEST_LEDGER.md:41-49`). Stage A later retained p30/p31 and
+verified p22 after boot (`:291-308`). This is conservative eMMC access evidence
+only; it does not prove HS200/HS400, tuning, write safety or MMC1 detection.
 
-`research/MAINLINE.md`, `research/BOOT_PROBE.md`, and the read-only 2026-08-30
-snapshot in `research/HARDWARE_TEST_LEDGER.md` record eMMC access, the p29
-read-only root/store path, and boot-partition identities. They do not prove
-high-speed timing, tuning, write safety, SD-card detection, or card voltage
-switching. The old HS200/HS400 and SDR104 acceptance logs are removed.
-
-Next validation: keep p31 as recovery; test MMC0 read-only first, then one
-controlled write to the development slot. Add MMC1 only with verified pins,
-card-detect and rail levels. Retune/high-speed tests require repeated cold and
-temperature-controlled captures.
+The later p22 candidate/rollback transaction stopped before SSH and a
+post-rollback readback (`research/HARDWARE_TEST_LEDGER.md:655-674`). Therefore
+there is no current partition-state claim. The next gate is a read-only full
+hash/size/label check of p22/p30/p31 after the network/recovery path returns.
+MicroSD remains disabled until pins, card detect and rail levels have an
+independent evidence packet.

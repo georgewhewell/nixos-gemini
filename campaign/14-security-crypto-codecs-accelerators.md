@@ -6,7 +6,7 @@ EIP-93 identity/applicability **UNKNOWN**; DT ENABLED **NO**; DEVICE-TESTED
 
 The current tree contains generic SafeXcel EIP-93 bindings and drivers (the
 binding describes the generic IP and SoC-specific compatible requirement at
-`/home/grw/src/linux-gemini-push/Documentation/devicetree/bindings/crypto/inside-secure,safexcel-eip93.yaml:7-14,30-43`), but no MT6797
+`linux-gemini-platform@518957636:Documentation/devicetree/bindings/crypto/inside-secure,safexcel-eip93.yaml:7-14,30-43`), but no MT6797
 Gemini DT node or match proving that the vendor address `0x10210000` is that
 IP. A generic driver source is not evidence of clocks, IRQ polarity, register
 layout, firmware needs, TRNG quality, or secure-world key isolation.

@@ -6,12 +6,12 @@ DEVICE-TESTED **NO**.
 
 Vendor DTS/source describe an MD1 reserved-memory area, CLDMA and CCIF resources,
 and VSIM rails. The CLDMA/CCIF resource declaration is explicit in
-`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi:1782-1806`.
+`vendor/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi:1782-1806`.
 The relevant declarations are in
-`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi` and
+`vendor/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi` and
 `drivers/misc/mediatek/eccci/mt6797/cldma_reg.h`. They establish a source
 contract, not a safe Linux modem boot. The current Gemini DT only reserves
-generic CCCI memory (`/home/grw/src/linux-gemini-push/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:108-122`) and has no modem consumer.
+generic CCCI memory (`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:108-122`) and has no modem consumer.
 
 The former claims about a 161 MiB fixed address, signatures, boot-status values,
 SIM debounce, CCCI channel semantics, or ModemManager compatibility are removed:

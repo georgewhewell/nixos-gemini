@@ -1,19 +1,23 @@
 # Keyboard, notification LEDs and camera flash
 
-Status: SOURCE EXISTS; GENERIC AW9523 pinctrl and gpio-matrix-keypad drivers
-EXIST; MT6797 applicability for the expander is binding-level only; Gemini DT
-consumers are disabled; DEVICE-TESTED **UNKNOWN**.
+Status: the base keyboard consumers are INERT; the Nix-pinned input contains an
+OPT-IN polling keyboard overlay; DEVICE-TESTED keyboard, LEDs and flash are
+**UNKNOWN**.
 
-The mainline board DT describes an AW9523-compatible expander at I2C address
-0x5b, GPIO87 interrupt, GPIO58 reset and an 8x7 matrix, but leaves both
-expander and matrix disabled (`/home/grw/src/linux-gemini-push/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:366-483`). Vendor DTS confirms the legacy keyboard and AW9120 GPIO245 power-down pin (`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:641-700`).
+The base describes I2C5, AW9523 at 0x5b, GPIO58 reset, GPIO87/EINT10 facts and
+an 8x7 matrix, but disables the expander and matrix
+(`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:432-507`).
+The polling overlay, present in the pinned input, enables I2C5 at 400 kHz and
+uses the generic matrix path with 20 ms polling and 2 us column settling; it
+deliberately omits the untested parent/row IRQ paths
+(`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtso:3-55`).
 
-No current mainline AW9120 or LM3643 Gemini consumer is proven. Vendor LED
-microcode, key maps, debounce behavior, chip IDs, flash currents and autonomous
-breathing behavior are SOURCE EXISTS only. The former “PROVEN” key/LED/flash
-claims and guessed compatible strings are removed.
+Its comment cites a retained prior run, but this campaign has no current
+Gemini hardware acceptance for that exact Nix image/overlay. Vendor AW9120,
+LED and flash source is not an activation contract. AW9120, LEDs, flash,
+cameras and sensors remain outside the keyboard overlay’s scope.
 
-Next validation: enable only the AW9523 node on a recoverable image, verify I2C
-ID, reset/IRQ and a small key subset, then expand the matrix. Treat AW9120 and
-flash as separate devices; verify rails and thermal timeout before any light
-output.
+After recovery revalidation, the first gate is a recovery-only keyboard image
+with the polling overlay and a bounded, retained press/release subset. Do not
+enable the AW9523 IRQ domain or any light output until its separate electrical
+and safety evidence exists.
