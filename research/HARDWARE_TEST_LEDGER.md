@@ -1216,3 +1216,32 @@ evidence is under
 `/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-122238-76509`;
 the recatch evidence is in the `p22-recatch-2.*` files in that same Trex run
 directory.
+
+## Cycle 5 long-lease full-NixOS provisioning retry and automatic rescue: 2026-08-30 12:38--12:45
+
+Root authorized the same committed long-lease manifest at root commit
+`e5d8c57`, after read-only preflight again proved Stage-A p22/p30/p31 and
+p29 ro. Candidate p22 Download Only completed `Download Succeeded`, rc=0 at
+12:39:09. Stage1 reached gadget SSH and emitted the literal
+`watchdog=petting ... lease=180s handoff=stage1` and exact
+`store-provision=required` request. The host attempted the guarded stdin
+upload, but it again stopped at exactly `96096256` of `100421632` bytes;
+`/run/stage1.log` therefore never advanced beyond `store-provision=required`
+before its bounded timeout. No Stage2 boot or candidate acceptance occurred.
+
+The updated supervisor armed exact Stage-A rollback at 12:41:40 and its
+single bounded retry caught the delayed watchdog reset. Rescue completed
+`Download Succeeded`, rc=0 at 12:43:49; state became
+`supervisor_rollback_succeeded_rescue_verified` at 12:43:50. Final read-only
+SSH proved p22
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and
+p31 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+The old Stage-A store remained regular, single-link, `100417536` bytes with
+SHA256 `1aec7ab82d592e49da6e8c916d36cda097467855fdbd90a76b4d942a0b2a1da3`;
+the unique final target remained absent. Its owned partial temp remained
+regular, single-link, `96096256` bytes with SHA256
+`57e048e92d1663ba5a805a96cb0ac748cc66ec9c2c42b3a4a6c5ce4db9e0aa52`, and
+p29 ended `ro,norecovery`. No p30/p31 write, erase, format, firmware
+upgrade, or candidate acceptance occurred. Run evidence is under
+`/mnt/Home/src/nixos-gemini-flash-p22-20260829/p22-recovery-20260830-123858-86331`.
