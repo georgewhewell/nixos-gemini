@@ -96,6 +96,19 @@ stop_capture() {
     ssh trex "for f in '$RUN_SHARED'/*.pid; do test -f \"\$f\" && kill \"\$(cat \"\$f\")\" 2>/dev/null || true; done" 2>/dev/null || true
 }
 
+cleanup() {
+    rc=$?
+    trap - EXIT INT TERM
+    stop_capture
+    if [ "$rc" -ne 0 ] && [ -n "${RUN_LOCAL:-}" ] && [ -f "$RUN_LOCAL/state" ]; then
+        case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
+            accepted_p22*|recovered_known_good_p22*|recovery_failed*|recovery_flash_failed*) ;;
+            *) printf 'harness_failed rc=%s %s\n' "$rc" "$(date -Is)" > "$RUN_LOCAL/state" ;;
+        esac
+    fi
+    exit "$rc"
+}
+
 wait_state() {
     wanted=$1
     limit=$2
@@ -185,8 +198,8 @@ if [ "$MODE" = --dry-run ]; then
     exit 0
 fi
 
+trap cleanup EXIT INT TERM
 start_capture
-trap stop_capture EXIT INT TERM
 stage_image "$CANDIDATE" "$CANDIDATE_SHA"
 candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"

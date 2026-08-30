@@ -14,6 +14,7 @@
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
+  powerObserveOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -44,7 +45,8 @@
     ]
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
-    ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment];
+    ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
+    ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -77,6 +79,10 @@
     if audioOverlay
     then "mt6797-mt6351-enumeration-only-v1"
     else "none";
+  powerObserveLabel =
+    if powerObserveOverlay
+    then "bq2589x-i2c0-no-write-no-irq-v1"
+    else "none";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
@@ -85,7 +91,8 @@
     + lib.optionalString consysIdentityOverlay "-consys-identity"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
-    + lib.optionalString audioOverlay "-audio";
+    + lib.optionalString audioOverlay "-audio"
+    + lib.optionalString powerObserveOverlay "-power-observe";
   baseDtbSha256 =
     if platformEnablement
     then "87cbce082c7a6d6f67fab47527ed45b148647dd01e178864c618665af8af6d58"
@@ -106,7 +113,12 @@
     assert
       (!displayOverlay && !audioOverlay)
       || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
-    if platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay
+    assert
+      !powerObserveOverlay
+      || (platformEnablement && displayOverlay && audioOverlay && !consysIdentityOverlay);
+    if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && !consysIdentityOverlay
+    then "87b96e7af03491c4f26dd9b57f77a873019760779b7ec9d7a780f5af332974c7"
+    else if platformEnablement && displayOverlay && audioOverlay && !powerObserveOverlay && !consysIdentityOverlay
     then "6b42aca0194c399c939bcb8bcada3c770e0b1a5c10954c90bca29dbe77ae0cde"
     else if platformEnablement && consysIdentityOverlay && !displayOverlay && !audioOverlay
     then "e3be740108d83c15829e7772bef06a19a2ff85aed68195c0b229852d956e35d0"
@@ -128,7 +140,8 @@
       + lib.optionalString consysIdentityOverlay "-consys-identity"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
-      + lib.optionalString audioOverlay "-audio";
+      + lib.optionalString audioOverlay "-audio"
+      + lib.optionalString powerObserveOverlay "-power-observe";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -225,6 +238,10 @@
         grep -Fqx 'CONFIG_SND_SOC_MT6351=y' .config
         grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' .config
         ! grep -q '^CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString powerObserveOverlay ''
+        grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
+        grep -Fqx 'CONFIG_CHARGER_BQ25890=y' .config
       ''}
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
@@ -337,6 +354,10 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-audio.dtbo \
           "$out/mt6797-gemini-pda-audio.dtbo"
       ''}
+      ${lib.optionalString powerObserveOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtbo \
+          "$out/mt6797-gemini-pda-power-observe.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -383,7 +404,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -491,15 +512,36 @@
         then ''
           fdtoverlay \
             -i "$out/gemini-display.dtb" \
-            -o "$out/gemini.dtb" \
+            -o "$out/gemini-audio.dtb" \
             ${kernel}/mt6797-gemini-pda-audio.dtbo
-          test "$(fdtget "$out/gemini.dtb" /audio-controller@11220000 status)" = okay
-          test "$(fdtget "$out/gemini.dtb" /sound compatible)" = \
+          test "$(fdtget "$out/gemini-audio.dtb" /audio-controller@11220000 status)" = okay
+          test "$(fdtget "$out/gemini-audio.dtb" /sound compatible)" = \
             mediatek,mt6797-mt6351-sound
           echo 'audio-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
-          cp "$out/gemini-display.dtb" "$out/gemini.dtb"
+          cp "$out/gemini-display.dtb" "$out/gemini-audio.dtb"
+        ''
+      }
+      ${
+        if powerObserveOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-audio.dtb" \
+            -o "$out/gemini.dtb" \
+            ${kernel}/mt6797-gemini-pda-power-observe.dtbo
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000 status)" = okay
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b status)" = okay
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b compatible)" = \
+            'ti,bq25896 ti,bq25890'
+          fdtget -p "$out/gemini.dtb" /i2c@11007000/charger@6b \
+            | grep -Fqx 'ti,read-only'
+          ! fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b interrupts \
+            >/dev/null 2>&1
+          echo 'power-observe-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else ''
+          cp "$out/gemini-audio.dtb" "$out/gemini.dtb"
         ''
       }
       test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
@@ -873,6 +915,7 @@
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"
+      echo "nix-power-observe=${powerObserveLabel}"
       echo "nix-hardening=disabled-all"
       echo "hardware-proof=ixoo-Buildbox-artifact-only"
       echo "nix-kernel-byte-match-ixoo=no"

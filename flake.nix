@@ -413,6 +413,27 @@
       audioOverlay = true;
     };
 
+    # Queued Stage-D recovery image: retain the combined platform smoke test
+    # and add only the independently routed BQ2589x no-write/no-IRQ observer.
+    mainlinePlatformRecovery = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+    };
+
     #############################################
     # NixOS System - Cross-compiled from x86_64
     #############################################
@@ -850,6 +871,9 @@
       mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
       mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
       mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
+      mainlinePlatformRecoveryKernel = mainlinePlatformRecovery.kernel;
+      mainlinePlatformRecoveryDtb = mainlinePlatformRecovery.serviceabilityDtb;
+      mainlinePlatformRecoveryBundle = mainlinePlatformRecovery.bundle;
       # Cross-compiled squashfs
       squashfs = nixosSquashfs;
       toplevel = nixosSystemCross.config.system.build.toplevel;
