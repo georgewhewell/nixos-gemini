@@ -356,7 +356,7 @@ require_manifest() {
             require_path "$STAGE2_SUCCESS_MARKER" stage2_success_marker
             case "$STAGE2_WATCHDOG_OWNER_UNIT" in *.service) ;; *) die "stage2_watchdog_owner_unit must end in .service" ;; esac
             case "$STAGE1_PROVISION_WAIT_SECONDS:$LEASE_SECONDS:$ACCEPTANCE_WINDOW_SECONDS" in
-                65:90:80|120:180:150) ;;
+                65:90:80|120:180:150|240:300:270) ;;
                 *) die "unknown Stage1 provision/watchdog/acceptance timing profile" ;;
             esac ;;
         *) die "unknown stage2_policy" ;;
@@ -374,7 +374,7 @@ load_manifest
 require_manifest
 
 # Leave ten seconds for the remote size/hash/move/sync contract after the
-# bounded stream exits. The two accepted profiles yield 55s and 110s.
+# bounded stream exits. The accepted profiles yield 55s, 110s and 230s.
 PROVISION_UPLOAD_TIMEOUT_SECONDS=$((STAGE1_PROVISION_WAIT_SECONDS - 10))
 
 if [ "$PROOF_LEASE" = yes ]; then
