@@ -18,6 +18,7 @@
   powerObservePreflight ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
+  thermalHallObserveOverlay ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -51,7 +52,8 @@
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
-    ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment];
+    ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
+    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -97,7 +99,9 @@
     then "mtk-wdt-probe-start-90s-open-timeout-initramfs-pet-v2"
     else "none";
   inputObserveLabel =
-    if inputObserveOverlay
+    if inputObserveOverlay && thermalHallObserveOverlay
+    then "aw9523-matrix-poll-nt36772-i2c4-client-disabled-mt6797-thermal-hall-observe-v2"
+    else if inputObserveOverlay
     then "aw9523-matrix-poll-and-nt36772-i2c4-client-disabled-v1"
     else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
@@ -121,7 +125,8 @@
     + lib.optionalString powerObserveOverlay "-power-observe"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
-    + lib.optionalString inputObserveOverlay "-input-observe";
+    + lib.optionalString inputObserveOverlay "-input-observe"
+    + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   baseDtbSha256 = "d8339bbfee7d75f3823eb3c11e6eabb4ddb09c73e43e77fafa99499177ee6fc4";
@@ -133,6 +138,7 @@
   # still detected before the touchscreen bus-only observer is composed.
   keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";
   inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";
+  thermalHallDtbSha256 = "68db149d12100835a800deee4ecc8010cfafc0a5be8273d4310d1145e0aa58ba";
   finalDtbSha256 =
     assert
       !powerObservePreflight
@@ -154,7 +160,11 @@
         && unattendedRecovery
         && !consysIdentityOverlay
       );
-    if inputObserveOverlay
+    assert
+      !thermalHallObserveOverlay || inputObserveOverlay;
+    if thermalHallObserveOverlay
+    then thermalHallDtbSha256
+    else if inputObserveOverlay
     then inputObserveDtbSha256
     else if platformEnablement && displayOverlay && audioOverlay && powerObserveOverlay && unattendedRecovery && !consysIdentityOverlay
     then "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce"
@@ -186,7 +196,8 @@
       + lib.optionalString powerObserveOverlay "-power-observe"
       + lib.optionalString powerObservePreflight "-power-preflight"
       + lib.optionalString unattendedRecovery "-unattended-recovery"
-      + lib.optionalString inputObserveOverlay "-input-observe";
+      + lib.optionalString inputObserveOverlay "-input-observe"
+      + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -311,6 +322,12 @@
         grep -Fqx 'CONFIG_I2C_MT65XX=y' .config
         grep -Fqx 'CONFIG_THERMAL=y' .config
         grep -Fqx 'CONFIG_THERMAL_OF=y' .config
+      ''}
+      ${lib.optionalString thermalHallObserveOverlay ''
+        grep -Fqx 'CONFIG_MTK_THERMAL=y' .config
+        grep -Fqx 'CONFIG_MTK_SOC_THERMAL=y' .config
+        grep -Fqx 'CONFIG_MEDIATEK_MT6577_AUXADC=y' .config
+        grep -Fqx 'CONFIG_KEYBOARD_GPIO=y' .config
       ''}
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
@@ -455,6 +472,12 @@
         test -s "$out/mt6797-gemini-pda-keyboard.dtbo"
         test -s "$out/mt6797-gemini-pda-touchscreen-observe.dtbo"
       ''}
+      ${lib.optionalString thermalHallObserveOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-thermal-hall-observe.dtbo \
+          "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo"
+        test "$(sha256sum "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo" | cut -d' ' -f1)" = \
+          81c3523a460b9e7d5c83965130cc311eca457ed7bfbc4d4dca1f5f749842f9e9
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -501,7 +524,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb =
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -697,11 +720,35 @@
         ''
         else ""
       }
+      ${
+        if thermalHallObserveOverlay
+        then ''
+          # This source-locked overlay enables only the existing AUXADC,
+          # thermal controller, and GPIO66 Hall key. It declares no external
+          # sensor, power rail, wake source, or SCP path.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-thermal-hall-observe.dtb" \
+            ${kernel}/mt6797-gemini-pda-thermal-hall-observe.dtbo
+          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /adc@11001000 status)" = okay
+          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /thermal@1100b000 status)" = okay
+          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /gpio-keys status)" = okay
+          ! fdtget -p "$out/gemini-thermal-hall-observe.dtb" /gpio-keys \
+            | grep -Fqx 'wakeup-source'
+          test "$(sha256sum "$out/gemini-thermal-hall-observe.dtb" | cut -d' ' -f1)" = \
+            ${thermalHallDtbSha256}
+          cp "$out/gemini-thermal-hall-observe.dtb" "$out/gemini.dtb"
+          echo 'thermal-hall-observer=auxadc-thermal-gpio66-no-wake-passed' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
       test "$(sha256sum "$out/gemini.dtb" | cut -d' ' -f1)" = \
         ${finalDtbSha256}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
-        if inputObserveOverlay
+        if thermalHallObserveOverlay
+        then "gemini-keyboard.dtb gemini-input-observe.dtb gemini-thermal-hall-observe.dtb "
+        else if inputObserveOverlay
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
       }Image.gz-dtb) > "$out/SHA256SUMS"
@@ -1234,6 +1281,7 @@
       echo "nix-power-observe=${powerObserveLabel}"
       echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
       echo "nix-input-observe=${inputObserveLabel}"
+      echo "nix-thermal-hall-observe=${if thermalHallObserveOverlay then "auxadc-thermal-gpio66-no-wake-v1" else "none"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery
