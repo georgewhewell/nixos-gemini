@@ -11,6 +11,7 @@
   rootfsProbe ? false,
   usbHostOverlay ? false,
   consysIdentityOverlay ? false,
+  consysG2bOverlay ? false,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -54,6 +55,7 @@
     ]
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
+    ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
@@ -85,6 +87,10 @@
   consysIdentityLabel =
     if consysIdentityOverlay
     then "bounded-0x0279-reset-held-v1"
+    else "none";
+  consysG2bLabel =
+    if consysG2bOverlay
+    then "emi-identity-postid-raw-mandatory-full-no-firmware-v1"
     else "none";
   displayLabel =
     if displayOverlay
@@ -136,6 +142,7 @@
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
+    + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
@@ -143,6 +150,7 @@
     + lib.optionalString rootfsProbe "-p29-ro"
     + lib.optionalString usbHostOverlay "-usb11-host"
     + lib.optionalString consysIdentityOverlay "-consys-identity"
+    + lib.optionalString consysG2bOverlay "-consys-g2b"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -161,6 +169,7 @@
   serviceabilityBaseDtbSha256 = "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
+    assert !(consysIdentityOverlay && consysG2bOverlay);
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -258,6 +267,7 @@
       + lib.optionalString storageOverlay "-emmc-probe"
       + lib.optionalString usbHostOverlay "-usb11-host"
       + lib.optionalString consysIdentityOverlay "-consys-identity"
+      + lib.optionalString consysG2bOverlay "-consys-g2b"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
@@ -318,7 +328,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -355,6 +365,17 @@
           ! grep -q '^CONFIG_MTK_MT6797_CONSYS_LIVE=' .config
         ''
       }
+      ${lib.optionalString consysG2bOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=y' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_KUNIT_TEST=' .config
@@ -531,6 +552,11 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
           "$out/mt6797-gemini-consys-identity.dtbo"
       ''}
+      ${lib.optionalString consysG2bOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2b-no-firmware.dtbo \
+          "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
+      ''}
       ${lib.optionalString usbHostOverlay ''
         # This overlay is built and reviewed with the locked kernel source.
         # Do not replace it with a repository-local DTS: the retired version
@@ -648,7 +674,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -747,6 +773,30 @@
           test "$(sha256sum "$out/gemini-platform.dtb" | cut -d' ' -f1)" = \
             ${usbPlatformDtbSha256}
           echo 'consys-identity-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else if consysG2bOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2b-no-firmware.dtbo
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 status)" = okay
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 status)" = okay
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2b-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2b-owner compatible)" = \
+            mediatek,mt6797-consys-g2b-owner
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2b-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap-no-patch'
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2b-owner \
+            | grep -Fqx 'mediatek,experimental-g2b-no-firmware'
+          echo 'consys-g2b-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2b-firmware=disabled' >> "$out/VALIDATION"
+          echo 'consys-g2b-radio-clients=disabled' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
@@ -1623,6 +1673,7 @@
       echo "nix-rootfs-probe=${rootfsLabel}"
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
+      echo "nix-consys-g2b=${consysG2bLabel}"
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"

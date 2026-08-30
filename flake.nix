@@ -27,6 +27,13 @@
       url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
       flake = false;
     };
+    linux-gemini-next = {
+      # Critical-path experiments consume a second immutable pin so the
+      # accepted p22 baseline remains rebuildable byte-for-byte while newer
+      # CONSYS/GPU/cellular work advances on the same maintained fork.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=a04ee59adddcc1941affae4b65f069a89c90e36f";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -42,6 +49,7 @@
     vendor-kernel,
     ixoo-kernel,
     linux-gemini,
+    linux-gemini-next,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -398,6 +406,28 @@
       sshAccess = true;
       usbHostOverlay = true;
       consysIdentityOverlay = true;
+    };
+
+    # Critical-path radio-subsystem experiment. This keeps the accepted
+    # storage, SSH, dual-USB and watchdog substrate, then performs the complete
+    # no-firmware G2b chronology in one boot: persistent EMI, reset-held 0x0279
+    # identity, MBIST/AFE/reset release, and raw/mandatory/full WMT queries.
+    # It never requests a patch or enables a radio function.
+    mainlineConsysG2bNoFirmware = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2bOverlay = true;
+      unattendedRecovery = true;
     };
 
     # Queued Stage-C recovery image: test the reviewed native display and
@@ -1081,6 +1111,10 @@
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
+      mainlineConsysG2bNoFirmwareKernel = mainlineConsysG2bNoFirmware.kernel;
+      mainlineConsysG2bNoFirmwareDtb = mainlineConsysG2bNoFirmware.serviceabilityDtb;
+      mainlineConsysG2bNoFirmwareInitramfs = mainlineConsysG2bNoFirmware.probeInitramfs;
+      mainlineConsysG2bNoFirmwareBundle = mainlineConsysG2bNoFirmware.bundle;
       mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
       mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
       mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
