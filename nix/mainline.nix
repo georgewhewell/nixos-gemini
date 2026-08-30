@@ -138,7 +138,7 @@
   # still detected before the touchscreen bus-only observer is composed.
   keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";
   inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";
-  thermalHallDtbSha256 = "68db149d12100835a800deee4ecc8010cfafc0a5be8273d4310d1145e0aa58ba";
+  thermalHallDtbSha256 = "a87ef1feb384520ada3ad17e84787a8f5dcd51619d83bbca091d3977712ee81f";
   finalDtbSha256 =
     assert
       !powerObservePreflight

@@ -14,7 +14,7 @@ grep -Fqx '    ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fr
 grep -Fqx '    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment];' "$ROOT/nix/mainline.nix"
 grep -Fqx '  keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";' "$ROOT/nix/mainline.nix"
 grep -Fqx '  inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";' "$ROOT/nix/mainline.nix"
-grep -Fqx '  thermalHallDtbSha256 = "68db149d12100835a800deee4ecc8010cfafc0a5be8273d4310d1145e0aa58ba";' "$ROOT/nix/mainline.nix"
+grep -Fqx '  thermalHallDtbSha256 = "a87ef1feb384520ada3ad17e84787a8f5dcd51619d83bbca091d3977712ee81f";' "$ROOT/nix/mainline.nix"
 grep -Fqx '          test "$(fdtget "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 status)" = disabled' "$ROOT/nix/mainline.nix"
 grep -Fqx '          ! fdtget -p "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 \' "$ROOT/nix/mainline.nix"
 grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' "$ROOT/nix/mainline-input-observe.fragment"
