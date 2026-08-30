@@ -356,6 +356,7 @@ static void params_set_interval(struct snd_pcm_hw_params *params,
 
 static int verify_playback_1(int ctl_fd)
 {
+	static const char expected_id[] = "Playback_1";
 	struct snd_pcm_info info = {
 		.device = PCM_DEVICE,
 		.subdevice = 0,
@@ -366,10 +367,19 @@ static int verify_playback_1(int ctl_fd)
 		print_errno("SNDRV_CTL_IOCTL_PCM_INFO(Playback_1)");
 		return -1;
 	}
-	if (strncmp((const char *)info.name, "Playback_1", sizeof(info.name)) != 0) {
+	/* ASoC decorates dynamic front-end PCM IDs with " (*)" and leaves
+	 * snd_pcm_info.name empty on this machine driver.  Match the complete
+	 * undecorated ID token, while allowing that kernel-generated suffix. */
+	if (strncmp((const char *)info.id, expected_id,
+		    sizeof(expected_id) - 1) != 0 ||
+	    (info.id[sizeof(expected_id) - 1] != '\0' &&
+	     info.id[sizeof(expected_id) - 1] != ' ')) {
 		fprintf(stderr,
-			"gemini-audio-headphone: PCM C?D0p is '%.*s', not Playback_1\n",
-			(int)sizeof(info.name), info.name);
+			"gemini-audio-headphone: PCM C?D0p identity is "
+			"id='%.*s' name='%.*s' subname='%.*s', not Playback_1\n",
+			(int)sizeof(info.id), info.id,
+			(int)sizeof(info.name), info.name,
+			(int)sizeof(info.subname), info.subname);
 		return -1;
 	}
 	return 0;
