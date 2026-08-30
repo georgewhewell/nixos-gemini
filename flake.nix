@@ -452,6 +452,27 @@
       unattendedRecovery = true;
     };
 
+    # G2c is prepared, not implied: it is for a later p22-only cycle after a
+    # corrected G2b run has proved raw HCR/HVR/FVR and the full-STP query. It
+    # alone enables the hash-pinned patch gate, then fences before any radio
+    # function can be created.
+    mainlineConsysG2cPatchOnly = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2cPatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
     # Critical-path GPU identity experiment. It keeps the accepted recovery
     # substrate, then exclusively votes RT5735 and all four MFG domains,
     # enables BG3D, reads immutable Mali-T880 identity/features, and unwinds.
@@ -1183,6 +1204,10 @@
       mainlineConsysFirmwarePreflightDtb = mainlineConsysFirmwarePreflight.serviceabilityDtb;
       mainlineConsysFirmwarePreflightInitramfs = mainlineConsysFirmwarePreflight.probeInitramfs;
       mainlineConsysFirmwarePreflightBundle = mainlineConsysFirmwarePreflight.bundle;
+      mainlineConsysG2cPatchOnlyKernel = mainlineConsysG2cPatchOnly.kernel;
+      mainlineConsysG2cPatchOnlyDtb = mainlineConsysG2cPatchOnly.serviceabilityDtb;
+      mainlineConsysG2cPatchOnlyInitramfs = mainlineConsysG2cPatchOnly.probeInitramfs;
+      mainlineConsysG2cPatchOnlyBundle = mainlineConsysG2cPatchOnly.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

@@ -12,6 +12,7 @@
   usbHostOverlay ? false,
   consysIdentityOverlay ? false,
   consysG2bOverlay ? false,
+  consysG2cPatchOverlay ? false,
   consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
@@ -59,6 +60,7 @@
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
     ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
+    ++ lib.optionals consysG2cPatchOverlay [./mainline-consys-g2c-patch.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -100,8 +102,15 @@
       then "emi-identity-postid-raw-mandatory-full-wmt-firmware-packaged-no-patch-v1"
       else "emi-identity-postid-raw-mandatory-full-no-firmware-v1"
     else "none";
+  consysG2cPatchLabel =
+    if consysG2cPatchOverlay
+    then "emi-identity-postid-raw-mandatory-full-hash-pinned-patch-only-v1"
+    else "none";
+  consysFirmwareAvailable = consysFirmware || consysG2cPatchOverlay;
   consysFirmwareLabel =
-    if consysFirmware
+    if consysG2cPatchOverlay
+    then "three-blob-exact-size-sha256-patch-manifest-enabled-v1"
+    else if consysFirmware
     then "tracked-production-wmt-patch-preflight-only-v1"
     else "none";
   gpuStagedLabel =
@@ -163,6 +172,7 @@
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
+    + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -172,6 +182,7 @@
     + lib.optionalString usbHostOverlay "-usb11-host"
     + lib.optionalString consysIdentityOverlay "-consys-identity"
     + lib.optionalString consysG2bOverlay "-consys-g2b"
+    + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -202,10 +213,12 @@
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
     else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
-    assert !(consysIdentityOverlay && consysG2bOverlay);
+    assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay));
+    assert !(consysG2bOverlay && consysG2cPatchOverlay);
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
-    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay));
+    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay));
+    assert !consysG2cPatchOverlay || unattendedRecovery;
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -304,6 +317,7 @@
       + lib.optionalString usbHostOverlay "-usb11-host"
       + lib.optionalString consysIdentityOverlay "-consys-identity"
       + lib.optionalString consysG2bOverlay "-consys-g2b"
+      + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
@@ -366,7 +380,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -411,6 +425,18 @@
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=y' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2cPatchOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2C_PATCH_OWNER=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
       ''}
@@ -612,6 +638,11 @@
           "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
         test -s "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
       ''}
+      ${lib.optionalString consysG2cPatchOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2c-patch-only.dtbo \
+          "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+      ''}
       ${lib.optionalString gpuStagedOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-staged.dtbo \
           "$out/mt6797-gemini-pda-gpu-staged.dtbo"
@@ -739,7 +770,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -862,6 +893,31 @@
           echo 'consys-g2b-overlay=passed' >> "$out/VALIDATION"
           echo 'consys-g2b-firmware=disabled' >> "$out/VALIDATION"
           echo 'consys-g2b-radio-clients=disabled' >> "$out/VALIDATION"
+        ''
+        else if consysG2cPatchOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2c-patch-only.dtbo
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-patch-owner compatible)" = \
+            mediatek,mt6797-consys-g2c-patch-owner
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2c-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap'
+          ! fdtget -p "$out/gemini-consys.dtb" /consys-g2c-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap-no-patch'
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2c-patch-owner \
+            | grep -Fqx 'mediatek,experimental-g2c-patch-owner'
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status)" = disabled
+          echo 'consys-g2c-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2c-manifest=hash-pinned-after-full-stp-only' >> "$out/VALIDATION"
+          echo 'consys-g2c-radio-clients=disabled' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
@@ -1215,11 +1271,11 @@
         test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
           5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
       ''}
-      ${lib.optionalString consysFirmware ''
+      ${lib.optionalString consysFirmwareAvailable ''
         # The staged MT6797 patch controller accepts only these bare names and
         # complete-image digests. Packaging is not activation: the G2b command
-        # line deliberately leaves its patch-download gate and all radio
-        # functions disabled.
+        # line only enables the patch gate in the explicit G2c profile; every
+        # radio function remains disabled in every profile.
         mkdir -p root/lib/firmware
         cp ${../blobs/WMT_SOC.cfg} root/lib/firmware/WMT_SOC.cfg
         cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
@@ -1807,6 +1863,7 @@
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
       echo "nix-consys-g2b=${consysG2bLabel}"
+      echo "nix-consys-g2c-patch=${consysG2cPatchLabel}"
       echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
       echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
