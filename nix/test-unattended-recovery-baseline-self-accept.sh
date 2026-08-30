@@ -30,6 +30,9 @@ BUSYBOX
     'watchdog-state=active' > "$d/run/gemini-mainline-success"
   printf '%s\n' 'result=pass watchdog_lease=unchanged remote_review_required=yes' > "$d/run/bq2589x-preflight.pass"
   printf '%s\n' \
+    'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
+    > "$d/run/gemini-display-activation"
+  printf '%s\n' \
     'format=gemini-unattended-recovery-lease-v1' \
     'clock=monotonic-uptime-seconds' \
     'started=100' 'deadline=820' 'lease_seconds=720' > "$d/run/unattended-recovery.lease-deadline"
@@ -76,6 +79,12 @@ run_fixture "$ok"
 grep -Fqx unattended_recovery=healthy "$ok/run/unattended-recovery.accepted"
 test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
+
+missing_display=$WORK/missing-display
+make_fixture "$missing_display"
+rm "$missing_display/run/gemini-display-activation"
+if run_fixture "$missing_display"; then fail 'accepted without display activation'; fi
+test ! -e "$missing_display/run/unattended-recovery.accepted"
 
 bad_token=$WORK/bad-token
 make_fixture "$bad_token"

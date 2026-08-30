@@ -20,6 +20,8 @@
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
+  touchscreenActivationOverlay ? false,
+  fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
 }: let
   lib = buildPkgs.lib;
@@ -31,6 +33,7 @@
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
+  p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -56,6 +59,8 @@
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
+    ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
+    ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
   overlayLabel =
     if debugOverlay
@@ -115,6 +120,14 @@
     if deviceActivationOverlay
     then "nt36772-fgadc-microsd-3v-live-proven-v1"
     else "none";
+  touchscreenActivationLabel =
+    if touchscreenActivationOverlay
+    then "nt36772-i2c4-0x62-live-proven-v1"
+    else "none";
+  fgadcActivationLabel =
+    if fgadcActivationOverlay
+    then "mt6351-exact-0x28-osr8-live-proven-v1"
+    else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
@@ -139,6 +152,8 @@
     + lib.optionalString unattendedRecovery "-unattended-recovery"
     + lib.optionalString inputObserveOverlay "-input-observe"
     + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
+    + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
+    + lib.optionalString fgadcActivationOverlay "-fgadc-active"
     + lib.optionalString deviceActivationOverlay "-device-activation";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
@@ -178,6 +193,44 @@
     assert
       !thermalHallObserveOverlay || inputObserveOverlay;
     assert
+      !touchscreenActivationOverlay
+      || (
+        storageOverlay
+        && sshAccess
+        && usbHostOverlay
+        && platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && powerObserveOverlay
+        && powerObservePreflight
+        && unattendedRecovery
+        && inputObserveOverlay
+        && thermalHallObserveOverlay
+        && !consysIdentityOverlay
+      );
+    assert
+      !fgadcActivationOverlay
+      || (
+        storageOverlay
+        && sshAccess
+        && usbHostOverlay
+        && platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && powerObserveOverlay
+        && powerObservePreflight
+        && unattendedRecovery
+        && inputObserveOverlay
+        && thermalHallObserveOverlay
+        && !consysIdentityOverlay
+      );
+    assert
+      !(touchscreenActivationOverlay || fgadcActivationOverlay)
+      || kernelRevision == p22BaselinePlatformRevision;
+    assert
+      !(touchscreenActivationOverlay || fgadcActivationOverlay)
+      || !deviceActivationOverlay;
+    assert
       !deviceActivationOverlay
       || (
         storageOverlay
@@ -213,6 +266,8 @@
       + lib.optionalString unattendedRecovery "-unattended-recovery"
       + lib.optionalString inputObserveOverlay "-input-observe"
       + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
+      + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
+      + lib.optionalString fgadcActivationOverlay "-fgadc-active"
       + lib.optionalString deviceActivationOverlay "-device-activation";
     version = "7.1.3";
     src = linux-gemini;
@@ -349,6 +404,18 @@
         grep -Fqx 'CONFIG_IIO=y' .config
         grep -Fqx 'CONFIG_MEDIATEK_MT6577_AUXADC=y' .config
         grep -Fqx 'CONFIG_KEYBOARD_GPIO=y' .config
+      ''}
+      ${lib.optionalString touchscreenActivationOverlay ''
+        grep -Fqx 'CONFIG_INPUT=y' .config
+        grep -Fqx 'CONFIG_INPUT_EVDEV=y' .config
+        grep -Fqx 'CONFIG_INPUT_TOUCHSCREEN=y' .config
+        grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' .config
+        ! grep -q '^CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString fgadcActivationOverlay ''
+        grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
+        grep -Fqx 'CONFIG_BATTERY_MT6351_FGADC=y' .config
+        ! grep -q '^CONFIG_BATTERY_MT6351_FGADC_KUNIT_TEST=' .config
       ''}
       grep -A20 -F 'consys: consys@18070000 {' \
         arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
@@ -510,6 +577,16 @@
         test -s "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
         test -s "$out/mt6797-gemini-pda-microsd-bringup.dtbo"
       ''}
+      ${lib.optionalString touchscreenActivationOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-activation.dtbo \
+          "$out/mt6797-gemini-pda-touchscreen-activation.dtbo"
+        test -s "$out/mt6797-gemini-pda-touchscreen-activation.dtbo"
+      ''}
+      ${lib.optionalString fgadcActivationOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-fuel-gauge-active.dtbo \
+          "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
+        test -s "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -517,6 +594,21 @@
       # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
         ${baseDtbSha256}
+      # The full p22 candidate depends on the DSI pre-host-registration IRQ
+      # ordering.  Keep this source-level guard adjacent to the locked kernel
+      # revision so a future platform refresh cannot silently reintroduce the
+      # synchronous panel-probe race.
+      ${lib.optionalString displayOverlay ''
+        dsi_irq_line=$(grep -n -F 'ret = devm_request_irq(&pdev->dev, irq_num, mtk_dsi_irq,' \
+          drivers/gpu/drm/mediatek/mtk_dsi.c | cut -d: -f1)
+        dsi_host_line=$(grep -n -F 'ret = mipi_dsi_host_register(&dsi->host);' \
+          drivers/gpu/drm/mediatek/mtk_dsi.c | cut -d: -f1)
+        test -n "$dsi_irq_line"
+        test -n "$dsi_host_line"
+        test "$dsi_irq_line" -lt "$dsi_host_line"
+        grep -Fq 'The panel may issue DSI transfers before' \
+          drivers/gpu/drm/mediatek/mtk_dsi.c
+      ''}
 
       if strings "$out/Image" | grep -Fq /nix/store/; then
         echo "Nix store path leaked into mainline Image" >&2
@@ -556,7 +648,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -785,6 +877,49 @@
         else ""
       }
       ${
+        if touchscreenActivationOverlay
+        then ''
+          # This is the active NT36772 component, separate from the inert
+          # I2C4 observer.  The source-locked overlay deliberately does not
+          # claim VTOUCH or GPIO68 reset ownership.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-touchscreen-active.dtb" \
+            ${kernel}/mt6797-gemini-pda-touchscreen-activation.dtbo
+          test "$(fdtget "$out/gemini-touchscreen-active.dtb" /i2c@11011000 status)" = okay
+          test "$(fdtget "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 status)" = okay
+          test "$(fdtget "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 compatible)" = \
+            novatek,nt36xxx
+          ! fdtget -p "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 \
+            | grep -Fqx 'reset-gpios'
+          ! fdtget -p "$out/gemini-touchscreen-active.dtb" /i2c@11011000/touchscreen@62 \
+            | grep -Fqx 'novatek,identity-only'
+          cp "$out/gemini-touchscreen-active.dtb" "$out/gemini.dtb"
+          echo 'touchscreen-activation=nt36772-i2c4-0x62-live-proven-passed' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
+      ${
+        if fgadcActivationOverlay
+        then ''
+          # FGADC owns only the calibrated PMIC monitor transaction.  It does
+          # not turn on capacity, charger, OTG, interrupt, or MicroSD policy.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-fgadc-active.dtb" \
+            ${kernel}/mt6797-gemini-pda-fuel-gauge-active.dtbo
+          test "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge status)" = disabled
+          test "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active status)" = okay
+          test "$(fdtget -t x "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active mediatek,fgadc-init-control)" = 28
+          test "$(fdtget -t i "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active mediatek,fgadc-osr)" = 8
+          fdtget -p "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active \
+            | grep -Fqx 'mediatek,initialize-fgadc'
+          cp "$out/gemini-fgadc-active.dtb" "$out/gemini.dtb"
+          echo 'fgadc-activation=mt6351-exact-0x28-osr8-live-proven-passed' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
+      ${
         if deviceActivationOverlay
         then ''
           # These three activation overlays were proved independently against
@@ -832,6 +967,14 @@
         ''
         else ""
       }
+      ${lib.optionalString (touchscreenActivationOverlay || fgadcActivationOverlay) ''
+        # Explicit negative contracts: this full-NixOS baseline does not pull
+        # in the later MicroSD, GPU, or radio bring-up experiments.
+        test "$(fdtget "$out/gemini.dtb" /mmc@11240000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
+      ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
         if thermalHallObserveOverlay
@@ -839,7 +982,7 @@
         else if inputObserveOverlay
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
-      }${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
+      }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is deliberately a small standalone ALSA-UAPI client, not a partial
@@ -1488,6 +1631,8 @@
       echo "nix-power-observe-preflight=${powerObservePreflightLabel}"
       echo "nix-input-observe=${inputObserveLabel}"
       echo "nix-thermal-hall-observe=${if thermalHallObserveOverlay then "auxadc-thermal-gpio66-no-wake-v1" else "none"}"
+      echo "nix-touchscreen-activation=${touchscreenActivationLabel}"
+      echo "nix-fgadc-activation=${fgadcActivationLabel}"
       echo "nix-device-activation=${deviceActivationLabel}"
       echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"

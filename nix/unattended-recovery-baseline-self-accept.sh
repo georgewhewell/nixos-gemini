@@ -29,6 +29,7 @@ expected_system_file=$run_root/gemini-lease-expected-system
 handoff_file=$run_root/stage1-handoff
 success_file=$run_root/gemini-mainline-success
 stage1_log=$run_root/stage1.log
+display_activation_file=$run_root/gemini-display-activation
 
 log() {
   line="GEMINI_MAINLINE_NIXOS: $*"
@@ -142,6 +143,10 @@ failed_units=$("$systemctl" --failed --no-legend --plain 2>/dev/null || true)
   fail store-not-readonly
 has_address '10.15.19.82/24' || fail gadget-address-missing
 has_address '192.168.23.70/' || fail right-nic-address-missing
+[ -r "$display_activation_file" ] || fail display-activation-missing
+"$busybox" grep -Fqx \
+  'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
+  "$display_activation_file" || fail display-activation-missing
 
 owner=$("$busybox" cat "$run_root/unattended-recovery.watchdog-owner" 2>/dev/null || true)
 watchdog_owned "$owner" || fail watchdog-owner-invalid

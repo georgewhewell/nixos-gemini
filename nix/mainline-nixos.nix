@@ -10,6 +10,7 @@
   bq2589xPreflight,
   unattendedRecovery ? false,
   inputDiagnostics ? false,
+  displayActivation ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
@@ -18,9 +19,11 @@
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
+assert builtins.isBool displayActivation;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
+assert !displayActivation || unattendedRecovery;
 let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists.  Derive the p29 filename from the immutable Nix store path so a
@@ -399,7 +402,27 @@ let
       ) &
     }
 
+    activate_display() {
+      # The locked 28c4715 platform requests the DSI IRQ before registering
+      # the MIPI host. Release the one-way MMSYS gate only after the watchdog
+      # petter and its lease are live, so a synchronous panel probe remains
+      # inside the recovery envelope.
+      display_gate=/sys/devices/platform/14000000.syscon/activate_drm
+      attempt=0
+      while [ ! -w "$display_gate" ] && [ "$attempt" -lt 30 ]; do
+        attempt=$((attempt + 1))
+        sleep 1
+      done
+      [ -w "$display_gate" ] || fail "display-activation-gate-missing"
+      printf '%s\n' 1 > "$display_gate" || fail "display-activation-write"
+      printf '%s\n' \
+        'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
+        > /run/gemini-display-activation
+      log "display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration"
+    }
+
     @START_WATCHDOG@
+    @ACTIVATE_DISPLAY@
     ${if inputDiagnostics then ''
       /bin/busybox sh /bin/input-observe stage1 &
       log "input_observe=started mode=sysfs-read-only i2c_transfers=none touchscreen_client=untouched"
@@ -495,6 +518,11 @@ let
         if unattendedRecovery
         then "start_watchdog_lease"
         else ":"
+      } \
+      --replace-fail @ACTIVATE_DISPLAY@ ${
+        if displayActivation
+        then "activate_display"
+        else ":"
       }
     ${if unattendedRecovery then ''
       grep -a -Fq watchdog "$busybox/bin/busybox"
@@ -505,6 +533,15 @@ let
       grep -Fq 'clock=monotonic-uptime-seconds' root/bin/unattended-recovery-lease-record
     '' else ''
       ! grep -Fq '^    start_watchdog_lease$' root/init
+    ''}
+    ${if displayActivation then ''
+      grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
+      grep -Fq 'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' root/init
+      activation_line=$(grep -n -F '    activate_display' root/init | tail -n 1 | cut -d: -f1)
+      watchdog_line=$(grep -n -F 'start_watchdog_lease' root/init | tail -n 1 | cut -d: -f1)
+      test "$watchdog_line" -lt "$activation_line"
+    '' else ''
+      ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
     ''}
     ${if provisionStore then ''
       grep -Fq 'store-provision=required' root/init
@@ -581,6 +618,13 @@ let
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
+      echo "display-activation=${if displayActivation then "stage1 watchdog-gated 14000000.syscon/activate_drm; DSI IRQ before host registration" else "none"}"
+      echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
+      echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
+      echo "microsd-activation=inactive (not composed)"
+      echo "audio-playback-exercise=inactive (no helper in image)"
+      echo "consys-radios=inactive (DT disabled)"
+      echo "gpu=inactive (DT disabled)"
       echo "unattended-recovery=${
         if unattendedRecovery
         then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"

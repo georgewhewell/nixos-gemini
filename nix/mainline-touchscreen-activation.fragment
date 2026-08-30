@@ -1,0 +1,7 @@
+# Explicit full-NixOS NT36772 component.  The DT overlay, not this fragment,
+# authorizes I2C4/0x62 binding; keeping the driver built in avoids a module
+# loader dependency in the recovery initramfs.
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
+CONFIG_INPUT_TOUCHSCREEN=y
+CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y
