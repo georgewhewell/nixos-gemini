@@ -952,3 +952,28 @@ leader-loss cleanup, foreground process topology, and the unique XML/starttime
 handoff; shell syntax, strict ShellCheck, and the complete harness suite pass.
 The next hardware action remains review-gated; p22-only, Download Only, and
 the p30/p31 no-write invariant are unchanged.
+
+## af0259fd observe-always-rollback cycle: 2026-08-30 07:43--07:48
+
+The reviewed candidate was written only to p22.  Trex's candidate log records
+BROM and DA connection, `[23] WRITE TO PARTITION [ boot ]`, `Download
+Succeeded`, and rc=0 at 07:43:30.  Candidate p22 readback was
+`3be59c637d058c7104522dc647b5895abceae1f96b71b1a31e2304a22cc94387`.
+
+Candidate validation failed closed because the required host-net marker
+reported `usb-host-net=missing after=60s driver=r8152`; the probe also recorded
+the bounded watchdog lease-expired/stopped evidence.  The durable supervisor
+armed the exact Stage-A rescue at 07:44:51.  Its Download Only writer completed
+rc=0 with `Download Succeeded` at 07:46:40 and terminal rescue verification at
+07:46:41.  No p30/p31 write, erase, format, or firmware upgrade occurred.
+
+The local harness recorded `manual_reset_required_supervisor_or_readback` at
+07:47:27 because its bounded readback window ended while the rescue boot was
+still bringing up USB.  This was not a device loss: gadget `0525:a4a2` returned
+at 07:46:59, link became `LOWER_UP` at 07:47:57, and independent SSH readback
+then proved p22 `1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`,
+p30 `122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and
+p31 `1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+Trex transaction and supervisor units were subsequently absent.  The cycle is
+therefore a candidate-rejected, rescue-successful run with a harness timing
+diagnosis, not an unrecovered hardware state.
