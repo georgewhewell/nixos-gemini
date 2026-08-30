@@ -254,6 +254,7 @@ test_stop_capture_does_not_trust_stale_diagnostic_pid() {
     sed -n '/^stop_capture() {/,/^cleanup() {/p' "$HARNESS" | sed '$d' > "$TEST_ROOT/stop-capture-stale.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/stop-capture-stale.sh"
+    cleanup_stage2_store_temp() { :; }
     run=$TEST_ROOT/stale-diagnostic
     mkdir -p "$run"
     stale_pid_file=$run/kernel.pid
@@ -527,10 +528,13 @@ test_rendered_candidate_validation_is_valid_shell() {
     EXPECTED_WATCHDOG_IDENTITY=mtk-wdt
     EXPECTED_WATCHDOG_STATE=active
     EXPECTED_WATCHDOG_TIMEOUT=31
+    LEASE_SECONDS=90
     STAGE2_POLICY=none
     STAGE1_WATCHDOG_OWNER_MARKER=
+    STAGE1_HANDOFF_PATH=
     STAGE2_WATCHDOG_OWNER_UNIT=
     STAGE2_WATCHDOG_STATE=
+    STAGE2_WATCHDOG_EVIDENCE=
     STAGE2_SUCCESS_MARKER=
     validate_candidate
 }
@@ -559,8 +563,160 @@ test_stage2_schema_requires_takeover_fields() {
         "$TEST_ROOT/stage2-missing.log"
 }
 
+test_stage2_schema_requires_store_fields() {
+    manifest=$TEST_ROOT/stage2-store-missing.manifest
+    sed -e 's/^watchdog_profile=.*/watchdog_profile=initramfs-petter/' \
+        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=60/' \
+        "$ROOT/research/p22-next-experiment.manifest" > "$manifest"
+    printf '%s\n' \
+        'stage2_policy=watchdog-takeover-required' \
+        'expected_watchdog_identity=mtk-wdt' \
+        'expected_watchdog_state=active' \
+        'expected_watchdog_timeout=31' \
+        'stage1_watchdog_owner_marker=watchdog=petting' \
+        'stage1_handoff_path=/run/stage1-handoff' \
+        'stage2_watchdog_owner_unit=gemini-watchdog.service' \
+        'stage2_watchdog_state=active' \
+        'stage2_watchdog_evidence=stage2=multi-user watchdog=petting acceptance=external' \
+        'stage2_success_marker=/run/gemini-mainline-success' \
+        'ssh_path_policy=both' \
+        'power_preflight_policy=required' \
+        'transaction_policy=observe-always-rollback' \
+        'lease_seconds=90' >> "$manifest"
+    set +e
+    "$HARNESS" --manifest "$manifest" --dry-run \
+        > "$TEST_ROOT/stage2-store-missing.log" 2>&1
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    grep -Fq 'manifest field is missing: stage2_store_source' \
+        "$TEST_ROOT/stage2-store-missing.log"
+}
+
+test_stage2_schema_rejects_unsafe_store_target() {
+    manifest=$TEST_ROOT/stage2-store-target.manifest
+    sed -e 's/^watchdog_profile=.*/watchdog_profile=initramfs-petter/' \
+        -e 's/^acceptance_window_seconds=.*/acceptance_window_seconds=60/' \
+        "$ROOT/research/p22-next-experiment.manifest" > "$manifest"
+    printf '%s\n' \
+        'stage2_policy=watchdog-takeover-required' \
+        'expected_watchdog_identity=mtk-wdt' \
+        'expected_watchdog_state=active' \
+        'expected_watchdog_timeout=31' \
+        'stage1_watchdog_owner_marker=watchdog=petting' \
+        'stage1_handoff_path=/run/stage1-handoff' \
+        'stage2_watchdog_owner_unit=gemini-watchdog.service' \
+        'stage2_watchdog_state=active' \
+        'stage2_watchdog_evidence=stage2=multi-user watchdog=petting acceptance=external' \
+        'stage2_success_marker=/run/gemini-mainline-success' \
+        'stage2_store_source=/mnt/Home/src/stage2-test.squashfs' \
+        'stage2_store_sha256=0000000000000000000000000000000000000000000000000000000000000000' \
+        'stage2_store_size=1' \
+        'stage2_store_target=/dev/mmcblk0p22' \
+        'stage2_store_target_live=/gemian/nixos/next-mainline.squashfs' \
+        'stage1_store_target=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs' \
+        'stage1_store_sha256=0000000000000000000000000000000000000000000000000000000000000000' \
+        'stage1_store_size=1' \
+        'ssh_path_policy=both' \
+        'power_preflight_policy=required' \
+        'transaction_policy=observe-always-rollback' \
+        'lease_seconds=90' >> "$manifest"
+    set +e
+    "$HARNESS" --manifest "$manifest" --dry-run \
+        > "$TEST_ROOT/stage2-store-target.log" 2>&1
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    grep -Fq 'stage2_store_target must be a unique /nixos/*.squashfs path' \
+        "$TEST_ROOT/stage2-store-target.log"
+}
+
+test_stage2_store_staging_commands_are_safe_shell() {
+    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/stage2-store-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/stage2-store-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-store-run
+    mkdir -p "$RUN_LOCAL"
+    n=0
+    : > "$TEST_ROOT/stage2-test.squashfs"
+    device_ssh_gadget() {
+        n=$((n + 1))
+        printf '%s\n' "$1" > "$RUN_LOCAL/store-command-$n.sh"
+        case "$1" in
+            *'test -f'*) return 1 ;;
+            *'grep -Fqx'*) return 0 ;;
+            *'cat >'*) cat > "$RUN_LOCAL/store-stream-$n"; return 0 ;;
+            *) return 0 ;;
+        esac
+    }
+    device_ssh_gadget_provision() { device_ssh_gadget "$@"; }
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-test.squashfs
+    STAGE2_STORE_SIZE=1
+    STAGE2_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE2_STORE_TARGET=/nixos/next-mainline.squashfs
+    STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
+    STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+    STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE1_STORE_SIZE=1
+    provision_stage2_store
+    for command in "$RUN_LOCAL"/store-command-*.sh; do sh -n "$command"; done
+    grep -Fq 'cat >' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp' \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'mv ' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'sync' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "test ! -L '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs' \
+        "$RUN_LOCAL/store-command-3.sh"
+    ! grep -R -Fq 'device_scp' "$RUN_LOCAL" 2>/dev/null
+}
+
+test_stage2_exact_target_is_idempotent() {
+    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/stage2-idempotent-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/stage2-idempotent-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-idempotent-run
+    mkdir -p "$RUN_LOCAL"
+    calls=0
+    device_ssh_gadget() {
+        calls=$((calls + 1))
+        case "$1" in
+            *'test -f'*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_SIZE=1
+    STAGE2_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
+    STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+    STAGE1_STORE_SIZE=1
+    STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    provision_stage2_store
+    test "$calls" -eq 1
+    test "$STAGE2_STORE_PROVISIONED" = yes
+    calls=0
+    STAGE2_STORE_PROVISIONED=no
+    device_ssh_gadget() {
+        calls=$((calls + 1))
+        case "$calls" in
+            1) return 1 ;;
+            2) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+    provision_stage2_store
+    test "$calls" -eq 2
+    test "$STAGE2_STORE_PROVISIONED" = yes
+}
+
 test_stage2_rendered_validation_requires_handoff() {
-    sed -n '/^validate_candidate() {/,/^}/p' "$HARNESS" \
+    sed -n '/^validate_candidate_stage2() {/,/^}/p' "$HARNESS" \
         > "$TEST_ROOT/validate-stage2-function.sh"
     # shellcheck disable=SC1090,SC1091
     . "$TEST_ROOT/validate-stage2-function.sh"
@@ -588,17 +744,62 @@ test_stage2_rendered_validation_requires_handoff() {
     EXPECTED_WATCHDOG_STATE=active
     EXPECTED_WATCHDOG_TIMEOUT=31
     STAGE2_POLICY=watchdog-takeover-required
-    STAGE1_WATCHDOG_OWNER_MARKER=stage1_watchdog_owner=initramfs
+    LEASE_SECONDS=90
+    STAGE1_WATCHDOG_OWNER_MARKER=watchdog=petting
+    STAGE1_HANDOFF_PATH=/run/stage1-handoff
     STAGE2_WATCHDOG_OWNER_UNIT=gemini-watchdog.service
     STAGE2_WATCHDOG_STATE=active
+    STAGE2_WATCHDOG_EVIDENCE='stage2=multi-user watchdog=petting acceptance=external'
     STAGE2_SUCCESS_MARKER=/run/gemini-mainline-success
-    validate_candidate
+    validate_candidate_stage2
     grep -Fq 'stage2_state=$(systemctl is-active' \
         "$RUN_LOCAL/rendered-stage2.sh"
     grep -Fq 'systemctl show -p MainPID --value' \
         "$RUN_LOCAL/rendered-stage2.sh"
-    grep -Fq 'test -s "/run/gemini-mainline-success"' \
+    grep -Fq 'test "$success_first" = '\''mainline NixOS reached multi-user.target'\''' \
         "$RUN_LOCAL/rendered-stage2.sh"
+    ! grep -Fq '/run/probe-status' "$RUN_LOCAL/rendered-stage2.sh"
+    sed -n '/^validate_candidate_right_path_stage2() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/validate-stage2-right-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/validate-stage2-right-function.sh"
+    device_ssh_right() {
+        printf '%s\n' "$1" > "$RUN_LOCAL/rendered-stage2-right.sh"
+        sh -n -c "$1"
+    }
+    SSH_PATH_POLICY=both
+    validate_candidate_right_path_stage2
+    grep -Fq '/dev/mmcblk0p31' "$RUN_LOCAL/rendered-stage2-right.sh"
+    grep -Fq 'idVendor' "$RUN_LOCAL/rendered-stage2-right.sh"
+    grep -Fq 'watchdog-owner=$stage2_pid' "$RUN_LOCAL/rendered-stage2-right.sh"
+    ! grep -Fq '/run/probe-status' "$RUN_LOCAL/rendered-stage2-right.sh"
+}
+
+test_stage2_lease_evidence_is_literal() {
+    sed -n '/^verify_lease_expiry_evidence() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/verify-lease-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/verify-lease-function.sh"
+    RUN_LOCAL=$TEST_ROOT/lease-proof
+    mkdir -p "$RUN_LOCAL"
+    cat > "$RUN_LOCAL/probe-status-proof.log" <<'EOF'
+stage2-evidence
+stage2=multi-user watchdog=petting acceptance=external
+unattended_recovery=lease-expired watchdog_userspace=stopped
+stage2-disconnected 2026-08-30T00:00:00Z
+EOF
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_WATCHDOG_EVIDENCE='stage2=multi-user watchdog=petting acceptance=external'
+    SUPERVISOR_STATE=$TEST_ROOT/supervisor.state
+    printf '%s\n' 'supervisor_rollback_succeeded_rescue_verified 2026-08-30T00:00:00Z' > "$SUPERVISOR_STATE"
+    trex_ssh() { grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$SUPERVISOR_STATE"; }
+    verify_lease_expiry_evidence
+    sed -i '/unattended_recovery=lease-expired/d' "$RUN_LOCAL/probe-status-proof.log"
+    set +e
+    verify_lease_expiry_evidence
+    rc=$?
+    set -e
+    test "$rc" -ne 0
 }
 
 test_stage2_policy_requires_observe_lease() {
@@ -611,10 +812,20 @@ test_stage2_policy_requires_observe_lease() {
         'expected_watchdog_identity=mtk-wdt' \
         'expected_watchdog_state=active' \
         'expected_watchdog_timeout=31' \
-        'stage1_watchdog_owner_marker=stage1_watchdog_owner=initramfs' \
+        'stage1_watchdog_owner_marker=watchdog=petting' \
+        'stage1_handoff_path=/run/stage1-handoff' \
         'stage2_watchdog_owner_unit=gemini-watchdog.service' \
         'stage2_watchdog_state=active' \
+        'stage2_watchdog_evidence=stage2=multi-user watchdog=petting acceptance=external' \
         'stage2_success_marker=/run/gemini-mainline-success' \
+        'stage2_store_source=/mnt/Home/src/stage2-test.squashfs' \
+        'stage2_store_sha256=0000000000000000000000000000000000000000000000000000000000000000' \
+        'stage2_store_size=1' \
+        'stage2_store_target=/nixos/next-mainline.squashfs' \
+        'stage2_store_target_live=/gemian/nixos/next-mainline.squashfs' \
+        'stage1_store_target=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs' \
+        'stage1_store_sha256=0000000000000000000000000000000000000000000000000000000000000000' \
+        'stage1_store_size=1' \
         'ssh_path_policy=both' \
         'power_preflight_policy=required' \
         'transaction_policy=observe-always-rollback' \
@@ -695,6 +906,11 @@ test_wrapper_requires_transaction_owner_when_requested
 test_wrapper_rejects_stale_transaction_owner
 test_transaction_holder_removes_expired_owner
 test_stage2_schema_requires_takeover_fields
+test_stage2_schema_requires_store_fields
+test_stage2_schema_rejects_unsafe_store_target
+test_stage2_store_staging_commands_are_safe_shell
+test_stage2_exact_target_is_idempotent
 test_stage2_rendered_validation_requires_handoff
+test_stage2_lease_evidence_is_literal
 test_stage2_policy_requires_observe_lease
 echo 'p22-recovery-harness tests: passed'

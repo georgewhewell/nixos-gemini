@@ -1144,3 +1144,37 @@ The offline shell suite and rendered-remote-script syntax regression passed;
 ShellCheck still reports only the repository's pre-existing warnings/info
 (including deliberate escaped remote-script quoting); no hardware, Trex,
 network, power, or partition operation was performed.
+
+## Full-NixOS handoff evidence and store staging correction: 2026-08-30 (no hardware)
+
+The full-NixOS contract does not expose `/run/probe-status`.  Stage1 evidence
+is instead `/run/stage1.log` with `watchdog=petting ... lease=90s handoff=stage1`
+and a nonempty `/run/stage1-handoff`; Stage2 must append
+`stage2=multi-user watchdog=petting acceptance=external` to `/run/stage1.log`
+and create `/run/gemini-mainline-success`.  The isolated harness now captures
+those files, validates the Stage2 systemd watchdog owner and watchdog FD over
+both SSH paths, and proves RTL8156 identity from the expected IPv4 interface's
+sysfs USB ancestry (`idVendor=0bda`, `idProduct=8156`, driver `r8152`).  The
+right-NIC Stage2 validation has no `/run/probe-status` dependency.
+
+For Stage2 manifests, the SquashFS source must provide an exact local path,
+SHA256, and positive size.  The live target is a unique
+`/gemian/nixos/<new-name>.squashfs`, corresponding to `/nixos/<new-name>.squashfs`
+after Stage2 handoff; it must never replace the Stage-A file
+`/gemian/nixos/mainline-nixos-connectivity-m0.squashfs`.  Dry-run checks local
+bytes and the current old-file/p22/p30/p31 identities only.  It does not stage
+the currently observed older NixOS, whose `/gemian` is read-only (and has no
+safe journal remount path).
+
+On a candidate boot, Stage1 mounts p29 journaled read-write only when the
+unique target is absent, and publishes the exact request in `/run/stage1.log`:
+`store-provision=required target=/mnt/gemian/nixos/<new-name>.squashfs
+temp=/mnt/gemian/nixos/<new-name>.squashfs.provision.tmp sha256=<sha> size=<size>`.
+The host then streams the immutable source over gadget SSH stdin (Stage1 has
+no scp), verifies the temporary and old Stage-A file, atomically renames only
+the absent unique target, syncs, rereads hashes, and requires
+`/run/store-provision.ready` to equal
+`store-provision=ready sha256=<sha> size=<size>`.  Stage1 remounts p29
+`ro,noload` before Stage2.  A failed upload may leave only the exact owned
+`.provision.tmp`; cleanup may remove only that path.  No block device, p30,
+p31, erase, format, or replacement of the Stage-A store is permitted.

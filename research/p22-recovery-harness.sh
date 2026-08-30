@@ -94,9 +94,21 @@ TRANSACTION_POLICY=
 # retain their previous validation semantics.
 STAGE2_POLICY=
 STAGE1_WATCHDOG_OWNER_MARKER=
+STAGE1_HANDOFF_PATH=
 STAGE2_WATCHDOG_OWNER_UNIT=
 STAGE2_WATCHDOG_STATE=
+STAGE2_WATCHDOG_EVIDENCE=
 STAGE2_SUCCESS_MARKER=
+STAGE2_STORE_SOURCE=
+STAGE2_STORE_SHA=
+STAGE2_STORE_SIZE=
+STAGE2_STORE_TARGET=
+STAGE2_STORE_TARGET_LIVE=
+STAGE1_STORE_TARGET=
+STAGE1_STORE_SHA=
+STAGE1_STORE_SIZE=
+STAGE2_STORE_TEMP=
+STAGE2_STORE_PROVISIONED=no
 LEASE_SECONDS=
 ACCEPTANCE_DEADLINE=
 HOST_NET_FALLBACK_ARMED=no
@@ -104,6 +116,9 @@ CANDIDATE_HOSTKEY_MODE=no
 VALIDATION_GADGET_ONLY=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
+# Stage1 waits up to 65s for the host stream. Keep the upload itself bounded
+# but long enough for the full SquashFS over gadget SSH.
+PROVISION_UPLOAD_TIMEOUT_SECONDS=55
 # Both known-good and candidate initramfs hold their user-visible services
 # behind the approximately 48-second DVFSP late-validation gate.  Trex may
 # finish restoring p22 before that boot reaches SSH, so recovery readback must
@@ -164,9 +179,19 @@ load_manifest() {
             transaction_policy) [ -z "$TRANSACTION_POLICY" ] || die "duplicate transaction_policy"; TRANSACTION_POLICY=$value ;;
             stage2_policy) [ -z "$STAGE2_POLICY" ] || die "duplicate stage2_policy"; STAGE2_POLICY=$value ;;
             stage1_watchdog_owner_marker) [ -z "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "duplicate stage1_watchdog_owner_marker"; STAGE1_WATCHDOG_OWNER_MARKER=$value ;;
+            stage1_handoff_path) [ -z "$STAGE1_HANDOFF_PATH" ] || die "duplicate stage1_handoff_path"; STAGE1_HANDOFF_PATH=$value ;;
             stage2_watchdog_owner_unit) [ -z "$STAGE2_WATCHDOG_OWNER_UNIT" ] || die "duplicate stage2_watchdog_owner_unit"; STAGE2_WATCHDOG_OWNER_UNIT=$value ;;
             stage2_watchdog_state) [ -z "$STAGE2_WATCHDOG_STATE" ] || die "duplicate stage2_watchdog_state"; STAGE2_WATCHDOG_STATE=$value ;;
+            stage2_watchdog_evidence) [ -z "$STAGE2_WATCHDOG_EVIDENCE" ] || die "duplicate stage2_watchdog_evidence"; STAGE2_WATCHDOG_EVIDENCE=$value ;;
             stage2_success_marker) [ -z "$STAGE2_SUCCESS_MARKER" ] || die "duplicate stage2_success_marker"; STAGE2_SUCCESS_MARKER=$value ;;
+            stage2_store_source) [ -z "$STAGE2_STORE_SOURCE" ] || die "duplicate stage2_store_source"; STAGE2_STORE_SOURCE=$value ;;
+            stage2_store_sha256) [ -z "$STAGE2_STORE_SHA" ] || die "duplicate stage2_store_sha256"; STAGE2_STORE_SHA=$value ;;
+            stage2_store_size) [ -z "$STAGE2_STORE_SIZE" ] || die "duplicate stage2_store_size"; STAGE2_STORE_SIZE=$value ;;
+            stage2_store_target) [ -z "$STAGE2_STORE_TARGET" ] || die "duplicate stage2_store_target"; STAGE2_STORE_TARGET=$value ;;
+            stage2_store_target_live) [ -z "$STAGE2_STORE_TARGET_LIVE" ] || die "duplicate stage2_store_target_live"; STAGE2_STORE_TARGET_LIVE=$value ;;
+            stage1_store_target) [ -z "$STAGE1_STORE_TARGET" ] || die "duplicate stage1_store_target"; STAGE1_STORE_TARGET=$value ;;
+            stage1_store_sha256) [ -z "$STAGE1_STORE_SHA" ] || die "duplicate stage1_store_sha256"; STAGE1_STORE_SHA=$value ;;
+            stage1_store_size) [ -z "$STAGE1_STORE_SIZE" ] || die "duplicate stage1_store_size"; STAGE1_STORE_SIZE=$value ;;
             lease_seconds) [ -z "$LEASE_SECONDS" ] || die "duplicate lease_seconds"; LEASE_SECONDS=$value ;;
             *) die "unknown manifest key: $key" ;;
         esac
@@ -279,7 +304,7 @@ require_manifest() {
     require_token "$HOST_NET_POLICY"
     case "$STAGE2_POLICY" in
         none)
-            [ -z "$STAGE1_WATCHDOG_OWNER_MARKER$STAGE2_WATCHDOG_OWNER_UNIT$STAGE2_WATCHDOG_STATE$STAGE2_SUCCESS_MARKER" ] ||
+            [ -z "$STAGE1_WATCHDOG_OWNER_MARKER$STAGE1_HANDOFF_PATH$STAGE2_WATCHDOG_OWNER_UNIT$STAGE2_WATCHDOG_STATE$STAGE2_WATCHDOG_EVIDENCE$STAGE2_SUCCESS_MARKER$STAGE2_STORE_SOURCE$STAGE2_STORE_SHA$STAGE2_STORE_SIZE$STAGE2_STORE_TARGET$STAGE2_STORE_TARGET_LIVE$STAGE1_STORE_TARGET$STAGE1_STORE_SHA$STAGE1_STORE_SIZE" ] ||
                 die "stage2 watchdog fields require stage2_policy=watchdog-takeover-required" ;;
         watchdog-takeover-required)
             [ "$ROOTFS_POLICY" = nixos-stage2 ] || die "stage2 watchdog takeover requires rootfs_policy=nixos-stage2"
@@ -289,14 +314,40 @@ require_manifest() {
             [ "$TRANSACTION_POLICY" = observe-always-rollback ] || die "stage2 watchdog takeover requires observe-always-rollback"
             [ "$LEASE_SECONDS" -eq 90 ] || die "stage2 watchdog takeover requires lease_seconds=90"
             [ -n "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "manifest field is missing: stage1_watchdog_owner_marker"
+            [ "$STAGE1_WATCHDOG_OWNER_MARKER" = watchdog=petting ] || die "stage1_watchdog_owner_marker must be watchdog=petting"
+            [ "$STAGE1_HANDOFF_PATH" = /run/stage1-handoff ] || die "stage1_handoff_path must be /run/stage1-handoff"
             [ -n "$STAGE2_WATCHDOG_OWNER_UNIT" ] || die "manifest field is missing: stage2_watchdog_owner_unit"
             [ -n "$STAGE2_WATCHDOG_STATE" ] || die "manifest field is missing: stage2_watchdog_state"
             [ "$STAGE2_WATCHDOG_STATE" = active ] || die "stage2_watchdog_state must be active"
+            [ "$STAGE2_WATCHDOG_EVIDENCE" = 'stage2=multi-user watchdog=petting acceptance=external' ] || die "stage2_watchdog_evidence does not match the Stage2 handoff contract"
             [ -n "$STAGE2_SUCCESS_MARKER" ] || die "manifest field is missing: stage2_success_marker"
             [ "$STAGE2_SUCCESS_MARKER" = /run/gemini-mainline-success ] || die "stage2_success_marker must be /run/gemini-mainline-success"
+            [ -n "$STAGE2_STORE_SOURCE" ] || die "manifest field is missing: stage2_store_source"
+            [ -n "$STAGE2_STORE_SHA" ] || die "manifest field is missing: stage2_store_sha256"
+            [ -n "$STAGE2_STORE_SIZE" ] || die "manifest field is missing: stage2_store_size"
+            [ -n "$STAGE2_STORE_TARGET_LIVE" ] || die "manifest field is missing: stage2_store_target_live"
+            [ -n "$STAGE1_STORE_TARGET" ] || die "manifest field is missing: stage1_store_target"
+            [ -n "$STAGE1_STORE_SHA" ] || die "manifest field is missing: stage1_store_sha256"
+            [ -n "$STAGE1_STORE_SIZE" ] || die "manifest field is missing: stage1_store_size"
+            case "$STAGE2_STORE_TARGET" in /nixos/*.squashfs) ;; *) die "stage2_store_target must be a unique /nixos/*.squashfs path" ;; esac
+            case "$STAGE2_STORE_TARGET_LIVE" in /gemian/nixos/*.squashfs) ;; *) die "stage2_store_target_live must be /gemian/nixos/*.squashfs" ;; esac
+            [ "${STAGE2_STORE_TARGET_LIVE##/gemian}" = "$STAGE2_STORE_TARGET" ] || die "live and Stage2 store targets must name the same file"
+            [ "$STAGE2_STORE_TARGET" != /nixos/mainline-nixos-connectivity-m0.squashfs ] || die "Stage2 store target must not replace the Stage-A store"
+            [ "$STAGE1_STORE_TARGET" = /gemian/nixos/mainline-nixos-connectivity-m0.squashfs ] || die "stage1_store_target must be the Stage-A store path"
             require_token "$STAGE1_WATCHDOG_OWNER_MARKER"
             require_token "$STAGE2_WATCHDOG_OWNER_UNIT"
             require_token "$STAGE2_WATCHDOG_STATE"
+            require_sha "$STAGE2_STORE_SHA" stage2_store_sha256
+            case "$STAGE2_STORE_SIZE" in ''|*[!0-9]*) die "stage2_store_size must be numeric" ;; esac
+            [ "$STAGE2_STORE_SIZE" -gt 0 ] || die "stage2_store_size must be positive"
+            require_sha "$STAGE1_STORE_SHA" stage1_store_sha256
+            case "$STAGE1_STORE_SIZE" in ''|*[!0-9]*) die "stage1_store_size must be numeric" ;; esac
+            [ "$STAGE1_STORE_SIZE" -gt 0 ] || die "stage1_store_size must be positive"
+            require_path "$STAGE1_HANDOFF_PATH" stage1_handoff_path
+            require_path "$STAGE2_STORE_SOURCE" stage2_store_source
+            require_path "$STAGE2_STORE_TARGET" stage2_store_target
+            require_path "$STAGE2_STORE_TARGET_LIVE" stage2_store_target_live
+            require_path "$STAGE1_STORE_TARGET" stage1_store_target
             require_path "$STAGE2_SUCCESS_MARKER" stage2_success_marker
             case "$STAGE2_WATCHDOG_OWNER_UNIT" in *.service) ;; *) die "stage2_watchdog_owner_unit must end in .service" ;; esac ;;
         *) die "unknown stage2_policy" ;;
@@ -336,6 +387,21 @@ device_ssh_gadget() {
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
         timeout "$SSH_DEADLINE_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+    fi
+}
+
+device_ssh_gadget_provision() {
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
+    else
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
             -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
@@ -439,10 +505,30 @@ preflight_local() {
     hash_size "$ROLLBACK_SHA" "$ROLLBACK"
     test "$CANDIDATE_SIZE" -eq "$SIZE"
     test "$ROLLBACK_SIZE" -eq "$SIZE"
+    if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+        test "$(stat -Lc %s "$STAGE2_STORE_SOURCE")" -eq "$STAGE2_STORE_SIZE"
+        test "$(sha256sum "$STAGE2_STORE_SOURCE" | cut -d' ' -f1)" = "$STAGE2_STORE_SHA"
+    fi
     preflight_scatter
 }
 
 preflight_device() {
+    stage2_store_checks=
+    if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+stage2_store_checks="test -d /gemian/nixos
+test -f '$STAGE1_STORE_TARGET'
+test \"\$(stat -Lc %s '$STAGE1_STORE_TARGET')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
+test ! -b '$STAGE1_STORE_TARGET'
+test ! -L '$STAGE1_STORE_TARGET'
+test ! -L '$STAGE2_STORE_TARGET_LIVE'
+if test -e '$STAGE2_STORE_TARGET_LIVE'; then
+  test ! -L '$STAGE2_STORE_TARGET_LIVE'
+  test ! -b '$STAGE2_STORE_TARGET_LIVE'
+  test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
+  test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+fi"
+    fi
     device_ssh "set -eu
 target=\$(readlink -f /dev/disk/by-partlabel/boot)
 test \"\$target\" = $TARGET_DEVICE
@@ -454,6 +540,10 @@ test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
 test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 sha256sum \"\$target\" /dev/mmcblk0p30 /dev/mmcblk0p31"
+    if [ -n "$stage2_store_checks" ]; then
+        device_ssh "set -eu
+$stage2_store_checks"
+    fi
 }
 
 stage_image() {
@@ -465,6 +555,69 @@ stage_image() {
     # /mnt/Home is shared storage, but the writer runs on Trex. Verify the
     # bytes from Trex immediately before every candidate/rollback wrapper.
     trex_ssh "test \"\$(stat -Lc %s '$STAGE_IMAGE')\" -eq '$SIZE'; test \"\$(sha256sum '$STAGE_IMAGE' | cut -d' ' -f1)\" = '$expected'"
+}
+
+provision_stage2_store() {
+    [ "$STAGE2_POLICY" = watchdog-takeover-required ] || return 0
+    init_target=/mnt$STAGE2_STORE_TARGET_LIVE
+    init_stage1_target=/mnt$STAGE1_STORE_TARGET
+    provision_tmp=$init_target.provision.tmp
+    STAGE2_STORE_TEMP=$provision_tmp
+    required_line="store-provision=required target=$init_target temp=$provision_tmp sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
+    ready_line="store-provision=ready sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
+    # Stage1 alone opens p29 journaled rw. The host streams over gadget SSH
+    # only after Stage1 publishes the exact request marker.
+    if device_ssh_gadget "set -eu
+test -f '$init_target'
+test ! -L '$init_target'
+test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'"; then
+        STAGE2_STORE_TEMP=
+        STAGE2_STORE_PROVISIONED=yes
+        return 0
+    fi
+    if device_ssh_gadget "set -eu
+test -f '$STAGE2_STORE_TARGET_LIVE'
+test ! -L '$STAGE2_STORE_TARGET_LIVE'
+test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test -f '$STAGE1_STORE_TARGET'
+test \"\$(stat -Lc %s '$STAGE1_STORE_TARGET')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'"; then
+        STAGE2_STORE_TEMP=
+        STAGE2_STORE_PROVISIONED=yes
+        return 0
+    fi
+    device_ssh_gadget "grep -Fqx -- '$required_line' /run/stage1.log" || return 1
+    if ! device_ssh_gadget_provision "set -eu
+test ! -e '$init_target'
+test ! -e '$provision_tmp'
+test ! -L '$provision_tmp'
+cat > '$provision_tmp'
+test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test ! -e '$init_target'
+test ! -L '$init_target'
+mv '$provision_tmp' '$init_target'
+sync
+test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
+printf '%s\\n' '$ready_line' > /run/store-provision.ready
+test \"\$(cat /run/store-provision.ready)\" = '$ready_line'" < "$STAGE2_STORE_SOURCE"; then
+        return 1
+    fi
+    device_ssh_gadget "set -eu
+test \"\$(cat /run/store-provision.ready)\" = '$ready_line'
+test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'" || return 1
+    STAGE2_STORE_TEMP=
+    STAGE2_STORE_PROVISIONED=yes
 }
 
 start_capture() {
@@ -529,6 +682,18 @@ start_capture() {
     HOST_NET_FALLBACK_ARMED=yes
 }
 
+cleanup_stage2_store_temp() {
+    [ -n "${STAGE2_STORE_TEMP:-}" ] || return 0
+    case "$STAGE2_STORE_TEMP" in
+        /mnt/gemian/nixos/*.provision.tmp) ;;
+        *) return 0 ;;
+    esac
+    # Only remove the exact Stage1-owned temporary for this manifest. Never
+    # remove a final store or anything on a block device.
+    device_ssh_gadget "test ! -L '$STAGE2_STORE_TEMP' && test -f '$STAGE2_STORE_TEMP' && rm -f '$STAGE2_STORE_TEMP'" >/dev/null 2>&1 || true
+    STAGE2_STORE_TEMP=
+}
+
 # shellcheck disable=SC2329 # reached through the EXIT/INT/TERM cleanup trap
 stop_capture() {
     [ -n "${RUN_SHARED:-}" ] || return 0
@@ -543,6 +708,7 @@ stop_capture() {
         # supervisor, transaction lease, watcher, and any rollback child alive.
         return 0
     fi
+    cleanup_stage2_store_temp
     if [ -n "${SUPERVISOR_UNIT:-}" ]; then
         # A terminal supervisor has completed or failed its bounded work;
         # stopping the transient unit merely releases its service record.
@@ -563,10 +729,18 @@ start_probe_capture() {
     proof_log=$RUN_LOCAL/probe-status-proof.log
     (
         while :; do
-            printf 'probe-status %s\n' "$(date -Is)"
-            if ! device_ssh 'cat /run/probe-status'; then
-                printf 'probe-status-disconnected %s\n' "$(date -Is)"
-                break
+            if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+                printf 'stage2-evidence %s\n' "$(date -Is)"
+                if ! device_ssh 'for f in /run/stage1.log /run/stage1-handoff /run/store-provision.ready; do if test -e "$f"; then printf "--- %s ---\n" "$f"; cat "$f"; fi; done'; then
+                    printf 'stage2-disconnected %s\n' "$(date -Is)"
+                    break
+                fi
+            else
+                printf 'probe-status %s\n' "$(date -Is)"
+                if ! device_ssh 'cat /run/probe-status'; then
+                    printf 'probe-status-disconnected %s\n' "$(date -Is)"
+                    break
+                fi
             fi
             sleep 3
         done
@@ -580,6 +754,23 @@ stop_probe_capture() {
     kill "$PROBE_CAPTURE_PID" 2>/dev/null || true
     wait "$PROBE_CAPTURE_PID" 2>/dev/null || true
     PROBE_CAPTURE_PID=
+}
+
+verify_lease_expiry_evidence() {
+    if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+        # Full NixOS has no probe-status file. Require the literal lease line
+        # captured from /run/stage1.log, followed by the observed disconnect;
+        # SSH loss alone is never converted into a synthetic lease claim.
+        grep -Fq -- 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
+            "$RUN_LOCAL/probe-status-proof.log" || return 1
+        grep -Fq -- "$STAGE2_WATCHDOG_EVIDENCE" "$RUN_LOCAL/probe-status-proof.log" || return 1
+        grep -Fq -- 'stage2-disconnected ' "$RUN_LOCAL/probe-status-proof.log" || return 1
+        [ -n "${SUPERVISOR_STATE:-}" ] || return 1
+        trex_ssh "grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' '$SUPERVISOR_STATE'" || return 1
+        return 0
+    fi
+    grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
+        "$RUN_LOCAL/probe-status-proof.log"
 }
 
 start_supervisor() {
@@ -781,7 +972,89 @@ wait_ssh() {
     return 1
 }
 
+validate_candidate_stage2() {
+    device_ssh "set -eu
+accept_deadline=$ACCEPTANCE_DEADLINE
+test \"\$(date +%s)\" -lt \"\$accept_deadline\"
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
+grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
+while ! test -s /run/bq2589x-preflight.pass; do
+  test ! -e /run/bq2589x-preflight.fail
+  test \"\$(date +%s)\" -lt \"\$accept_deadline\"
+  sleep 1
+done
+grep -Fqx 'result=pass watchdog_lease=unchanged remote_review_required=yes' /run/bq2589x-preflight.pass
+grep -Fq 'GEMINI_BQ2589X_PREFLIGHT: result=pass watchdog_lease=unchanged remote_review_required=yes' /run/bq2589x-preflight.status
+grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
+grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
+grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
+test \"\$(cat /sys/devices/system/cpu/online)\" = $EXPECTED_CPU_ONLINE
+gadget_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_GADGET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+test -n \"\$gadget_if\"
+test -n \"\$ethernet_if\"
+test \"\$(basename \"\$(readlink -f \"/sys/class/net/\$ethernet_if/device/driver\")\")\" = r8152
+usb_node=\$(readlink -f \"/sys/class/net/\$ethernet_if/device\")
+usb_ok=no
+while [ \"\$usb_node\" != / ]; do
+  if test -r \"\$usb_node/idVendor\" && test -r \"\$usb_node/idProduct\" &&
+     test \"\$(cat \"\$usb_node/idVendor\")\" = 0bda &&
+     test \"\$(cat \"\$usb_node/idProduct\")\" = 8156; then
+    usb_ok=yes
+    break
+  fi
+  next_node=\$(dirname \"\$usb_node\")
+  test \"\$next_node\" != \"\$usb_node\" || break
+  usb_node=\$next_node
+done
+test \"\$usb_ok\" = yes
+stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
+stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+case \"\$stage2_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+test \"\$stage2_pid\" -gt 1
+test -d \"/proc/\$stage2_pid\"
+stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+test -n \"\$stage2_device\"
+success_first=\$(sed -n '1p' \"$STAGE2_SUCCESS_MARKER\")
+test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
+grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
+grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
+grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+test -s \"$STAGE1_HANDOFF_PATH\"
+grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
+grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
+stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
+stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+case \"\$stage2_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+test \"\$stage2_pid\" -gt 1
+test -d \"/proc/\$stage2_pid\"
+stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+test -n \"\$stage2_device\"
+grep -Fq -- 'panic=5' /proc/cmdline
+grep -Fq -- 'mtk_wdt.start_at_boot=1' /proc/cmdline
+test \"\$(cat /sys/class/watchdog/watchdog0/identity)\" = \"$EXPECTED_WATCHDOG_IDENTITY\"
+test \"\$(cat /sys/class/watchdog/watchdog0/state)\" = \"$EXPECTED_WATCHDOG_STATE\"
+test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
+test -r /sys/class/watchdog/watchdog0/bootstatus
+printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"
+printf 'stage1_handoff_path=%s\\n' \"$STAGE1_HANDOFF_PATH\"
+printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
+printf 'stage2_success_marker=%s\\n' \"$STAGE2_SUCCESS_MARKER\"
+printf '%s\\n' \"$STAGE2_WATCHDOG_EVIDENCE\"
+"
+}
+
 validate_candidate() {
+    if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+        validate_candidate_stage2
+        return $?
+    fi
     device_ssh "set -eu
 accept_deadline=$ACCEPTANCE_DEADLINE
 test \"\$(date +%s)\" -lt \"\$accept_deadline\"
@@ -794,7 +1067,10 @@ case \"$ROOTFS_POLICY\" in
     grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
     if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
       test -s \"$STAGE2_SUCCESS_MARKER\"
-      grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/probe-status
+      grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+      test -s \"$STAGE1_HANDOFF_PATH\"
+      grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
+      grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
       stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
       test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
       stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
@@ -804,7 +1080,10 @@ case \"$ROOTFS_POLICY\" in
       stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
       test -n \"\$stage2_device\"
       printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"
+      printf 'stage1_handoff_path=%s\\n' \"$STAGE1_HANDOFF_PATH\"
+      grep -E 'watchdog=petting .*lease=[0-9]+s handoff=stage1' /run/stage1.log
       printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
+      grep -F -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
       printf 'stage2_success_marker=%s\\n' \"$STAGE2_SUCCESS_MARKER\"
     fi ;;
   enumeration-only)
@@ -850,8 +1129,26 @@ case \"$HOST_NET_POLICY\" in
   required)
     while :; do
       ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
-      if test -n \"\$ethernet_if\" &&
-         grep -Eq \"usb-host-net=ready iface=\$ethernet_if address=$EXPECTED_ETHERNET_IP/[^ ]+ action=(bound|renew) usb=0bda:8156\" /run/probe-status; then
+      if test -n \"\$ethernet_if\"; then
+        if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
+          test \"\$(basename \"\$(readlink -f \"/sys/class/net/\$ethernet_if/device/driver\")\")\" = r8152 || continue
+          usb_node=\$(readlink -f \"/sys/class/net/\$ethernet_if/device\")
+          usb_ok=no
+          while [ \"\$usb_node\" != / ]; do
+            if test -r \"\$usb_node/idVendor\" && test -r \"\$usb_node/idProduct\" &&
+               test \"\$(cat \"\$usb_node/idVendor\")\" = 0bda &&
+               test \"\$(cat \"\$usb_node/idProduct\")\" = 8156; then
+              usb_ok=yes
+              break
+            fi
+            next_node=\$(dirname \"\$usb_node\")
+            test \"\$next_node\" != \"\$usb_node\" || break
+            usb_node=\$next_node
+          done
+          test \"\$usb_ok\" = yes || continue
+        elif ! grep -Eq \"usb-host-net=ready iface=\$ethernet_if address=$EXPECTED_ETHERNET_IP/[^ ]+ action=(bound|renew) usb=0bda:8156\" /run/probe-status; then
+          continue
+        fi
         break
       fi
       test \"\$(date +%s)\" -lt \"\$accept_deadline\" || exit 1
@@ -860,8 +1157,17 @@ case \"$HOST_NET_POLICY\" in
   none) : ;;
   *) exit 1 ;;
 esac
-grep -Fq -- \"$EXPECTED_MARKER\" /run/probe-status
-! grep -Fq -- 'unattended_recovery=failed' /run/probe-status
+if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
+  success_first=\$(sed -n '1p' \"$STAGE2_SUCCESS_MARKER\")
+  test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
+  grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
+  grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
+  grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+  grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
+else
+  grep -Fq -- \"$EXPECTED_MARKER\" /run/probe-status
+  ! grep -Fq -- 'unattended_recovery=failed' /run/probe-status
+fi
 case \"$FEATURE_POLICY\" in
   connectivity-no-radio)
     ! dmesg | grep -Eiq 'request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem'
@@ -877,7 +1183,10 @@ if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
   test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
   test -r /sys/class/watchdog/watchdog0/bootstatus
   if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
-    grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/probe-status
+    grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+    test -s \"$STAGE1_HANDOFF_PATH\"
+    grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
+    grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
   else
     watchdog_pid=\$(sed -n 's/.*watchdog_pid=\([0-9][0-9]*\).*/\1/p' /run/probe-status | tail -n 1)
     test -n \"\$watchdog_pid\"
@@ -899,7 +1208,56 @@ mv -f \"\$accept_tmp\" /run/unattended-recovery.accepted
 test \"\$(cat /run/unattended-recovery.accepted)\" = \"$LEASE_MARKER\""
 }
 
+validate_candidate_right_path_stage2() {
+    [ "$SSH_PATH_POLICY" = both ] || return 0
+    device_ssh_right "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
+grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
+grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
+ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+test -n \"\$ethernet_if\"
+test \"\$(basename \"\$(readlink -f \"/sys/class/net/\$ethernet_if/device/driver\")\")\" = r8152
+usb_node=\$(readlink -f \"/sys/class/net/\$ethernet_if/device\")
+usb_ok=no
+while [ \"\$usb_node\" != / ]; do
+  if test -r \"\$usb_node/idVendor\" && test -r \"\$usb_node/idProduct\" &&
+     test \"\$(cat \"\$usb_node/idVendor\")\" = 0bda &&
+     test \"\$(cat \"\$usb_node/idProduct\")\" = 8156; then
+    usb_ok=yes
+    break
+  fi
+  next_node=\$(dirname \"\$usb_node\")
+  test \"\$next_node\" != \"\$usb_node\" || break
+  usb_node=\$next_node
+done
+test \"\$usb_ok\" = yes
+stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
+stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+case \"\$stage2_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+test \"\$stage2_pid\" -gt 1
+test -d \"/proc/\$stage2_pid\"
+stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+test -n \"\$stage2_device\"
+success_first=\$(sed -n '1p' \"$STAGE2_SUCCESS_MARKER\")
+test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
+grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
+grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
+grep -Eq '^/dev/mmcblk0p29 /gemian .* ro[, ]' \"$STAGE2_SUCCESS_MARKER\"
+grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+test -s \"$STAGE1_HANDOFF_PATH\"
+grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
+printf 'stage2-watchdog-right-path state=%s pid=%s device=%s\\n' \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\""
+}
+
 validate_candidate_right_path() {
+    if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+        validate_candidate_right_path_stage2
+        return $?
+    fi
     [ "$SSH_PATH_POLICY" = both ] || return 0
     # The gadget path performs the full profile validation.  This independent
     # right-NIC session proves the second SSH transport reaches the same exact
@@ -911,7 +1269,39 @@ test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2
 grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
 grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
 grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
-test -s /run/probe-status"
+ethernet_if=\$(ip -4 -o addr show | awk -v ip=\"$EXPECTED_ETHERNET_IP\" '\$4 ~ (\"^\" ip \"/\") {print \$2; exit}')
+test -n \"\$ethernet_if\"
+if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
+  test \"\$(basename \"\$(readlink -f \"/sys/class/net/\$ethernet_if/device/driver\")\")\" = r8152
+  usb_node=\$(readlink -f \"/sys/class/net/\$ethernet_if/device\")
+  usb_ok=no
+  while [ \"\$usb_node\" != / ]; do
+    if test -r \"\$usb_node/idVendor\" && test -r \"\$usb_node/idProduct\" &&
+       test \"\$(cat \"\$usb_node/idVendor\")\" = 0bda &&
+       test \"\$(cat \"\$usb_node/idProduct\")\" = 8156; then
+      usb_ok=yes
+      break
+    fi
+    next_node=\$(dirname \"\$usb_node\")
+    test \"\$next_node\" != \"\$usb_node\" || break
+    usb_node=\$next_node
+  done
+  test \"\$usb_ok\" = yes
+  test -s \"$STAGE2_SUCCESS_MARKER\"
+  grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+  test -s \"$STAGE1_HANDOFF_PATH\"
+  grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
+  stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+  test \"\$stage2_state\" = \"$STAGE2_WATCHDOG_STATE\"
+  stage2_pid=\$(systemctl show -p MainPID --value \"$STAGE2_WATCHDOG_OWNER_UNIT\")
+  case \"\$stage2_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+  test \"\$stage2_pid\" -gt 1
+  test -d \"/proc/\$stage2_pid\"
+  stage2_device=\$(for fd in /proc/\$stage2_pid/fd/*; do readlink \"\$fd\"; done | grep -E '/dev/watchdog(0)?$' | head -n 1)
+  test -n \"\$stage2_device\"
+else
+  test -s /run/probe-status
+fi"
 }
 
 accept_candidate_until_deadline() {
@@ -926,6 +1316,13 @@ accept_candidate_until_deadline() {
                 # Capture probe status before validation can fail or recovery
                 # arms rollback, preserving the lease-expiry evidence window.
                 start_probe_capture
+            fi
+            if [ "$STAGE2_POLICY" = watchdog-takeover-required ] &&
+                [ "$STAGE2_STORE_PROVISIONED" != yes ]; then
+                if ! provision_stage2_store; then
+                    sleep 1
+                    continue
+                fi
             fi
             old_validation_gadget_only=$VALIDATION_GADGET_ONLY
             if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
@@ -1067,7 +1464,11 @@ recover() {
     if ! device_ssh "set -eu
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
 test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513"; then
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+$(if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
+    printf '%s\n' "test \"\$(stat -Lc %s '$STAGE1_STORE_TARGET')\" -eq '$STAGE1_STORE_SIZE'" \
+        "test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'"
+fi)"; then
         printf 'recovery_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
     fi
@@ -1148,8 +1549,7 @@ if [ "$PROOF_LEASE" = yes ]; then
             printf 'recovered_but_proof_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
         fi
-        if ! grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
-            "$RUN_LOCAL/probe-status-proof.log"; then
+        if ! verify_lease_expiry_evidence; then
             printf 'recovered_but_proof_failed_no_lease_expiry %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
         fi
@@ -1163,8 +1563,7 @@ if [ "$PROOF_LEASE" = yes ]; then
             printf 'recovered_but_proof_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
         fi
-        if ! grep -Fq 'unattended_recovery=lease-expired watchdog_userspace=stopped' \
-            "$RUN_LOCAL/probe-status-proof.log"; then
+        if ! verify_lease_expiry_evidence; then
             printf 'recovered_but_proof_failed_no_lease_expiry %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
         fi
