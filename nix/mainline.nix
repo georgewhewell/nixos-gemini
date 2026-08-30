@@ -1224,35 +1224,60 @@
           echo "<6>GEMINI_NIX_IXOO_STORAGE: $*" > /dev/kmsg 2>/dev/null || true
         }
 
+        find_emmc() {
+          for node in /sys/class/block/mmcblk*; do
+            [ -e "$node" ] || continue
+            name=''${node##*/}
+            # Ignore partitions, boot areas and RPMB. The kernel-assigned
+            # mmcblk index is not stable when the removable-SD host is also
+            # enabled, but the Gemini eMMC controller address is.
+            case "$name" in
+              mmcblk*[!0-9]*) continue ;;
+            esac
+            target=$(readlink -f "$node" 2>/dev/null || true)
+            case "$target" in
+              */11230000.mmc/*)
+                echo "$name"
+                return 0
+                ;;
+            esac
+          done
+          return 1
+        }
+
         attempt=0
-        while [ ! -e /sys/class/block/mmcblk0 ] && [ "$attempt" -lt 30 ]; do
+        emmc=
+        while [ "$attempt" -lt 30 ]; do
+          emmc=$(find_emmc 2>/dev/null || true)
+          [ -n "$emmc" ] && break
           attempt=$((attempt + 1))
           sleep 1
         done
-        if [ ! -e /sys/class/block/mmcblk0 ]; then
+        if [ -z "$emmc" ]; then
           record "emmc=missing after=30s userspace_block_io=none"
-          dmesg 2>/dev/null | grep -Ei '1000d000|pwrap|mt6351|11230000|msdc|mmc0|mmcblk' >> /run/storage-probe 2>/dev/null || true
+          dmesg 2>/dev/null | grep -Ei '1000d000|pwrap|mt6351|11230000|msdc|mmc[0-9]|mmcblk' >> /run/storage-probe 2>/dev/null || true
           exit 1
         fi
+        printf '%s\n' "$emmc" > /run/emmc-block-device
 
         if grep -Eq '^[^ ]*mmcblk' /proc/mounts 2>/dev/null; then
           record "guard=failed unexpected_mmc_mount=yes"
           exit 1
         fi
-        sectors=$(cat /sys/class/block/mmcblk0/size 2>/dev/null || echo unknown)
-        device=$(readlink -f /sys/class/block/mmc0/device 2>/dev/null || echo unknown)
+        sectors=$(cat "/sys/class/block/$emmc/size" 2>/dev/null || echo unknown)
+        device=$(readlink -f "/sys/class/block/$emmc/device" 2>/dev/null || echo unknown)
         partitions=
-        for node in /sys/class/block/mmcblk0p*; do
+        for node in /sys/class/block/"$emmc"p*; do
           [ -e "$node" ] || continue
           partitions="''${partitions} ''${node##*/}"
         done
-        record "emmc=present sectors=$sectors host=$device partitions=''${partitions# } userspace_block_reads=none userspace_block_writes=none mounts=none"
+        record "emmc=present block=$emmc sectors=$sectors host=$device partitions=''${partitions# } userspace_block_reads=none userspace_block_writes=none mounts=none"
         for uevent in /sys/class/block/mmcblk*/uevent; do
           [ -r "$uevent" ] || continue
           echo "--- $uevent" >> /run/storage-probe
           cat "$uevent" >> /run/storage-probe
         done
-        dmesg 2>/dev/null | grep -Ei '1000d000|pwrap|mt6351|11230000|msdc|mmc0|mmcblk' >> /run/storage-probe 2>/dev/null || true
+        dmesg 2>/dev/null | grep -Ei '1000d000|pwrap|mt6351|11230000|msdc|mmc[0-9]|mmcblk' >> /run/storage-probe 2>/dev/null || true
         STORAGE_PROBE
       ''}
 
@@ -1278,13 +1303,21 @@
           exit 1
         fi
 
-        if ! mount -t ext4 -o ro,noload,nosuid,nodev,noexec /dev/mmcblk0p29 /mnt/linux; then
-          record "mount=failed source=/dev/mmcblk0p29 requested=ro,noload"
-          dmesg 2>/dev/null | grep -Ei 'EXT4-fs|mmcblk0p29' >> /run/rootfs-probe 2>/dev/null || true
+        emmc=$(cat /run/emmc-block-device 2>/dev/null || true)
+        case "$emmc" in
+          mmcblk*[!0-9]*|'')
+            record "mount=skipped reason=invalid-emmc-device value=''${emmc:-missing}"
+            exit 1
+            ;;
+        esac
+        source=/dev/''${emmc}p29
+        if ! mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$source" /mnt/linux; then
+          record "mount=failed source=$source requested=ro,noload"
+          dmesg 2>/dev/null | grep -Ei "EXT4-fs|''${emmc}p29" >> /run/rootfs-probe 2>/dev/null || true
           exit 1
         fi
         mounted=$(awk '$2 == "/mnt/linux" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
-        record "mount=success source=/dev/mmcblk0p29 observed=''${mounted:-unknown} access=directory-metadata-only writes=none"
+        record "mount=success source=$source observed=''${mounted:-unknown} access=directory-metadata-only writes=none"
         if [ -d /mnt/linux/nixos ]; then
           record "nixos-directory=present"
           for entry in /mnt/linux/nixos/*; do
@@ -1298,7 +1331,7 @@
         else
           record "nixos-directory=missing"
         fi
-        dmesg 2>/dev/null | grep -Ei 'EXT4-fs|mmcblk0p29' >> /run/rootfs-probe 2>/dev/null || true
+        dmesg 2>/dev/null | grep -Ei "EXT4-fs|''${emmc}p29" >> /run/rootfs-probe 2>/dev/null || true
         ROOTFS_PROBE
       ''}
 
