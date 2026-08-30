@@ -187,5 +187,10 @@ grep -Fqx '    after = ["gemini-unattended-recovery-lease-enforcer.service"];' \
 grep -Fqx '    requires = ["gemini-unattended-recovery-lease-enforcer.service"];' \
   "$ROOT/nixos/mainline-configuration.nix"
 grep -Fqx '      KillMode = "process";' "$ROOT/nixos/mainline-configuration.nix"
+# The outer unit runs the script with store BusyBox, but the script also uses
+# BusyBox internally.  Stage 2 only creates /bin/sh, so do not fall back to a
+# nonexistent /bin/busybox after switch_root.
+grep -Fqx '      export GEMINI_LEASE_BUSYBOX=${pkgs.busybox}/bin/busybox' \
+  "$ROOT/nixos/mainline-configuration.nix"
 
 echo 'test-unattended-recovery-lease: PASS'

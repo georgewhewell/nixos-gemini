@@ -180,6 +180,9 @@
       KillMode = "process";
     };
     script = ''
+      # The activated NixOS root only guarantees /bin/sh.  Keep the helper's
+      # internal BusyBox invocations on the same store path as this wrapper.
+      export GEMINI_LEASE_BUSYBOX=${pkgs.busybox}/bin/busybox
       exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-lease-enforcer.sh}
     '';
   };
