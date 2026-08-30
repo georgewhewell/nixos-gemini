@@ -10,7 +10,9 @@ TOOL=/nix/store/wlgln84hg9k6hnqdm6r24vn21fxf85b7-mtk-flash-tool-2018-04-07/opt/m
 
 printf 'tool_started %s\n' "$(date -Is)" > "$STATE"
 printf '[%s] exact p22 Download Only wrapper started\n' "$(date -Is)" >> "$LOG"
-timeout 180 sudo -n "$TOOL" -i "$XML" -r >> "$LOG" 2>&1
+# Keep this above the harness's 250-second state wait so timeout completion
+# cannot race the final poll; the tool's own BROM wait remains bounded.
+timeout 240 sudo -n "$TOOL" -i "$XML" -r >> "$LOG" 2>&1
 rc=$?
 printf 'flash_rc=%s %s\n' "$rc" "$(date -Is)" > "$STATE"
 printf '[%s] Flash Tool exited rc=%s\n' "$(date -Is)" "$rc" >> "$LOG"

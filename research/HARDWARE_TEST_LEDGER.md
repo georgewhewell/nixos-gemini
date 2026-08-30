@@ -408,3 +408,35 @@ state markers.  The script passed `sh -n` and
 **Verdict: recovery mechanism is proven for orderly reboot and known-good
 return, but pre-init watchdog recovery remains unproven by hardware design.**
 No Stage-B artifact was flashed and no p30/p31 write occurred.
+
+## Next-experiment p22 handoff flow: 2026-08-30
+
+The previously Stage-A-hardcoded transaction was tightened into a fail-closed
+exact-manifest flow.  `research/p22-next-experiment.manifest` carries the
+candidate and rollback paths, SHA-256 digests and sizes, target identity,
+scatter/XML digests, staging/capture paths, and the expected model, DT
+compatible, cmdline token, CPU, gadget, and Ethernet identities.  The parser
+accepts only known `key=value` fields, rejects duplicates, missing fields,
+relative or unsafe paths, non-`boot/p22` targets, non-16 MiB images, and unsafe
+acceptance tokens; it never sources the manifest as shell.  Thus a future
+reviewed p22 artifact can be handed off by replacing this exact manifest while
+the target and read-only p30/p31 guards remain fixed.
+
+The harness now passes manifest values only after local validation and uses the
+exact `/dev/mmcblk0p22` target, with p30 and p31 remaining read-only invariants.
+The Flash Tool wrapper timeout is 240 seconds and the harness waits 250 seconds
+for `flash_rc`, avoiding the former exact-180-second completion race.  The
+trex launch no longer uses `setsid -f`; the recorded PID names the wrapper
+process, while `timeout` bounds Flash Tool.  A failed candidate acceptance waits
+for a terminal candidate-tool state before staging rollback, so it cannot start
+two USB owners concurrently.
+
+The manual-reset boundary is explicit in the script comments and terminal
+states: because watchdog0 is inactive with `nowayout=0`, a pre-init hang with
+no preloader cannot be reset remotely.  The harness stops with
+`manual_reset_required_no_preloader` or `manual_reset_required_no_ssh`, leaving
+captures and state for an owner-attended physical reset.  It never claims
+watchdog recovery, never writes p30/p31, and never erases/formats/upgrades
+firmware.  Validation performed without flashing: `sh -n`,
+`shellcheck -S error -s sh` (no errors), default dry-run, explicit manifest
+dry-run, missing-manifest rejection (rc 2), and missing-mode rejection (rc 2).

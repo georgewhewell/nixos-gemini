@@ -4,29 +4,175 @@ set -eu
 # Explicitly opt-in host harness for the default boot/p22 slot. There is no
 # default execution path: --execute is required. This script never writes p30
 # or p31 and rejects any XML/scatter that does not prove boot-only operation.
+# The handoff manifest is data, never shell: unknown keys and unsafe values
+# fail closed before the device is contacted.
+# IMPORTANT: watchdog0 is inactive/nowayout=0 on this device. If Linux hangs
+# before init and no preloader appears, this harness cannot reset the device;
+# it stops with manual_reset_required_* and requires an owner-attended reset.
 
+# shellcheck disable=SC1007 # zsh/NixOS-compatible scoped CDPATH assignment
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-CANDIDATE=$ROOT/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
-ROLLBACK=$ROOT/artifacts/mainline-nixos-connectivity-m0/boot-padded-p22.img
-CANDIDATE_SHA=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
-ROLLBACK_SHA=08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3
+MANIFEST=$ROOT/research/p22-next-experiment.manifest
 SIZE=16777216
-SCATTER=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
-XML=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
-STAGE_IMAGE=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
-TREX_CAPTURE_ROOT=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+
+die() {
+    echo "p22-recovery-harness: $*" >&2
+    exit 2
+}
+
+usage() {
+    echo "usage: $0 [--manifest PATH] --dry-run | --execute" >&2
+    exit 2
+}
+
+MODE=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --manifest)
+            [ "$#" -ge 2 ] || usage
+            MANIFEST=$2
+            shift 2
+            ;;
+        --dry-run|--execute)
+            [ -z "$MODE" ] || usage
+            MODE=$1
+            shift
+            ;;
+        *) usage ;;
+    esac
+done
+[ -n "$MODE" ] || usage
+
+CANDIDATE=
+CANDIDATE_SHA=
+CANDIDATE_SIZE=
+ROLLBACK=
+ROLLBACK_SHA=
+ROLLBACK_SIZE=
+TARGET_PARTITION=
+TARGET_DEVICE=
+SCATTER=
+SCATTER_SHA=
+XML=
+XML_SHA=
+STAGE_IMAGE=
+TREX_CAPTURE_ROOT=
+EXPECTED_MODEL=
+EXPECTED_COMPATIBLE=
+EXPECTED_CMDLINE=
+EXPECTED_CPU_ONLINE=
+EXPECTED_GADGET_IP=
+EXPECTED_ETHERNET_IP=
+
+load_manifest() {
+    [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
+    while IFS='=' read -r key value || [ -n "${key:-}${value:-}" ]; do
+        case "$key" in
+            ''|'#'*) continue ;;
+            candidate) [ -z "$CANDIDATE" ] || die "duplicate candidate"; CANDIDATE=$value ;;
+            candidate_sha256) [ -z "$CANDIDATE_SHA" ] || die "duplicate candidate_sha256"; CANDIDATE_SHA=$value ;;
+            candidate_size) [ -z "$CANDIDATE_SIZE" ] || die "duplicate candidate_size"; CANDIDATE_SIZE=$value ;;
+            rollback) [ -z "$ROLLBACK" ] || die "duplicate rollback"; ROLLBACK=$value ;;
+            rollback_sha256) [ -z "$ROLLBACK_SHA" ] || die "duplicate rollback_sha256"; ROLLBACK_SHA=$value ;;
+            rollback_size) [ -z "$ROLLBACK_SIZE" ] || die "duplicate rollback_size"; ROLLBACK_SIZE=$value ;;
+            target_partition) [ -z "$TARGET_PARTITION" ] || die "duplicate target_partition"; TARGET_PARTITION=$value ;;
+            target_device) [ -z "$TARGET_DEVICE" ] || die "duplicate target_device"; TARGET_DEVICE=$value ;;
+            scatter) [ -z "$SCATTER" ] || die "duplicate scatter"; SCATTER=$value ;;
+            scatter_sha256) [ -z "$SCATTER_SHA" ] || die "duplicate scatter_sha256"; SCATTER_SHA=$value ;;
+            xml) [ -z "$XML" ] || die "duplicate xml"; XML=$value ;;
+            xml_sha256) [ -z "$XML_SHA" ] || die "duplicate xml_sha256"; XML_SHA=$value ;;
+            stage_image) [ -z "$STAGE_IMAGE" ] || die "duplicate stage_image"; STAGE_IMAGE=$value ;;
+            trex_capture_root) [ -z "$TREX_CAPTURE_ROOT" ] || die "duplicate trex_capture_root"; TREX_CAPTURE_ROOT=$value ;;
+            expected_model) [ -z "$EXPECTED_MODEL" ] || die "duplicate expected_model"; EXPECTED_MODEL=$value ;;
+            expected_compatible) [ -z "$EXPECTED_COMPATIBLE" ] || die "duplicate expected_compatible"; EXPECTED_COMPATIBLE=$value ;;
+            expected_cmdline_token) [ -z "$EXPECTED_CMDLINE" ] || die "duplicate expected_cmdline_token"; EXPECTED_CMDLINE=$value ;;
+            expected_cpu_online) [ -z "$EXPECTED_CPU_ONLINE" ] || die "duplicate expected_cpu_online"; EXPECTED_CPU_ONLINE=$value ;;
+            expected_gadget_ip) [ -z "$EXPECTED_GADGET_IP" ] || die "duplicate expected_gadget_ip"; EXPECTED_GADGET_IP=$value ;;
+            expected_ethernet_ip) [ -z "$EXPECTED_ETHERNET_IP" ] || die "duplicate expected_ethernet_ip"; EXPECTED_ETHERNET_IP=$value ;;
+            *) die "unknown manifest key: $key" ;;
+        esac
+    done < "$MANIFEST"
+}
+
+require_manifest() {
+    [ -n "$CANDIDATE" ] || die "manifest field is missing: candidate"
+    [ -n "$CANDIDATE_SHA" ] || die "manifest field is missing: candidate_sha256"
+    [ -n "$CANDIDATE_SIZE" ] || die "manifest field is missing: candidate_size"
+    [ -n "$ROLLBACK" ] || die "manifest field is missing: rollback"
+    [ -n "$ROLLBACK_SHA" ] || die "manifest field is missing: rollback_sha256"
+    [ -n "$ROLLBACK_SIZE" ] || die "manifest field is missing: rollback_size"
+    [ -n "$TARGET_PARTITION" ] || die "manifest field is missing: target_partition"
+    [ -n "$TARGET_DEVICE" ] || die "manifest field is missing: target_device"
+    [ -n "$SCATTER" ] || die "manifest field is missing: scatter"
+    [ -n "$SCATTER_SHA" ] || die "manifest field is missing: scatter_sha256"
+    [ -n "$XML" ] || die "manifest field is missing: xml"
+    [ -n "$XML_SHA" ] || die "manifest field is missing: xml_sha256"
+    [ -n "$STAGE_IMAGE" ] || die "manifest field is missing: stage_image"
+    [ -n "$TREX_CAPTURE_ROOT" ] || die "manifest field is missing: trex_capture_root"
+    [ -n "$EXPECTED_MODEL" ] || die "manifest field is missing: expected_model"
+    [ -n "$EXPECTED_COMPATIBLE" ] || die "manifest field is missing: expected_compatible"
+    [ -n "$EXPECTED_CMDLINE" ] || die "manifest field is missing: expected_cmdline_token"
+    [ -n "$EXPECTED_CPU_ONLINE" ] || die "manifest field is missing: expected_cpu_online"
+    [ -n "$EXPECTED_GADGET_IP" ] || die "manifest field is missing: expected_gadget_ip"
+    [ -n "$EXPECTED_ETHERNET_IP" ] || die "manifest field is missing: expected_ethernet_ip"
+    require_sha() {
+        sha=$1
+        label=$2
+        case "$sha" in
+            *[!0-9a-f]*|'') die "$label must be 64 lowercase hex characters" ;;
+        esac
+        [ "${#sha}" -eq 64 ] || die "$label must be 64 lowercase hex characters"
+    }
+    require_sha "$CANDIDATE_SHA" candidate_sha256
+    require_sha "$ROLLBACK_SHA" rollback_sha256
+    require_sha "$SCATTER_SHA" scatter_sha256
+    require_sha "$XML_SHA" xml_sha256
+    [ "$TARGET_PARTITION" = boot/p22 ] || die "target_partition must be boot/p22"
+    [ "$TARGET_DEVICE" = /dev/mmcblk0p22 ] || die "target_device must be /dev/mmcblk0p22"
+    [ "$CANDIDATE_SIZE" = "$SIZE" ] || die "candidate_size must be $SIZE"
+    [ "$ROLLBACK_SIZE" = "$SIZE" ] || die "rollback_size must be $SIZE"
+    require_path() {
+        path=$1
+        label=$2
+        case "$path" in
+            /*) ;;
+            *) die "$label must be absolute" ;;
+        esac
+        case "$path" in
+            *[!A-Za-z0-9._:/=-]*) die "unsafe path in manifest: $label" ;;
+        esac
+    }
+    require_path "$CANDIDATE" candidate
+    require_path "$ROLLBACK" rollback
+    require_path "$SCATTER" scatter
+    require_path "$XML" xml
+    require_path "$STAGE_IMAGE" stage_image
+    require_path "$TREX_CAPTURE_ROOT" trex_capture_root
+    case "$STAGE_IMAGE" in
+        */boot.img) ;;
+        *) die "stage_image must end in boot.img" ;;
+    esac
+    require_token() {
+        token=$1
+        case "$token" in
+            *[!A-Za-z0-9._:/=,-]*) die "unsafe acceptance token in manifest" ;;
+        esac
+    }
+    require_token "$EXPECTED_MODEL"
+    require_token "$EXPECTED_COMPATIBLE"
+    require_token "$EXPECTED_CMDLINE"
+    require_token "$EXPECTED_CPU_ONLINE"
+    require_token "$EXPECTED_GADGET_IP"
+    require_token "$EXPECTED_ETHERNET_IP"
+}
+
+load_manifest
+require_manifest
 
 device_ssh() {
     ssh -J trex -i /home/grw/.ssh/id_ed25519 -o IdentitiesOnly=yes \
         -o ConnectTimeout=8 root@10.15.19.82 "$@"
 }
-
-usage() {
-    echo "usage: $0 --dry-run | --execute" >&2
-    exit 2
-}
-[ "${1:-}" = --dry-run ] || [ "${1:-}" = --execute ] || usage
-MODE=$1
 
 hash_size() {
     expected=$1
@@ -36,8 +182,8 @@ hash_size() {
 }
 
 preflight_scatter() {
-    test "$(sha256sum "$SCATTER" | cut -d' ' -f1)" = 19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
-    test "$(sha256sum "$XML" | cut -d' ' -f1)" = 90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+    test "$(sha256sum "$SCATTER" | cut -d' ' -f1)" = "$SCATTER_SHA"
+    test "$(sha256sum "$XML" | cut -d' ' -f1)" = "$XML_SHA"
     test "$(grep -c 'is_download: true' "$SCATTER")" -eq 1
     grep -A8 -B2 'partition_name: boot$' "$SCATTER" | grep -q 'file_name: boot.img'
     grep -A12 -B2 'partition_name: boot$' "$SCATTER" | grep -q 'linear_start_addr: 0xb100000'
@@ -51,22 +197,23 @@ preflight_scatter() {
 preflight_local() {
     hash_size "$CANDIDATE_SHA" "$CANDIDATE"
     hash_size "$ROLLBACK_SHA" "$ROLLBACK"
+    test "$CANDIDATE_SIZE" -eq "$SIZE"
+    test "$ROLLBACK_SIZE" -eq "$SIZE"
     preflight_scatter
 }
 
 preflight_device() {
-    device_ssh 'set -eu
-target=$(readlink -f /dev/disk/by-partlabel/boot)
-test "$target" = /dev/mmcblk0p22
-test "$target" != /dev/mmcblk0p29
-! grep -q "^$target " /proc/mounts
-test "$(blockdev --getsize64 "$target")" -eq 16777216
-p22=$(sha256sum "$target" | cut -d" " -f1)
-test "$p22" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc \
-  || test "$p22" = 08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3
-test "$(sha256sum /dev/mmcblk0p30 | cut -d" " -f1)" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test "$(sha256sum /dev/mmcblk0p31 | cut -d" " -f1)" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum "$target" /dev/mmcblk0p30 /dev/mmcblk0p31'
+    device_ssh "set -eu
+target=\$(readlink -f /dev/disk/by-partlabel/boot)
+test \"\$target\" = $TARGET_DEVICE
+test \"\$target\" != /dev/mmcblk0p29
+! grep -q \"^\$target \" /proc/mounts
+test \"\$(blockdev --getsize64 \"\$target\")\" -eq 16777216
+p22=\$(sha256sum \"\$target\" | cut -d' ' -f1)
+test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+sha256sum \"\$target\" /dev/mmcblk0p30 /dev/mmcblk0p31"
 }
 
 stage_image() {
@@ -137,22 +284,26 @@ wait_ssh() {
 }
 
 accept_candidate() {
-    device_ssh 'set -eu
-test "$(sha256sum /dev/mmcblk0p22 | cut -d" " -f1)" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
-grep -q "^/dev/mmcblk0p29 /gemian .* ro," /proc/mounts
-grep -q "^/dev/loop0 /nix/store squashfs ro," /proc/mounts
-grep -q "planet,gemini-pda" /proc/device-tree/compatible
-grep -q "maxcpus=8" /proc/cmdline
-test "$(cat /sys/devices/system/cpu/online)" = 0-7
-test -n "$(ip -4 -o addr show dev usb0 | grep 10.15.19.82)"
-test -n "$(ip -4 -o addr show dev enu1 | grep 192.168.23.70)"
-! dmesg | grep -Eiq "request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem|afe"
-! ls /sys/bus/platform/devices | grep -Eiq "consys|btif|wmt"'
+    device_ssh "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
+grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
+grep -Fq -- $EXPECTED_MODEL /proc/device-tree/model
+grep -Fq -- $EXPECTED_COMPATIBLE /proc/device-tree/compatible
+grep -Fq -- $EXPECTED_CMDLINE /proc/cmdline
+test \"\$(cat /sys/devices/system/cpu/online)\" = $EXPECTED_CPU_ONLINE
+test -n \"\$(ip -4 -o addr show dev usb0 | grep -F -- $EXPECTED_GADGET_IP)\"
+test -n \"\$(ip -4 -o addr show dev enu1 | grep -F -- $EXPECTED_ETHERNET_IP)\"
+! dmesg | grep -Eiq 'request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem|afe'
+! ls /sys/bus/platform/devices | grep -Eiq 'consys|btif|wmt'"
 }
 
 start_tool() {
     log=$1
-    ssh trex "nohup setsid -f sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
+    # Keep the wrapper PID (no setsid fork) so a future bounded abort can
+    # identify the owner. The wrapper's timeout remains the final kill
+    # boundary for Flash Tool itself.
+    ssh trex "nohup sh '$RUN_SHARED/flash-wrapper.sh' '$STATE' '$log' '$XML' </dev/null > '$log' 2>&1 & echo \$! > '$RUN_SHARED/tool.pid'"
     if wait_state tool_started 20; then
         return 0
     fi
@@ -170,6 +321,13 @@ request_reboot() {
 
 recover() {
     printf 'candidate_acceptance_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    # Never launch a second Flash Tool while the candidate wrapper might still
+    # own the USB port. The extra ten seconds avoids an exact timeout race;
+    # failure here is a manual boundary, not an unsafe concurrent retry.
+    if ! wait_state flash_rc 250; then
+        printf 'recovery_blocked_candidate_tool_timeout %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        return 1
+    fi
     stage_image "$ROLLBACK" "$ROLLBACK_SHA"
     rollback_log=$RUN_SHARED/rollback-flash.log
     start_tool "$rollback_log"
@@ -177,17 +335,17 @@ recover() {
     # after rollback is waiting. If it is hung before init, wait for a natural
     # watchdog/preloader transition; no unsafe force-reset is attempted.
     if wait_ssh 1; then request_reboot; fi
-    if ! wait_state flash_rc 180; then
-        printf 'recovery_failed_no_flash_result %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    if ! wait_state flash_rc 250; then
+        printf 'manual_reset_required_no_preloader %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         return 1
     fi
     state=$(cat "$STATE")
     case "$state" in flash_rc=0*) ;; *) printf 'recovery_flash_failed %s\n' "$state" > "$RUN_LOCAL/state"; return 1;; esac
-    if ! wait_ssh 40; then printf 'recovery_failed_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
-    device_ssh 'set -eu
-test "$(sha256sum /dev/mmcblk0p22 | cut -d" " -f1)" = 08631fe982b6693f30ab64280edf501ef65c86c703b9fe54e2cfeff7027ec8f3
-test "$(sha256sum /dev/mmcblk0p30 | cut -d" " -f1)" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test "$(sha256sum /dev/mmcblk0p31 | cut -d" " -f1)" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
+    if ! wait_ssh 40; then printf 'manual_reset_required_no_ssh %s\n' "$(date -Is)" > "$RUN_LOCAL/state"; return 1; fi
+    device_ssh "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $ROLLBACK_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513"
     printf 'recovered_known_good_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
 }
 
@@ -205,11 +363,11 @@ candidate_log=$RUN_SHARED/candidate-flash.log
 start_tool "$candidate_log"
 request_reboot
 if wait_ssh 40 && accept_candidate; then
-    device_ssh 'set -eu
-test "$(sha256sum /dev/mmcblk0p22 | cut -d" " -f1)" = 1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
-test "$(sha256sum /dev/mmcblk0p30 | cut -d" " -f1)" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test "$(sha256sum /dev/mmcblk0p31 | cut -d" " -f1)" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31' > "$RUN_LOCAL/final-partition-hashes"
+    device_ssh "set -eu
+test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" > "$RUN_LOCAL/final-partition-hashes"
     printf 'accepted_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     exit 0
 fi
