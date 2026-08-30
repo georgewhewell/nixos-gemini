@@ -408,17 +408,22 @@ device_ssh_gadget() {
 }
 
 device_ssh_gadget_provision() {
+    # Store stdin is a long-lived byte stream.  Do not inherit a user-level
+    # ControlMaster socket: its mux can disappear while the Stage1 network is
+    # still healthy and turns the upload into a local Broken pipe.
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null root@10.15.19.82 "$@"
     else
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -J trex -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 root@10.15.19.82 "$@"
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            root@10.15.19.82 "$@"
     fi
 }
 
@@ -427,13 +432,15 @@ device_ssh_right_provision() {
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null "root@$EXPECTED_ETHERNET_IP" "$@"
     else
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
-            -o ServerAliveCountMax=2 "root@$EXPECTED_ETHERNET_IP" "$@"
+            -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+            "root@$EXPECTED_ETHERNET_IP" "$@"
     fi
 }
 

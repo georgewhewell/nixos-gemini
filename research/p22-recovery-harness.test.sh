@@ -32,6 +32,53 @@ EOF
     test "$elapsed" -lt 22
 }
 
+test_provision_ssh_disables_control_master() {
+    sed -n '/^device_ssh_gadget_provision() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/device-ssh-gadget-provision.sh"
+    sed -n '/^device_ssh_right_provision() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/device-ssh-right-provision.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/device-ssh-gadget-provision.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/device-ssh-right-provision.sh"
+    RUN_LOCAL=$TEST_ROOT/provision-ssh
+    mkdir -p "$RUN_LOCAL"
+    timeout() {
+        printf '%s\n' "$1" > "$argv.timeout"
+        shift
+        "$@"
+    }
+    ssh() { printf '%s\n' "$@" > "$argv"; }
+    CANDIDATE_HOSTKEY_MODE=no
+    # shellcheck disable=SC2034 # consumed by the sourced provision helpers
+    PROVISION_UPLOAD_TIMEOUT_SECONDS=73
+    EXPECTED_ETHERNET_IP=192.168.23.70
+    argv=$RUN_LOCAL/gadget.argv
+    device_ssh_gadget_provision 'true'
+    test "$(cat "$argv.timeout")" = 73
+    grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
+    grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- root@10.15.19.82 "$argv" >/dev/null
+    argv=$RUN_LOCAL/right.argv
+    device_ssh_right_provision 'true'
+    test "$(cat "$argv.timeout")" = 73
+    grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
+    grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- root@192.168.23.70 "$argv" >/dev/null
+    CANDIDATE_HOSTKEY_MODE=yes
+    candidate_hostkey_allowed() { return 0; }
+    argv=$RUN_LOCAL/gadget-candidate.argv
+    device_ssh_gadget_provision 'true'
+    grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
+    grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
+    argv=$RUN_LOCAL/right-candidate.argv
+    device_ssh_right_provision 'true'
+    grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
+    grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
+}
+
 test_duplicate_flash_tool_rejected() {
     test_bin=$TEST_ROOT/duplicate-bin
     mkdir -p "$test_bin"
@@ -1050,6 +1097,7 @@ test_transaction_holder_removes_expired_owner() {
 }
 
 test_ssh_timeout
+test_provision_ssh_disables_control_master
 test_duplicate_flash_tool_rejected
 test_post_marker_failure_does_not_recover
 test_stale_attempt_state_not_reused
