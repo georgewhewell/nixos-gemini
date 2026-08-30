@@ -508,6 +508,17 @@
         test "$(sha256sum "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo" | cut -d' ' -f1)" = \
           2fd591269a217634cc9bd6b1aa3afa7702f08c2bbef0dad2f673e278f2cda28d
       ''}
+      ${lib.optionalString deviceActivationOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-activation.dtbo \
+          "$out/mt6797-gemini-pda-touchscreen-activation.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-fuel-gauge-active.dtbo \
+          "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-microsd-bringup.dtbo \
+          "$out/mt6797-gemini-pda-microsd-bringup.dtbo"
+        test -s "$out/mt6797-gemini-pda-touchscreen-activation.dtbo"
+        test -s "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
+        test -s "$out/mt6797-gemini-pda-microsd-bringup.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
