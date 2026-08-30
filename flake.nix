@@ -31,7 +31,7 @@
       # Critical-path experiments consume a second immutable pin so the
       # accepted p22 baseline remains rebuildable byte-for-byte while newer
       # CONSYS/GPU/cellular work advances on the same maintained fork.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=ff723cf67106ffd58ddad38617ad524a96ac3151";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=4ffa70b709ce296992c729a0570870e61f9b22d3";
       flake = false;
     };
     ixoo-candidate = {
