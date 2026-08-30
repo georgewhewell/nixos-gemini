@@ -72,6 +72,89 @@ let
     echo "<6>GEMINI_MAINLINE_NIXOS: usb0=ready address=10.15.19.82/24" > /dev/kmsg 2>/dev/null || true
     USB_NET
 
+    cat > root/bin/usb-host-net-udhcpc <<'USB_HOST_NET_UDHCPC'
+    #!/bin/busybox sh
+    export PATH=/bin
+    interface=''${interface:-}
+    case "$interface" in
+      ""|*[!A-Za-z0-9._-]*) exit 1 ;;
+    esac
+    ip_value=''${ip:-}
+    case "$ip_value" in
+      ""|*[!0-9./]*) exit 1 ;;
+    esac
+    subnet=''${subnet:-24}
+    case "$subnet" in
+      *[!0-9.]*) exit 1 ;;
+    esac
+    case "''${1:-}" in
+      deconfig)
+        ip addr flush dev "$interface" 2>/dev/null || true
+        ;;
+      bound|renew)
+        ip link set "$interface" up
+        ip addr flush dev "$interface" 2>/dev/null || true
+        ip addr replace "$ip_value/$subnet" dev "$interface"
+        for gateway in ''${router:-}; do
+          case "$gateway" in *[!0-9.]*) continue ;; esac
+          ip route replace default via "$gateway" dev "$interface"
+          break
+        done
+        echo "GEMINI_MAINLINE_NIXOS: usb-host-net=ready iface=$interface address=$ip_value/$subnet action=$1 usb=''${USB_HOST_USB:-unknown}" \
+          >> /run/stage1.log 2>/dev/null || true
+        ;;
+      *) exit 1 ;;
+    esac
+    USB_HOST_NET_UDHCPC
+
+    cat > root/bin/usb-host-net <<'USB_HOST_NET'
+    #!/bin/busybox sh
+    export PATH=/bin
+    attempt=0
+    host_if=
+    usb_vid=
+    usb_pid=
+    while [ "$attempt" -lt 60 ] && [ -z "$host_if" ]; do
+      for net in /sys/class/net/*; do
+        [ -e "$net" ] || continue
+        name=''${net##*/}
+        [ "$name" != usb0 ] || continue
+        driver=$(readlink -f "$net/device/driver" 2>/dev/null || true)
+        case "$driver" in
+          */r8152)
+            host_if=$name
+            usb_path=$(readlink -f "$net/device" 2>/dev/null || true)
+            while [ -n "$usb_path" ] && [ "$usb_path" != / ]; do
+              if [ -r "$usb_path/idVendor" ] && [ -r "$usb_path/idProduct" ]; then
+                usb_vid=$(cat "$usb_path/idVendor")
+                usb_pid=$(cat "$usb_path/idProduct")
+                break
+              fi
+              parent=''${usb_path%/*}
+              [ "$parent" != "$usb_path" ] || break
+              usb_path=$parent
+            done
+            break
+            ;;
+        esac
+      done
+      [ -n "$host_if" ] || { attempt=$((attempt + 1)); sleep 1; }
+    done
+    if [ -z "$host_if" ]; then
+      echo "GEMINI_MAINLINE_NIXOS: usb-host-net=missing after=60s driver=r8152" \
+        >> /run/stage1.log 2>/dev/null || true
+      exit 1
+    fi
+    if [ "$usb_vid" != 0bda ] || [ "$usb_pid" != 8156 ]; then
+      echo "GEMINI_MAINLINE_NIXOS: usb-host-net=failed iface=$host_if driver=r8152 usb=''${usb_vid:-unknown}:''${usb_pid:-unknown}" \
+        >> /run/stage1.log 2>/dev/null || true
+      exit 1
+    fi
+    ip link set "$host_if" up || exit 1
+    export USB_HOST_USB=$usb_vid:$usb_pid
+    exec udhcpc -f -t 5 -T 3 -A 10 -i "$host_if" -s /bin/usb-host-net-udhcpc
+    USB_HOST_NET
+
     cat > root/bin/ssh-server <<'SSH_SERVER'
     #!/bin/busybox sh
     export PATH=/bin
@@ -243,6 +326,7 @@ let
     /bin/bq2589x-preflight &
     log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
     /bin/usb-net &
+    /bin/usb-host-net &
     /bin/ssh-server &
     log "stage1=entered p29=ro,noload store-compression=gzip"
 
@@ -342,7 +426,9 @@ let
       ! grep -Fq '^      provision_store$' root/init
     ''}
     bash -n root/init
-    chmod 0755 root/init root/bin/usb-net root/bin/ssh-server \
+    bash -n root/bin/usb-host-net root/bin/usb-host-net-udhcpc
+    chmod 0755 root/init root/bin/usb-net root/bin/usb-host-net \
+      root/bin/usb-host-net-udhcpc root/bin/ssh-server \
       root/bin/bq2589x-preflight \
       root/bin/dropbear root/bin/dropbearkey
     find root -exec touch -h -d @0 {} +
@@ -397,7 +483,7 @@ let
       echo "p29=ext4 ro,noload after store installation"
       echo "squashfs=compression gzip; mount read-only"
       echo "left-port=MTU3 gadget usb0 10.15.19.82/24"
-      echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in NixOS"
+      echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "unattended-recovery=${

@@ -794,7 +794,7 @@ test_stage2_store_staging_commands_are_safe_shell() {
             *) return 0 ;;
         esac
     }
-    device_ssh_gadget_provision() { device_ssh_gadget "$@"; }
+    device_ssh_right_provision() { device_ssh_gadget "$@"; }
     STAGE2_POLICY=watchdog-takeover-required
     STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-test.squashfs
     # Exercise byte-to-df-block rounding: 1025 bytes needs two 1024-byte

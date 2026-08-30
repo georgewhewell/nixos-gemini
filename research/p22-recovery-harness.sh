@@ -422,6 +422,21 @@ device_ssh_gadget_provision() {
     fi
 }
 
+device_ssh_right_provision() {
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null "root@$EXPECTED_ETHERNET_IP" "$@"
+    else
+        timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+            -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+            -o ServerAliveCountMax=2 "root@$EXPECTED_ETHERNET_IP" "$@"
+    fi
+}
+
 device_ssh_gadget_fast() {
     # Stage2 readiness is a gadget-only liveness check. A right-NIC fallback
     # here can spend another full SSH timeout and starve Stage1 provisioning.
@@ -602,8 +617,8 @@ provision_stage2_store() {
     STAGE2_STORE_TEMP=$provision_tmp
     required_line="store-provision=required target=$init_target temp=$provision_tmp sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
     ready_line="store-provision=ready sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
-    # Stage1 alone opens p29 journaled rw. The host streams over gadget SSH
-    # only after Stage1 publishes the exact request marker.
+    # Stage1 alone opens p29 journaled rw. The host streams over the RTL8156
+    # only after Stage1 publishes the exact request marker over gadget SSH.
     if device_ssh_gadget "set -eu
 test -f '$init_target'
 test ! -L '$init_target'
@@ -630,7 +645,7 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
     # log() prefixes every Stage1 line; require the complete emitted line so
     # a similarly named or embedded token cannot authorize provisioning.
     device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
-    if ! device_ssh_gadget_provision "set -eu
+    if ! device_ssh_right_provision "set -eu
 test ! -e '$init_target'
 if test -e '$provision_tmp' || test -L '$provision_tmp'; then
   test ! -L '$provision_tmp'
