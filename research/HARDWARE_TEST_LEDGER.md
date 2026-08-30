@@ -781,3 +781,22 @@ fake client proves duplicate Flash Tool ownership is rejected.  `sh -n`,
 ShellCheck (only the pre-existing indirect-trap informational notices), and
 both regressions pass.  No further hardware action is authorized until root
 reviews the host-key fix.
+
+## Acceptance commit-point hardening: 2026-08-30
+
+The failed v2 run exposed a subtle unattended failure boundary: writing
+`/run/unattended-recovery.accepted` before a later host-side p30/p31 readback
+could leave the watchdog petter alive if that later SSH call failed.  The
+harness now performs the candidate p22, p30, and p31 hash checks inside the
+single remote `validate_candidate` transaction before atomically creating the
+lease marker.  The host-side final readback is evidence-only and best-effort
+after the marker; a committed marker cannot fall through to `recover()`.
+
+Normal pre-marker failures remain bounded: candidate host-key mode is disabled,
+the rollback tool is armed first, and the initramfs lease expires to expose the
+next watchdog/preloader window.  This is explicit in the recovery path and is
+not claimed to cover a pre-MTK-watchdog-probe hang.
+
+A fake-SSH state-machine regression forces the post-marker final readback to
+fail and verifies that the accepted state is retained and `recover()` is not
+called.  The hanging-SSH and duplicate-owner regressions continue to pass.

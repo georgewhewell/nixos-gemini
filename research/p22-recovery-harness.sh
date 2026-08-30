@@ -90,6 +90,7 @@ HOST_NET_FALLBACK_ARMED=no
 CANDIDATE_HOSTKEY_MODE=no
 SSH_DEADLINE_SECONDS=15
 SCP_DEADLINE_SECONDS=30
+ACCEPTANCE_COMMITTED=no
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -506,6 +507,8 @@ validate_candidate() {
 accept_deadline=$ACCEPTANCE_DEADLINE
 test \"\$(date +%s)\" -lt \"\$accept_deadline\"
 test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 case \"$ROOTFS_POLICY\" in
   nixos-stage2)
     grep -q \"^/dev/mmcblk0p29 /gemian .* ro,\" /proc/mounts
@@ -578,6 +581,11 @@ accept_candidate_until_deadline() {
     ACCEPTANCE_DEADLINE=$(( $(date +%s) + ACCEPTANCE_WINDOW_SECONDS ))
     while [ "$(date +%s)" -lt "$ACCEPTANCE_DEADLINE" ]; do
         if device_ssh 'test -s /proc/cmdline' >/dev/null 2>&1 && validate_candidate; then
+            if [ "$P22_WRITE_MARKER" = yes ]; then
+                # validate_candidate writes the lease marker only after every
+                # invariant, including p22/p30/p31 hashes, has passed.
+                ACCEPTANCE_COMMITTED=yes
+            fi
             return 0
         fi
         sleep 2
@@ -629,6 +637,10 @@ request_reboot() {
 
 recover() {
     CANDIDATE_HOSTKEY_MODE=no
+    # A normal initramfs-petter failure is still pre-commit here.  Because the
+    # candidate host key is intentionally not trusted for rollback dispatch,
+    # the bounded initramfs lease expires and exposes the next WDT/preloader
+    # window; this is explicit, finite, and never a post-marker recovery path.
     printf 'candidate_acceptance_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     # Never launch a second Flash Tool while the candidate wrapper might still
     # own the USB port. The extra ten seconds avoids an exact timeout race;
@@ -667,6 +679,21 @@ test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2
         return 1
     fi
     printf 'recovered_known_good_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+}
+
+finalize_accepted_candidate() {
+    final_record_rc=0
+    # Marker creation is the irreversible commit point.  This readback is
+    # evidence only; a transient host-plane failure must not enter recover and
+    # cannot revoke a candidate whose remote p22/p30/p31 validation committed.
+    device_ssh "set -eu
+sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" \
+        > "$RUN_LOCAL/final-partition-hashes" 2>&1 || final_record_rc=$?
+    printf 'post-marker-final-record rc=%s\n' "$final_record_rc" \
+        > "$RUN_LOCAL/final-record-status"
+    [ "$ACCEPTANCE_COMMITTED" = yes ] || return 1
+    printf 'accepted_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    return 0
 }
 
 preflight_local
@@ -715,12 +742,13 @@ if [ "$PROOF_LEASE" = yes ]; then
         exit "$recovery_rc"
     fi
 elif P22_WRITE_MARKER=yes accept_candidate_until_deadline; then
-    device_ssh "set -eu
-test \"\$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)\" = $CANDIDATE_SHA
-test \"\$(sha256sum /dev/mmcblk0p30 | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum /dev/mmcblk0p31 | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum /dev/mmcblk0p22 /dev/mmcblk0p30 /dev/mmcblk0p31" > "$RUN_LOCAL/final-partition-hashes"
-    printf 'accepted_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    if finalize_accepted_candidate; then
+        exit 0
+    fi
+fi
+if [ "$ACCEPTANCE_COMMITTED" = yes ]; then
+    # Defensive guard: a committed marker always terminates successfully and
+    # can never fall through to automatic recovery.
     exit 0
 fi
 if recover; then

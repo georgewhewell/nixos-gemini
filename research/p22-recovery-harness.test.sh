@@ -49,6 +49,33 @@ EOF
     grep -Fq 'phase=normal-before-proof begin' "$TEST_ROOT/duplicate.log"
 }
 
+test_post_marker_failure_does_not_recover() {
+    # Exercise the actual finalization function with a fake SSH failure.  The
+    # acceptance marker is already committed, so the state machine must keep
+    # the candidate accepted and must not invoke recover().
+    sed -n '/^finalize_accepted_candidate() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/finalize-function.sh"
+    RUN_LOCAL=$TEST_ROOT/finalize-run
+    mkdir -p "$RUN_LOCAL"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/finalize-function.sh"
+    device_ssh() { return 1; }
+    recover() { : > "$TEST_ROOT/recover-called"; return 1; }
+    # shellcheck disable=SC2034
+    ACCEPTANCE_COMMITTED=yes
+    # shellcheck disable=SC2034
+    CANDIDATE_SHA=unused
+    if finalize_accepted_candidate; then
+        :
+    else
+        recover
+    fi
+    test "$(cat "$RUN_LOCAL/final-record-status")" = 'post-marker-final-record rc=1'
+    grep -Fq 'accepted_p22 ' "$RUN_LOCAL/state"
+    test ! -e "$TEST_ROOT/recover-called"
+}
+
 test_ssh_timeout
 test_duplicate_flash_tool_rejected
+test_post_marker_failure_does_not_recover
 echo 'p22-recovery-harness tests: passed'
