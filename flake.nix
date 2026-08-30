@@ -560,10 +560,10 @@
       deviceActivationOverlay = true;
     };
 
-    # Manual-only headphone DPCM exercise over the existing fully observable
-    # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
-    # never invokes it: an operator must explicitly run
-    # /bin/gemini-audio-headphone after confirming the target card.
+    # Manual-only staged ALSA boundary diagnostic over the existing fully
+    # observable recovery profile. It adds a static helper to the initramfs
+    # but never invokes it: default execution only observes the named card;
+    # an operator must explicitly select and activate each later stage.
     mainlineUnattendedRecoveryDeviceActivationAudioHeadphone = import ./nix/mainline.nix {
       inherit
         buildPkgs

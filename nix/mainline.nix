@@ -91,7 +91,7 @@
     else "none";
   audioHeadphoneTestLabel =
     if audioHeadphoneTest
-    then "manual-dpcm-headphone-440hz-750ms-restoring-v1"
+    then "manual-staged-alsa-boundary-diagnostic-v2"
     else "none";
   powerObserveLabel =
     if powerObserveOverlay
@@ -843,13 +843,13 @@
     '';
 
   # This is deliberately a small standalone ALSA-UAPI client, not a partial
-  # userspace audio stack.  Its source only opens the named MT6797/MT6351 card,
-  # changes the four hardware-proven headphone DPCM controls temporarily, and
-  # restores them before exit.  Keeping it static avoids adding a dynamic
+  # userspace audio stack.  Its default is observation-only; a manually chosen
+  # activation stage exercises one control or PCM boundary and records before
+  # and after every ALSA ioctl.  Keeping it static avoids adding a dynamic
   # loader or libasound to the diagnostic initramfs.
   audioHeadphoneExercise = crossPkgs.pkgsStatic.stdenv.mkDerivation {
     pname = "gemini-audio-headphone";
-    version = "1";
+    version = "2";
     src = ./gemini-audio-headphone.c;
     dontUnpack = true;
     dontPatchELF = true;
@@ -859,6 +859,14 @@
       runHook preBuild
       "$CC" -std=c11 -Wall -Wextra -Werror -Wpedantic -O2 -static \
         "$src" -o gemini-audio-headphone
+      # Cross binaries cannot execute on the build host. Assert the safety
+      # contract directly from the source after the warning-clean static build.
+      grep -Fq 'STAGE_OBSERVE' "$src"
+      grep -Fq 'SNDRV_PCM_IOCTL_HW_FREE' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_DRAIN' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_WRITEI_FRAMES' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_PREPARE' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_START' "$src"
       runHook postBuild
     '';
     installPhase = ''
