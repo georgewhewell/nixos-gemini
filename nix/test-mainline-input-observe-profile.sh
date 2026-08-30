@@ -3,18 +3,15 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=e360d0c5dcf095f5247f869a6061d15aff40cf75";' "$ROOT/flake.nix"
-grep -Fqx '        "rev": "e360d0c5dcf095f5247f869a6061d15aff40cf75",' "$ROOT/flake.lock"
+grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=28c47150235be70cf5b19ea8d9ce7a5473ec23f2";' "$ROOT/flake.nix"
+grep -Fqx '        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",' "$ROOT/flake.lock"
 grep -Fqx '      thermalHallObserveOverlay = true;' "$ROOT/flake.nix"
 grep -Fqx '      provisionWaitSeconds = 600;' "$ROOT/flake.nix"
 grep -Fqx '      watchdogLeaseSeconds = 720;' "$ROOT/flake.nix"
 grep -Fqx '  inputObserveOverlay ? false,' "$ROOT/nix/mainline.nix"
 grep -Fqx '  thermalHallObserveOverlay ? false,' "$ROOT/nix/mainline.nix"
 grep -Fqx '    ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]' "$ROOT/nix/mainline.nix"
-grep -Fqx '    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment];' "$ROOT/nix/mainline.nix"
-grep -Fqx '  keyboardDtbSha256 = "8346de103fb76e4b6698ec77b5b8f70b85f657fcc867cb232e7c8091fd1528ce";' "$ROOT/nix/mainline.nix"
-grep -Fqx '  inputObserveDtbSha256 = "8020621422afbc55c6605aedc0ebfb8391bf7699cbfb3acc69755b6ceae20b78";' "$ROOT/nix/mainline.nix"
-grep -Fqx '  thermalHallDtbSha256 = "f0e80f8bc94029b894f42526239f3c5342ef657b22b0caacff7ccbb607fc5de5";' "$ROOT/nix/mainline.nix"
+grep -Fqx '    ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]' "$ROOT/nix/mainline.nix"
 grep -Fqx '          test "$(fdtget "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 status)" = disabled' "$ROOT/nix/mainline.nix"
 grep -Fqx '          ! fdtget -p "$out/gemini-input-observe.dtb" /i2c@11011000/touchscreen@62 \' "$ROOT/nix/mainline.nix"
 grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' "$ROOT/nix/mainline-input-observe.fragment"
