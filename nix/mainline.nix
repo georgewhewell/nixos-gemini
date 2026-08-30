@@ -190,15 +190,15 @@
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   baseDtbSha256 =
-    if kernelRevision == "16331ae8b903f8de49046588e6e25a4d0a935bb4"
+    if kernelRevision == "2c865f4d43c5ba9216ae57f09618b5ffd146a6f7"
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
     else "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
   serviceabilityBaseDtbSha256 =
-    if kernelRevision == "16331ae8b903f8de49046588e6e25a4d0a935bb4"
+    if kernelRevision == "2c865f4d43c5ba9216ae57f09618b5ffd146a6f7"
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
     else "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
   usbPlatformDtbSha256 =
-    if kernelRevision == "16331ae8b903f8de49046588e6e25a4d0a935bb4"
+    if kernelRevision == "2c865f4d43c5ba9216ae57f09618b5ffd146a6f7"
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
     else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
