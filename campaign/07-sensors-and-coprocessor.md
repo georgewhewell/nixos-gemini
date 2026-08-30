@@ -1,19 +1,19 @@
 # Sensors, thermal and SCP
 
-Status: GENERIC thermal, GPIO-key, and IMU drivers EXIST; MT6797 thermal
-APPLICABILITY PROVEN; board sensor identity, SCP ownership and DT enablement
-**UNKNOWN**; DEVICE-TESTED **NO**.
+Status: raw SoC thermal readout is VERIFIED WORKING; Hall and keyboard input
+are BOUND-UNVERIFIED; IMU/SCP remain IMPLEMENTED-INACTIVE or UNKNOWN.
 
-The current tree has the MT6797 thermal match
-(`linux-gemini-platform@518957636:drivers/thermal/mediatek/auxadc_thermal.c:1748-1754`) and generic `st,lsm6ds3` I2C support. The Gemini board DT wires thermal calibration but leaves the BMI160 candidate disabled (`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:372-385`).
+The live image exposes soc-thermal at about 46 C and binds the MT6797 thermal
+driver. Dmesg says No trip points found, so this is a sensor readout, not a
+validated cooling policy. The current board source wires calibration but keeps
+the BMI160 candidate disabled (linux-gemini-platform@28c471502:
+arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:393-406,607-616).
 
-Vendor DTS records a Hall input on GPIO66 and touch/keyboard-related GPIOs,
-but the current board DT keeps the Hall gpio-keys node disabled and specifies a
-64 ms debounce (`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:617-630`). A vendor SCP directory is not proof that firmware, I2C ownership arbitration, wake sources, or step counting works.
+The Hall gpio-keys node and keyboard matrix are present in the current runtime,
+but no physical Hall transition or key press was retained. No IIO device is
+present, and the SCP node has no bound remoteproc/firmware device. A vendor SCP
+directory is not proof of ownership, wake, or sensor behavior.
 
-The former thermal formulas, shared-zone explanations, “wakes AP” behavior, and
-SCP deep-suspend claims are removed. Validate each assertion from a live trace.
-
-Next validation: read the physically populated IMU ID over the correct bus,
-capture calibrated thermal zones, and generate Hall open/close events on a
-recoverable image. SCP tests require an identified firmware/ownership protocol.
+Next gates: capture calibrated thermal readings under a known load, generate a
+Hall open/close event on a recoverable image, and read the physically populated
+IMU identity over the correct bus. Suspend/wake behavior remains untested.

@@ -1,23 +1,20 @@
 # USB, Type-C and power delivery
 
-Status: the earlier baseline DEVICE-TESTED the stated USB network paths; the
-current physical state, Type-C roles, PD and charging are **UNKNOWN** pending a
-fresh read-only recheck.
+Status: the observed USB paths are VERIFIED WORKING; Type-C source/host role
+is observed; PD, dual-role behavior, and charging remain UNKNOWN.
 
-The independent baseline saw the left gadget at `usb0` with SSH and the
-right-port Ethernet interface `enu1` (`research/HARDWARE_TEST_LEDGER.md:39-47`).
-Stage A again reported USB and Ethernet after its p22 acceptance
-(`:291-300`). The Nix-pinned input also contains the separate right-port
-host-only FUSB301A/MUSB overlay (`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtso:3-128`), and Nix's host profile
-selects it (`nix/mainline.nix:47,68-71,383-390`). Those facts do not establish
-PD, device/dual-role behaviour, charging, every cable or the RTL8156 adapter.
+The current full Stage2 runtime has a configured high-speed UDC using
+g_ether, usb0=10.15.19.82/24, and SSH. The right MUSB host enumerates the
+RTL8156 adapter 0bda:8156; enu1=192.168.23.70 is up with carrier. Cycle18
+overlay probes kept both networks and the watchdog active during cleanup.
 
-The last authorized p22 run ended with the gadget enumerated but the Trex
-interface down, no SSH and no post-rollback hash capture
-(`research/HARDWARE_TEST_LEDGER.md:655-674`). Thus the old text claiming that
-the deployed image “currently” has both interfaces was stale.
+Runtime Type-C reports FUSB301A at 3-0025, power_role=[source],
+data_role=[host], orientation normal, partner present, and
+supports_usb_power_delivery=no, PD revision 0.0. This is a current role
+observation, not PD negotiation or charging evidence. The host overlay source
+is explicit and host-only (linux-gemini-platform@28c471502:
+arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtso:5-34,91-129).
 
-First recover route/interface/SSH and capture pstore plus all partition hashes.
-Only then test one known cable, port and role at a time, preserving the left
-gadget as recovery. Pass a host test only with retained Type-C state, VBUS,
-enumeration and link evidence; do not write charger or CC-controller registers.
+Next gate: test one declared cable/role at a time while preserving the left
+gadget recovery path; retain Type-C state, VBUS, USB enumeration, and link
+evidence. Do not write charger or CC-controller registers.

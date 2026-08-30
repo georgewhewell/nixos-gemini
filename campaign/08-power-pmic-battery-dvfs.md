@@ -1,25 +1,35 @@
 # Power, PMIC, battery and DVFS
 
-Status: SOURCE EXISTS; the BQ2589x observer is OPT-IN and no-write; battery,
-fuel-gauge, charging policy, DVFS and DEVICE-TESTED power management are
-**UNKNOWN**.
+Status: BQ25896 status observation is BOUND-UNVERIFIED; Cycle18 FG preflight
+is read-only and cleanly removed; battery, charging policy, and DVFS remain
+UNKNOWN or IMPLEMENTED-INACTIVE.
 
-The board DWS routes `SW_CHARGER` to I2C0/0x6b
-(`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/dws/mt6797/aeon6797_6m_n.dws:3679-3683`),
-and the retained vendor capture reports a bound `bq25890` at that address while
-explicitly not logging the exact part number
-(`research/mt6797-bq25896-routing-evidence/README.md:138-151`). The Nix-pinned
-kernel input contains a BQ25896/BQ25890-compatible overlay which exposes only
-I2C0, the address and `ti,read-only`, with no IRQ, charge limits, battery,
-regulator or OTG control (`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtso:3-33`).
+The current board source places the charger candidate at I2C0/0x6b and keeps
+the VGPU/FAN candidates disabled (linux-gemini-platform@28c471502:
+arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:351-390,618-638). The live
+full Stage2 image binds 3-006b to bq25890-charger, exposing TI
+BQ25896, online=1, status=Not charging, and charge_type=N/A. This is a
+read-only status observation, not proof of charging or battery operation.
 
-Nix defines, but does not thereby hardware-prove, a platform recovery output
-that selects this overlay (`flake.nix:417-436`); the composed-DT check confirms
-the no-IRQ/read-only shape (`nix/mainline.nix:584-598`). Exact BQ variant,
-CHR_STAT routing, fuel-gauge device, battery electrical parameters and safe
-charge policy could not be determined.
+Cycle18's second probe used gemini-live-fgadc with activate=N and reported:
 
-The next gate is after recovery revalidation: boot only the no-write observer,
-retain its I2C/driver errors and exposed read-only values, and stop. No raw PMIC
-or charger writes, regulator control, OTG, battery reporting or DVFS change is
-authorized by this evidence.
+> exact-active state ckpdn=0x1270 con0=0x29 osr=0x8, no child/power_supply, cleanly removed.
+
+The exact evidence is
+/mnt/Home/src/gemini-live-probe-cycle18-fg-preflight-20260830; its
+`RESULT:1-3` has remote_rc=0 and its
+`/mnt/Home/src/gemini-live-probe-cycle18-fg-preflight-20260830/dmesg-applied:1895-1901`
+records clean overlay removal.
+The current full NixOS image intentionally composes InputObserve, not
+DeviceActivation: the fuel-gauge child is disabled in the runtime DT.
+
+The FG result does not establish battery capacity, voltage/current calibration,
+CHR_STAT routing, charger control, or a safe charging policy. The exact BQ
+variant beyond the compatible identity and the physical battery topology remain
+could not determine. No raw PMIC or charger writes are authorized by this
+evidence.
+
+DVFSP handoff reaches state=ready and late_validation=passed in the live
+dmesg, but no CPUFreq policy or OPP sysfs exists; classify DVFS as
+IMPLEMENTED-INACTIVE. The next gates are a read-only charger/battery identity
+record and a separately reviewed fixed-OPP DVFS test.

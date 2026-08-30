@@ -1,26 +1,29 @@
 # Touchscreen
 
-Status: SOURCE EXISTS; the base NT36xxx client and its bus are INERT; the
-Nix-pinned input contains an OPT-IN bus observer; safe client activation and
-DEVICE-TESTED **UNKNOWN**.
+Status: SOURCE EXISTS; the normal full NixOS image keeps the client INACTIVE;
+Cycle18 established the NT36772 identity and clean overlay teardown;
+physical touch behavior remains UNKNOWN.
 
-The current base describes an NT36xxx client at I2C4/0x62, rising GPIO85/EINT8,
-and vendor-derived X/Y transforms, but deliberately leaves both adapter and
-client disabled. Its comment explicitly records the unresolved physical
-VTOUCH regulator mapping (`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:388-412`).
-The pinned observer only enables I2C4; it leaves the client disabled and
-therefore makes no touch I2C transfer or EINT request
-(`linux-gemini-platform@1bb2a9863:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-observe.dtso:3-33`).
+The current board DT describes the NT36xxx client at I2C4/0x62, rising
+GPIO85/EINT8, and the vendor-derived transforms, but deliberately leaves both
+adapter and client disabled (linux-gemini-platform@28c471502:
+arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:409-436). The current image
+is the InputObserve composition, not DeviceActivation, so runtime
+/i2c@11011000/touchscreen@62/status=disabled is expected.
 
-Vendor DTS text records GPIO85/EINT8 and a selectable GPIO68 reset state
-(`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/aeon6797_6m_n.dts:579-638`).
-It does not determine reset polarity/timing, VTOUCH regulator identity or
-voltage, controller revision, or a safe read transaction. The later read-only
-VTOUCH collector exists at `linux-gemini-platform@2fcd32294`, but it is not in
-the Nix pin (`flake.nix:23-28`).
+Cycle18's read-only/live overlay result is authoritative for identity only:
 
-The next gate is vendor-boot collection of the actual VTOUCH phandle and
-regulator properties, without I2C/GPIO/PMIC writes. Only an exact rail and
-reset contract can justify a separately selectable recovery-only client
-overlay. Until then, no address scan, polling substitute, or IRQ activation is
-permitted.
+> bound 1-0062 to novatek-nt36xxx, detected NT36772 trim 00 00 03 72 66 03 1080x2160, created event2, and cleanly removed/restored disabled status while both nets/watchdog stayed active.
+
+The exact evidence is in
+/mnt/Home/src/gemini-live-probe-cycle18-touch-20260830; its `RESULT:1-3` has
+remote_rc=0, and its
+`/mnt/Home/src/gemini-live-probe-cycle18-touch-20260830/dmesg-applied:1889-1890`
+records the input and trim. This
+does not prove a finger event, coordinates, calibration, reset polarity, or
+VTOUCH regulator behavior. No physical touch observation is claimed.
+
+The next gate is a separately reviewed recovery-only activation retaining the
+identity, event stream, cleanup, and network/watchdog continuity, followed by a
+physical touch test. Do not promote the probe to normal-image activation or
+DEVICE-TESTED touch behavior.
