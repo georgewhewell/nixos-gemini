@@ -1056,3 +1056,40 @@ bundled helper's exact `ip addr replace 192.168.23.70/255.255.255.0` form
 against a deliberately nonexistent interface.  It returned only
 `ip: can't find device`, not a prefix-parse error, proving dotted DHCP subnet
 syntax is accepted without mutating a real host interface.
+
+## d69d558 BQ/USB11 proof-lease execute and automatic rescue: 2026-08-30 08:14--08:19
+
+Root explicitly authorized one exact p22-only `--execute --proof-lease`
+transaction using the pinned candidate above.  The candidate Download Only
+writer connected to BROM/DA and completed `[23] WRITE TO PARTITION [ boot ]`
+with `Download Succeeded`, rc=0 at 08:14:24.  Candidate SSH evidence proved
+the corrected path: watchdog `mtk-wdt active timeout=31`, eMMC
+`userspace_block_reads=none` and `mounts=none`, RTL8156 `0bda:8156`/r8152
+DHCP-ready at `192.168.23.70`, and BQ PASS with
+`i2c_client=2-006b controller=11007000.i2c driver=bq25890-charger`,
+`model_name=BQ25896`, and `online=1`.
+
+The candidate was deliberately not accepted.  The durable supervisor armed
+the exact Stage-A rescue at 08:15:45; after the 90-second lease, the candidate
+SSH path disappeared and the rescue writer caught BROM, completed the exact
+p22 rollback with `Download Succeeded`, rc=0 at 08:17:34, and published
+`supervisor_rollback_succeeded_rescue_verified` at 08:17:35.  The proof log
+contains `unattended_recovery=lease-expired watchdog_userspace=stopped`.
+
+The local harness terminal state was
+`recovered_but_proof_failed_candidate_validation` because the candidate
+validation remote script contained an extra rendered `fi` syntax error.  It
+still completed `verify_recovered_stage_a`; that guard emits no text when its
+three hash comparisons pass, hence the empty `recovered-partition-hashes`
+artifact.  This did not alter the durable rescue result.  Independent explicit
+SSH readback at 08:19 recorded
+p22 Stage A
+`1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc`, p30
+`122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159`, and p31
+`1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513`.
+Trex had no remaining writer, watcher, transaction, or proof process/unit.
+No p30/p31 write, erase, format, firmware upgrade, or second writer occurred.
+The complete run evidence is under
+`artifacts/p22-recovery-20260830-081412-326018` and the corresponding Trex
+directory under `/mnt/Home/src/nixos-gemini-flash-p22-20260829/`; this is a
+successful automatic rescue with a harness-validation defect requiring review.
