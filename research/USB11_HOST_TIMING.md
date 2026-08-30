@@ -38,9 +38,11 @@ window, measured from the helper's launch, not from kernel boot.  The source
 does not emit a helper-start timestamp, and `/bin/usb-host-net` is launched
 without an ordering barrier (`/home/grw/src/nixos-gemini/nix/mainline.nix:750-753`).
 
-## Exact candidate-cycle evidence
+## Control versus candidate evidence
 
-The candidate's kernel log records the driver and device path succeeding:
+The retained `dmesg-pre` file is a successful control/Stage-A-style capture,
+not the candidate pstore cycle.  It records the driver and device path
+succeeding:
 
 ```text
 [   58.161859] r8152 1-1:1.0 enu1: renamed from eth0
@@ -48,7 +50,16 @@ The candidate's kernel log records the driver and device path succeeding:
 ```
 
 (`/home/grw/src/nixos-gemini/artifacts/p22-recovery-20260830-065400-4074658/dmesg-pre:1524-1525`).
-The same boot's pstore records the helper's timeout much later:
+The candidate's corresponding pstore instead records the T-PHY resource
+failure and dependent MUSB deferral:
+
+```text
+[    0.740044] phy phy-11210000.t-phy.2: error -EBUSY: can't request region for resource [mem 0x11210800-0x112108ff]
+[    0.988977] probe of 11200000.usb returned -517 after 20 usecs
+```
+
+(`/home/grw/src/nixos-gemini/artifacts/p22-recovery-20260830-065400-4074658/pstore-pre:361,590`).
+The same candidate pstore records the helper's timeout much later:
 
 ```text
 [   49.229442] GEMINI_NIX_IXOO_STORAGE: ... userspace_block_reads=none userspace_block_writes=none mounts=none
@@ -60,7 +71,9 @@ The 49.229442 line is the last visible initramfs setup marker before the
 timeout; it is not a helper-start marker.  It nevertheless bounds the
 observed launch context.  The approximately 60-second interval from that
 setup marker to the timeout is consistent with the helper's 60 one-second
-iterations, but does not itself prove the helper's exact start time.
+iterations, but does not itself prove the helper's exact start time.  Because
+the candidate T-PHY failed before MUSB could bind, the timing record does not
+support a deadline/race diagnosis for this cycle.
 
 The cycle's durable ledger states:
 
@@ -91,24 +104,22 @@ was visible to the candidate helper at every earlier instant.
 
 ## Judgement
 
-**Proven.**  USB11 reaches a real RTL8156: the MT6797 overlay enables the
-USB11 TPHY, U2 PHY, and MUSB node (`/home/grw/src/linux-gemini-platform/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtso:118-128`),
+**Proven for the control, not the candidate.**  USB11 reaches a real RTL8156
+in the successful control/Stage-A-style capture: the MT6797 overlay enables
+the USB11 TPHY, U2 PHY, and MUSB node
+(`/home/grw/src/linux-gemini-platform/arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtso:118-128`),
 and the platform driver configures the MT6797 controller as multipoint with
 six endpoints (`/home/grw/src/linux-gemini-platform/drivers/usb/musb/mediatek.c:404-428`).
-The candidate kernel registered/renamed `enu1`, later asserted carrier, and
-the right-NIC SSH path eventually worked.  The helper emitted its explicit
-missing marker at boot+109.530455.
+The candidate pstore instead proves the T-PHY failed with `-EBUSY` and MUSB
+deferred; its helper emitted the explicit missing marker at boot+109.530455.
 
 **Not proven.**  The 60-second deadline did not, on this record, expire
-because carrier appeared at +60.314571: carrier is not part of the loop's
-condition, and the interface event preceded the helper timeout by roughly
-51 seconds.  A simple deadline increase may still be useful for future
-boots, but this cycle does not establish it as the fix.  The missing
-`waiting` marker means we cannot tell whether the candidate helper failed to
-observe the transient sysfs driver link, was not actually running the source
-shown above, or encountered an unrecorded process/sysfs failure.  The log
-does not prove which of those occurred.  DHCP success for the candidate is
-also not proven by the later SSH observation alone.
+because carrier appeared at +60.314571: those events belong to the successful
+control capture, while the candidate T-PHY failed at boot+0.740044.  A simple
+deadline increase is therefore not an evidence-backed fix for this candidate.
+The candidate's network helper did not emit `waiting`; no candidate
+`r8152` interface appears in its pstore.  DHCP success for the candidate is
+also not proven by the later control/SSH observation.
 
 ## Smallest decisive next gate
 
