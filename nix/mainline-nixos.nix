@@ -257,6 +257,7 @@
       @PROVISION_STORE@
     fi
     [ -f "$store_image" ] || fail "store-image-missing"
+    [ ! -L "$store_image" ] || fail "store-image-symlink"
     actual=$(sha256sum "$store_image" | awk '{print $1}')
     [ "$actual" = "$expected" ] || fail "store-image-hash expected=$expected actual=$actual"
     log "store-image=verified sha256=$actual"
@@ -322,6 +323,14 @@
       grep -Fq 'unattended-recovery.watchdog-owner' root/init
     '' else ''
       ! grep -Fq '^    start_watchdog_lease$' root/init
+    ''}
+    ${if provisionStore then ''
+      grep -Fq 'store-provision=required' root/init
+      grep -Fq 'mount -t ext4 -o rw,nosuid,nodev,noexec' root/init
+      grep -Fq 'restore_store_readonly' root/init
+      ! grep -Fq 'mount -o remount,rw' root/init
+    '' else ''
+      ! grep -Fq '^      provision_store$' root/init
     ''}
     bash -n root/init
     chmod 0755 root/init root/bin/usb-net root/bin/ssh-server \
