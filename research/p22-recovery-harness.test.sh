@@ -384,12 +384,42 @@ EOF
     printf '%s\n' '#!/bin/sh' 'printf "1: usb0: <BROADCAST> mtu 1500 state UP group default qlen 1000\\n    link/ether 42:00:15:19:82:00 brd ff:ff:ff:ff:ff:ff\\n"' > "$fake_bin/ip"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "$fake_bin/lsusb"
     chmod +x "$fake_bin/ssh" "$fake_bin/ip" "$fake_bin/lsusb"
-    PATH="$fake_bin:$PATH" timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
+    P22_SUPERVISOR_ARM_DELAY=0 PATH="$fake_bin:$PATH" \
+        timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
         "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
     grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$run/supervisor.state"
     test "$(sha256sum "$stage" | cut -d' ' -f1)" = "$rollback_sha"
+}
+
+test_supervisor_prearms_before_acceptance_window() {
+    run=$TEST_ROOT/supervisor-prearmed
+    mkdir -p "$run"
+    rescue=$run/rescue.img
+    stage=$run/boot.img
+    truncate -s 16777216 "$rescue"
+    rollback_sha=$(sha256sum "$rescue" | cut -d' ' -f1)
+    printf '%s\n' 'flash_rc=0 candidate' > "$run/candidate.state"
+    fake_wrapper=$run/fake-wrapper
+    cat > "$fake_wrapper" <<'EOF'
+#!/bin/sh
+date +%s > "${1%/*}/wrapper.started"
+printf 'flash_rc=0 early-reset-caught\n' > "$1"
+EOF
+    chmod +x "$fake_wrapper"
+    started=$(date +%s)
+    # The acceptance window is deliberately longer than the outer timeout.
+    # Success therefore proves the rescue scanner starts after the short arm
+    # grace, rather than waiting for acceptance to expire.
+    P22_SUPERVISOR_ARM_DELAY=1 P22_SUPERVISOR_ROLLBACK_TIMEOUT=2 timeout 6 \
+        "$ROOT/research/p22-proof-supervisor.sh" \
+        "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
+        "$run/download.xml" "$run/global.lock" 8 "$fake_wrapper" \
+        "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
+    wrapper_started=$(cat "$run/wrapper.started")
+    test "$((wrapper_started - started))" -le 4
+    grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$run/supervisor.state"
 }
 
 test_supervisor_rolls_back_failed_candidate() {
@@ -407,7 +437,8 @@ test_supervisor_rolls_back_failed_candidate() {
     printf '%s\n' '#!/bin/sh' 'printf "link/ether 42:00:15:19:82:00\\n"' > "$run/bin/ip"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "$run/bin/lsusb"
     chmod +x "$fake_wrapper" "$run/bin/ssh" "$run/bin/ip" "$run/bin/lsusb"
-    PATH="$run/bin:$PATH" timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
+    P22_SUPERVISOR_ARM_DELAY=0 PATH="$run/bin:$PATH" \
+        timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
         "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
@@ -436,7 +467,8 @@ fi
 printf 'flash_rc=0 simulated-second-scan-catch\n' > "$1"
 EOF
     chmod +x "$fake_wrapper"
-    PATH="$run/bin:$PATH" timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
+    P22_SUPERVISOR_ARM_DELAY=0 PATH="$run/bin:$PATH" \
+        timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
         "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
@@ -452,7 +484,8 @@ test_supervisor_records_unexpected_exit() {
     truncate -s 16777216 "$rescue"
     printf '%s\n' 'flash_rc=0 candidate' > "$run/candidate.state"
     set +e
-    timeout 20 "$ROOT/research/p22-proof-supervisor.sh" \
+    P22_SUPERVISOR_ARM_DELAY=0 timeout 20 \
+        "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" \
         0000000000000000000000000000000000000000000000000000000000000000 \
         "$run/boot.img" "$run/download.xml" "$run/global.lock" 3 \
@@ -486,7 +519,7 @@ EOF
     setsid sh -c 'while :; do sleep 60; done' sh "$run/download.xml" &
     foreign_pid=$!
     set +e
-    P22_SUPERVISOR_ROLLBACK_TIMEOUT=2 timeout 15 \
+    P22_SUPERVISOR_ARM_DELAY=0 P22_SUPERVISOR_ROLLBACK_TIMEOUT=2 timeout 15 \
         "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
@@ -518,7 +551,7 @@ printf 'tool_started fake\n' > "$1"
 while :; do sleep 60; done
 EOF
     chmod +x "$fake_wrapper"
-    P22_SUPERVISOR_ROLLBACK_TIMEOUT=8 timeout 20 \
+    P22_SUPERVISOR_ARM_DELAY=0 P22_SUPERVISOR_ROLLBACK_TIMEOUT=8 timeout 20 \
         "$ROOT/research/p22-proof-supervisor.sh" \
         "$run" "$run/candidate.state" "$rescue" "$rollback_sha" "$stage" \
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
@@ -1315,6 +1348,7 @@ test_stop_tool_before_state_initialization_is_noop
 test_stop_capture_does_not_trust_stale_diagnostic_pid
 test_xml_is_attempt_unique_for_writer_and_supervisor
 test_supervisor_fake_rollback
+test_supervisor_prearms_before_acceptance_window
 test_supervisor_rolls_back_failed_candidate
 test_supervisor_retries_one_brom_scan_timeout
 test_supervisor_records_unexpected_exit

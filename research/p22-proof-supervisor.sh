@@ -21,6 +21,13 @@ LEASE_SECONDS=${13:-90}
 SIZE=16777216
 SUPERVISOR_TERMINAL=no
 ROLLBACK_WAIT_SECONDS=${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}
+# The candidate flash completes while the device is still leaving the
+# preloader session used for the write.  Give that first boot a short,
+# measured grace period, then keep an exact rescue writer scanning throughout
+# the observation window.  On Gemini the first post-flash preloader is gone
+# within about ten seconds and the earliest failed-kernel watchdog return is
+# about thirty seconds after that, so fifteen seconds separates the two.
+ROLLBACK_ARM_DELAY_SECONDS=${P22_SUPERVISOR_ARM_DELAY:-15}
 
 write_state() {
     printf '%s %s\n' "$1" "$(date -Is)" > "$SUPERVISOR_STATE"
@@ -49,6 +56,9 @@ case "$LEASE_SECONDS" in
     ''|*[!0-9]*) write_state supervisor_blocked_bad_lease; exit 2 ;;
 esac
 [ "$LEASE_SECONDS" -ge 3 ] || { write_state supervisor_blocked_bad_lease; exit 2; }
+case "$ROLLBACK_ARM_DELAY_SECONDS" in
+    ''|*[!0-9]*) write_state supervisor_blocked_bad_arm_delay; exit 2 ;;
+esac
 [ "$ACCEPTANCE_WINDOW" -lt "$LEASE_SECONDS" ] || { write_state supervisor_blocked_bad_window; exit 2; }
 write_state supervisor_waiting_candidate
 
@@ -72,18 +82,22 @@ case "$(cat "$CANDIDATE_STATE" 2>/dev/null || true)" in
         candidate_failed=yes ;;
 esac
 
-# Give the candidate its complete acceptance window. The harness collects
-# evidence concurrently; no acceptance marker is ever consulted or written.
+# A successful candidate gets its complete acceptance window, but the rescue
+# scanner must already be alive when an early watchdog reset exposes
+# preloader.  Waiting out the acceptance window before launching Flash Tool
+# loses precisely that recovery window and can strand a repeatedly failing
+# candidate once the boot firmware stops retrying it.
 if [ "$candidate_failed" = no ]; then
-    window_end=$(( $(date +%s) + ACCEPTANCE_WINDOW ))
-    while [ "$(date +%s)" -lt "$window_end" ]; do
+    rollback_deadline=$(( $(date +%s) + ACCEPTANCE_WINDOW + ROLLBACK_WAIT_SECONDS ))
+    arm_at=$(( $(date +%s) + ROLLBACK_ARM_DELAY_SECONDS ))
+    while [ "$(date +%s)" -lt "$arm_at" ]; do
         sleep 1
     done
 else
     # A failed/partial candidate transaction is still unsafe to boot. Roll
-    # back immediately after the post-flash reboot dispatch; do not abandon
-    # ownership merely because candidate Flash Tool returned nonzero.
-    :
+    # back at the first available preloader; do not abandon ownership merely
+    # because candidate Flash Tool returned nonzero.
+    rollback_deadline=$(( $(date +%s) + ROLLBACK_WAIT_SECONDS ))
 fi
 
 test "$(stat -Lc %s "$RESCUE_IMAGE")" -eq "$SIZE"
@@ -98,9 +112,9 @@ pid_file=$RUN_SHARED/supervisor-rollback.pid
 pgid_file=$RUN_SHARED/supervisor-rollback.pgid
 sid_file=$RUN_SHARED/supervisor-rollback.sid
 starttime_file=$RUN_SHARED/supervisor-rollback.starttime
-deadline=$(( $(date +%s) + "$ROLLBACK_WAIT_SECONDS" ))
+deadline=$rollback_deadline
 rollback_attempt=1
-while [ "$rollback_attempt" -le 2 ]; do
+while [ "$(date +%s)" -lt "$deadline" ]; do
     rm -f "$ROLLBACK_STATE"
     setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
         "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
@@ -124,17 +138,16 @@ while [ "$rollback_attempt" -le 2 ]; do
         sleep 1
     done
     state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
-    if [ "$rollback_attempt" -eq 1 ] &&
-       printf '%s\n' "$state" | grep -Fq 'flash_rc=1 '; then
-        # Flash Tool's own BROM scan is 120 seconds. The observed watchdog
-        # handoff can expose preloader just after that first scan expires.
-        # Reap the finished wrapper, then immediately open one final bounded
-        # scan: the exact rescue bytes, p22-only XML, global writer lock and
-        # overall rollback deadline are unchanged.
+    if printf '%s\n' "$state" | grep -Fq 'flash_rc=1 '; then
+        # Flash Tool's own BROM scan is 120 seconds. Reap each missed scan and
+        # immediately reopen the same exact p22-only rescue transaction. This
+        # keeps coverage continuous from the first possible failed-kernel
+        # reset through the watchdog lease-expiry proof, under one absolute
+        # deadline and the same global writer lock.
         wait "$launch_pid" 2>/dev/null || true
-        printf '[%s] rollback attempt 1 missed/failed rc=1; retrying exact p22 once\n' \
-            "$(date -Is)" >> "$ROLLBACK_LOG"
-        rollback_attempt=2
+        printf '[%s] rollback attempt %s missed/failed rc=1; retrying exact p22 within deadline\n' \
+            "$(date -Is)" "$rollback_attempt" >> "$ROLLBACK_LOG"
+        rollback_attempt=$((rollback_attempt + 1))
         continue
     fi
     break
