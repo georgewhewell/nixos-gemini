@@ -5,6 +5,60 @@ on `trex`.  Three delegated workers are intentionally still running, so their
 branches and artifacts may advance after this snapshot.  Inspect the current
 worktrees and Trex units before repeating work.
 
+## 05:22 CEST authoritative update
+
+This update supersedes the older W0-v5/v6 and "GNSS untested" statements
+later in this document.  The current p22 image is corrected W0-v7:
+
+```text
+current p22 SHA-256:
+c1fbdaf692f319583f9a32d7d6cb0f0f70077769f966e66cd1922fef353b006e
+
+Linux tip: 12140b6291e1d25f0d707572849117a70499d116
+Nix tip:   0d6eb1bde143ee112b01fb39a7ea9ce27cb7d92c
+candidate: /mnt/Home/src/w0-hif-p22-candidate-20260831-v7
+capture:   /mnt/Home/src/w0-hif-p22-candidate-20260831-v7/captures/p22-one-shot-20260831-051843-11232
+```
+
+The single p22-only write and exact readback passed.  Gadget and RTL SSH both
+returned.  Decisive hardware output was:
+
+```text
+WMT14 result=0
+G2d RF calibration event: len=378 prefix=00 01
+WCIR raw=0x100279 chip=0x0279 rev=0 por=1 ready=0
+G2d passed; bootstrap will fence/reset
+```
+
+Thus CONSYS, the GEN3 CMD53 HIF portal and field-wise WCIR decoder are
+hardware-proven.  Wi-Fi is not a network interface yet: the active W1 lane is
+implementing the vendor's split RAM-code download, including the later
+sections written through the 512 KiB CONSYS EMI window after a temporary MPU
+permission change, followed by bounded firmware-start/IRQ/READY evidence.
+
+GNSS also received one isolated hardware test before W0-v7:
+
+```text
+candidate SHA: 0135afa346c67ecd7673a72f6320f228b681cb6456534e6e369a9bfe93268f9e
+capture: /mnt/Home/src/nixos-gemini-gnss-p22-hardware/artifacts/mainline-consys-g2d-gnss-p22/captures-w0v6-gnss-0135afa/p22-one-shot-20260831-050132-3772610
+result: G2d GNSS causal stage gnss-lna-init failed: -524
+cleanup: LNA-low=-524 FUNC_CTRL-off-attempted=0 result=0
+```
+
+This was safe and decisive: no GPS FUNC_CTRL-on was transmitted.  Mainline
+MT6797 pinctrl currently exposes MODE/DIR/DI/DO only, while the experimental
+GNSS states requested unsupported slew-rate and bias-disable operations.  The
+active hardware lane is removing only those unsupported properties, retaining
+GPIO69 pinmux plus output-low/high, and rebuilding before any retest.
+
+The host rebooted after those cycles and killed the original workers; three
+new Terra workers were recreated from preserved state.  Current lane names
+are `wifi_firmware_bringup`, `cellular_md1_bringup`, and
+`radio_hardware_test`.  Cellular has advanced to Linux `592c5840d` and Nix
+`10e1562`: it encodes a fail-closed RMPU/remap diagnostic plan based on the
+vendor order, but has not powered or released MD1 and has not touched modem
+partitions.
+
 ## Mission and priorities
 
 The goal is full usable mainline Linux/NixOS hardware support for the Planet
