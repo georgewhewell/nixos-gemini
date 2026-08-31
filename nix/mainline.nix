@@ -1089,6 +1089,68 @@
         ''
         else ""
       }
+      ${lib.optionalString md1LkHandoffProbe ''
+        # The source overlay is deliberately disabled.  This profile makes one
+        # explicit, reviewable transition to okay; its separate built-in
+        # module parameter remains the second required gate.  The driver maps
+        # only LK metadata and unmaps before any MD1 control operation.
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-lk-handoff.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo
+        test "$(fdtget "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe status)" = disabled
+        test "$(fdtget "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe compatible)" = \
+          mediatek,mt6797-md1-lk-handoff-probe
+        fdtget -p "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe \
+          | grep -Fqx 'mediatek,experimental-md1-lk-handoff-probe'
+        fdtget -p "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe \
+          | grep -Fqx 'mediatek,stage-lk-handoff-read-only'
+        fdtput -t s "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe status okay
+        test "$(fdtget "$out/gemini-md1-lk-handoff.dtb" /modem-lk-handoff-probe status)" = okay
+        cp "$out/gemini-md1-lk-handoff.dtb" "$out/gemini.dtb"
+        echo 'md1-lk-handoff=dt-gate-okay cmdline-gate-required read-only-only' >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString md1BootStatusObserve ''
+        # The source overlay is disabled too. This is a separate, visible
+        # transition and the built-in parameter remains the second gate. The
+        # driver does only the vendor's three AP-side reads of each word, then
+        # captures AP CCIF RCHNUM raw beside the already passive BUSY/ACK read.
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-boot-status.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-boot-status-observe.dtbo
+        test "$(fdtget "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 status)" = disabled
+        test "$(fdtget "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 compatible)" = \
+          mediatek,mt6797-md1-boot-status-observe
+        fdtget -p "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 \
+          | grep -Fqx 'mediatek,experimental-md1-boot-status'
+        fdtput -t s "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 status okay
+        test "$(fdtget "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 status)" = okay
+        cp "$out/gemini-md1-boot-status.dtb" "$out/gemini.dtb"
+        echo 'md1-boot-status=dt-gate-okay cmdline-gate-required three-reads-per-word passive-ap-rchnum-raw no-write-no-interpretation' >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString md1RemapObserve ''
+        # The source overlay remains disabled.  Making it okay here is one
+        # visible gate; the driver requires its separate default-false cmdline
+        # parameter and accepts only the already validated LK plan.
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-remap-observe.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-remap-observe.dtbo
+        test "$(fdtget "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 status)" = disabled
+        test "$(fdtget "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 compatible)" = \
+          mediatek,mt6797-md1-remap-observe
+        test "$(fdtget -t x "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 reg)" = \
+          '0 10001000 0 1000'
+        fdtget -p "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 \
+          | grep -Fqx 'mediatek,experimental-md1-remap-observe'
+        fdtget -p "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 \
+          | grep -Fqx 'mediatek,stage-lk-remap-observe-read-only'
+        fdtput -t s "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 status okay
+        test "$(fdtget "$out/gemini-md1-remap-observe.dtb" /modem-remap-observe@10001000 status)" = okay
+        cp "$out/gemini-md1-remap-observe.dtb" "$out/gemini.dtb"
+        echo 'md1-remap-observe=dt-gate-okay cmdline-gate-required five-infracfg-reads no-write-no-ownership' >> "$out/VALIDATION"
+      ''}
       ${lib.optionalString (touchscreenActivationOverlay || fgadcActivationOverlay) ''
         # Explicit negative contracts: this full-NixOS baseline does not pull
         # in the later MicroSD, GPU, or radio bring-up experiments.
@@ -1569,6 +1631,63 @@
       else
         note "pstore=unavailable"
       fi
+      ${lib.optionalString md1LkHandoffProbe ''
+      # MD1 probe itself ran during platform population.  Collect only its
+      # bounded kernel evidence; this initramfs code neither retriggers it nor
+      # accesses modem partitions, reserved memory, clocks, resets, CCIF, or
+      # any modem transport.
+      md1_attempt=0
+      while [ "$md1_attempt" -lt 3 ]; do
+        dmesg 2>/dev/null | grep -F 'mt6797-md1-lk-handoff' \
+          > /run/md1-lk-handoff.dmesg || true
+        [ -s /run/md1-lk-handoff.dmesg ] && break
+        md1_attempt=$((md1_attempt + 1))
+        sleep 1
+      done
+      if grep -Fq 'verified LK hand-off:' /run/md1-lk-handoff.dmesg 2>/dev/null; then
+        if grep -Fq 'LK MD1 load evidence:' /run/md1-lk-handoff.dmesg; then
+          note "md1_lk_handoff=verified stage=lk-image-load-only execution=unknown evidence=/run/md1-lk-handoff.dmesg cold-owner=not-granted"
+        elif grep -Fq 'RMPU/remap candidate encodings:' /run/md1-lk-handoff.dmesg; then
+          note "md1_lk_handoff=verified stage=metadata-and-plan-only evidence=/run/md1-lk-handoff.dmesg next=mpu-remap-owner-and-mode-required"
+        else
+          note "md1_lk_handoff=verified stage=metadata-only evidence=/run/md1-lk-handoff.dmesg next=inspect-rmpu-plan-log"
+        fi
+      elif [ -s /run/md1-lk-handoff.dmesg ]; then
+        note "md1_lk_handoff=rejected stage=metadata-only evidence=/run/md1-lk-handoff.dmesg action=inspect-exact-kernel-error"
+      else
+        note "md1_lk_handoff=not-observed after=3s action=inspect-cmdline-dt-and-dmesg"
+      fi
+      ''}
+      ${lib.optionalString md1BootStatusObserve ''
+      # The driver was populated exactly once by the DT. Collect its result;
+      # never interpret a value as execution, ownership, or permission to
+      # modify MD1 state.
+      dmesg 2>/dev/null | grep -E 'MD1_BOOT_STATS|MD1 boot-status complete|passive MD1 CCIF snapshot' > /run/md1-boot-status.dmesg || true
+      if grep -Fq 'MD1 boot-status complete:' /run/md1-boot-status.dmesg 2>/dev/null \
+        && grep -Fq 'ap_rchnum=' /run/md1-boot-status.dmesg; then
+        stats0_count=$(grep -Fc 'after MD1_BOOT_STATS0 sample' /run/md1-boot-status.dmesg || true)
+        stats1_count=$(grep -Fc 'after MD1_BOOT_STATS1 sample' /run/md1-boot-status.dmesg || true)
+        if [ "$stats0_count" -eq 3 ] && [ "$stats1_count" -eq 3 ]; then
+          note "md1_boot_status=observed samples=3+3 ap_rchnum=raw evidence=/run/md1-boot-status.dmesg interpretation=none ownership=not-granted"
+        else
+          note "md1_boot_status=incomplete evidence=/run/md1-boot-status.dmesg action=inspect-before-after-boundary"
+        fi
+      else
+        note "md1_boot_status=not-observed evidence=/run/md1-boot-status.dmesg action=inspect-cmdline-dt-and-dmesg"
+      fi
+      ''}
+      ${lib.optionalString md1RemapObserve ''
+      # Population runs the DT driver once. This just retains its bounded
+      # five-read evidence and never touches any modem control resource.
+      dmesg 2>/dev/null | grep -E 'MD1 remap observed|MD1 remap read|mt6797-md1-remap-observe' > /run/md1-remap-observe.dmesg || true
+      if grep -Fq 'MD1 remap observed' /run/md1-remap-observe.dmesg 2>/dev/null; then
+        note "md1_remap_observe=observed reads=5 evidence=/run/md1-remap-observe.dmesg classification=source-shaped-only ownership=not-granted"
+      elif [ -s /run/md1-remap-observe.dmesg ]; then
+        note "md1_remap_observe=rejected-or-incomplete evidence=/run/md1-remap-observe.dmesg action=inspect-plan-gates-and-dmesg"
+      else
+        note "md1_remap_observe=not-observed evidence=/run/md1-remap-observe.dmesg action=inspect-cmdline-dt-and-lk-plan"
+      fi
+      ''}
       /bin/usb-net &
       ${lib.optionalString usbHostOverlay ''
       /bin/usb-host-net &
@@ -2047,6 +2166,39 @@
       echo "nix-device-activation=${deviceActivationLabel}"
       echo "nix-a72-cpu8-sram-diagnostic=${a72Cpu8SramDiagnosticLabel}"
       echo "a72-cpu8-request=initramfs exact-token once after watchdog+gadget+rtl+emmc gates; cpu9=maxcpus-9 veto; retry=0 cpu_off=0 rollback=0"
+      echo "nix-md1-lk-handoff=${md1LkHandoffLabel}"
+      echo "nix-md1-boot-status=${md1BootStatusLabel}"
+      echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
+      echo "md1-lk-handoff-contract=${
+        if md1LkHandoffProbe
+        then "DT-status=okay plus built-in parameter; LK flag is accepted only as image-load evidence and execution remains unknown; metadata table and diagnostic RMPU/remap plan read-only; fence/secure-MPU-provider/backend source is explicitly unselected and has no hardware run path; public LK remap-lock/refusal evidence is source-only; mandatory unmap before partition-I/O/MPU/remap writes/power/reset/CCIF/CLDMA/DMA"
+        else "none"
+      }"
+      echo "md1-boot-status-contract=${
+        if md1BootStatusObserve
+        then "second DT-status=okay plus separate built-in parameter; exactly three reads of each AP-visible vendor status word followed by one passive raw AP-CCIF RCHNUM read after LK load evidence; no write/poll/retry/value interpretation, ACK, IRQ request, or ownership grant"
+        else "none"
+      }"
+      echo "md1-remap-observe-contract=${
+        if md1RemapObserve
+        then "third DT-status=okay plus separate built-in parameter; exactly five infracfg-AO reads after validated LK plan: bank0 0x300/0x304, bank4 0x310/0x314, lock 0xf80; source-shaped classifier result is evidence only, never remap/MPU/WDT/release/CCIF/CLDMA/DMA authority"
+        else "none"
+      }"
+      echo "md1-lk-handoff-runtime-evidence=${
+        if md1LkHandoffProbe
+        then "/run/md1-lk-handoff.dmesg and GEMINI_NIX_IXOO_PROBE md1_lk_handoff=*"
+        else "none"
+      }"
+      echo "md1-boot-status-runtime-evidence=${
+        if md1BootStatusObserve
+        then "/run/md1-boot-status.dmesg and GEMINI_NIX_IXOO_PROBE md1_boot_status=*"
+        else "none"
+      }"
+      echo "md1-remap-observe-runtime-evidence=${
+        if md1RemapObserve
+        then "/run/md1-remap-observe.dmesg and GEMINI_NIX_IXOO_PROBE md1_remap_observe=*"
+        else "none"
+      }"
       echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${

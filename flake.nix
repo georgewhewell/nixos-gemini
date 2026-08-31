@@ -530,6 +530,132 @@
       thermalHallObserveOverlay = true;
     };
 
+    # MD1 stage 1 is a deliberately narrow successor to the full observed
+    # recovery substrate.  It consumes linux-gemini-next so a review can use
+    # --override-input linux-gemini-next path:/absolute/reviewed/kernel-tree
+    # before that kernel commit is published.  It arms only the LK metadata
+    # read-only probe; it never selects the separate MD1 power/reset scaffold.
+    mainlineMd1LkHandoffProbe = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      md1LkHandoffProbe = true;
+      md1LkHandoffKernelCommit = "511691b221bffd2094583f348df5303ea9babc27";
+      md1LkHandoffKernelNarHash = "sha256-Ezi7bZi46faezZLHZ6SyHyuXS6Rp2/c1hwFZvSVqpHc=";
+    };
+
+    # This p22 candidate preserves the build-time reservations, while its
+    # probe resolves LK's authoritative live CCCI mblock rewrite.  It remains
+    # read-only: neither form of reservation grants modem control.
+    mainlineMd1LkReservedImage = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      md1LkHandoffProbe = true;
+      # A vendor-shaped, read-only execution-state experiment.  It cannot run
+      # until the preceding native48/live-mblock LK preflight attests.  It
+      # captures AP CCIF RCHNUM raw beside the prior BUSY/ACK snapshot, but
+      # never ACKs, requests the CCIF IRQ, or decodes a channel.
+      md1BootStatusObserve = true;
+      md1LkHandoffKernelCommit = "7e10432b9f26ce57638d2877e8a8ce1da9e1c48a";
+      md1LkHandoffKernelNarHash = "sha256-ByNUCJG8Qzs0644F+GV2ieDhjsfAIrpscQriYajXgZc=";
+    };
+
+    # MD1 stage 2 is still observation-only. It first consumes the same LK
+    # load evidence, then performs the vendor-shaped three reads of each
+    # AP-visible boot-status word. It has no MD1 write, release, or transport.
+    mainlineMd1LkHandoffBootStatusObserve = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      md1LkHandoffProbe = true;
+      md1BootStatusObserve = true;
+      md1LkHandoffKernelCommit = "511691b221bffd2094583f348df5303ea9babc27";
+      md1LkHandoffKernelNarHash = "sha256-Ezi7bZi46faezZLHZ6SyHyuXS6Rp2/c1hwFZvSVqpHc=";
+    };
+
+    # MD1 stage 3 is a bounded infracfg-AO observation only.  It first needs
+    # the LK hand-off plan, then reads exactly bank0, bank4, and the persistent
+    # MD1 remap lock.  It never selects the secure-MPU, WDT, remap writer,
+    # power/reset, boot-vector, CCIF, CLDMA, DMA, or transport paths.
+    mainlineMd1LkHandoffRemapObserve = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      md1LkHandoffProbe = true;
+      md1RemapObserve = true;
+      md1LkHandoffKernelCommit = "03de12f86ef5ea349b032abc44b372f44b207fc3";
+      md1LkHandoffKernelNarHash = "sha256-SS90wx/kMyW1INlN27zRpAgz+7S3139m4nErcg+ErQA=";
+    };
+
     # First combined unattended hardware image. It retains the full
     # display/audio/power/input observation chain, then enables only the
     # touchscreen, FGADC, and conservative 3.0V MicroSD contracts that were
