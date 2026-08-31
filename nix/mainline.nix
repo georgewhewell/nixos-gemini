@@ -363,6 +363,7 @@
       ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
 
+      set -x
       test -z "''${NIX_HARDENING_ENABLE:-}"
       # The selected CPU8 profile ends with its own explicit local version;
       # accepting the read-only profile's old value here would reintroduce the
