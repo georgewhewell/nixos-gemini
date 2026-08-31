@@ -1062,7 +1062,10 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-candidate.dtbo \
           "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-cldma-prepare.dtbo \
+          "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
       ''}
+        test -s "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -1733,7 +1736,20 @@
         fdtget -p "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner \
           | grep -Fqx 'mediatek,stage-md1-boot-vector-release'
         cp "$out/gemini-md1-boot-candidate.dtb" "$out/gemini.dtb"
-        echo 'md1-boot-candidate=single-enabled-p22-overlay plus six-cmdline-gates one-vector-write then-100ms-bounded-observation no-irq-no-cldma-no-ccci' >> "$out/VALIDATION"
+
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-cldma-prepare.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-cldma-prepare.dtbo
+        test "$(fdtget "$out/gemini-md1-cldma-prepare.dtb" /modem-cldma@10014000 status)" = disabled
+        test "$(fdtget "$out/gemini-md1-cldma-prepare.dtb" /modem-cldma@10014000 compatible)" = \
+          mediatek,mt6797-md1-cldma-prepare
+        test "$(fdtget -t x "$out/gemini-md1-cldma-prepare.dtb" /modem-cldma@10014000 reg)" = \
+          '0 10014000 0 1e00 0 10015000 0 1e00 0 10219000 0 1e00 0 1021a000 0 1e00 0 10209000 0 1000 0 1020a000 0 1000'
+        fdtget -p "$out/gemini-md1-cldma-prepare.dtb" /modem-cldma@10014000 \
+          | grep -Fqx 'mediatek,stage-dma-rings-inert'
+
+
       ''}
       ${lib.optionalString md1LkHandoffProbe ''
         # The source overlay is deliberately disabled.  This profile makes one
@@ -2477,9 +2493,9 @@
       # The five DT drivers have already populated once. This only collects
       # their terminal evidence; it does not touch or retry MD1.
       dmesg 2>/dev/null | grep -E 'verified LK hand-off:|MD1 remap observed|MD1 secure EMI-MPU provider armed|MD1 WDT keys attempted|MD1 boot-vector|MD1 boot candidate' > /run/md1-boot-candidate.dmesg || true
-      if grep -Fq 'MD1 boot candidate observed post-vector activity' /run/md1-boot-candidate.dmesg; then
+      if grep -Fq 'MD1 post-vector oracle GO:' /run/md1-boot-candidate.dmesg; then
         note "md1_boot_candidate=activity-observed evidence=/run/md1-boot-candidate.dmesg next=minimal-cldma-ccci-hs"
-      elif grep -Fq 'MD1 boot-vector readback=0x1 but no boot-status or CCIF movement' /run/md1-boot-candidate.dmesg; then
+      elif grep -Fq 'MD1 post-vector oracle NO-GO:' /run/md1-boot-candidate.dmesg; then
         note "md1_boot_candidate=no-movement-bounded-100ms evidence=/run/md1-boot-candidate.dmesg action=watchdog-recovery-no-retry"
       else
         note "md1_boot_candidate=no-terminal-oracle evidence=/run/md1-boot-candidate.dmesg action=inspect-gates-and-dmesg"
@@ -2999,7 +3015,7 @@
       }"
       echo "md1-boot-candidate-contract=${
         if md1BootCandidate
-        then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us AP/CCIF observation; terminal after activity or timeout, no retry/IRQ/CLDMA/shared-memory/CCCI"
+        then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us AP/CCIF delta oracle; terminal GO requires a fresh status/CCIF delta and terminal NO-GO records the bounded quiet snapshot, no retry/IRQ/CLDMA/shared-memory/CCCI"
         else "none"
       }"
       echo "md1-lk-handoff-runtime-evidence=${
