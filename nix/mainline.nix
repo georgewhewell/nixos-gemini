@@ -473,8 +473,13 @@
         grep -Fqx 'CONFIG_MEDIATEK_WATCHDOG_RECOVERY_TAKEOVER=y' .config
         grep -Fqx 'CONFIG_PSTORE_GEMINI_TRANSITION_LEDGER=y' .config
         grep -Fqx 'CONFIG_PSTORE_GEMINI_ADMISSION_TRACE=y' .config
+        grep -Fqx 'CONFIG_CMDLINE_FORCE=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_CAPABILITY_PROFILE=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_P30_PROTOCOL_MODEL=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_P24_TRANSACTION_OWNER_MODEL=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_DERIVED_ADMISSION=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_STATE=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_SNAPSHOT_OBSERVER=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_CLOCK_BACKEND=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_BIGIDVFS_BACKEND=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_BIGIDVFS_SRAM_OWNER=y' .config
@@ -484,7 +489,7 @@
         grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_CONTROLLER=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_LIVE_TRIGGER=y' .config
         grep -Fqx '# CONFIG_KUNIT is not set' .config
-        grep -Fqx '# CONFIG_HOTPLUG_SPLIT_STARTUP is not set' .config
+        ! grep -Fqx 'CONFIG_HOTPLUG_SPLIT_STARTUP=y' .config
         grep -Fq '#define MT6797_A72_ADMISSION_CPU 8' \
           drivers/soc/mediatek/mt6797-a72-admission-controller.c
         ! grep -Fq 'CPU9 admission controller' \
