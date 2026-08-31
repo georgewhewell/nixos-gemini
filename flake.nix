@@ -619,6 +619,8 @@
       wifiW1FirmwareReadyProof = true;
       wifiW2NicCapability = true;
       wifiW4Connect = true;
+      md1BootStatusObserve = true;
+      a72Cpu8SramDiagnostic = true;
       platformEnablement = true;
       displayOverlay = true;
       audioOverlay = true;
@@ -651,6 +653,7 @@
       wifiW1FirmwareReadyProof = true;
       wifiW2NicCapability = true;
       wifiW4Connect = true;
+      a72Cpu8SramDiagnostic = true;
       unattendedRecovery = true;
     };
 

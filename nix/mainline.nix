@@ -254,7 +254,13 @@
     then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
     else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   usbBuildTag =
-    if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve
+    if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
+      consysG2gGnssEndpoint && consysG2hBtEndpoint
+    then "a72-w4-gnss-bt-ccif"
+    else if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
+      consysG2gGnssEndpoint
+    then "a72-w4-gnss-ccif"
+    else if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve
     then "a72-w4-ccif"
     else if consysG2gGnssEndpoint && consysG2hBtEndpoint
     then "radio-wifi-gnss-bt"
