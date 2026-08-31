@@ -1683,8 +1683,19 @@
         # in the later MicroSD, GPU, or radio bring-up experiments.
         test "$(fdtget "$out/gemini.dtb" /mmc@11240000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
-        test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
-        test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
+        ${lib.optionalString (!wifiW4Connect) ''
+          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
+          test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
+        ''}
+        ${lib.optionalString wifiW4Connect ''
+          # W4 requires the CONSYS/BTIF provider pair alive, but it does not
+          # create a BT endpoint or grant function-control ownership.
+          test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = okay
+          test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = okay
+          test -z "$(fdtget -l "$out/gemini.dtb" /serial@1100c000)"
+          ! fdtget "$out/gemini.dtb" /consys-g2d-postpatch-owner \
+            mediatek,function-control >/dev/null 2>&1
+        ''}
       ''}
       ${lib.optionalString a72Cpu8SramDiagnostic ''
         fdtoverlay \
