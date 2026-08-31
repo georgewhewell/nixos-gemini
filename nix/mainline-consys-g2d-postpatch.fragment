@@ -18,6 +18,10 @@ CONFIG_MTK_MT6797_CONSYS_RUNTIME=y
 CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y
 CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y
 # CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD_KUNIT_TEST is not set
+# The bounded H4 collector is a compile-time bootstrap dependency only; no
+# G2e/G2f DT node or Bluetooth proof module parameter is included here.
+CONFIG_MTK_MT6797_BT_H4_COLLECTOR=y
+# CONFIG_MTK_MT6797_BT_H4_COLLECTOR_KUNIT_TEST is not set
 CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y
 # CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER_KUNIT_TEST is not set
 # The present Linux Kconfig has G2d depend on the reusable G2c owner object.
