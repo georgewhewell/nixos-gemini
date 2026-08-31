@@ -87,6 +87,8 @@
     ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w1-ready.fragment]
     ++ lib.optionals (wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w2-capability.fragment]
     ++ lib.optionals wifiW4Connect [./mainline-wifi-w4-connect.fragment]
+    ++ lib.optionals md1LkHandoffProbe [./mainline-md1-lk-handoff.fragment]
+    ++ lib.optionals md1BootStatusObserve [./mainline-md1-boot-status-observe.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]

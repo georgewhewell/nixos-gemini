@@ -1,0 +1,20 @@
+# Deliberately no KUnit or MD1 pre-release/power/reset/transport selections.
+# This enables only parser/diagnostic-plan libraries and the separately
+# DT+cmdline-gated, read-only LK metadata probe. No KUnit, pre-release,
+# power/reset/transport selection, or MPU/remap writer is present.
+CONFIG_MTK_MT6797_MD1_FIRMWARE_PREFLIGHT=y
+CONFIG_MTK_MT6797_MD1_MPU_REMAP_PLAN=y
+CONFIG_MTK_MT6797_MD1_LK_HANDOFF=y
+CONFIG_MTK_MT6797_MD1_LK_HANDOFF_PROBE=y
+# Keep every MD1 control experiment absent from the first hardware candidate.
+# The boot-status observer maps AP-visible modem state only, but it is not
+# needed to validate LK's hand-off and is deliberately excluded too.
+# CONFIG_MTK_MT6797_MD1_BOOT_STATUS_OBSERVE is not set
+# CONFIG_MTK_MT6797_MD1_BRINGUP_FENCE is not set
+# CONFIG_MTK_MT6797_MD1_BRINGUP_FENCE_KUNIT_TEST is not set
+# CONFIG_MTK_MT6797_MD1_EMI_MPU is not set
+# CONFIG_MTK_MT6797_MD1_EMI_MPU_KUNIT_TEST is not set
+# CONFIG_MTK_MT6797_MD1_BRINGUP_BACKEND is not set
+# CONFIG_MTK_MT6797_MD1_BRINGUP_BACKEND_KUNIT_TEST is not set
+# CONFIG_MTK_MT6797_MD1_PRERELEASE is not set
+# CONFIG_MTK_MT6797_MD1_PRERELEASE_KUNIT_TEST is not set

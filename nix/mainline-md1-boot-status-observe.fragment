@@ -1,0 +1,6 @@
+# A deliberately separate, read-only MD1 successor to LK hand-off parsing.
+# It contains no KUnit, fencing, secure-EMI-MPU, remap, power, reset, CCIF,
+# CLDMA, transport, firmware, SIM, or RF selection. The matching source DT
+# overlay is disabled and the profile builder makes its gate visible; the
+# driver additionally requires its own default-false command-line parameter.
+CONFIG_MTK_MT6797_MD1_BOOT_STATUS_OBSERVE=y
