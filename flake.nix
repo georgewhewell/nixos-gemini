@@ -71,6 +71,14 @@
       url = "path:/home/grw/src/linux-gemini-bt-hci0-next-20260831";
       flake = false;
     };
+    linux-gemini-combined-candidate = {
+      # Authoritative radio/A72 composition: persistent CPU8 plus fenced CPU9
+      # admission, W4, retained GNSS, standard hci0 and passive MD1 evidence.
+      # Keep the full image on one immutable path input so a later reviewed
+      # passive-observer commit can be repinned without rebuilding userspace.
+      url = "path:/home/grw/src/linux-gemini-combined-cpu9-gnss-20260831";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -93,6 +101,7 @@
     linux-gemini-w4-connect-candidate,
     linux-gemini-gnss-candidate,
     linux-gemini-bt-candidate,
+    linux-gemini-combined-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -607,7 +616,7 @@
         ixoo-kernel
         ixoo-candidate
         ;
-      linux-gemini = linux-gemini-bt-candidate;
+      linux-gemini = linux-gemini-combined-candidate;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -621,6 +630,7 @@
       wifiW4Connect = true;
       md1BootStatusObserve = true;
       a72Cpu8SramDiagnostic = true;
+      cacheTopologyObserver = true;
       platformEnablement = true;
       displayOverlay = true;
       audioOverlay = true;

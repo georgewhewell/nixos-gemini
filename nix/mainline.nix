@@ -42,6 +42,7 @@
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
   a72Cpu8Interactive ? false,
+  cacheTopologyObserver ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -99,7 +100,8 @@
     ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
-    ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment] 
+    ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment]
+    ++ lib.optionals cacheTopologyObserver [./mainline-cache-topology-observer.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
   overlayLabel =
     if debugOverlay
@@ -231,6 +233,10 @@
     else if a72Cpu8SramDiagnostic
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
     else "none";
+  cacheTopologyObserverLabel =
+    if cacheTopologyObserver
+    then "raw-local-ccsidr-and-three-cluster-dt-v1"
+    else "none";
   md1LkHandoffLabel =
     if !md1LkHandoffProbe
     then "none"
@@ -333,7 +339,8 @@
     + lib.optionalString deviceActivationOverlay "-device-activation"
     + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram"
     + lib.optionalString a72Cpu8TraceOnly "-trace-only"
-    + lib.optionalString a72Cpu8Interactive "-interactive";
+    + lib.optionalString a72Cpu8Interactive "-interactive"
+    + lib.optionalString cacheTopologyObserver "-cache-topology-observer";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   # The reviewed CPU8 chain replaces the deleted a72_power node with the
@@ -477,6 +484,7 @@
       );
     assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
     assert !a72Cpu8Interactive || (a72Cpu8SramDiagnostic && a72Cpu8TraceOnly && unattendedRecovery && sshAccess);
+    assert !cacheTopologyObserver || a72Cpu8SramDiagnostic;
     true;
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
@@ -511,7 +519,8 @@
       + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
       + lib.optionalString fgadcActivationOverlay "-fgadc-active"
       + lib.optionalString deviceActivationOverlay "-device-activation"
-      + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram" 
+      + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram"
+      + lib.optionalString cacheTopologyObserver "-cache-topology-observer"
       + lib.optionalString deviceActivationOverlay "-device-activation";
     version = "7.1.3";
     src = linux-gemini;
@@ -823,6 +832,9 @@
         ! grep -Fq 'CPU9 admission controller' \
           drivers/soc/mediatek/mt6797-a72-admission-controller.c
       ''}
+      ${lib.optionalString cacheTopologyObserver ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CACHE_OBSERVER=y' .config
+      ''}
       grep -Eq '^CONFIG_CMDLINE=".*maxcpus=${a72MaxCpus}( |")' .config
       grep -Fqx '# CONFIG_SCSI is not set' .config
       grep -Fqx '# CONFIG_ATA is not set' .config
@@ -1090,7 +1102,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}${lib.optionalString cacheTopologyObserver "-cache-topology-observer"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3 buildPkgs.binutils];
     } ''
       mkdir -p "$out"
@@ -1810,6 +1822,47 @@
         test "$(fdtget "$out/gemini.dtb" /chosen/gemini-late-cpu-provenance profile-id)" = \
           mt6797-a53-a72-a41-v7
         echo 'a72-cpu8-sram-diagnostic=overlay-composed cpu8-only cpu9-veto=maxcpus-9' \
+          >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString cacheTopologyObserver ''
+        # Validate every scheduler-topology CPU reference and every L2 cache
+        # reference by identity. Numeric phandle allocation is deliberately
+        # not part of the ABI and can change as overlays are composed.
+        assert_cpu_ref() {
+          cpu_node=$1
+          map_node=$2
+          test "$(fdtget -t x "$out/gemini.dtb" "$map_node" cpu)" = \
+            "$(fdtget -t x "$out/gemini.dtb" "$cpu_node" phandle)"
+        }
+        assert_l2_ref() {
+          cpu_node=$1
+          cache_node=$2
+          test "$(fdtget -t x "$out/gemini.dtb" "$cpu_node" next-level-cache)" = \
+            "$(fdtget -t x "$out/gemini.dtb" "$cache_node" phandle)"
+          test "$(fdtget -t u "$out/gemini.dtb" "$cache_node" cache-level)" = 2
+          fdtget "$out/gemini.dtb" "$cache_node" cache-unified >/dev/null
+        }
+        assert_cpu_ref /cpus/cpu@0 /cpus/cpu-map/cluster0/core0
+        assert_cpu_ref /cpus/cpu@1 /cpus/cpu-map/cluster0/core1
+        assert_cpu_ref /cpus/cpu@2 /cpus/cpu-map/cluster0/core2
+        assert_cpu_ref /cpus/cpu@3 /cpus/cpu-map/cluster0/core3
+        assert_cpu_ref /cpus/cpu@100 /cpus/cpu-map/cluster1/core0
+        assert_cpu_ref /cpus/cpu@101 /cpus/cpu-map/cluster1/core1
+        assert_cpu_ref /cpus/cpu@102 /cpus/cpu-map/cluster1/core2
+        assert_cpu_ref /cpus/cpu@103 /cpus/cpu-map/cluster1/core3
+        assert_cpu_ref /cpus/cpu@200 /cpus/cpu-map/cluster2/core0
+        assert_cpu_ref /cpus/cpu@201 /cpus/cpu-map/cluster2/core1
+        assert_l2_ref /cpus/cpu@0 /cpus/l2-cache0
+        assert_l2_ref /cpus/cpu@1 /cpus/l2-cache0
+        assert_l2_ref /cpus/cpu@2 /cpus/l2-cache0
+        assert_l2_ref /cpus/cpu@3 /cpus/l2-cache0
+        assert_l2_ref /cpus/cpu@100 /cpus/l2-cache1
+        assert_l2_ref /cpus/cpu@101 /cpus/l2-cache1
+        assert_l2_ref /cpus/cpu@102 /cpus/l2-cache1
+        assert_l2_ref /cpus/cpu@103 /cpus/l2-cache1
+        assert_l2_ref /cpus/cpu@200 /cpus/l2-cache2
+        assert_l2_ref /cpus/cpu@201 /cpus/l2-cache2
+        echo 'cache-topology=cpu-map-4+4+2 all-ten-cpu-cache-phandles raw-ccsidr-observer' \
           >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
@@ -2839,6 +2892,7 @@
       echo "nix-fgadc-activation=${fgadcActivationLabel}"
       echo "nix-device-activation=${deviceActivationLabel}"
       echo "nix-a72-cpu8-sram-diagnostic=${a72Cpu8SramDiagnosticLabel}"
+      echo "nix-cache-topology-observer=${cacheTopologyObserverLabel}"
       echo "a72-cpu8-request=initramfs exact-token once after watchdog+gadget+rtl+emmc gates; cpu9=maxcpus-9 veto; retry=0 cpu_off=0 rollback=0"
       echo "nix-md1-lk-handoff=${md1LkHandoffLabel}"
       echo "nix-md1-boot-status=${md1BootStatusLabel}"

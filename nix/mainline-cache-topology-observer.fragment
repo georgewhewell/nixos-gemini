@@ -1,0 +1,3 @@
+# Read-only, per-online-CPU cache geometry snapshot. The observer changes only
+# the target CPU's local CSSELR_EL1 selector under an IRQ mask, then restores it.
+CONFIG_MTK_MT6797_CACHE_OBSERVER=y
