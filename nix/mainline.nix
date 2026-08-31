@@ -140,10 +140,18 @@
     else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
+  gadgetProduct =
+    if a72Cpu8SramDiagnostic
+    then "Gemini-A72-CPU8-Admission"
+    else "Gemini-L-DA921x-Bind";
+  gadgetSerial =
+    if a72Cpu8SramDiagnostic
+    then "A72-89898a1-gatefix"
+    else "GEMINI_DA921X_BIND_20260729";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=${gadgetProduct} g_ether.iSerialNumber=${gadgetSerial} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=${gadgetProduct} g_ether.iSerialNumber=${gadgetSerial} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
@@ -1230,17 +1238,44 @@
         [ -w "$trigger" ] || fence admission-trigger-missing
         pre=$(cat "$status" 2>/dev/null || true)
         record "stage=pre online=$online cpu9=$cpu9_state status=$pre"
-        case "$pre" in
-          *'state=armed'*'binder_snapshot_ret=0'*'trigger_consumed=0'*'trigger_executions=0'*'cpu_requests=0'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*)
-            record "stage=pre-provider-binder-ready binder_snapshot_ret=0 trigger=not-consumed"
-            ;;
-          *) fence admission-not-armed ;;
-        esac
-        # This is the sole write in this program and the only CPU request path.
+        # The kernel status ABI has a stable set of fields but does not promise
+        # a field order.  Check each admission invariant independently so a
+        # harmless telemetry reordering cannot suppress the sole live token.
+        for required in \
+          'state=armed' \
+          'binder_snapshot_ret=0' \
+          'trigger_consumed=0' \
+          'trigger_executions=0' \
+          'cpu_requests=0' \
+          'cpu9_requests=0' \
+          'cpu_off_requests=0 retries=0'; do
+          printf '%s\n' "$pre" | grep -Fq "$required" || fence admission-not-armed
+        done
+        record "stage=pre-provider-binder-ready binder_snapshot_ret=0 trigger=not-consumed"
+        # /sys is mounted read-only for the probe.  The admission ABI is a
+        # deliberate exception: if that was its original state, make one
+        # short rw window for the sole token and restore ro before examining
+        # its terminal result.  No other sysfs write is in this program.
+        sysfs_was_ro=0
+        if awk '$2 == "/sys" && $3 == "sysfs" {
+                  n = split($4, options, ",");
+                  for (i = 1; i <= n; i++) if (options[i] == "ro") ro = 1;
+                  exit
+                }
+                END { exit ro ? 0 : 1 }' /proc/mounts; then
+          sysfs_was_ro=1
+          mount -o remount,rw /sys || fence sysfs-remount-rw
+        fi
+        # This is the sole token write and the only CPU request path.
         write_rc=0
         printf 'run-a72-admission-20260828-a\n' > "$trigger" || write_rc=$?
+        restore_rc=0
+        if [ "$sysfs_was_ro" -eq 1 ]; then
+          mount -o remount,ro /sys || restore_rc=$?
+        fi
         post=$(cat "$status" 2>/dev/null || true)
-        record "stage=terminal trigger_write_rc=$write_rc status=$post"
+        record "stage=terminal trigger_write_rc=$write_rc sysfs_restore_rc=$restore_rc status=$post"
+        [ "$restore_rc" -eq 0 ] || fence sysfs-remount-ro
         [ "$write_rc" -eq 0 ] || fence trigger-write
         case "$post" in
           *'trigger_consumed=1'*'trigger_executions=1'*'core_consumed=1'*'cpu_requests=1'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*) ;;
