@@ -23,7 +23,7 @@
     linux-gemini = {
       # Trex-local A72 candidate source: tested platform base plus upstream
       # DA9213 provider-release, held-isolation, and SRAM-diagnostic repairs.
-      url = "path:/home/grw/src/linux-gemini-a72-ready-r0p1-fix-20260831";
+      url = "path:/home/grw/src/linux-gemini-a72-postsuccess-watchdog-handoff-20260831";
       flake = false;
     };
     linux-gemini-next = {
