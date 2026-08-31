@@ -33,8 +33,8 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788177884,
-        "narHash": "sha256-13kH0ZKeIsdlfhchjZ7b/idHBbUHxkvh38NJ8wvzaKA=",
+        "lastModified": 1788180522,
+        "narHash": "sha256-YzQBIudFO9OZPZ/QtlG4c7ByLFOg92JG8QjeO9m44zs=",
         "path": "/mnt/Home/src/linux-gemini-a72-final-trex",
         "type": "path"
       },
