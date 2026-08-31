@@ -968,6 +968,9 @@
           # one live owner: G2c remains disabled and receives no boot gate.
           fdtput -t s "$out/gemini-consys.dtb" /consys-g2c-patch-owner status disabled
           fdtput -t s "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status okay
+          ${lib.optionalString wifiW0Observe ''
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
+          ''}
           test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
             mediatek,mt6797-consys-runtime
           test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
@@ -983,6 +986,11 @@
           ${lib.optionalString wifiW0Observe ''
             fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
               | grep -Fqx 'mediatek,experimental-wifi-wcir-observe'
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
+              mediatek,wifi
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 reg)" = \
+              '0 180f0000 0 1100'
           ''}
           # PIO has no child endpoint and neither owner declares a function
           # client. The kernel config also excludes BTIF transport/HCI.
