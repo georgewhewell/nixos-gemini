@@ -1408,10 +1408,36 @@
           status=$(status_path) || return 1
           status=$(cat "$status")
           case "$status" in
-            *'state=armed'*'trigger_consumed=0'*'binder_snapshot_ret=0'*)
+            *'ledger_state=retained-terminal'*)
+              echo "preflight=blocked reason=retained-terminal-ledger action=ack-ledger"; return 1 ;;
+            *'ledger_state=retained-incomplete'*)
+              echo "preflight=blocked reason=retained-incomplete-ledger"; return 1 ;;
+            *'ledger_state=unreadable'*)
+              echo "preflight=blocked reason=retained-ledger-unreadable"; return 1 ;;
+            *'state=armed'*'trigger_consumed=0'*'binder_snapshot_ret=0'*'ledger_state=empty'*)
               echo "preflight=ready next=admission-chain" ;;
             *) echo "preflight=blocked"; return 1 ;;
           esac
+        }
+        ack_ledger() {
+          dump || return
+          status=$(status_path) || return 1
+          status=$(cat "$status")
+          case "$status" in
+            *'state=armed'*'trigger_consumed=0'*'ledger_state=retained-terminal'*) ;;
+            *) echo "ack_ledger=blocked reason=terminal-ledger-not-present"; return 1 ;;
+          esac
+          recover=$(dirname "$status")/recover
+          grep -q ' /sys sysfs ro,' /proc/mounts && {
+            mount -o remount,rw /sys || return 1
+            was_ro=1
+          }
+          printf 'ack-terminal-ledger-v1\n' > "$recover"
+          ret=$?
+          [ "''${was_ro:-0}" = 1 ] && mount -o remount,ro /sys
+          echo "ack_ledger_write_ret=$ret"
+          dump
+          return "$ret"
         }
         advance() {
           preflight || return
@@ -1431,8 +1457,9 @@
         case "''${1:-dump}" in
           dump|ledger|admission|provider|p27|p28|sram|cpu8) dump ;;
           preflight) preflight ;;
+          recover|ack-ledger) ack_ledger ;;
           advance) advance ;;
-          *) echo "usage: $0 {dump|preflight|advance|ledger|admission|provider|p27|p28|sram|cpu8}"; exit 2 ;;
+          *) echo "usage: $0 {dump|preflight|ack-ledger|advance|ledger|admission|provider|p27|p28|sram|cpu8}"; exit 2 ;;
         esac
         A72_CPU8_CONTROL
         chmod 0755 root/bin/a72-cpu8-control
