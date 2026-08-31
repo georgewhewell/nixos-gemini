@@ -35,9 +35,13 @@
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
   p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
-  ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
-  candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
-  profile = "da921x-lk-clock-readonly-provider";
+  # This candidate must use the profile that carries the DA9213 membership
+  # owner.  The preceding read-only profile binds the regulator but leaves the
+  # provider unpublished, which keeps the A72 binder at -EPROBE_DEFER and the
+  # controller status at binder_snapshot_ret=-EAGAIN.
+  ixooRevision = "43bd2369b87322a903d4f05dbb56f6111ce9e9bb";
+  candidateRevision = "43bd2369b87322a903d4f05dbb56f6111ce9e9bb";
+  profile = "a72-admission-live-trigger-candidate";
   ixooManifest = builtins.fromJSON (builtins.readFile (ixoo-kernel + "/kernel/manifest.json"));
   profileDefinition = ixooManifest.config.profiles.${profile};
 
@@ -360,11 +364,16 @@
       make "''${kernelMakeFlags[@]}" olddefconfig
 
       test -z "''${NIX_HARDENING_ENABLE:-}"
-      grep -Fqx 'CONFIG_LOCALVERSION="-gemini-da921x-lkro"' .config
+      # The selected CPU8 profile ends with its own explicit local version;
+      # accepting the read-only profile's old value here would reintroduce the
+      # exact profile/config mismatch that caused binder -EAGAIN.
+      grep -Fqx 'CONFIG_LOCALVERSION="-gemini-a72-admission-live"' .config
       grep -Fqx '# CONFIG_LOCALVERSION_AUTO is not set' .config
       grep -Fqx 'CONFIG_NVMEM_MTK_ATAG_DEVINFO=y' .config
       grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
-      grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
+      # The live-admission profile deliberately publishes the provider owner;
+      # its read-only observer was only an old serviceability-profile aid and
+      # is not part of the provider-to-binder readiness contract.
       grep -Fqx 'CONFIG_MTK_STP=y' .config
       ! grep -q '^CONFIG_MTK_STP_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_WMT=y' .config
@@ -481,6 +490,8 @@
         grep -Fqx 'CONFIG_PSTORE_GEMINI_TRANSITION_LEDGER=y' .config
         grep -Fqx 'CONFIG_PSTORE_GEMINI_ADMISSION_TRACE=y' .config
         grep -Fqx 'CONFIG_CMDLINE_FORCE=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_PROVIDER_OWNER=y' .config
+        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_CAPABILITY_PROFILE=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_P30_PROTOCOL_MODEL=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_P24_TRANSACTION_OWNER_MODEL=y' .config
@@ -581,7 +592,7 @@
       make -j"$NIX_BUILD_CORES" "''${kernelMakeFlags[@]}" \
         Image Image.gz dtbs
       test "$(make "''${kernelMakeFlags[@]}" -s kernelrelease)" = \
-        "7.1.3-gemini-da921x-lkro"
+        "7.1.3-gemini-a72-admission-live"
       runHook postBuild
     '';
 
@@ -1182,7 +1193,7 @@
                END { if (!column) exit 1; print sum + 0 }' /proc/interrupts
         }
 
-        record "stage=begin ixoo=4c114301 sram_p28_diagnostic=enabled cpu8_only=1 cpu9_veto=maxcpus-9"
+        record "stage=begin ixoo=43bd2369 provider_owner=required sram_p28_diagnostic=enabled cpu8_only=1 cpu9_veto=maxcpus-9"
         wait_for_serviceability || fence serviceability-gate
         grep -Eq '(^| )maxcpus=9( |$)' /proc/cmdline || fence cmdline-maxcpus
         online=$(cat /sys/devices/system/cpu/online 2>/dev/null || true)
@@ -1209,7 +1220,9 @@
         pre=$(cat "$status" 2>/dev/null || true)
         record "stage=pre online=$online cpu9=$cpu9_state status=$pre"
         case "$pre" in
-          *'state=armed'*'trigger_consumed=0'*'trigger_executions=0'*'cpu_requests=0'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*) ;;
+          *'state=armed'*'binder_snapshot_ret=0'*'trigger_consumed=0'*'trigger_executions=0'*'cpu_requests=0'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*)
+            record "stage=pre-provider-binder-ready binder_snapshot_ret=0 trigger=not-consumed"
+            ;;
           *) fence admission-not-armed ;;
         esac
         # This is the sole write in this program and the only CPU request path.
