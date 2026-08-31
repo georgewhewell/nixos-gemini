@@ -590,6 +590,36 @@
       fgadcActivationOverlay = true;
     };
 
+    # CPU8-only SRAM/P28 terminal diagnostic over the proven full
+    # serviceability envelope.  The live token is emitted once by initramfs
+    # only after watchdog, gadget, RTL and eMMC gates pass; CPU9 stays capped
+    # by maxcpus=9.  This declaration creates an artifact only, never a write.
+    mainlineA72Cpu8SramDiagnostic = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+      a72Cpu8SramDiagnostic = true;
+    };
+
     # Manual-only headphone DPCM exercise over the existing fully observable
     # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
     # never invokes it: an operator must explicitly run
@@ -1078,6 +1108,10 @@
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
+      mainlineA72Cpu8SramDiagnosticKernel = mainlineA72Cpu8SramDiagnostic.kernel;
+      mainlineA72Cpu8SramDiagnosticDtb = mainlineA72Cpu8SramDiagnostic.serviceabilityDtb;
+      mainlineA72Cpu8SramDiagnosticInitramfs = mainlineA72Cpu8SramDiagnostic.probeInitramfs;
+      mainlineA72Cpu8SramDiagnosticBundle = mainlineA72Cpu8SramDiagnostic.bundle;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;

@@ -23,6 +23,7 @@
   touchscreenActivationOverlay ? false,
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
+  a72Cpu8SramDiagnostic ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -61,7 +62,8 @@
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
     ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
-    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
+    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
+    ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -128,11 +130,16 @@
     if fgadcActivationOverlay
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
+  a72Cpu8SramDiagnosticLabel =
+    if a72Cpu8SramDiagnostic
+    then "cpu8-one-shot-sram-p28-diagnostic-v1"
+    else "none";
+  a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
@@ -154,7 +161,8 @@
     + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
     + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
     + lib.optionalString fgadcActivationOverlay "-fgadc-active"
-    + lib.optionalString deviceActivationOverlay "-device-activation";
+    + lib.optionalString deviceActivationOverlay "-device-activation"
+    + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   baseDtbSha256 = "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
@@ -226,7 +234,8 @@
       );
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
-      || kernelRevision == p22BaselinePlatformRevision;
+      || kernelRevision == p22BaselinePlatformRevision
+      || a72Cpu8SramDiagnostic;
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || !deviceActivationOverlay;
@@ -244,6 +253,25 @@
         && unattendedRecovery
         && inputObserveOverlay
         && thermalHallObserveOverlay
+        && !consysIdentityOverlay
+      );
+    assert
+      !a72Cpu8SramDiagnostic
+      || (
+        storageOverlay
+        && sshAccess
+        && usbHostOverlay
+        && platformEnablement
+        && displayOverlay
+        && audioOverlay
+        && powerObserveOverlay
+        && powerObservePreflight
+        && unattendedRecovery
+        && inputObserveOverlay
+        && thermalHallObserveOverlay
+        && touchscreenActivationOverlay
+        && fgadcActivationOverlay
+        && !deviceActivationOverlay
         && !consysIdentityOverlay
       );
     true;
@@ -268,7 +296,8 @@
       + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
       + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
       + lib.optionalString fgadcActivationOverlay "-fgadc-active"
-      + lib.optionalString deviceActivationOverlay "-device-activation";
+      + lib.optionalString deviceActivationOverlay "-device-activation"
+      + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -439,7 +468,28 @@
       ''}
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
       grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
-      grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+        grep -Fqx 'CONFIG_MEDIATEK_WATCHDOG_RECOVERY_TAKEOVER=y' .config
+        grep -Fqx 'CONFIG_PSTORE_GEMINI_TRANSITION_LEDGER=y' .config
+        grep -Fqx 'CONFIG_PSTORE_GEMINI_ADMISSION_TRACE=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_DERIVED_ADMISSION=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_STATE=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_CLOCK_BACKEND=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_BIGIDVFS_BACKEND=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_BIGIDVFS_SRAM_OWNER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_TRANSITION_EXECUTOR=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_DEFAULT_OFF_BINDER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_PHYSICAL_SOURCE_OBSERVER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_LIVE_TRIGGER=y' .config
+        grep -Fqx '# CONFIG_KUNIT is not set' .config
+        grep -Fqx '# CONFIG_HOTPLUG_SPLIT_STARTUP is not set' .config
+        grep -Fq '#define MT6797_A72_ADMISSION_CPU 8' \
+          drivers/soc/mediatek/mt6797-a72-admission-controller.c
+        ! grep -Fq 'CPU9 admission controller' \
+          drivers/soc/mediatek/mt6797-a72-admission-controller.c
+      ''}
+      grep -Eq '^CONFIG_CMDLINE=".*maxcpus=${a72MaxCpus}( |")' .config
       grep -Fqx '# CONFIG_SCSI is not set' .config
       grep -Fqx '# CONFIG_ATA is not set' .config
       grep -Fqx '# CONFIG_USB_CONFIGFS is not set' .config
@@ -975,6 +1025,23 @@
         test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
       ''}
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-a72-cpu8-sram.dtb" \
+          ${kernel}/mt6797-gemini-pda-a72-admission.dtbo
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-binder compatible)" = \
+          mediatek,mt6797-a72-binder
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-binder status)" = okay
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller compatible)" = \
+          mediatek,mt6797-a72-admission-controller
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller status)" = okay
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = disabled
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = disabled
+        cp "$out/gemini-a72-cpu8-sram.dtb" "$out/gemini.dtb"
+        echo 'a72-cpu8-sram-diagnostic=overlay-composed cpu8-only cpu9-veto=maxcpus-9' \
+          >> "$out/VALIDATION"
+      ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
         if thermalHallObserveOverlay
@@ -982,7 +1049,7 @@
         else if inputObserveOverlay
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
-      }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
+      }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}${lib.optionalString a72Cpu8SramDiagnostic "gemini-a72-cpu8-sram.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is deliberately a small standalone ALSA-UAPI client, not a partial
@@ -1058,6 +1125,110 @@
       ${lib.optionalString powerObservePreflight ''
         cp ${./bq2589x-preflight.sh} root/bin/bq2589x-preflight
         chmod 0755 root/bin/bq2589x-preflight
+      ''}
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+        cat > root/bin/a72-cpu8-sram-diagnostic <<'A72_CPU8_SRAM_DIAGNOSTIC'
+        #!/bin/busybox sh
+        # One exact CPU8 request after the existing watchdog, gadget, RTL and
+        # eMMC serviceability gates.  Every refusal is terminal: no retry,
+        # CPU_OFF, rollback, reboot, radio action or watchdog lease extension.
+        export PATH=/bin
+        record() {
+          line="$*"
+          echo "GEMINI_A72_CPU8: $line" >> /run/a72-cpu8-sram-diagnostic.log
+          echo "<6>GEMINI_A72_CPU8: $line" > /dev/kmsg 2>/dev/null || true
+          echo "GEMINI_A72_CPU8: $line" >> /run/probe-status 2>/dev/null || true
+        }
+        fence() {
+          record "result=fence reason=$1 retry=0 cpu_off=0 rollback=0 watchdog=existing-petter-lease-unchanged"
+          exit 1
+        }
+        wait_for_serviceability() {
+          attempt=0
+          while [ "$attempt" -lt 65 ]; do
+            if grep -Fq 'unattended_recovery=healthy watchdog_userspace=petting' /run/probe-status 2>/dev/null &&
+               grep -Fq 'usb0=ready address=10.15.19.82/24 access=ssh:22' /run/probe-status 2>/dev/null &&
+               grep -Fq 'usb-host-net=ready iface=' /run/probe-status 2>/dev/null &&
+               grep -Fq 'emmc=present' /run/storage-probe 2>/dev/null; then
+              return 0
+            fi
+            attempt=$((attempt + 1))
+            sleep 1
+          done
+          return 1
+        }
+        cpu8_irq_total() {
+          awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "CPU8") column = i; next }
+               column && $1 ~ /:$/ { value = $column; gsub(/[^0-9]/, "", value); sum += value }
+               END { if (!column) exit 1; print sum + 0 }' /proc/interrupts
+        }
+
+        record "stage=begin ixoo=4c114301 sram_p28_diagnostic=enabled cpu8_only=1 cpu9_veto=maxcpus-9"
+        wait_for_serviceability || fence serviceability-gate
+        grep -Eq '(^| )maxcpus=9( |$)' /proc/cmdline || fence cmdline-maxcpus
+        online=$(cat /sys/devices/system/cpu/online 2>/dev/null || true)
+        [ "$online" = 0-7 ] || fence cpu-online-precondition
+        if [ -e /sys/devices/system/cpu/cpu9/online ]; then
+          [ "$(cat /sys/devices/system/cpu/cpu9/online 2>/dev/null || true)" = 0 ] || fence cpu9-not-offline
+          cpu9_state=offline
+        else
+          cpu9_state=absent-by-maxcpus
+        fi
+        status=
+        attempt=0
+        while [ "$attempt" -lt 30 ] && [ -z "$status" ]; do
+          for candidate in /sys/devices/platform/*/gemini_admission/status; do
+            [ -r "$candidate" ] || continue
+            status=$candidate
+            break
+          done
+          [ -n "$status" ] || { attempt=$((attempt + 1)); sleep 1; }
+        done
+        [ -n "$status" ] || fence admission-status-missing
+        trigger=$(dirname "$status")/trigger
+        [ -w "$trigger" ] || fence admission-trigger-missing
+        pre=$(cat "$status" 2>/dev/null || true)
+        record "stage=pre online=$online cpu9=$cpu9_state status=$pre"
+        case "$pre" in
+          *'state=armed'*'trigger_consumed=0'*'trigger_executions=0'*'cpu_requests=0'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*) ;;
+          *) fence admission-not-armed ;;
+        esac
+        # This is the sole write in this program and the only CPU request path.
+        write_rc=0
+        printf 'run-a72-admission-20260828-a\n' > "$trigger" || write_rc=$?
+        post=$(cat "$status" 2>/dev/null || true)
+        record "stage=terminal trigger_write_rc=$write_rc status=$post"
+        [ "$write_rc" -eq 0 ] || fence trigger-write
+        case "$post" in
+          *'trigger_consumed=1'*'trigger_executions=1'*'core_consumed=1'*'cpu_requests=1'*'cpu9_requests=0'*'cpu_off_requests=0 retries=0'*) ;;
+          *) fence terminal-accounting ;;
+        esac
+        case "$post" in
+          *'operation_ret=0'*) ;;
+          *)
+            record "result=terminal-failure distinction=sram-p28-or-earlier cpu8_online=not-claimed no_auto_rollback=1"
+            exit 1
+            ;;
+        esac
+        online=$(cat /sys/devices/system/cpu/online 2>/dev/null || true)
+        [ "$online" = 0-8 ] || fence cpu8-not-online
+        [ ! -e /sys/devices/system/cpu/cpu9/online ] ||
+          [ "$(cat /sys/devices/system/cpu/cpu9/online 2>/dev/null || true)" = 0 ] || fence cpu9-online-post
+        midr_path=$(find /sys/devices/system/cpu/cpu8 -type f -name midr_el1 -print 2>/dev/null | head -n 1)
+        [ -n "$midr_path" ] || fence cpu8-midr-missing
+        midr=$(cat "$midr_path" 2>/dev/null || true)
+        case "$midr" in
+          *d08*|*D08*) ;;
+          *) fence cpu8-not-cortex-a72 ;;
+        esac
+        irq_before=$(cpu8_irq_total) || fence cpu8-interrupt-column-missing
+        timeout 5 taskset -c 8 sh -c 'i=0; value=0; while [ "$i" -lt 200000 ]; do value=$((value + i)); i=$((i + 1)); done; printf "%s\\n" "$value" > /run/a72-cpu8-stress.result' || fence cpu8-bounded-stress
+        [ -s /run/a72-cpu8-stress.result ] || fence cpu8-stress-proof-missing
+        irq_after=$(cpu8_irq_total) || fence cpu8-interrupt-post-missing
+        [ "$irq_after" -gt "$irq_before" ] || fence cpu8-interrupt-stalled
+        record "result=pass cpu8_online=1 midr=$midr online=$online cpu9=offline-or-absent cache_coherency=cpu8-affine-bounded-stress interrupt_cpu8_before=$irq_before interrupt_cpu8_after=$irq_after retry=0 cpu_off=0 rollback=0 watchdog=petting"
+        A72_CPU8_SRAM_DIAGNOSTIC
+        chmod 0755 root/bin/a72-cpu8-sram-diagnostic
       ''}
       ${lib.optionalString unattendedRecovery ''
         # busybox is an aarch64 target binary; inspect it, never execute it on
@@ -1176,6 +1347,10 @@
       ${lib.optionalString sshAccess ''
       /bin/ssh-server &
       note "ssh=dropbear key_only=yes listen=all_ipv4 port=22 forwarding=disabled"
+      ''}
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+      /bin/a72-cpu8-sram-diagnostic &
+      note "a72_cpu8=armed trigger=one-exact-token serviceability-gated no-retry-no-rollback"
       ''}
 
       while :; do
@@ -1626,6 +1801,8 @@
       echo "nix-touchscreen-activation=${touchscreenActivationLabel}"
       echo "nix-fgadc-activation=${fgadcActivationLabel}"
       echo "nix-device-activation=${deviceActivationLabel}"
+      echo "nix-a72-cpu8-sram-diagnostic=${a72Cpu8SramDiagnosticLabel}"
+      echo "a72-cpu8-request=initramfs exact-token once after watchdog+gadget+rtl+emmc gates; cpu9=maxcpus-9 veto; retry=0 cpu_off=0 rollback=0"
       echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
