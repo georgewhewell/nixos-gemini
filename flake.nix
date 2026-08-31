@@ -34,6 +34,13 @@
       url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=da6e93b0bce1b62e0e38425938efe3ceba7cfc09";
       flake = false;
     };
+    linux-gemini-w1-candidate = {
+      # Deliberately consume the reviewed local W1 commit rather than moving
+      # linux-gemini-next.  The flake lock records its content hash for the
+      # staged candidate while every accepted profile retains its old pin.
+      url = "path:/mnt/Home/src/linux-gemini-w1-firmware-source";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -50,6 +57,7 @@
     ixoo-kernel,
     linux-gemini,
     linux-gemini-next,
+    linux-gemini-w1-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -491,6 +499,29 @@
       sshAccess = true;
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # W1 follows the hardware-passed W0 CMD53 portal read. It sends only the
+    # SHA-pinned image, proves WCIR.READY, then fences IRQ delivery and every
+    # WLAN client because the vendor tree has no isolated post-enable IRQ
+    # event. This output is build/stage-only; it does not authorize a flash.
+    mainlineWifiW1Ready = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w1-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
       unattendedRecovery = true;
     };
 
@@ -1233,6 +1264,10 @@
       mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
       mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
       mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
+      mainlineWifiW1ReadyKernel = mainlineWifiW1Ready.kernel;
+      mainlineWifiW1ReadyDtb = mainlineWifiW1Ready.serviceabilityDtb;
+      mainlineWifiW1ReadyInitramfs = mainlineWifiW1Ready.probeInitramfs;
+      mainlineWifiW1ReadyBundle = mainlineWifiW1Ready.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;
