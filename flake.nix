@@ -57,7 +57,7 @@
     linux-gemini-gnss-candidate = {
       # Committed G2g endpoint source: retained STP, exact active GPS WMT and
       # Gemini GPIO69 LNA chronology. This never moves an accepted source pin.
-      url = "path:/mnt/Home/src/linux-gemini-gnss-persistent-trex";
+      url = "path:/mnt/Home/src/linux-gemini-radio-persistent-trex";
       flake = false;
     };
     ixoo-candidate = {
@@ -542,6 +542,7 @@
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
       consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
       unattendedRecovery = true;
     };
 
@@ -565,6 +566,7 @@
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
       consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
       platformEnablement = true;
       displayOverlay = true;
       audioOverlay = true;
@@ -947,6 +949,7 @@
         {
           _module.args.geminiLeaseSelfAcceptToken = null;
           _module.args.geminiGnssDevice = "/dev/gnss0";
+          _module.args.geminiBluetooth = true;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1059,6 +1062,7 @@
       displayActivation = true;
       consysFirmware = true;
       gnssService = true;
+      bluetoothService = true;
       provisionStore = true;
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;

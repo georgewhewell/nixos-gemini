@@ -1,0 +1,5 @@
+# Persistent G2h Bluetooth endpoint sharing the retained full-STP session.
+CONFIG_BT=y
+CONFIG_BT_MTK_CONSYS=y
+CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y
+

@@ -8,6 +8,7 @@
   lib,
   geminiLeaseSelfAcceptToken ? null,
   geminiGnssDevice ? null,
+  geminiBluetooth ? false,
   ...
 }: {
   assertions = [
@@ -133,6 +134,10 @@
       Restart = "on-failure";
       RestartSec = "2s";
     };
+  };
+  hardware.bluetooth = lib.mkIf geminiBluetooth {
+    enable = true;
+    powerOnBoot = true;
   };
   programs.ssh.package = pkgs.openssh.override {
     withFIDO = false;
@@ -405,6 +410,7 @@
       pkgs.ethtool
     ]
     ++ lib.optionals (geminiGnssDevice != null) [pkgs.gpsd]
+    ++ lib.optionals geminiBluetooth [pkgs.bluez]
   );
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];

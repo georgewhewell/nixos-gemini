@@ -13,6 +13,7 @@
   displayActivation ? false,
   consysFirmware ? false,
   gnssService ? false,
+  bluetoothService ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
@@ -24,6 +25,7 @@ assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
 assert builtins.isBool consysFirmware;
 assert builtins.isBool gnssService;
+assert builtins.isBool bluetoothService;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
@@ -680,7 +682,11 @@ assert !gnssService || consysFirmware; let
       echo "audio-playback-exercise=inactive (no helper in image)"
       echo "consys-radios=${
       if gnssService
-      then "GNSS endpoint enabled; gpsd read-only/nowait on localhost; Bluetooth/Wi-Fi/FM inactive"
+      then "GNSS endpoint enabled; gpsd read-only/nowait on localhost; ${
+        if bluetoothService
+        then "Bluetooth HCI endpoint and BlueZ enabled; Wi-Fi/FM inactive"
+        else "Bluetooth/Wi-Fi/FM inactive"
+      }"
       else "inactive (DT disabled)"
     }"
       echo "gpu=inactive (DT disabled)"
