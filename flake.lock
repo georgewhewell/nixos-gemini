@@ -20,36 +20,27 @@
     "ixoo-kernel": {
       "flake": false,
       "locked": {
-        "lastModified": 1787011291,
-        "narHash": "sha256-CzEBGiBJ/yyvaHbd+dj7EeEN3787deO8fCOXVvP7OmY=",
-        "owner": "ixoo",
-        "repo": "gemini-pda-mainline",
-        "rev": "7199e8229c6a805a941e33a6862956949dfebd3a",
-        "type": "github"
+        "lastModified": 1788171653,
+        "narHash": "sha256-Q3scaGJd0XJp9MeNSVwsnEvyjAHm8M3zmzYAipsxzPw=",
+        "path": "/mnt/Home/src/ixoo-gemini-a72-main-4c114301",
+        "type": "path"
       },
       "original": {
-        "owner": "ixoo",
-        "repo": "gemini-pda-mainline",
-        "rev": "7199e8229c6a805a941e33a6862956949dfebd3a",
-        "type": "github"
+        "path": "/mnt/Home/src/ixoo-gemini-a72-main-4c114301",
+        "type": "path"
       }
     },
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788117142,
-        "narHash": "sha256-GuhrEVzqJHXb+rKhUr8rplYnwM/Maqv0KelwLP4k/tw=",
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
-        "revCount": 158,
-        "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "lastModified": 1788172131,
+        "narHash": "sha256-Z4j4KN0i2DPmPsng0Fv/4S9mVJazuVolYRK6wV5uef8=",
+        "path": "/mnt/Home/src/linux-gemini-a72-final-trex",
+        "type": "path"
       },
       "original": {
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
-        "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "path": "/mnt/Home/src/linux-gemini-a72-final-trex",
+        "type": "path"
       }
     },
     "nixpkgs": {
