@@ -127,9 +127,12 @@
     nowait = true;
     listenany = false;
   };
+  services.udev.extraRules = lib.optionalString (geminiGnssDevice != null) ''
+    SUBSYSTEM=="gnss", KERNEL=="gnss0", TAG+="systemd"
+  '';
   systemd.services.gpsd = lib.mkIf (geminiGnssDevice != null) {
     after = ["dev-gnss0.device"];
-    requires = ["dev-gnss0.device"];
+    unitConfig.BindsTo = ["dev-gnss0.device"];
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = "2s";
