@@ -628,6 +628,7 @@
       wifiW1FirmwareReadyProof = true;
       wifiW2NicCapability = true;
       wifiW4Connect = true;
+      md1LkHandoffProbe = true;
       md1BootStatusObserve = true;
       a72Cpu8SramDiagnostic = true;
       cacheTopologyObserver = true;
