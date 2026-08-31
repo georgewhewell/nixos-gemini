@@ -24,6 +24,7 @@
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
   a72Cpu8SramDiagnostic ? false,
+  a72Cpu8TraceOnly ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -135,7 +136,9 @@
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
   a72Cpu8SramDiagnosticLabel =
-    if a72Cpu8SramDiagnostic
+    if a72Cpu8TraceOnly
+    then "cpu8-trace-header-read-only-v1"
+    else if a72Cpu8SramDiagnostic
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
     else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
@@ -174,7 +177,8 @@
     + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
     + lib.optionalString fgadcActivationOverlay "-fgadc-active"
     + lib.optionalString deviceActivationOverlay "-device-activation"
-    + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
+    + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram"
+    + lib.optionalString a72Cpu8TraceOnly "-trace-only";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   # The reviewed CPU8 chain replaces the deleted a72_power node with the
@@ -291,6 +295,7 @@
         && !deviceActivationOverlay
         && !consysIdentityOverlay
       );
+    assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
     true;
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
@@ -1427,8 +1432,13 @@
       note "ssh=dropbear key_only=yes listen=all_ipv4 port=22 forwarding=disabled"
       ''}
       ${lib.optionalString a72Cpu8SramDiagnostic ''
+      ${lib.optionalString a72Cpu8TraceOnly ''
+      note "a72_cpu8=trace-header-snapshot-only trigger=disabled no-sysfs-write"
+      ''}
+      ${lib.optionalString (!a72Cpu8TraceOnly) ''
       /bin/a72-cpu8-sram-diagnostic &
       note "a72_cpu8=armed trigger=one-exact-token serviceability-gated no-retry-no-rollback"
+      ''}
       ''}
 
       while :; do

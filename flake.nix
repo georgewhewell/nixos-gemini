@@ -619,6 +619,36 @@
       a72Cpu8SramDiagnostic = true;
     };
 
+    # Read the admission trace's retained-RAM header at probe time and expose
+    # it in dmesg/status.  The one-shot trigger script is present but is not
+    # launched, so this artifact performs no admission sysfs write.
+    mainlineA72Cpu8TraceDiagnostic = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+      a72Cpu8SramDiagnostic = true;
+      a72Cpu8TraceOnly = true;
+    };
+
     # Manual-only headphone DPCM exercise over the existing fully observable
     # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
     # never invokes it: an operator must explicitly run
@@ -1111,6 +1141,8 @@
       mainlineA72Cpu8SramDiagnosticDtb = mainlineA72Cpu8SramDiagnostic.serviceabilityDtb;
       mainlineA72Cpu8SramDiagnosticInitramfs = mainlineA72Cpu8SramDiagnostic.probeInitramfs;
       mainlineA72Cpu8SramDiagnosticBundle = mainlineA72Cpu8SramDiagnostic.bundle;
+      mainlineA72Cpu8TraceDiagnosticKernel = mainlineA72Cpu8TraceDiagnostic.kernel;
+      mainlineA72Cpu8TraceDiagnosticBundle = mainlineA72Cpu8TraceDiagnostic.bundle;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
