@@ -184,7 +184,7 @@
   # The reviewed CPU8 chain replaces the deleted a72_power node with the
   # disabled a72_platform_state/DVFSP access-controller topology.  Pin the
   # resulting base DTB rather than accepting the retired topology's hash.
-  baseDtbSha256 = "2ba8f57caad4d1723f658bd925fdbd79c155f7f2a08e6321c83a59f1936443e1";
+  baseDtbSha256 = "f1262332ce232dac56c78c9d3d3e1fa390ebfd2209540fa4ca023b89cb871250";
   # Same reviewed A72 topology after the existing, structurally validated
   # serviceability transform (CONSYS/BTIF remain disabled).
   serviceabilityBaseDtbSha256 = "88cee4bc481ddf31da72fc8bf2e1100d9b4ff23034902034848846bf0e3766e7";
