@@ -55,8 +55,10 @@ def kernel_config_blob(vmlinux: Path) -> bytes:
     return data
 
 
-def digest(tag: bytes, length: int, payload: bytes) -> bytes:
-    return hashlib.sha256(DOMAIN + tag + length.to_bytes(length, "big") + payload).digest()
+def digest(tag: bytes, length_width: int, payload: bytes) -> bytes:
+    return hashlib.sha256(
+        DOMAIN + tag + len(payload).to_bytes(length_width, "big") + payload
+    ).digest()
 
 
 def blob64(tag: bytes, payload: bytes) -> bytes:
