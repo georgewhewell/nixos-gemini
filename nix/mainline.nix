@@ -470,7 +470,9 @@
       ''}
       ${lib.optionalString wifiW0Observe ''
         grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=y' .config
-        grep -Fqx '# CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST is not set' .config
+        # KUNIT=n omits this Kconfig symbol entirely; either omission or the
+        # explicit disabled form is safe, but an enabled test is not.
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST=' .config
       ''}
       ${lib.optionalString gpuStagedOverlay ''
         grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
