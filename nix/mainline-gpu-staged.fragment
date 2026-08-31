@@ -1,0 +1,12 @@
+# Recovery-bounded Mali-T880 identity transaction. The GPU remains disabled;
+# the diagnostic alone owns RT5735, the four MFG domains, and BG3D long enough
+# to read immutable ID/feature registers, then unwinds every vote.
+CONFIG_PM=y
+CONFIG_PM_GENERIC_DOMAINS=y
+CONFIG_PM_GENERIC_DOMAINS_OF=y
+CONFIG_REGULATOR=y
+CONFIG_REGULATOR_RT5735=y
+CONFIG_MTK_SCPSYS=y
+CONFIG_COMMON_CLK_MT6797_MFGSYS=y
+CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=y
+# CONFIG_DRM_PANFROST is not set

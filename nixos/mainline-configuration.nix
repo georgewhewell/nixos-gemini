@@ -7,12 +7,18 @@
   pkgs,
   lib,
   geminiLeaseSelfAcceptToken ? null,
+  geminiGnssDevice ? null,
+  geminiBluetooth ? false,
   ...
 }: {
   assertions = [
     {
       assertion = geminiLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" geminiLeaseSelfAcceptToken != null;
       message = "geminiLeaseSelfAcceptToken must be a versioned 64-hex baseline capability";
+    }
+    {
+      assertion = geminiGnssDevice == null || geminiGnssDevice == "/dev/gnss0";
+      message = "the Gemini GNSS profile accepts only the retained /dev/gnss0 endpoint";
     }
   ];
   nixpkgs.overlays = [
@@ -108,6 +114,33 @@
         path = "/gemian/etc/ssh/ssh_host_ed25519_key";
       }
     ];
+  };
+
+  # The experimental radio image supplies one retained Linux GNSS endpoint.
+  # Keep gpsd read-only until the chipset's userspace command protocol is
+  # independently evidenced: merely opening /dev/gnss0 is sufficient to hold
+  # the kernel's GPS power vote, while gpsd exposes its observations locally.
+  services.gpsd = lib.mkIf (geminiGnssDevice != null) {
+    enable = true;
+    devices = [geminiGnssDevice];
+    readonly = true;
+    nowait = true;
+    listenany = false;
+  };
+  services.udev.extraRules = lib.optionalString (geminiGnssDevice != null) ''
+    SUBSYSTEM=="gnss", KERNEL=="gnss0", TAG+="systemd"
+  '';
+  systemd.services.gpsd = lib.mkIf (geminiGnssDevice != null) {
+    after = ["dev-gnss0.device"];
+    unitConfig.BindsTo = ["dev-gnss0.device"];
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = "2s";
+    };
+  };
+  hardware.bluetooth = lib.mkIf geminiBluetooth {
+    enable = true;
+    powerOnBoot = true;
   };
   programs.ssh.package = pkgs.openssh.override {
     withFIDO = false;
@@ -295,7 +328,11 @@
         echo "watchdog-owner=$(${pkgs.busybox}/bin/busybox cat /run/unattended-recovery.watchdog-owner)"
         echo "watchdog-state=$(${pkgs.busybox}/bin/busybox cat /sys/class/watchdog/watchdog0/state)"
       } > /run/gemini-mainline-success
-      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=${if geminiLeaseSelfAcceptToken == null then "external" else "baseline-self-accept-pending"}" \
+      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=${
+        if geminiLeaseSelfAcceptToken == null
+        then "external"
+        else "baseline-self-accept-pending"
+      }" \
         >> /run/stage1.log
     '';
   };
@@ -367,13 +404,17 @@
   # bring-up without building another single-purpose image. The selected
   # systemd package is already in the closure for PID 1; adding it here merely
   # exposes systemctl/journalctl through the system profile.
-  environment.systemPackages = lib.mkForce [
-    pkgs.busybox
-    config.systemd.package
-    pkgs.iproute2
-    pkgs.usbutils
-    pkgs.ethtool
-  ];
+  environment.systemPackages = lib.mkForce (
+    [
+      pkgs.busybox
+      config.systemd.package
+      pkgs.iproute2
+      pkgs.usbutils
+      pkgs.ethtool
+    ]
+    ++ lib.optionals (geminiGnssDevice != null) [pkgs.gpsd]
+    ++ lib.optionals geminiBluetooth [pkgs.bluez]
+  );
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
 

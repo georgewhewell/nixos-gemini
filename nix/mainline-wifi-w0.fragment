@@ -1,0 +1,4 @@
+# W0 is the already-passed single GEN3 portal observation following G2d.
+# It has no WLAN MAC, IRQ requester, DMA, firmware load, or netdev.
+CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=y
+# CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST is not set

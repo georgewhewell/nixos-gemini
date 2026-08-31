@@ -95,6 +95,8 @@ test_provision_ssh_disables_control_master() {
     test "$(cat "$argv.timeout")" = 73
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveInterval=15' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveCountMax=40' "$argv" >/dev/null
     grep -Fx -- 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' "$argv" >/dev/null
     grep -Fx -- root@10.15.19.82 "$argv" >/dev/null
     argv=$RUN_LOCAL/right.argv
@@ -102,6 +104,8 @@ test_provision_ssh_disables_control_master() {
     test "$(cat "$argv.timeout")" = 73
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveInterval=15' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveCountMax=40' "$argv" >/dev/null
     grep -Fx -- root@192.168.23.70 "$argv" >/dev/null
     CANDIDATE_HOSTKEY_MODE=yes
     candidate_hostkey_allowed() { return 0; }
@@ -109,12 +113,16 @@ test_provision_ssh_disables_control_master() {
     device_ssh_gadget_provision 'true'
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveInterval=15' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveCountMax=40' "$argv" >/dev/null
     grep -Fx -- 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' "$argv" >/dev/null
     grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
     argv=$RUN_LOCAL/right-candidate.argv
     device_ssh_right_provision 'true'
     grep -Fx -- 'ControlMaster=no' "$argv" >/dev/null
     grep -Fx -- 'ControlPath=none' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveInterval=15' "$argv" >/dev/null
+    grep -Fx -- 'ServerAliveCountMax=40' "$argv" >/dev/null
     grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
 }
 

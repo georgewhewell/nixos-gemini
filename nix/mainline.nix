@@ -11,6 +11,19 @@
   rootfsProbe ? false,
   usbHostOverlay ? false,
   consysIdentityOverlay ? false,
+  consysG2bOverlay ? false,
+  consysG2cPatchOverlay ? false,
+  consysG2dPostpatchOverlay ? false,
+  consysG2gGnssEndpoint ? false,
+  consysG2hBtEndpoint ? false,
+  wifiW0Observe ? false,
+  wifiW1FirmwareReadyProof ? false,
+  wifiW1Forensic ? false,
+  wifiW2NicCapability ? false,
+  wifiW4Connect ? false,
+  consysFirmware ? false,
+  gpuStagedOverlay ? false,
+  gpuFixedOppOverlay ? false,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -44,6 +57,7 @@
   ixooRevision = "4c1143012226586dc13b24eb1042422f1b4dfa69";
   candidateRevision = "4c1143012226586dc13b24eb1042422f1b4dfa69";
   profile = "a72-admission-live-trigger-candidate";
+
   ixooManifest = builtins.fromJSON (builtins.readFile (ixoo-kernel + "/kernel/manifest.json"));
   profileDefinition = ixooManifest.config.profiles.${profile};
 
@@ -61,6 +75,17 @@
     ]
     ++ lib.optionals usbHostOverlay [./mainline-usb11-host.fragment]
     ++ lib.optionals consysIdentityOverlay [./mainline-consys-identity.fragment]
+    ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
+    ++ lib.optionals consysG2cPatchOverlay [./mainline-consys-g2c-patch.fragment]
+    ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
+    ++ lib.optionals consysG2gGnssEndpoint [./mainline-consys-g2g-gnss.fragment]
+    ++ lib.optionals consysG2hBtEndpoint [./mainline-consys-g2h-bt.fragment]
+    ++ lib.optionals (wifiW0Observe || wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w0.fragment]
+    ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w1-ready.fragment]
+    ++ lib.optionals (wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w2-capability.fragment]
+    ++ lib.optionals wifiW4Connect [./mainline-wifi-w4-connect.fragment]
+    ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
+    ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
@@ -70,6 +95,7 @@
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
     ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment];
+    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -94,6 +120,62 @@
     if consysIdentityOverlay
     then "bounded-0x0279-reset-held-v1"
     else "none";
+  consysG2bLabel =
+    if consysG2bOverlay
+    then
+      if consysFirmware
+      then "emi-identity-postid-raw-mandatory-full-wmt-firmware-packaged-no-patch-v1"
+      else "emi-identity-postid-raw-mandatory-full-no-firmware-v1"
+    else "none";
+  consysG2cPatchLabel =
+    if consysG2cPatchOverlay
+    then "emi-identity-postid-raw-mandatory-full-hash-pinned-patch-only-v1"
+    else "none";
+  consysG2dPostpatchLabel =
+    if consysG2dPostpatchOverlay
+    then "emi-identity-postid-full-wmt-hash-pinned-patch-postpatch-no-radio-client-v1"
+    else "none";
+  consysG2gGnssLabel =
+    if consysG2gGnssEndpoint
+    then "retained-full-stp-gpio69-func-ctrl-dev-gnss-v1"
+    else "none";
+  consysG2hBtLabel =
+    if consysG2hBtEndpoint
+    then "retained-full-stp-vcn33-bt-hci-v1"
+    else "none";
+  wifiW0Label = if wifiW0Observe then "gen3-cmd53-wcir-only-v1" else "none";
+  wifiW1Label =
+    if wifiW1FirmwareReadyProof
+    then
+      if wifiW1Forensic
+      then "bounded-full-firmware-start-ready-forensic-no-irq-no-netdev-v1"
+      else "bounded-full-firmware-start-ready-no-irq-no-netdev-v1"
+    else "none";
+  wifiW2Label =
+    if wifiW2NicCapability
+    then "bounded-nic-capability-fresh-rx1-irq-no-netdev-v1"
+    else "none";
+  wifiW4Label =
+    if wifiW4Connect
+    then "retained-controller-w3-irq-cfg80211-open-auth-assoc-netdev-v2"
+    else "none";
+  consysFirmwareAvailable =
+    consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay ||
+    wifiW1FirmwareReadyProof;
+  consysFirmwareLabel =
+    if consysG2cPatchOverlay || consysG2dPostpatchOverlay || wifiW1FirmwareReadyProof
+    then "three-blob-exact-size-sha256-patch-manifest-enabled-v1"
+    else if consysFirmware
+    then "tracked-production-wmt-patch-preflight-only-v1"
+    else "none";
+  gpuStagedLabel =
+    if gpuStagedOverlay
+    then "rt5735-mfg-four-domain-bg3d-readonly-id-stage2-v1"
+    else "none";
+  gpuFixedOppLabel =
+    if gpuFixedOppOverlay
+    then "panfrost-single-500500000hz-975000uv-type12-v1"
+    else "none";
   displayLabel =
     if displayOverlay
     then "nt36672-lp3101-smi-bypass-recovery-smoke-v2"
@@ -104,7 +186,7 @@
     else "none";
   audioHeadphoneTestLabel =
     if audioHeadphoneTest
-    then "manual-dpcm-headphone-440hz-750ms-restoring-v1"
+    then "manual-staged-alsa-boundary-diagnostic-v2"
     else "none";
   powerObserveLabel =
     if powerObserveOverlay
@@ -173,9 +255,44 @@
     if debugOverlay
     then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=${gadgetProduct} g_ether.iSerialNumber=${gadgetSerial} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
     else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=${gadgetProduct} g_ether.iSerialNumber=${gadgetSerial} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+  panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
+  usbBuildTag =
+    if consysG2hBtEndpoint
+    then "radio-gnss-bt"
+    else if consysG2gGnssEndpoint
+    then "radio-gnss"
+    else if wifiW4Connect
+    then "wifi-w4"
+    else if wifiW2NicCapability
+    then "wifi-w2"
+    else if wifiW1FirmwareReadyProof
+    then "wifi-w1"
+    else if consysG2dPostpatchOverlay
+    then "consys-g2d"
+    else if gpuFixedOppOverlay
+    then "gpu-panfrost"
+    else if platformEnablement
+    then "platform"
+    else "baseline";
+  usbBuildSerial = "NIX-${builtins.substring 0 16 (builtins.hashString "sha256" "${kernelRevision}:${variantSuffix}")}";
+  usbIdentityCmdline = "g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-${usbBuildTag} g_ether.iSerialNumber=${usbBuildSerial}";
+  baseCmdline =
+    if debugOverlay
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
+    + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
+    + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
+    + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
+    + lib.optionalString consysG2gGnssEndpoint " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2g_gnss_endpoint=1"
+    + lib.optionalString consysG2hBtEndpoint " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2h_bt_endpoint=1"
+    + lib.optionalString wifiW0Observe " mt6797_wifi_ahb_wcir.enable_experimental_wifi_wcir_observe=1"
+    + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
+    + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
+    + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
+    + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
@@ -183,6 +300,20 @@
     + lib.optionalString rootfsProbe "-p29-ro"
     + lib.optionalString usbHostOverlay "-usb11-host"
     + lib.optionalString consysIdentityOverlay "-consys-identity"
+    + lib.optionalString consysG2bOverlay "-consys-g2b"
+    + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
+    + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
+    + lib.optionalString consysG2gGnssEndpoint "-consys-g2g-gnss"
+    + lib.optionalString consysG2hBtEndpoint "-consys-g2h-bt"
+    + lib.optionalString wifiW0Observe "-wifi-w0"
+    + lib.optionalString wifiW1FirmwareReadyProof (
+      if wifiW2NicCapability || wifiW4Connect then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+    )
+    + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
+    + lib.optionalString wifiW4Connect "-wifi-w4-connect"
+    + lib.optionalString consysFirmware "-consys-firmware"
+    + lib.optionalString gpuStagedOverlay "-gpu-staged"
+    + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -212,7 +343,38 @@
   serviceabilityBaseDtbSha256 = "22b7b4158f88a2ad8bb752dbf1d3cfbae4234efd95356b1c5dc044fd7824f613";
 	admissionServiceabilityBaseDtbSha256 = "0e6cdd5edf677e992386ef501456d241d7e599054e1c38756c594836bdb19b24";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+    + lib.optionalString deviceActivationOverlay "-device-activation";
+  # These three inputs are generated from the same locked DTS and the same
+  # unconditional provider/USB transforms for every exported profile.  Keep
+  # them independent of C-only kernel revisions: 07dc and 733110 produced
+  # byte-identical base DTBs, and selecting an unobserved hash by revision hid
+  # that invariant behind a false install-time failure.
+  baseDtbSha256 =
+    "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c";
+  serviceabilityBaseDtbSha256 =
+    "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8";
+  usbPlatformDtbSha256 =
+    "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610";
   profileCombinationValid =
+    assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
+    assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
+    assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
+    assert !wifiW0Observe || consysG2dPostpatchOverlay;
+    assert !consysG2gGnssEndpoint || consysG2dPostpatchOverlay;
+    assert !consysG2hBtEndpoint || consysG2dPostpatchOverlay;
+    assert !consysG2gGnssEndpoint || (!wifiW0Observe && !wifiW1FirmwareReadyProof && !wifiW2NicCapability && !wifiW4Connect);
+    assert !wifiW1FirmwareReadyProof || (consysG2dPostpatchOverlay && wifiW0Observe);
+    assert !wifiW1Forensic || wifiW1FirmwareReadyProof;
+    assert !wifiW2NicCapability || (wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);
+    assert !wifiW4Connect || (wifiW2NicCapability && wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);
+    assert !consysFirmware || consysG2bOverlay;
+    assert !(gpuStagedOverlay && gpuFixedOppOverlay);
+    assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
+    assert !consysG2cPatchOverlay || unattendedRecovery;
+    assert !consysG2dPostpatchOverlay || unattendedRecovery;
+    assert !wifiW1FirmwareReadyProof || unattendedRecovery;
+    assert !wifiW2NicCapability || unattendedRecovery;
+    assert !wifiW4Connect || unattendedRecovery;
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -280,6 +442,7 @@
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || kernelRevision == p22BaselinePlatformRevision
       || a72Cpu8SramDiagnostic;
+      || kernelRevision == p22BaselinePlatformRevision;
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || !deviceActivationOverlay;
@@ -332,6 +495,17 @@
       + lib.optionalString storageOverlay "-emmc-probe"
       + lib.optionalString usbHostOverlay "-usb11-host"
       + lib.optionalString consysIdentityOverlay "-consys-identity"
+      + lib.optionalString consysG2bOverlay "-consys-g2b"
+      + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
+      + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
+      + lib.optionalString wifiW0Observe "-wifi-w0"
+      + lib.optionalString wifiW1FirmwareReadyProof (
+        if wifiW2NicCapability || wifiW4Connect then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+      )
+      + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
+      + lib.optionalString wifiW4Connect "-wifi-w4-connect"
+      + lib.optionalString gpuStagedOverlay "-gpu-staged"
+      + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
@@ -344,6 +518,7 @@
       + lib.optionalString fgadcActivationOverlay "-fgadc-active"
       + lib.optionalString deviceActivationOverlay "-device-activation"
       + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
+      + lib.optionalString deviceActivationOverlay "-device-activation";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -394,7 +569,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -448,6 +623,96 @@
           ! grep -q '^CONFIG_MTK_MT6797_CONSYS_LIVE=' .config
         ''
       }
+      ${lib.optionalString consysG2bOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=y' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2cPatchOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2C_PATCH_OWNER=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2dPostpatchOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_POSTID=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2C_PATCH_OWNER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2D_POSTPATCH_OWNER=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2gGnssEndpoint ''
+        grep -Fqx 'CONFIG_GNSS=y' .config
+        grep -Fqx 'CONFIG_GNSS_MTK_CONSYS=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2G_GNSS_ENDPOINT=y' .config
+        ! grep -q '^CONFIG_GNSS_MTK_CONSYS_KUNIT_TEST=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString consysG2hBtEndpoint ''
+        grep -Fqx 'CONFIG_BT=y' .config
+        grep -Fqx 'CONFIG_BT_MTK_CONSYS=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y' .config
+        grep -Fqx 'CONFIG_CRYPTO_CMAC=y' .config
+        grep -Fqx 'CONFIG_CRYPTO_AES=y' .config
+      ''}
+      ${lib.optionalString wifiW0Observe ''
+        grep -E '^CONFIG_MTK_MT6797_WIFI_AHB_[A-Z0-9_]+=' .config || true
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString wifiW1FirmwareReadyProof ''
+        grep -E '^CONFIG_(MTK_MT6797_WIFI_AHB_[A-Z0-9_]+|CRYPTO_SHA256)=' .config || true
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W1_FIRMWARE_PREFLIGHT=y' .config
+        grep -Fqx 'CONFIG_CRYPTO_SHA256=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_W1_FIRMWARE_KUNIT_TEST=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
+      ''}
+      ${lib.optionalString wifiW2NicCapability ''
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W2_NIC_CAPABILITY=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_W1_FIRMWARE_KUNIT_TEST=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
+      ''}
+      ${lib.optionalString wifiW4Connect ''
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W3_SESSION=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W4_PLATFORM=y' .config
+        grep -Fqx 'CONFIG_CFG80211=y' .config
+      ''}
+      ${lib.optionalString gpuStagedOverlay ''
+        grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
+        grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
+        grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=y' .config
+        ! grep -q '^CONFIG_DRM_PANFROST=' .config
+      ''}
+      ${lib.optionalString gpuFixedOppOverlay ''
+        grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
+        grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
+        grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
+        grep -Fqx 'CONFIG_DRM=y' .config
+        grep -Fqx 'CONFIG_DRM_PANFROST=y' .config
+        grep -Fqx 'CONFIG_PM_DEVFREQ=y' .config
+        grep -Fqx 'CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=' .config
+      ''}
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_KUNIT_TEST=' .config
@@ -654,9 +919,34 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
           "$out/mt6797-gemini-consys-identity.dtbo"
       ''}
+      ${lib.optionalString consysG2bOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2b-no-firmware.dtbo \
+          "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2b-no-firmware.dtbo"
+      ''}
+      ${lib.optionalString consysG2cPatchOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2c-patch-only.dtbo \
+          "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+      ''}
+      ${lib.optionalString consysG2dPostpatchOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-g2c-patch-only.dtbo \
+          "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+        test -s "$out/mt6797-gemini-consys-g2c-patch-only.dtbo"
+      ''}
+      ${lib.optionalString gpuStagedOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-staged.dtbo \
+          "$out/mt6797-gemini-pda-gpu-staged.dtbo"
+        test -s "$out/mt6797-gemini-pda-gpu-staged.dtbo"
+      ''}
+      ${lib.optionalString gpuFixedOppOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-fixed-opp.dtbo \
+          "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
+        test -s "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
+      ''}
       ${lib.optionalString usbHostOverlay ''
         # This overlay is built and reviewed with the locked kernel source.
-        # Do not replace it with the retired repository-local DTS: that file
+        # Do not replace it with a repository-local DTS: the retired version
         # asserted GPIO72 at probe time and used the wrong regulator sequence.
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtbo \
           "$out/mt6797-gemini-pda-usb11-host.dtbo"
@@ -731,6 +1021,13 @@
 	    grep -Fq 'gemini,initialize-empty' \
 	      arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
 	  ''}
+      cp .config "$out/kernel.config"
+      cp System.map vmlinux "$out/"
+
+      # Device Tree output is compiler-independent and must match the reviewed
+      # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
+      test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
+        ${baseDtbSha256}
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
@@ -787,6 +1084,8 @@
   serviceabilityDtb = assert profileCombinationValid;
     buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3 buildPkgs.binutils];
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
       cp -R ${ixoo-candidate} candidate
@@ -885,15 +1184,232 @@
             ${usbPlatformDtbSha256}
           echo 'consys-identity-overlay=passed' >> "$out/VALIDATION"
         ''
+        else if consysG2bOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2b-no-firmware.dtbo
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 status)" = okay
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 status)" = okay
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2b-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2b-owner compatible)" = \
+            mediatek,mt6797-consys-g2b-owner
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2b-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap-no-patch'
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2b-owner \
+            | grep -Fqx 'mediatek,experimental-g2b-no-firmware'
+          echo 'consys-g2b-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2b-firmware=disabled' >> "$out/VALIDATION"
+          echo 'consys-g2b-radio-clients=disabled' >> "$out/VALIDATION"
+        ''
+        else if consysG2cPatchOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2c-patch-only.dtbo
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-patch-owner compatible)" = \
+            mediatek,mt6797-consys-g2c-patch-owner
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2c-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap'
+          ! fdtget -p "$out/gemini-consys.dtb" /consys-g2c-controller \
+            | grep -Fqx 'mediatek,experimental-bootstrap-no-patch'
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2c-patch-owner \
+            | grep -Fqx 'mediatek,experimental-g2c-patch-owner'
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status)" = disabled
+          echo 'consys-g2c-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2c-manifest=hash-pinned-after-full-stp-only' >> "$out/VALIDATION"
+          echo 'consys-g2c-radio-clients=disabled' >> "$out/VALIDATION"
+        ''
+        else if consysG2dPostpatchOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-platform.dtb" \
+            -o "$out/gemini-consys.dtb" \
+            ${kernel}/mt6797-gemini-consys-g2c-patch-only.dtbo
+          # The shared overlay declares both owners.  This profile has exactly
+          # one live owner: G2c remains disabled and receives no boot gate.
+          fdtput -t s "$out/gemini-consys.dtb" /consys-g2c-patch-owner status disabled
+          fdtput -t s "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status okay
+          test "$(fdtget "$out/gemini-consys.dtb" /consys@18070000 compatible)" = \
+            mediatek,mt6797-consys-runtime
+          test "$(fdtget "$out/gemini-consys.dtb" /serial@1100c000 compatible)" = \
+            mediatek,mt6797-btif-pio
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-controller compatible)" = \
+            mediatek,mt6797-consys-runtime-controller
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2c-patch-owner status)" = disabled
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner compatible)" = \
+            mediatek,mt6797-consys-g2d-postpatch-owner
+          test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status)" = okay
+          fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            | grep -Fqx 'mediatek,experimental-g2d-postpatch-owner'
+          ${lib.optionalString consysG2gGnssEndpoint ''
+            fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              mediatek,experimental-g2g-gnss-endpoint
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-g2g-gnss-endpoint'
+          ''}
+          ${lib.optionalString consysG2hBtEndpoint ''
+            fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              mediatek,experimental-g2h-bt-endpoint
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-g2h-bt-endpoint'
+          ''}
+          ${lib.optionalString wifiW0Observe ''
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
+              mediatek,wifi
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = disabled
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | grep -Fqx interrupts
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-wifi-wcir-observe'
+          ''}
+          ${lib.optionalString wifiW1FirmwareReadyProof ''
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-wifi-w1-firmware-preflight'
+          ''}
+          ${lib.optionalString wifiW2NicCapability ''
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-wifi-w2-nic-capability'
+          ''}
+          ${lib.optionalString wifiW4Connect ''
+            # W0's overlay supplies the vendor HIF node/IRQ.  W4 is the only
+            # profile that turns that exact portal into the retained owner.
+            # Reuse the G2d controller and the explicitly named PALDO rails.
+            # W4 binds on the first compatible; retain the vendor generic
+            # compatible as a fallback because the G2d W0/W1 transaction
+            # resolves this same live portal by "mediatek,wifi".
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 compatible \
+              mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi
+            # G2d performs resource/EMI preflight only; W4 owns start, IRQ, and stop.
+            fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              mediatek,experimental-wifi-w4-retained-owner
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,controller 0x90
+	    # W1's EMI copy is issued by W4 in the retained path.  Give that
+	    # actual consumer the same already-claimed provider as G2d; the EMI
+	    # API deliberately resolves ownership from the calling DT node.
+	    w4_emi_provider="$(fdtget -t x "$out/gemini-consys.dtb" \
+	      /consys-g2d-postpatch-owner mediatek,emi-mpu)"
+	    test -n "$w4_emi_provider"
+	    fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+	      mediatek,emi-mpu "$w4_emi_provider"
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              bt-paldo-supply 0x53
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              wifi-paldo-supply 0x54
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w4-platform
+            # W1/W2 execute with W4 as owner, and W3 gates the IRQ lifetime.
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w1-firmware-preflight
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w2-nic-capability
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w3-session
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
+              'mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi'
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names)" = wifi
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 reg)" = \
+              '0 180f0000 0 1100'
+	    test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+	      mediatek,emi-mpu)" = "$w4_emi_provider"
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 interrupts)" = \
+              '0 11b 8'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w4-platform'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w1-firmware-preflight'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w2-nic-capability'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w3-session'
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner | \
+              grep -Fqx 'mediatek,experimental-wifi-w4-retained-owner'
+          ''}
+          # PIO has no child endpoint and neither owner declares a function
+          # client. The kernel config also excludes BTIF transport/HCI.
+          test -z "$(fdtget -l "$out/gemini-consys.dtb" /serial@1100c000)"
+          ! fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            mediatek,function-control >/dev/null 2>&1
+          echo 'consys-g2d-overlay=passed' >> "$out/VALIDATION"
+          echo 'consys-g2d-owner=exclusive-g2c-disabled' >> "$out/VALIDATION"
+          echo 'consys-g2d-radio-clients=disabled' >> "$out/VALIDATION"
+          ${lib.optionalString wifiW0Observe "echo 'wifi-w0=cmd53-wcir-only' >> \"$out/VALIDATION\""}
+          ${lib.optionalString wifiW1FirmwareReadyProof "echo 'wifi-w1=full-firmware-start-ready-irq-netdev-fenced' >> \"$out/VALIDATION\""}
+          ${lib.optionalString wifiW2NicCapability "echo 'wifi-w2=nic-capability-fresh-rx1-irq-no-netdev' >> \"$out/VALIDATION\""}
+          ${lib.optionalString wifiW4Connect "echo 'wifi-w4=retained-controller-w3-irq-cfg80211-open-auth-assoc-netdev' >> \"$out/VALIDATION\""}
+        ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
+        ''
+      }
+      ${
+        if gpuStagedOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-consys.dtb" \
+            -o "$out/gemini-gpu.dtb" \
+            ${kernel}/mt6797-gemini-pda-gpu-staged.dtbo
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c compatible)" = \
+            richtek,rt5735
+          test "$(fdtget "$out/gemini-gpu.dtb" /syscon@13000000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /gpu@13040000 status)" = disabled
+          test "$(fdtget "$out/gemini-gpu.dtb" /gpu-staged status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /gpu-staged compatible)" = \
+            mediatek,mt6797-gpu-staged
+          fdtget -p "$out/gemini-gpu.dtb" /gpu-staged | grep -Fqx 'vgpu-supply'
+          fdtget -p "$out/gemini-gpu.dtb" /gpu-staged | grep -Fqx 'power-domains'
+          echo 'gpu-staged-overlay=rt5735-mfg-bg3d-readonly-id-passed' >> "$out/VALIDATION"
+          echo 'gpu-target=disabled-no-panfrost-bind' >> "$out/VALIDATION"
+        ''
+        else if gpuFixedOppOverlay
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-consys.dtb" \
+            -o "$out/gemini-gpu.dtb" \
+            ${kernel}/mt6797-gemini-pda-gpu-fixed-opp.dtbo
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c status)" = okay
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c regulator-min-microvolt)" = 975000
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c regulator-max-microvolt)" = 975000
+          fdtget -p "$out/gemini-gpu.dtb" /i2c@11010000/regulator@1c \
+            | grep -Fqx 'regulator-boot-on'
+          test "$(fdtget "$out/gemini-gpu.dtb" /syscon@13000000 status)" = okay
+          test "$(fdtget "$out/gemini-gpu.dtb" /gpu@13040000 status)" = okay
+          fdtget -p "$out/gemini-gpu.dtb" /gpu@13040000 \
+            | grep -Fqx 'operating-points-v2'
+          test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-hz)" = \
+            '0 1dd50620'
+          test "$(fdtget -t u "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-microvolt)" = 975000
+          echo 'gpu-fixed-opp=panfrost-500500000hz-975000uv-passed' >> "$out/VALIDATION"
+          echo 'gpu-dvfs=disabled-single-opp' >> "$out/VALIDATION"
+        ''
+        else ''
+          cp "$out/gemini-consys.dtb" "$out/gemini-gpu.dtb"
         ''
       }
       ${
         if displayOverlay
         then ''
           fdtoverlay \
-            -i "$out/gemini-consys.dtb" \
+            -i "$out/gemini-gpu.dtb" \
             -o "$out/gemini-display.dtb" \
             ${kernel}/mt6797-gemini-pda-display.dtbo
           test "$(fdtget "$out/gemini-display.dtb" /dsi@1401c000/panel@0 compatible)" = \
@@ -913,7 +1429,7 @@
           echo 'display-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
-          cp "$out/gemini-consys.dtb" "$out/gemini-display.dtb"
+          cp "$out/gemini-gpu.dtb" "$out/gemini-display.dtb"
         ''
       }
       ${
@@ -1247,16 +1763,17 @@
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
       }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}${lib.optionalString a72Cpu8SramDiagnostic "gemini-a72-cpu8-sram.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
+      }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is deliberately a small standalone ALSA-UAPI client, not a partial
-  # userspace audio stack.  Its source only opens the named MT6797/MT6351 card,
-  # changes the four hardware-proven headphone DPCM controls temporarily, and
-  # restores them before exit.  Keeping it static avoids adding a dynamic
+  # userspace audio stack.  Its default is observation-only; a manually chosen
+  # activation stage exercises one control or PCM boundary and records before
+  # and after every ALSA ioctl.  Keeping it static avoids adding a dynamic
   # loader or libasound to the diagnostic initramfs.
   audioHeadphoneExercise = crossPkgs.pkgsStatic.stdenv.mkDerivation {
     pname = "gemini-audio-headphone";
-    version = "1";
+    version = "2";
     src = ./gemini-audio-headphone.c;
     dontUnpack = true;
     dontPatchELF = true;
@@ -1266,6 +1783,14 @@
       runHook preBuild
       "$CC" -std=c11 -Wall -Wextra -Werror -Wpedantic -O2 -static \
         "$src" -o gemini-audio-headphone
+      # Cross binaries cannot execute on the build host. Assert the safety
+      # contract directly from the source after the warning-clean static build.
+      grep -Fq 'STAGE_OBSERVE' "$src"
+      grep -Fq 'SNDRV_PCM_IOCTL_HW_FREE' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_DRAIN' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_WRITEI_FRAMES' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_PREPARE' "$src"
+      ! grep -Fq 'SNDRV_PCM_IOCTL_START' "$src"
       runHook postBuild
     '';
     installPhase = ''
@@ -1293,6 +1818,12 @@
         busybox = crossPkgs.pkgsStatic.busybox;
         rtlFirmware = buildPkgs.linux-firmware;
       }
+      // lib.optionalAttrs wifiW4Connect {
+        iw = crossPkgs.pkgsStatic.iw;
+        wpaSupplicant = crossPkgs.pkgsStatic.wpa_supplicant;
+        iperf3 = crossPkgs.pkgsStatic.iperf3;
+        wirelessRegdb = buildPkgs.wireless-regdb;
+      }
       // lib.optionalAttrs audioHeadphoneTest {
         inherit audioHeadphoneExercise;
       }
@@ -1309,7 +1840,54 @@
         test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
           5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
       ''}
+      ${lib.optionalString consysFirmwareAvailable ''
+        # The staged MT6797 patch controller accepts only these bare names and
+        # complete-image digests. Packaging is not activation: the G2b command
+        # line only enables the patch gate in the explicit G2c profile; every
+        # radio function remains disabled in every profile.
+        mkdir -p root/lib/firmware
+        cp ${../blobs/WMT_SOC.cfg} root/lib/firmware/WMT_SOC.cfg
+        cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
+          root/lib/firmware/ROMv3_patch_1_1_hdr.bin
+        cp ${../blobs/ROMv3_patch_1_0_hdr.bin} \
+          root/lib/firmware/ROMv3_patch_1_0_hdr.bin
+        test "$(stat -c %s root/lib/firmware/WMT_SOC.cfg)" = 80
+        test "$(sha256sum root/lib/firmware/WMT_SOC.cfg | cut -d' ' -f1)" = \
+          f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+        test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_1_hdr.bin)" = 46472
+        test "$(sha256sum root/lib/firmware/ROMv3_patch_1_1_hdr.bin | cut -d' ' -f1)" = \
+          5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+        test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_0_hdr.bin)" = 210904
+        test "$(sha256sum root/lib/firmware/ROMv3_patch_1_0_hdr.bin | cut -d' ' -f1)" = \
+          450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+      ''}
+      ${lib.optionalString wifiW1FirmwareReadyProof ''
+        # W1 requests precisely this bare vendor name. Pin before boot, then
+        # make the initramfs fail to build if the staged bytes ever drift.
+        cp ${../blobs/WIFI_RAM_CODE_6797} root/lib/firmware/WIFI_RAM_CODE_6797
+        test "$(stat -c %s root/lib/firmware/WIFI_RAM_CODE_6797)" = 411632
+        test "$(sha256sum root/lib/firmware/WIFI_RAM_CODE_6797 | cut -d' ' -f1)" = \
+          a69383d74d829430487c39eef6b5e281b25f901595c903a632a10aa8631426dd
+      ''}
       cp "$busybox/bin/busybox" root/bin/busybox
+      ${lib.optionalString wifiW4Connect ''
+        # Real static WLAN userspace for the boot-active W4 candidate.  The
+        # signed regdb is firmware data, while iw/wpa_supplicant/iperf3 let the
+        # next hardware pass scan, associate and measure without a new image.
+        mkdir -p root/lib/firmware
+        cp "$wirelessRegdb/lib/firmware/regulatory.db" root/lib/firmware/regulatory.db
+        cp "$wirelessRegdb/lib/firmware/regulatory.db.p7s" root/lib/firmware/regulatory.db.p7s
+        cp "$iw/bin/iw" root/bin/iw
+        cp "$wpaSupplicant/bin/wpa_supplicant" root/bin/wpa_supplicant
+        cp "$iperf3/bin/iperf3" root/bin/iperf3
+        test -s root/lib/firmware/regulatory.db
+        test -s root/lib/firmware/regulatory.db.p7s
+        for tool in iw wpa_supplicant iperf3; do
+          readelf -h "root/bin/$tool" | grep -Fq 'Machine:                           AArch64'
+          ! readelf -l "root/bin/$tool" | grep -Fq 'Requesting program interpreter'
+          ! readelf -d "root/bin/$tool" | grep -Fq '(NEEDED)'
+        done
+      ''}
       ${lib.optionalString audioHeadphoneTest ''
         cp "$audioHeadphoneExercise/bin/gemini-audio-headphone" \
           root/bin/gemini-audio-headphone
@@ -2168,6 +2746,18 @@
       echo "nix-rootfs-probe=${rootfsLabel}"
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
+      echo "nix-consys-g2b=${consysG2bLabel}"
+      echo "nix-consys-g2c-patch=${consysG2cPatchLabel}"
+      echo "nix-consys-g2d-postpatch=${consysG2dPostpatchLabel}"
+      echo "nix-consys-g2g-gnss=${consysG2gGnssLabel}"
+      echo "nix-wifi-w0=${wifiW0Label}"
+      echo "nix-wifi-w1=${wifiW1Label}"
+      echo "nix-wifi-w2=${wifiW2Label}"
+      echo "nix-wifi-w4=${wifiW4Label}"
+      echo "wifi-userspace=${if wifiW4Connect then "iw+wpa_supplicant+iperf3+regulatory.db-static" else "none"}"
+      echo "nix-consys-firmware=${consysFirmwareLabel}"
+      echo "nix-gpu-staged=${gpuStagedLabel}"
+      echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
       echo "nix-platform-enablement=${if platformEnablement then "reviewed-dormant-v1" else "none"}"
       echo "nix-display=${displayLabel}"
       echo "nix-audio=${audioLabel}"
@@ -2291,6 +2881,10 @@
         ${probeInitramfs} \
         ${probeBootImg} \
         ${probeBoot2Img}
+      ${lib.optionalString wifiW1FirmwareReadyProof ''
+        sha256sum ${../blobs/WIFI_RAM_CODE_6797}
+        stat -c '%n size=%s' ${../blobs/WIFI_RAM_CODE_6797}
+      ''}
       ${lib.optionalString audioHeadphoneTest ''
         sha256sum ${audioHeadphoneExercise}/bin/gemini-audio-headphone
       ''}

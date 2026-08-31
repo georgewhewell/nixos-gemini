@@ -26,6 +26,45 @@
       url = "path:/home/grw/src/linux-gemini-p22-combined-next-20260831";
       flake = false;
     };
+    linux-gemini-next = {
+      # Critical-path experiments consume a second immutable pin so the
+      # accepted p22 baseline remains rebuildable byte-for-byte while newer
+      # CONSYS/GPU/cellular work advances on the same maintained fork.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=da6e93b0bce1b62e0e38425938efe3ceba7cfc09";
+      flake = false;
+    };
+    linux-gemini-w1-candidate = {
+      # Deliberately consume the reviewed local W1 commit rather than moving
+      # linux-gemini-next.  The flake lock records its content hash for the
+      # staged candidate while every accepted profile retains its old pin.
+      url = "path:/mnt/Home/src/linux-gemini-w1-firmware-source";
+      flake = false;
+    };
+    linux-gemini-w1-forensic-candidate = {
+      # Keep causal instrumentation separate from the earlier W1 READY image.
+      # The source is a committed, independent Trex clone; this profile is
+      # build/stage-only and never changes an accepted candidate's pin.
+      url = "path:/mnt/Home/src/linux-gemini-w2-trex";
+      flake = false;
+    };
+    linux-gemini-w2-capability-candidate = {
+      # W2 is an independent committed Trex worktree. It reuses the passed W1
+      # transaction, then proves the vendor NIC-capability IRQ path only.
+      url = "path:/mnt/Home/src/linux-gemini-w2-capability-trex";
+      flake = false;
+    };
+    linux-gemini-w4-connect-candidate = {
+      # W4 carries the retained HIF cfg80211 platform owner and the open
+      # authentication/association event state machine at reviewed 29625aeac.
+      url = "path:/mnt/Home/src/linux-gemini-w2-polling-trex";
+      flake = false;
+    };
+    linux-gemini-gnss-candidate = {
+      # Committed G2g endpoint source: retained STP, exact active GPS WMT and
+      # Gemini GPIO69 LNA chronology. This never moves an accepted source pin.
+      url = "path:/mnt/Home/src/linux-gemini-radio-persistent-trex";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -41,6 +80,12 @@
     vendor-kernel,
     ixoo-kernel,
     linux-gemini,
+    linux-gemini-next,
+    linux-gemini-w1-candidate,
+    linux-gemini-w1-forensic-candidate,
+    linux-gemini-w2-capability-candidate,
+    linux-gemini-w4-connect-candidate,
+    linux-gemini-gnss-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -397,6 +442,283 @@
       sshAccess = true;
       usbHostOverlay = true;
       consysIdentityOverlay = true;
+    };
+
+    # Critical-path radio-subsystem experiment. This keeps the accepted
+    # storage, SSH, dual-USB and watchdog substrate, then performs the complete
+    # no-firmware G2b chronology in one boot: persistent EMI, reset-held 0x0279
+    # identity, MBIST/AFE/reset release, and raw/mandatory/full WMT queries.
+    # It never requests a patch or enables a radio function.
+    mainlineConsysG2bNoFirmware = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2bOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # Firmware-preflight companion to G2b. It packages only the three
+    # byte-identified Gemini WMT inputs under the bare names requested by the
+    # controller. The existing G2b command line deliberately leaves patch
+    # download and every radio function disabled.
+    mainlineConsysFirmwarePreflight = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2bOverlay = true;
+      consysFirmware = true;
+      unattendedRecovery = true;
+    };
+
+    # G2c is prepared, not implied: it is for a later p22-only cycle after a
+    # corrected G2b run has proved raw HCR/HVR/FVR and the full-STP query. It
+    # alone enables the hash-pinned patch gate, then fences before any radio
+    # function can be created.
+    mainlineConsysG2cPatchOnly = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2cPatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # G2d completes the vendor post-patch firmware initialisation inside the
+    # G2c retained full-STP lifecycle. It is a p22-only, watchdog-protected
+    # owner swap: G2c's DT node and boot gate stay disabled, and no radio
+    # function/client is exposed.
+    mainlineConsysG2dPostpatch = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # G2g retains the hardware-passed G2d full-STP session and publishes one
+    # GNSS class endpoint. Opening it is the only path that raises GPIO69 and
+    # sends GPS FUNC_CTRL-on; close lowers GPIO69 before FUNC_CTRL-off.
+    mainlineConsysG2gGnss = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-gnss-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
+      unattendedRecovery = true;
+    };
+
+    # Integrated GNSS system candidate: retain the proven eMMC, dual-USB,
+    # display, audio and read-only board-observation substrate while replacing
+    # the short-lived G2g probe with the persistent /dev/gnss0 owner.  Active
+    # touchscreen and FGADC remain separate until this radio composition has
+    # survived its first full NixOS/gpsd hardware cycle.
+    mainlineConsysG2gGnssFull = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-gnss-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+    };
+
+    # W1 follows the hardware-passed W0 CMD53 portal read. It sends only the
+    # SHA-pinned image, proves WCIR.READY, then fences IRQ delivery and every
+    # WLAN client because the vendor tree has no isolated post-enable IRQ
+    # event. This output is build/stage-only; it does not authorize a flash.
+    mainlineWifiW1Ready = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w1-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      unattendedRecovery = true;
+    };
+
+    # W1 forensic successor to the safely failed READY candidate. It carries
+    # the same deliberately fenced device policy, but its committed kernel
+    # records every causal portal and PALDO cleanup result before any next
+    # hardware review. This output is not authorization to flash.
+    mainlineWifiW1Forensic = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w1-forensic-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
+      unattendedRecovery = true;
+    };
+
+    # W2 is the shortest source-backed successor to W1 READY. It issues only
+    # CMD_ID_GET_NIC_CAPABILITY and accepts only its fresh port-1 RX1 IRQ
+    # event. It does not expose a persistent WLAN transport or netdev.
+    mainlineWifiW2Capability = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w2-capability-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
+      wifiW2NicCapability = true;
+      unattendedRecovery = true;
+    };
+
+    # W4 is the first boot-active WLAN candidate: it retains the proven W1/W2
+    # firmware/session sequence, binds the exact HIF IRQ portal, and exposes
+    # cfg80211 open-network scan/connect.  USB host, SSH and watchdog stay on.
+    mainlineWifiW4Connect = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w4-connect-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
+      unattendedRecovery = true;
+    };
+
+    # Critical-path GPU identity experiment. It keeps the accepted recovery
+    # substrate, then exclusively votes RT5735 and all four MFG domains,
+    # enables BG3D, reads immutable Mali-T880 identity/features, and unwinds.
+    # The real GPU node remains disabled, so Panfrost cannot bind or submit.
+    mainlineGpuStaged = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      gpuStagedOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # First real Panfrost binding experiment.  Keep the boot-proven recovery,
+    # eMMC, SSH and dual-USB substrate, but expose exactly one GPU OPP: the
+    # already-programmed 500.5 MHz clock at the vendor type-12 975 mV voltage.
+    # There is deliberately no DVFS table and no staged diagnostic transaction.
+    mainlineGpuFixedOpp = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      gpuFixedOppOverlay = true;
+      unattendedRecovery = true;
     };
 
     # Queued Stage-C recovery image: test the reviewed native display and
@@ -780,6 +1102,10 @@
     # recovery profile.  It adds a static ALSA-UAPI helper to the initramfs but
     # never invokes it: an operator must explicitly run
     # /bin/gemini-audio-headphone after confirming the target card.
+    # Manual-only staged ALSA boundary diagnostic over the existing fully
+    # observable recovery profile. It adds a static helper to the initramfs
+    # but never invokes it: default execution only observes the named card;
+    # an operator must explicitly select and activate each later stage.
     mainlineUnattendedRecoveryDeviceActivationAudioHeadphone = import ./nix/mainline.nix {
       inherit
         buildPkgs
@@ -826,6 +1152,26 @@
         ./nixos/mainline-configuration.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+          _module.args.geminiGnssDevice = null;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
+    # Experimental systems never carry the baseline self-accept capability.
+    # gpsd starts only after the retained GNSS class device exists and remains
+    # localhost/read-only until the chipset command protocol is evidenced.
+    mainlineNixosGnssSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiGnssDevice = "/dev/gnss0";
+          _module.args.geminiBluetooth = true;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -860,21 +1206,39 @@
 
     # Linux SquashFS names the zlib codec "gzip".  Keep this distinct from
     # the vendor-kernel XZ payload and install it under a new p29 filename.
-    mainlineNixosSquashfs = buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
-      nativeBuildInputs = [buildPkgs.squashfsTools];
-    } ''
-      mkdir -p store-contents
-      for path in $(cat ${buildPkgs.closureInfo {
-        rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
-      }}/store-paths); do
-        cp -a "$path" store-contents/
-      done
-      basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
-        > store-contents/.gemini-system
-      mksquashfs store-contents "$out" \
-        -comp gzip -b 131072 -noappend -all-root -no-progress
-      unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
-    '';
+    mainlineNixosSquashfs =
+      buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
+          > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
+
+    mainlineNixosGnssSquashfs =
+      buildPkgs.runCommand "mainline-nixos-gnss-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosGnssSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        basename ${mainlineNixosGnssSystemCross.config.system.build.toplevel} \
+          > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -905,6 +1269,26 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosGnss = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineConsysG2gGnssFull.kernel;
+      serviceabilityDtb = mainlineConsysG2gGnssFull.serviceabilityDtb;
+      squashfs = mainlineNixosGnssSquashfs;
+      nixosToplevel = mainlineNixosGnssSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      consysFirmware = true;
+      gnssService = true;
+      bluetoothService = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      # No leaseSelfAcceptToken: this experiment remains externally accepted.
     };
 
     #############################################
@@ -1272,9 +1656,60 @@
       mainlineA72Cpu8TraceDiagnosticBundle = mainlineA72Cpu8TraceDiagnostic.bundle;
       mainlineA72Cpu8InteractiveKernel = mainlineA72Cpu8TraceDiagnostic.kernel;
       mainlineA72Cpu8InteractiveBundle = mainlineA72Cpu8TraceDiagnostic.bundle;
+      mainlineNixosGnssKernel = mainlineConsysG2gGnssFull.kernel;
+      mainlineNixosGnssDtb = mainlineConsysG2gGnssFull.serviceabilityDtb;
+      mainlineNixosGnssSquashfs = mainlineNixosGnssSquashfs;
+      mainlineNixosGnssInitramfs = mainlineNixosGnss.initramfs;
+      mainlineNixosGnssBundle = mainlineNixosGnss.bundle;
+      mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
+      mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
+      mainlineConsysG2bNoFirmwareKernel = mainlineConsysG2bNoFirmware.kernel;
+      mainlineConsysG2bNoFirmwareDtb = mainlineConsysG2bNoFirmware.serviceabilityDtb;
+      mainlineConsysG2bNoFirmwareInitramfs = mainlineConsysG2bNoFirmware.probeInitramfs;
+      mainlineConsysG2bNoFirmwareBundle = mainlineConsysG2bNoFirmware.bundle;
+      mainlineConsysFirmwarePreflightKernel = mainlineConsysFirmwarePreflight.kernel;
+      mainlineConsysFirmwarePreflightDtb = mainlineConsysFirmwarePreflight.serviceabilityDtb;
+      mainlineConsysFirmwarePreflightInitramfs = mainlineConsysFirmwarePreflight.probeInitramfs;
+      mainlineConsysFirmwarePreflightBundle = mainlineConsysFirmwarePreflight.bundle;
+      mainlineConsysG2cPatchOnlyKernel = mainlineConsysG2cPatchOnly.kernel;
+      mainlineConsysG2cPatchOnlyDtb = mainlineConsysG2cPatchOnly.serviceabilityDtb;
+      mainlineConsysG2cPatchOnlyInitramfs = mainlineConsysG2cPatchOnly.probeInitramfs;
+      mainlineConsysG2cPatchOnlyBundle = mainlineConsysG2cPatchOnly.bundle;
+      mainlineConsysG2dPostpatchKernel = mainlineConsysG2dPostpatch.kernel;
+      mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
+      mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
+      mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
+      mainlineConsysG2gGnssKernel = mainlineConsysG2gGnss.kernel;
+      mainlineConsysG2gGnssDtb = mainlineConsysG2gGnss.serviceabilityDtb;
+      mainlineConsysG2gGnssInitramfs = mainlineConsysG2gGnss.probeInitramfs;
+      mainlineConsysG2gGnssBundle = mainlineConsysG2gGnss.bundle;
+      mainlineWifiW1ReadyKernel = mainlineWifiW1Ready.kernel;
+      mainlineWifiW1ReadyDtb = mainlineWifiW1Ready.serviceabilityDtb;
+      mainlineWifiW1ReadyInitramfs = mainlineWifiW1Ready.probeInitramfs;
+      mainlineWifiW1ReadyBundle = mainlineWifiW1Ready.bundle;
+      mainlineWifiW1ForensicKernel = mainlineWifiW1Forensic.kernel;
+      mainlineWifiW1ForensicDtb = mainlineWifiW1Forensic.serviceabilityDtb;
+      mainlineWifiW1ForensicInitramfs = mainlineWifiW1Forensic.probeInitramfs;
+      mainlineWifiW1ForensicBundle = mainlineWifiW1Forensic.bundle;
+      mainlineWifiW2CapabilityKernel = mainlineWifiW2Capability.kernel;
+      mainlineWifiW2CapabilityDtb = mainlineWifiW2Capability.serviceabilityDtb;
+      mainlineWifiW2CapabilityInitramfs = mainlineWifiW2Capability.probeInitramfs;
+      mainlineWifiW2CapabilityBundle = mainlineWifiW2Capability.bundle;
+      mainlineWifiW4ConnectKernel = mainlineWifiW4Connect.kernel;
+      mainlineWifiW4ConnectDtb = mainlineWifiW4Connect.serviceabilityDtb;
+      mainlineWifiW4ConnectInitramfs = mainlineWifiW4Connect.probeInitramfs;
+      mainlineWifiW4ConnectBundle = mainlineWifiW4Connect.bundle;
+      mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
+      mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
+      mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;
+      mainlineGpuStagedBundle = mainlineGpuStaged.bundle;
+      mainlineGpuFixedOppKernel = mainlineGpuFixedOpp.kernel;
+      mainlineGpuFixedOppDtb = mainlineGpuFixedOpp.serviceabilityDtb;
+      mainlineGpuFixedOppInitramfs = mainlineGpuFixedOpp.probeInitramfs;
+      mainlineGpuFixedOppBundle = mainlineGpuFixedOpp.bundle;
       mainlinePlatformSmokeKernel = mainlinePlatformSmoke.kernel;
       mainlinePlatformSmokeDtb = mainlinePlatformSmoke.serviceabilityDtb;
       mainlinePlatformSmokeBundle = mainlinePlatformSmoke.bundle;
