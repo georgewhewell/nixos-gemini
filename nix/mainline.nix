@@ -1015,7 +1015,7 @@
       # Device Tree output is compiler-independent and must match the reviewed
       # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        ${baseDtbSha256}
+        ${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
