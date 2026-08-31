@@ -147,7 +147,7 @@
     else "none";
   wifiW4Label =
     if wifiW4Connect
-    then "retained-hif-cfg80211-open-auth-assoc-netdev-v1"
+    then "retained-controller-w3-irq-cfg80211-open-auth-assoc-netdev-v2"
     else "none";
   consysFirmwareAvailable =
     consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay ||
@@ -244,6 +244,7 @@
     + lib.optionalString wifiW0Observe " mt6797_wifi_ahb_wcir.enable_experimental_wifi_wcir_observe=1"
     + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
     + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
+    + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -1134,6 +1135,9 @@
             # resolves this same live portal by "mediatek,wifi".
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 compatible \
               mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi
+            # G2d performs resource/EMI preflight only; W4 owns start, IRQ, and stop.
+            fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              mediatek,experimental-wifi-w4-retained-owner
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
@@ -1144,6 +1148,13 @@
               wifi-paldo-supply 0x54
             fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
               mediatek,experimental-wifi-w4-platform
+            # W1/W2 execute with W4 as owner, and W3 gates the IRQ lifetime.
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w1-firmware-preflight
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w2-nic-capability
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w3-session
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
               'mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi'
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
@@ -1154,6 +1165,14 @@
               '0 11b 8'
             fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
               grep -Fqx 'mediatek,experimental-wifi-w4-platform'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w1-firmware-preflight'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w2-nic-capability'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w3-session'
+            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner | \
+              grep -Fqx 'mediatek,experimental-wifi-w4-retained-owner'
           ''}
           # PIO has no child endpoint and neither owner declares a function
           # client. The kernel config also excludes BTIF transport/HCI.
@@ -1166,7 +1185,7 @@
           ${lib.optionalString wifiW0Observe "echo 'wifi-w0=cmd53-wcir-only' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW1FirmwareReadyProof "echo 'wifi-w1=full-firmware-start-ready-irq-netdev-fenced' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW2NicCapability "echo 'wifi-w2=nic-capability-fresh-rx1-irq-no-netdev' >> \"$out/VALIDATION\""}
-          ${lib.optionalString wifiW4Connect "echo 'wifi-w4=retained-hif-cfg80211-open-auth-assoc-netdev' >> \"$out/VALIDATION\""}
+          ${lib.optionalString wifiW4Connect "echo 'wifi-w4=retained-controller-w3-irq-cfg80211-open-auth-assoc-netdev' >> \"$out/VALIDATION\""}
         ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
