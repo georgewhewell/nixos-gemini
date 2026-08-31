@@ -3,7 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 KERNEL_SOURCE=${LINUX_GEMINI_NEXT_SOURCE:-/home/grw/src/linux-gemini-platform}
-EXPECTED_REV=1e31c2cd45c141300d18ec0ec37d29efcbb9a2c6
+EXPECTED_REV=da6e93b0bce1b62e0e38425938efe3ceba7cfc09
 
 test "$(git -C "$KERNEL_SOURCE" rev-parse HEAD)" = "$EXPECTED_REV"
 grep -Fqx '  consysG2dPostpatchOverlay ? false,' "$ROOT/nix/mainline.nix"
