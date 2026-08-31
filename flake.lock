@@ -122,6 +122,19 @@
         "type": "path"
       }
     },
+    "linux-gemini-w4-connect-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788173012,
+        "narHash": "sha256-Rn+Dk9q+QSrTYUlM/KGYjCf+uYAs0kTxVyudmM007jQ=",
+        "path": "/mnt/Home/src/linux-gemini-w2-polling-trex",
+        "type": "path"
+      },
+      "original": {
+        "path": "/mnt/Home/src/linux-gemini-w2-polling-trex",
+        "type": "path"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1787736819,
@@ -164,6 +177,7 @@
         "linux-gemini-w1-candidate": "linux-gemini-w1-candidate",
         "linux-gemini-w1-forensic-candidate": "linux-gemini-w1-forensic-candidate",
         "linux-gemini-w2-capability-candidate": "linux-gemini-w2-capability-candidate",
+        "linux-gemini-w4-connect-candidate": "linux-gemini-w4-connect-candidate",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
         "vendor-kernel": "vendor-kernel"

@@ -20,6 +20,7 @@
   wifiW1FirmwareReadyProof ? false,
   wifiW1Forensic ? false,
   wifiW2NicCapability ? false,
+  wifiW4Connect ? false,
   consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
@@ -71,9 +72,10 @@
     ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
     ++ lib.optionals consysG2gGnssEndpoint [./mainline-consys-g2g-gnss.fragment]
     ++ lib.optionals consysG2hBtEndpoint [./mainline-consys-g2h-bt.fragment]
-    ++ lib.optionals (wifiW0Observe || wifiW1FirmwareReadyProof || wifiW2NicCapability) [./mainline-wifi-w0.fragment]
-    ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability) [./mainline-wifi-w1-ready.fragment]
-    ++ lib.optionals wifiW2NicCapability [./mainline-wifi-w2-capability.fragment]
+    ++ lib.optionals (wifiW0Observe || wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w0.fragment]
+    ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w1-ready.fragment]
+    ++ lib.optionals (wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w2-capability.fragment]
+    ++ lib.optionals wifiW4Connect [./mainline-wifi-w4-connect.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -143,6 +145,10 @@
     if wifiW2NicCapability
     then "bounded-nic-capability-fresh-rx1-irq-no-netdev-v1"
     else "none";
+  wifiW4Label =
+    if wifiW4Connect
+    then "retained-hif-cfg80211-open-auth-assoc-netdev-v1"
+    else "none";
   consysFirmwareAvailable =
     consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay ||
     wifiW1FirmwareReadyProof;
@@ -208,6 +214,8 @@
     then "radio-gnss-bt"
     else if consysG2gGnssEndpoint
     then "radio-gnss"
+    else if wifiW4Connect
+    then "wifi-w4"
     else if wifiW2NicCapability
     then "wifi-w2"
     else if wifiW1FirmwareReadyProof
@@ -251,9 +259,10 @@
     + lib.optionalString consysG2hBtEndpoint "-consys-g2h-bt"
     + lib.optionalString wifiW0Observe "-wifi-w0"
     + lib.optionalString wifiW1FirmwareReadyProof (
-      if wifiW2NicCapability then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+      if wifiW2NicCapability || wifiW4Connect then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
     )
     + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
+    + lib.optionalString wifiW4Connect "-wifi-w4-connect"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -287,10 +296,11 @@
     assert !wifiW0Observe || consysG2dPostpatchOverlay;
     assert !consysG2gGnssEndpoint || consysG2dPostpatchOverlay;
     assert !consysG2hBtEndpoint || consysG2dPostpatchOverlay;
-    assert !consysG2gGnssEndpoint || (!wifiW0Observe && !wifiW1FirmwareReadyProof && !wifiW2NicCapability);
+    assert !consysG2gGnssEndpoint || (!wifiW0Observe && !wifiW1FirmwareReadyProof && !wifiW2NicCapability && !wifiW4Connect);
     assert !wifiW1FirmwareReadyProof || (consysG2dPostpatchOverlay && wifiW0Observe);
     assert !wifiW1Forensic || wifiW1FirmwareReadyProof;
     assert !wifiW2NicCapability || (wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);
+    assert !wifiW4Connect || (wifiW2NicCapability && wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -298,6 +308,7 @@
     assert !consysG2dPostpatchOverlay || unattendedRecovery;
     assert !wifiW1FirmwareReadyProof || unattendedRecovery;
     assert !wifiW2NicCapability || unattendedRecovery;
+    assert !wifiW4Connect || unattendedRecovery;
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -400,9 +411,10 @@
       + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
       + lib.optionalString wifiW0Observe "-wifi-w0"
       + lib.optionalString wifiW1FirmwareReadyProof (
-        if wifiW2NicCapability then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+        if wifiW2NicCapability || wifiW4Connect then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
       )
       + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
+      + lib.optionalString wifiW4Connect "-wifi-w4-connect"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
@@ -570,6 +582,11 @@
         grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W2_NIC_CAPABILITY=y' .config
         ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_W1_FIRMWARE_KUNIT_TEST=' .config
         ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
+      ''}
+      ${lib.optionalString wifiW4Connect ''
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W3_SESSION=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_W4_PLATFORM=y' .config
+        grep -Fqx 'CONFIG_CFG80211=y' .config
       ''}
       ${lib.optionalString gpuStagedOverlay ''
         grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
@@ -907,7 +924,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
@@ -1106,6 +1123,33 @@
             fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
               | grep -Fqx 'mediatek,experimental-wifi-w2-nic-capability'
           ''}
+          ${lib.optionalString wifiW4Connect ''
+            # W0's overlay supplies the vendor HIF node/IRQ.  W4 is the only
+            # profile that turns that exact portal into the retained owner.
+            # Reuse the G2d controller and the explicitly named PALDO rails.
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 compatible \
+              mediatek,mt6797-wifi-ahb-w4-platform
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
+            fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,controller 0x90
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              bt-paldo-supply 0x53
+            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              wifi-paldo-supply 0x54
+            fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
+              mediatek,experimental-wifi-w4-platform
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
+              mediatek,mt6797-wifi-ahb-w4-platform
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
+            test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names)" = wifi
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 reg)" = \
+              '0 180f0000 0 1100'
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 interrupts)" = \
+              '0 11b 8'
+            fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
+              grep -Fqx 'mediatek,experimental-wifi-w4-platform'
+          ''}
           # PIO has no child endpoint and neither owner declares a function
           # client. The kernel config also excludes BTIF transport/HCI.
           test -z "$(fdtget -l "$out/gemini-consys.dtb" /serial@1100c000)"
@@ -1117,6 +1161,7 @@
           ${lib.optionalString wifiW0Observe "echo 'wifi-w0=cmd53-wcir-only' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW1FirmwareReadyProof "echo 'wifi-w1=full-firmware-start-ready-irq-netdev-fenced' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW2NicCapability "echo 'wifi-w2=nic-capability-fresh-rx1-irq-no-netdev' >> \"$out/VALIDATION\""}
+          ${lib.optionalString wifiW4Connect "echo 'wifi-w4=retained-hif-cfg80211-open-auth-assoc-netdev' >> \"$out/VALIDATION\""}
         ''
         else ''
           cp "$out/gemini-platform.dtb" "$out/gemini-consys.dtb"
@@ -2076,6 +2121,7 @@
       echo "nix-wifi-w0=${wifiW0Label}"
       echo "nix-wifi-w1=${wifiW1Label}"
       echo "nix-wifi-w2=${wifiW2Label}"
+      echo "nix-wifi-w4=${wifiW4Label}"
       echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
       echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"

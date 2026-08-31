@@ -54,6 +54,12 @@
       url = "path:/mnt/Home/src/linux-gemini-w2-capability-trex";
       flake = false;
     };
+    linux-gemini-w4-connect-candidate = {
+      # W4 carries the retained HIF cfg80211 platform owner and the open
+      # authentication/association event state machine at reviewed 29625aeac.
+      url = "path:/mnt/Home/src/linux-gemini-w2-polling-trex";
+      flake = false;
+    };
     linux-gemini-gnss-candidate = {
       # Committed G2g endpoint source: retained STP, exact active GPS WMT and
       # Gemini GPIO69 LNA chronology. This never moves an accepted source pin.
@@ -79,6 +85,7 @@
     linux-gemini-w1-candidate,
     linux-gemini-w1-forensic-candidate,
     linux-gemini-w2-capability-candidate,
+    linux-gemini-w4-connect-candidate,
     linux-gemini-gnss-candidate,
     ixoo-candidate,
   }: let
@@ -645,6 +652,31 @@
       wifiW1FirmwareReadyProof = true;
       wifiW1Forensic = true;
       wifiW2NicCapability = true;
+      unattendedRecovery = true;
+    };
+
+    # W4 is the first boot-active WLAN candidate: it retains the proven W1/W2
+    # firmware/session sequence, binds the exact HIF IRQ portal, and exposes
+    # cfg80211 open-network scan/connect.  USB host, SSH and watchdog stay on.
+    mainlineWifiW4Connect = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w4-connect-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
       unattendedRecovery = true;
     };
 
@@ -1466,6 +1498,10 @@
       mainlineWifiW2CapabilityDtb = mainlineWifiW2Capability.serviceabilityDtb;
       mainlineWifiW2CapabilityInitramfs = mainlineWifiW2Capability.probeInitramfs;
       mainlineWifiW2CapabilityBundle = mainlineWifiW2Capability.bundle;
+      mainlineWifiW4ConnectKernel = mainlineWifiW4Connect.kernel;
+      mainlineWifiW4ConnectDtb = mainlineWifiW4Connect.serviceabilityDtb;
+      mainlineWifiW4ConnectInitramfs = mainlineWifiW4Connect.probeInitramfs;
+      mainlineWifiW4ConnectBundle = mainlineWifiW4Connect.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

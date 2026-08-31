@@ -1,0 +1,9 @@
+# W4 is the retained GEN3 HIF owner: W3 session ordering, IRQ/RX, cfg80211
+# station netdev, scan and open-system authentication/association.
+# CFG80211 is gated by RFKILL's tristate dependency; promote both because W4
+# is a built-in platform owner and cannot bind against a modular cfg80211.
+CONFIG_WIRELESS=y
+CONFIG_RFKILL=y
+CONFIG_CFG80211=y
+CONFIG_MTK_MT6797_WIFI_AHB_W3_SESSION=y
+CONFIG_MTK_MT6797_WIFI_AHB_W4_PLATFORM=y
