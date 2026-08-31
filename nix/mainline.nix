@@ -1383,9 +1383,9 @@
         cat > root/bin/a72-cpu8-control <<'A72_CPU8_CONTROL'
         #!/bin/busybox sh
         # The idle A72 profile never writes sysfs by itself.  This helper keeps
-        # every readback in one place and makes the existing single admission
-        # ABI an explicit operator action.  It does not pretend that the
-        # currently read-only DA921x owner offers independent P27/P28 writes.
+        # every readback in one place and makes the existing ledgered admission
+        # ABI an explicit operator action.  P27, the vendor DA9214 BUCKB
+        # transcript, P28, SRAM and CPU8 remain one atomic kernel transition.
         export PATH=/bin
         status_path() {
           for path in /sys/devices/platform/*/gemini_admission/status; do
@@ -1399,7 +1399,7 @@
           echo "cpu_online=$(cat /sys/devices/system/cpu/online 2>/dev/null || echo unknown)"
           echo "watchdog=$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null || echo unknown)"
           cat "$status"
-          echo "provider_boundary=DA9213 owner is currently read-only; operation_ret=-95 is expected until a vendor-backed writable transcript exists"
+          echo "provider=vendor-PSCI DA9214 BUCKB transcript ledger-gated; no generic raw-write interface"
           echo "ledger_and_trace=dmesg-following"
           dmesg 2>/dev/null | grep -E 'GEMINI_A72|GEMINI_A72_ADMISSION|a72-transition|CPU8:' | tail -n 80 || true
         }
