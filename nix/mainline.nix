@@ -1127,8 +1127,11 @@
             # W0's overlay supplies the vendor HIF node/IRQ.  W4 is the only
             # profile that turns that exact portal into the retained owner.
             # Reuse the G2d controller and the explicitly named PALDO rails.
+            # W4 binds on the first compatible; retain the vendor generic
+            # compatible as a fallback because the G2d W0/W1 transaction
+            # resolves this same live portal by "mediatek,wifi".
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 compatible \
-              mediatek,mt6797-wifi-ahb-w4-platform
+              mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
@@ -1140,7 +1143,7 @@
             fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
               mediatek,experimental-wifi-w4-platform
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
-              mediatek,mt6797-wifi-ahb-w4-platform
+              'mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi'
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names)" = wifi
             test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 reg)" = \
@@ -1499,6 +1502,12 @@
         busybox = crossPkgs.pkgsStatic.busybox;
         rtlFirmware = buildPkgs.linux-firmware;
       }
+      // lib.optionalAttrs wifiW4Connect {
+        iw = crossPkgs.pkgsStatic.iw;
+        wpaSupplicant = crossPkgs.pkgsStatic.wpa_supplicant;
+        iperf3 = crossPkgs.pkgsStatic.iperf3;
+        wirelessRegdb = buildPkgs.wireless-regdb;
+      }
       // lib.optionalAttrs audioHeadphoneTest {
         inherit audioHeadphoneExercise;
       }
@@ -1545,6 +1554,24 @@
           a69383d74d829430487c39eef6b5e281b25f901595c903a632a10aa8631426dd
       ''}
       cp "$busybox/bin/busybox" root/bin/busybox
+      ${lib.optionalString wifiW4Connect ''
+        # Real static WLAN userspace for the boot-active W4 candidate.  The
+        # signed regdb is firmware data, while iw/wpa_supplicant/iperf3 let the
+        # next hardware pass scan, associate and measure without a new image.
+        mkdir -p root/lib/firmware
+        cp "$wirelessRegdb/lib/firmware/regulatory.db" root/lib/firmware/regulatory.db
+        cp "$wirelessRegdb/lib/firmware/regulatory.db.p7s" root/lib/firmware/regulatory.db.p7s
+        cp "$iw/bin/iw" root/bin/iw
+        cp "$wpaSupplicant/bin/wpa_supplicant" root/bin/wpa_supplicant
+        cp "$iperf3/bin/iperf3" root/bin/iperf3
+        test -s root/lib/firmware/regulatory.db
+        test -s root/lib/firmware/regulatory.db.p7s
+        for tool in iw wpa_supplicant iperf3; do
+          readelf -h "root/bin/$tool" | grep -Fq 'Machine:                           AArch64'
+          ! readelf -l "root/bin/$tool" | grep -Fq 'Requesting program interpreter'
+          ! readelf -d "root/bin/$tool" | grep -Fq '(NEEDED)'
+        done
+      ''}
       ${lib.optionalString audioHeadphoneTest ''
         cp "$audioHeadphoneExercise/bin/gemini-audio-headphone" \
           root/bin/gemini-audio-headphone
@@ -2122,6 +2149,7 @@
       echo "nix-wifi-w1=${wifiW1Label}"
       echo "nix-wifi-w2=${wifiW2Label}"
       echo "nix-wifi-w4=${wifiW4Label}"
+      echo "wifi-userspace=${if wifiW4Connect then "iw+wpa_supplicant+iperf3+regulatory.db-static" else "none"}"
       echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
       echo "nix-gpu-fixed-opp=${gpuFixedOppLabel}"
