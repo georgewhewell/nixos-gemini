@@ -2084,21 +2084,32 @@
           echo "ledger_and_trace=dmesg-following"
           dmesg 2>/dev/null | grep -E 'GEMINI_A72|GEMINI_A72_ADMISSION|a72-transition|CPU8:' | tail -n 80 || true
         }
+        field_is() {
+          case " $1 " in
+            *" $2 "*) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
         preflight() {
           dump || return
           status=$(status_path) || return 1
           status_text=$(cat "$status")
           case "$status_text" in
-            *'ledger_state=retained-terminal'*)
+            *ledger_state=retained-terminal*)
               echo "preflight=blocked reason=retained-terminal-ledger action=ack-ledger"; return 1 ;;
-            *'ledger_state=retained-incomplete'*)
+            *ledger_state=retained-incomplete*)
               echo "preflight=blocked reason=retained-incomplete-ledger"; return 1 ;;
-            *'ledger_state=unreadable'*)
+            *ledger_state=unreadable*)
               echo "preflight=blocked reason=retained-ledger-unreadable"; return 1 ;;
-            *'state=armed'*'trigger_consumed=0'*'binder_snapshot_ret=0'*'ledger_state=empty'*)
-              echo "preflight=ready next=admission-chain" ;;
-            *) echo "preflight=blocked"; return 1 ;;
           esac
+          if field_is "$status_text" state=armed &&
+             field_is "$status_text" trigger_consumed=0 &&
+             field_is "$status_text" binder_snapshot_ret=0 &&
+             field_is "$status_text" ledger_state=empty; then
+            echo "preflight=ready next=admission-chain"
+          else
+            echo "preflight=blocked"; return 1
+          fi
         }
         ack_ledger() {
           dump || return
