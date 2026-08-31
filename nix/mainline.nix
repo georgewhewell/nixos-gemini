@@ -651,6 +651,11 @@
           "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
         test -s "$out/mt6797-gemini-pda-fuel-gauge-active.dtbo"
       ''}
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-a72-admission.dtbo \
+          "$out/mt6797-gemini-pda-a72-admission.dtbo"
+        test -s "$out/mt6797-gemini-pda-a72-admission.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
