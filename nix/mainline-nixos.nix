@@ -646,7 +646,13 @@ let
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
       echo "microsd-activation=inactive (not composed)"
       echo "audio-playback-exercise=inactive (no helper in image)"
-      echo "consys-radios=inactive (DT disabled)"
+      echo "consys-radios=${
+        if consysFirmware
+        then "retained full-STP controller and W4 enabled; firmware in Stage1"
+        else "inactive (DT disabled)"
+      }"
+      echo "gnss-service=${if gnssService then "gpsd on retained /dev/gnss0 endpoint" else "inactive"}"
+      echo "bluetooth-service=${if bluetoothService then "BlueZ classic+LE on standard hci0 endpoint" else "inactive"}"
       echo "gpu=inactive (DT disabled)"
       echo "unattended-recovery=${
         if unattendedRecovery
