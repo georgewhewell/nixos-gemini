@@ -371,6 +371,8 @@
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_STP_SESSION=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_STP_SESSION_KUNIT_TEST=' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_BT_H4_COLLECTOR=y' .config
+      ! grep -q '^CONFIG_MTK_MT6797_BT_H4_COLLECTOR_KUNIT_TEST=' .config
       ${
         if consysIdentityOverlay
         then ''
