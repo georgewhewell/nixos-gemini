@@ -39,6 +39,7 @@
   md1LkHandoffProbe ? false,
   md1BootStatusObserve ? false,
   md1RemapObserve ? false,
+  md1BootCandidate ? false,
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
   a72Cpu8Interactive ? false,
@@ -90,6 +91,7 @@
     ++ lib.optionals wifiW4Connect [./mainline-wifi-w4-connect.fragment]
     ++ lib.optionals md1LkHandoffProbe [./mainline-md1-lk-handoff.fragment]
     ++ lib.optionals md1BootStatusObserve [./mainline-md1-boot-status-observe.fragment]
+    ++ lib.optionals md1BootCandidate [./mainline-md1-boot-candidate.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -253,6 +255,10 @@
     if md1RemapObserve
     then "five-infracfg-ao-reads-after-validated-lk-plan-no-write-no-ownership"
     else "none";
+  md1BootCandidateLabel =
+    if md1BootCandidate
+    then "single-vendor-boot-vector-write-after-LK-remap-attestation-and-active-CCF-power-sequence-then-100ms-bounded-observation-no-transport"
+    else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
@@ -260,7 +266,9 @@
     then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
     else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   usbBuildTag =
-    if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
+    if md1BootCandidate
+    then "md1-boot-candidate"
+    else if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
       consysG2gGnssEndpoint && consysG2hBtEndpoint
     then "a72-w4-gnss-bt-ccif"
     else if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
@@ -303,6 +311,7 @@
     + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
     + lib.optionalString md1LkHandoffProbe " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1"
     + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
+    + lib.optionalString md1BootCandidate " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner.enable_experimental_md1_boot_vector_release=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -322,6 +331,7 @@
     )
     + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
     + lib.optionalString wifiW4Connect "-wifi-w4-connect"
+    + lib.optionalString md1BootCandidate "-md1-boot-candidate"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -457,7 +467,8 @@
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || kernelRevision == p22BaselinePlatformRevision
-      || a72Cpu8SramDiagnostic;
+      || a72Cpu8SramDiagnostic
+      || md1BootCandidate;
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || !deviceActivationOverlay;
@@ -496,6 +507,8 @@
         && !deviceActivationOverlay
         && !consysIdentityOverlay
       );
+    assert !md1BootCandidate || unattendedRecovery;
+    assert !md1BootCandidate || (!md1LkHandoffProbe && !md1BootStatusObserve && !md1RemapObserve);
     assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
     assert !a72Cpu8Interactive || (a72Cpu8SramDiagnostic && a72Cpu8TraceOnly && unattendedRecovery && sshAccess);
     assert !cacheTopologyObserver || a72Cpu8SramDiagnostic;
@@ -520,6 +533,7 @@
       )
       + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
       + lib.optionalString wifiW4Connect "-wifi-w4-connect"
+      + lib.optionalString md1BootCandidate "-md1-boot-candidate"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
@@ -586,7 +600,7 @@
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
         -m -O . .config $fragmentInputs
-      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
+      ${lib.optionalString (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay || md1BootCandidate || gpuStagedOverlay || gpuFixedOppOverlay || unattendedRecovery) ''
         bash scripts/config --set-str CMDLINE \
           "${kernelCmdline}"
       ''}
@@ -1040,6 +1054,11 @@
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-status-observe.dtbo \
           "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
+      ''}
+      ${lib.optionalString md1BootCandidate ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-candidate.dtbo \
+          "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
+        test -s "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
       ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
@@ -1688,6 +1707,27 @@
         ''
         else ""
       }
+      ${lib.optionalString md1BootCandidate ''
+        # The candidate overlay is intentionally the sole MD1 DT transition in
+        # this image. Its source file is p22-only and its six built-in module
+        # parameters remain a separate runtime gate.
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-boot-candidate.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-boot-candidate.dtbo
+        for node in /modem-lk-handoff-probe /modem-boot-status@10201300 \
+                    /modem-remap-observe /modem-emi-mpu /modem-cold-owner; do
+          test "$(fdtget "$out/gemini-md1-boot-candidate.dtb" "$node" status)" = okay
+        done
+        test "$(fdtget "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner compatible)" = \
+          mediatek,mt6797-md1-cold-owner
+        test "$(fdtget -t x "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner reg)" = \
+          '0 10001000 0 1000 0 10209000 0 1000 0 1020a000 0 1000 0 1000c000 0 1000 0 20150000 0 118 0 20130000 0 1004 0 20060000 0 d0 0 260f0000 0 200 0 20140000 0 18 0 20120000 0 d0 0 200f0100 0 300 0 26010000 0 40 0 20000024 0 4 0 10201300 0 8'
+        fdtget -p "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner \
+          | grep -Fqx 'mediatek,stage-md1-boot-vector-release'
+        cp "$out/gemini-md1-boot-candidate.dtb" "$out/gemini.dtb"
+        echo 'md1-boot-candidate=single-enabled-p22-overlay plus six-cmdline-gates one-vector-write then-100ms-bounded-observation no-irq-no-cldma-no-ccci' >> "$out/VALIDATION"
+      ''}
       ${lib.optionalString md1LkHandoffProbe ''
         # The source overlay is deliberately disabled.  This profile makes one
         # explicit, reviewable transition to okay; its separate built-in
@@ -2426,6 +2466,18 @@
         note "md1_remap_observe=not-observed evidence=/run/md1-remap-observe.dmesg action=inspect-cmdline-dt-and-lk-plan"
       fi
       ''}
+      ${lib.optionalString md1BootCandidate ''
+      # The five DT drivers have already populated once. This only collects
+      # their terminal evidence; it does not touch or retry MD1.
+      dmesg 2>/dev/null | grep -E 'verified LK hand-off:|MD1 remap observed|MD1 secure EMI-MPU provider armed|MD1 WDT keys attempted|MD1 boot-vector|MD1 boot candidate' > /run/md1-boot-candidate.dmesg || true
+      if grep -Fq 'MD1 boot candidate observed post-vector activity' /run/md1-boot-candidate.dmesg; then
+        note "md1_boot_candidate=activity-observed evidence=/run/md1-boot-candidate.dmesg next=minimal-cldma-ccci-hs"
+      elif grep -Fq 'MD1 boot-vector readback=0x1 but no boot-status or CCIF movement' /run/md1-boot-candidate.dmesg; then
+        note "md1_boot_candidate=no-movement-bounded-100ms evidence=/run/md1-boot-candidate.dmesg action=watchdog-recovery-no-retry"
+      else
+        note "md1_boot_candidate=no-terminal-oracle evidence=/run/md1-boot-candidate.dmesg action=inspect-gates-and-dmesg"
+      fi
+      ''}
       /bin/usb-net &
       ${lib.optionalString usbHostOverlay ''
       /bin/usb-host-net &
@@ -2922,6 +2974,7 @@
       echo "nix-md1-lk-handoff=${md1LkHandoffLabel}"
       echo "nix-md1-boot-status=${md1BootStatusLabel}"
       echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
+      echo "nix-md1-boot-candidate=${md1BootCandidateLabel}"
       echo "md1-lk-handoff-contract=${
         if md1LkHandoffProbe
         then "DT-status=okay plus built-in parameter; LK flag is accepted only as image-load evidence and execution remains unknown; metadata table and diagnostic RMPU/remap plan read-only; fence/secure-MPU-provider/backend source is explicitly unselected and has no hardware run path; public LK remap-lock/refusal evidence is source-only; mandatory unmap before partition-I/O/MPU/remap writes/power/reset/CCIF/CLDMA/DMA"
@@ -2937,6 +2990,11 @@
         then "third DT-status=okay plus separate built-in parameter; exactly five infracfg-AO reads after validated LK plan: bank0 0x300/0x304, bank4 0x310/0x314, lock 0xf80; source-shaped classifier result is evidence only, never remap/MPU/WDT/release/CCIF/CLDMA/DMA authority"
         else "none"
       }"
+      echo "md1-boot-candidate-contract=${
+        if md1BootCandidate
+        then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us AP/CCIF observation; terminal after activity or timeout, no retry/IRQ/CLDMA/shared-memory/CCCI"
+        else "none"
+      }"
       echo "md1-lk-handoff-runtime-evidence=${
         if md1LkHandoffProbe
         then "/run/md1-lk-handoff.dmesg and GEMINI_NIX_IXOO_PROBE md1_lk_handoff=*"
@@ -2950,6 +3008,11 @@
       echo "md1-remap-observe-runtime-evidence=${
         if md1RemapObserve
         then "/run/md1-remap-observe.dmesg and GEMINI_NIX_IXOO_PROBE md1_remap_observe=*"
+        else "none"
+      }"
+      echo "md1-boot-candidate-runtime-evidence=${
+        if md1BootCandidate
+        then "/run/md1-boot-candidate.dmesg and GEMINI_NIX_IXOO_PROBE md1_boot_candidate=*"
         else "none"
       }"
       echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"

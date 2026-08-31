@@ -82,6 +82,19 @@
         "type": "path"
       }
     },
+    "linux-gemini-md1-boot-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788211855,
+        "narHash": "sha256-VAdht08HQ84iXqOpL0qRgL8oYQcAnDKa6FTgwge0WuI=",
+        "path": "/home/grw/src/linux-gemini-cellular-p22-candidate-20260831",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/grw/src/linux-gemini-cellular-p22-candidate-20260831",
+        "type": "path"
+      }
+    },
     "linux-gemini-next": {
       "flake": false,
       "locked": {
@@ -192,6 +205,7 @@
         "linux-gemini-bt-candidate": "linux-gemini-bt-candidate",
         "linux-gemini-combined-candidate": "linux-gemini-combined-candidate",
         "linux-gemini-gnss-candidate": "linux-gemini-gnss-candidate",
+        "linux-gemini-md1-boot-candidate": "linux-gemini-md1-boot-candidate",
         "linux-gemini-next": "linux-gemini-next",
         "linux-gemini-w1-candidate": "linux-gemini-w1-candidate",
         "linux-gemini-w1-forensic-candidate": "linux-gemini-w1-forensic-candidate",

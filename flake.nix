@@ -79,6 +79,13 @@
       url = "path:/home/grw/src/linux-gemini-combined-cpu9-gnss-20260831";
       flake = false;
     };
+    linux-gemini-md1-boot-candidate = {
+      # Separate committed p22 candidate: current combined radio lineage plus
+      # the source-backed, bounded MD1 boot-vector experiment. Normal outputs
+      # retain their existing input and default-disabled MD1 source overlay.
+      url = "path:/home/grw/src/linux-gemini-cellular-p22-candidate-20260831";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -102,6 +109,7 @@
     linux-gemini-gnss-candidate,
     linux-gemini-bt-candidate,
     linux-gemini-combined-candidate,
+    linux-gemini-md1-boot-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -1117,6 +1125,43 @@
       deviceActivationOverlay = true;
     };
 
+    # Full serviceability p22 candidate. It keeps the currently combined W4,
+    # GNSS and hci0 envelope but does not request any A72 admission; CPU8/9
+    # remain capped. The one MD1 transaction is separately gated in its own
+    # source DTBO and by six built-in parameters.
+    mainlineMd1BootCandidate = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-md1-boot-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
+      md1BootCandidate = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+    };
+
     # Cycle 18 full-NixOS baseline candidate. Keep the accepted Stage-2/eMMC
     # lineage, both USB paths, BQ observer and watchdog self-accept intact.
     # The DSI gate is released by the corresponding Stage-1 constructor only
@@ -1855,6 +1900,10 @@
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
+      mainlineMd1BootCandidateKernel = mainlineMd1BootCandidate.kernel;
+      mainlineMd1BootCandidateDtb = mainlineMd1BootCandidate.serviceabilityDtb;
+      mainlineMd1BootCandidateBundle = mainlineMd1BootCandidate.bundle;
+      mainlineMd1BootCandidateP22 = mainlineMd1BootCandidate.probeBoot2Img;
       mainlineA72Cpu8SramDiagnosticKernel = mainlineA72Cpu8SramDiagnostic.kernel;
       mainlineA72Cpu8SramDiagnosticDtb = mainlineA72Cpu8SramDiagnostic.serviceabilityDtb;
       mainlineA72Cpu8SramDiagnosticInitramfs = mainlineA72Cpu8SramDiagnostic.probeInitramfs;
