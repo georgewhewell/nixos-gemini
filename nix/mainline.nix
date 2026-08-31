@@ -169,7 +169,9 @@
   # disabled a72_platform_state/DVFSP access-controller topology.  Pin the
   # resulting base DTB rather than accepting the retired topology's hash.
   baseDtbSha256 = "2ba8f57caad4d1723f658bd925fdbd79c155f7f2a08e6321c83a59f1936443e1";
-  serviceabilityBaseDtbSha256 = "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
+  # Same reviewed A72 topology after the existing, structurally validated
+  # serviceability transform (CONSYS/BTIF remain disabled).
+  serviceabilityBaseDtbSha256 = "88cee4bc481ddf31da72fc8bf2e1100d9b4ff23034902034848846bf0e3766e7";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert
