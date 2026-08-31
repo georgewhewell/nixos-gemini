@@ -25,6 +25,7 @@
   deviceActivationOverlay ? false,
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
+  a72Cpu8Interactive ? false,
 }: let
   lib = buildPkgs.lib;
 
@@ -136,7 +137,9 @@
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
   a72Cpu8SramDiagnosticLabel =
-    if a72Cpu8TraceOnly
+    if a72Cpu8Interactive
+    then "cpu8-interactive-idle-v1"
+    else if a72Cpu8TraceOnly
     then "cpu8-trace-header-read-only-v1"
     else if a72Cpu8SramDiagnostic
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
@@ -178,7 +181,8 @@
     + lib.optionalString fgadcActivationOverlay "-fgadc-active"
     + lib.optionalString deviceActivationOverlay "-device-activation"
     + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram"
-    + lib.optionalString a72Cpu8TraceOnly "-trace-only";
+    + lib.optionalString a72Cpu8TraceOnly "-trace-only"
+    + lib.optionalString a72Cpu8Interactive "-interactive";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
   # The reviewed CPU8 chain replaces the deleted a72_power node with the
@@ -300,6 +304,7 @@
         && !consysIdentityOverlay
       );
     assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
+    assert !a72Cpu8Interactive || (a72Cpu8SramDiagnostic && a72Cpu8TraceOnly && unattendedRecovery && sshAccess);
     true;
   # ixoo's Buildbox used GCC 12.2.0.  The 23.05 cross set gives us the same
   # compiler release while keeping the build inside Nix.
@@ -1374,6 +1379,64 @@
         A72_CPU8_SRAM_DIAGNOSTIC
         chmod 0755 root/bin/a72-cpu8-sram-diagnostic
       ''}
+      ${lib.optionalString a72Cpu8Interactive ''
+        cat > root/bin/a72-cpu8-control <<'A72_CPU8_CONTROL'
+        #!/bin/busybox sh
+        # The idle A72 profile never writes sysfs by itself.  This helper keeps
+        # every readback in one place and makes the existing single admission
+        # ABI an explicit operator action.  It does not pretend that the
+        # currently read-only DA921x owner offers independent P27/P28 writes.
+        export PATH=/bin
+        status_path() {
+          for path in /sys/devices/platform/*/gemini_admission/status; do
+            [ -r "$path" ] && { echo "$path"; return 0; }
+          done
+          return 1
+        }
+        dump() {
+          status=$(status_path) || { echo "admission_status=missing"; return 1; }
+          echo "a72-control=v1 action=read-only-dump"
+          echo "cpu_online=$(cat /sys/devices/system/cpu/online 2>/dev/null || echo unknown)"
+          echo "watchdog=$(cat /sys/class/watchdog/watchdog0/identity 2>/dev/null || echo unknown)"
+          cat "$status"
+          echo "provider_boundary=DA9213 owner is currently read-only; operation_ret=-95 is expected until a vendor-backed writable transcript exists"
+          echo "ledger_and_trace=dmesg-following"
+          dmesg 2>/dev/null | grep -E 'GEMINI_A72|GEMINI_A72_ADMISSION|a72-transition|CPU8:' | tail -n 80 || true
+        }
+        preflight() {
+          dump || return
+          status=$(status_path) || return 1
+          status=$(cat "$status")
+          case "$status" in
+            *'state=armed'*'trigger_consumed=0'*'binder_snapshot_ret=0'*)
+              echo "preflight=ready next=admission-chain" ;;
+            *) echo "preflight=blocked"; return 1 ;;
+          esac
+        }
+        advance() {
+          preflight || return
+          status=$(status_path) || return 1
+          trigger=$(dirname "$status")/trigger
+          grep -q ' /sys sysfs ro,' /proc/mounts && {
+            mount -o remount,rw /sys || return 1
+            was_ro=1
+          }
+          printf 'run-a72-admission-20260828-a\n' > "$trigger"
+          ret=$?
+          [ "''${was_ro:-0}" = 1 ] && mount -o remount,ro /sys
+          echo "advance_write_ret=$ret"
+          dump
+          return "$ret"
+        }
+        case "''${1:-dump}" in
+          dump|ledger|admission|provider|p27|p28|sram|cpu8) dump ;;
+          preflight) preflight ;;
+          advance) advance ;;
+          *) echo "usage: $0 {dump|preflight|advance|ledger|admission|provider|p27|p28|sram|cpu8}"; exit 2 ;;
+        esac
+        A72_CPU8_CONTROL
+        chmod 0755 root/bin/a72-cpu8-control
+      ''}
       ${lib.optionalString unattendedRecovery ''
         # busybox is an aarch64 target binary; inspect it, never execute it on
         # the x86_64 builder.  The applet is then exposed by --install below.
@@ -1445,6 +1508,7 @@
         sleep 1
         if kill -0 "$watchdog_pid" 2>/dev/null; then
           note "unattended_recovery=healthy watchdog_userspace=petting watchdog_device=$watchdog_device watchdog_pid=$watchdog_pid watchdog_lifecycle=initramfs-through-ssh"
+          ${lib.optionalString (!a72Cpu8Interactive) ''
           (
             sleep 90
             if [ "$(cat /run/unattended-recovery.accepted 2>/dev/null || true)" != "unattended_recovery=healthy" ]; then
@@ -1452,6 +1516,7 @@
               kill -KILL "$watchdog_pid" 2>/dev/null || true
             fi
           ) &
+          ''}
         else
           note "unattended_recovery=failed watchdog_userspace=open-failed"
         fi
@@ -1493,6 +1558,9 @@
       note "ssh=dropbear key_only=yes listen=all_ipv4 port=22 forwarding=disabled"
       ''}
       ${lib.optionalString a72Cpu8SramDiagnostic ''
+      ${lib.optionalString a72Cpu8Interactive ''
+      note "a72_cpu8=interactive-idle trigger=disabled watchdog_userspace=persistent control=/bin/a72-cpu8-control"
+      ''}
       ${lib.optionalString a72Cpu8TraceOnly ''
       note "a72_cpu8=trace-header-snapshot-only trigger=disabled no-sysfs-write"
       ''}

@@ -619,9 +619,9 @@
       a72Cpu8SramDiagnostic = true;
     };
 
-    # Read the admission trace's retained-RAM header at probe time and expose
-    # it in dmesg/status.  The one-shot trigger script is present but is not
-    # launched, so this artifact performs no admission sysfs write.
+    # Persistent interactive A72 profile: no boot-time admission write, a
+    # watchdog petter that remains live, and one explicit control helper over
+    # the existing status/trigger ABI.
     mainlineA72Cpu8TraceDiagnostic = import ./nix/mainline.nix {
       inherit
         buildPkgs
@@ -647,6 +647,7 @@
       fgadcActivationOverlay = true;
       a72Cpu8SramDiagnostic = true;
       a72Cpu8TraceOnly = true;
+      a72Cpu8Interactive = true;
     };
 
     # Manual-only headphone DPCM exercise over the existing fully observable
@@ -1143,6 +1144,8 @@
       mainlineA72Cpu8SramDiagnosticBundle = mainlineA72Cpu8SramDiagnostic.bundle;
       mainlineA72Cpu8TraceDiagnosticKernel = mainlineA72Cpu8TraceDiagnostic.kernel;
       mainlineA72Cpu8TraceDiagnosticBundle = mainlineA72Cpu8TraceDiagnostic.bundle;
+      mainlineA72Cpu8InteractiveKernel = mainlineA72Cpu8TraceDiagnostic.kernel;
+      mainlineA72Cpu8InteractiveBundle = mainlineA72Cpu8TraceDiagnostic.bundle;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
