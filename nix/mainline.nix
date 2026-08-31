@@ -1142,6 +1142,14 @@
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
               mediatek,controller 0x90
+	    # W1's EMI copy is issued by W4 in the retained path.  Give that
+	    # actual consumer the same already-claimed provider as G2d; the EMI
+	    # API deliberately resolves ownership from the calling DT node.
+	    w4_emi_provider="$(fdtget -t x "$out/gemini-consys.dtb" \
+	      /consys-g2d-postpatch-owner mediatek,emi-mpu)"
+	    test -n "$w4_emi_provider"
+	    fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+	      mediatek,emi-mpu "$w4_emi_provider"
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
               bt-paldo-supply 0x53
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
@@ -1161,6 +1169,8 @@
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names)" = wifi
             test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 reg)" = \
               '0 180f0000 0 1100'
+	    test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+	      mediatek,emi-mpu)" = "$w4_emi_provider"
             test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 interrupts)" = \
               '0 11b 8'
             fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
