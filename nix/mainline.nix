@@ -1087,17 +1087,24 @@
       cp -R ${ixoo-candidate} candidate
       chmod -R u+w candidate
       providerBuilder=candidate/experiments/2026-08-17-mainline-da921x-readonly-provider-baseline/scripts/build-provider-dtb.sh
-      substituteInPlace "$providerBuilder" \
-        --replace-fail \
-          'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
-	          'BASE_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}' \
-        --replace-fail \
-          'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
-	          'OUTPUT_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}'
-      substituteInPlace "$providerBuilder" \
-        --replace-fail \
-          $'\tfdtput -d "$temporary" "$AW9523" "$property"' \
-          $'\tif fdtget "$temporary" "$AW9523" "$property" >/dev/null 2>&1; then\n\t\tfdtput -d "$temporary" "$AW9523" "$property"\n\tfi'
+      # A72 final already carries these exact provider hashes and the
+      # guarded AW9523 removal.  Apply the migration only to the retired
+      # snapshot, retaining a fail-fast replacement when that snapshot is used.
+      if grep -Fq 'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' "$providerBuilder"; then
+        substituteInPlace "$providerBuilder" \
+          --replace-fail \
+            'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
+            'BASE_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}' \
+          --replace-fail \
+            'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
+            'OUTPUT_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}'
+      fi
+      if grep -Fq $'\tfdtput -d "$temporary" "$AW9523" "$property"' "$providerBuilder"; then
+        substituteInPlace "$providerBuilder" \
+          --replace-fail \
+            $'\tfdtput -d "$temporary" "$AW9523" "$property"' \
+            $'\tif fdtget "$temporary" "$AW9523" "$property" >/dev/null 2>&1; then\n\t\tfdtput -d "$temporary" "$AW9523" "$property"\n\tfi'
+      fi
       bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
