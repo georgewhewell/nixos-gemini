@@ -587,6 +587,7 @@
           grep -Fqx 'CONFIG_CMDLINE="${kernelCmdline}"' .config
         ''
       }
+      set -e
       runHook postConfigure
     '';
 
