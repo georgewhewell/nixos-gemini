@@ -1300,8 +1300,13 @@
               mediatek,experimental-wifi-w4-retained-owner
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 interrupt-names wifi
+            # The controller phandle belongs to the G2d owner.  It changes
+            # with the composed base DT; copy the provider's live reference.
+            w4_controller="$(fdtget -t x "$out/gemini-consys.dtb" \
+              /consys-g2d-postpatch-owner mediatek,controller)"
+            test -n "$w4_controller"
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
-              mediatek,controller 0x90
+              mediatek,controller "$w4_controller"
 	    # W1's EMI copy is issued by W4 in the retained path.  Give that
 	    # actual consumer the same already-claimed provider as G2d; the EMI
 	    # API deliberately resolves ownership from the calling DT node.
