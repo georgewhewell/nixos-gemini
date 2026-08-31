@@ -426,7 +426,6 @@
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || kernelRevision == p22BaselinePlatformRevision
       || a72Cpu8SramDiagnostic;
-      || kernelRevision == p22BaselinePlatformRevision;
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || !deviceActivationOverlay;
