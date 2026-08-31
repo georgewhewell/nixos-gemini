@@ -256,10 +256,12 @@
   usbBuildTag =
     if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve
     then "a72-w4-ccif"
+    else if consysG2gGnssEndpoint && consysG2hBtEndpoint
+    then "radio-wifi-gnss-bt"
     else if consysG2hBtEndpoint
-    then "radio-gnss-bt"
+    then "radio-wifi-bt"
     else if consysG2gGnssEndpoint
-    then "radio-gnss"
+    then "radio-wifi-gnss"
     else if wifiW4Connect
     then "wifi-w4"
     else if wifiW2NicCapability
@@ -282,7 +284,7 @@
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
     + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
     + lib.optionalString consysG2gGnssEndpoint " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2g_gnss_endpoint=1"
-    + lib.optionalString consysG2hBtEndpoint " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2h_bt_endpoint=1"
+    + lib.optionalString consysG2hBtEndpoint " mt6797_stp_hci.enable_experimental_stp_hci=1"
     + lib.optionalString wifiW0Observe " mt6797_wifi_ahb_wcir.enable_experimental_wifi_wcir_observe=1"
     + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
     + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
@@ -655,8 +657,8 @@
       ''}
       ${lib.optionalString consysG2hBtEndpoint ''
         grep -Fqx 'CONFIG_BT=y' .config
-        grep -Fqx 'CONFIG_BT_MTK_CONSYS=y' .config
-        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y' .config
+        grep -Fqx 'CONFIG_BT_MTK6797_STP=y' .config
+        ! grep -q '^CONFIG_BT_MTK6797_STP_KUNIT_TEST=' .config
         grep -Fqx 'CONFIG_CRYPTO_CMAC=y' .config
         grep -Fqx 'CONFIG_CRYPTO_AES=y' .config
       ''}
@@ -1263,10 +1265,18 @@
               | grep -Fqx 'mediatek,experimental-g2g-gnss-endpoint'
           ''}
           ${lib.optionalString consysG2hBtEndpoint ''
-            fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
-              mediatek,experimental-g2h-bt-endpoint
-            fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
-              | grep -Fqx 'mediatek,experimental-g2h-bt-endpoint'
+            # The kernel overlay carries the controller/PALDO phandles and the
+            # independent experimental property.  Only status is composed here.
+            fdtput -t s "$out/gemini-consys.dtb" /consys-bt-hci status okay
+            test "$(fdtget "$out/gemini-consys.dtb" /consys-bt-hci compatible)" = \
+              mediatek,mt6797-stp-hci
+            test "$(fdtget "$out/gemini-consys.dtb" /consys-bt-hci status)" = okay
+            fdtget -p "$out/gemini-consys.dtb" /consys-bt-hci \
+              | grep -Fqx 'mediatek,experimental-stp-hci'
+            test -n "$(fdtget -t x "$out/gemini-consys.dtb" /consys-bt-hci \
+              mediatek,controller)"
+            test -n "$(fdtget -t x "$out/gemini-consys.dtb" /consys-bt-hci \
+              vcn33-bt-supply)"
           ''}
           ${lib.optionalString wifiW0Observe ''
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
@@ -1360,14 +1370,15 @@
             fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner | \
               grep -Fqx 'mediatek,experimental-wifi-w4-retained-owner'
           ''}
-          # PIO has no child endpoint and neither owner declares a function
-          # client. The kernel config also excludes BTIF transport/HCI.
+          # PIO has no raw child endpoint. Optional channel clients borrow the
+          # retained controller and serialize their WMT function transitions.
           test -z "$(fdtget -l "$out/gemini-consys.dtb" /serial@1100c000)"
           ! fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
             mediatek,function-control >/dev/null 2>&1
           echo 'consys-g2d-overlay=passed' >> "$out/VALIDATION"
           echo 'consys-g2d-owner=exclusive-g2c-disabled' >> "$out/VALIDATION"
-          echo 'consys-g2d-radio-clients=disabled' >> "$out/VALIDATION"
+          ${lib.optionalString (!consysG2gGnssEndpoint && !consysG2hBtEndpoint && !wifiW4Connect) "echo 'consys-g2d-radio-clients=disabled' >> \"$out/VALIDATION\""}
+          ${lib.optionalString consysG2hBtEndpoint "echo 'bluetooth=hci0-full-stp-paldo-func-ctrl-gated' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW0Observe "echo 'wifi-w0=cmd53-wcir-only' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW1FirmwareReadyProof "echo 'wifi-w1=full-firmware-start-ready-irq-netdev-fenced' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW2NicCapability "echo 'wifi-w2=nic-capability-fresh-rx1-irq-no-netdev' >> \"$out/VALIDATION\""}

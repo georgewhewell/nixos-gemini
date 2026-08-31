@@ -43,6 +43,19 @@
         "type": "path"
       }
     },
+    "linux-gemini-bt-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788202259,
+        "narHash": "sha256-wUyG4eASQonfWQ80Q426lmcbDueWm2WaQDfgIt2vSlE=",
+        "path": "/home/grw/src/linux-gemini-bt-hci0-next-20260831",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/grw/src/linux-gemini-bt-hci0-next-20260831",
+        "type": "path"
+      }
+    },
     "linux-gemini-gnss-candidate": {
       "flake": false,
       "locked": {
@@ -163,6 +176,7 @@
         "ixoo-candidate": "ixoo-candidate",
         "ixoo-kernel": "ixoo-kernel",
         "linux-gemini": "linux-gemini",
+        "linux-gemini-bt-candidate": "linux-gemini-bt-candidate",
         "linux-gemini-gnss-candidate": "linux-gemini-gnss-candidate",
         "linux-gemini-next": "linux-gemini-next",
         "linux-gemini-w1-candidate": "linux-gemini-w1-candidate",

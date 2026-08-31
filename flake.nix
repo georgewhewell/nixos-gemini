@@ -65,6 +65,12 @@
       url = "path:/home/grw/src/linux-gemini-gnss-endpoint-v2-20260831";
       flake = false;
     };
+    linux-gemini-bt-candidate = {
+      # Standard hci0 endpoint over the shared full-STP controller. Keep this
+      # independent so the GNSS-only image remains exactly reproducible.
+      url = "path:/home/grw/src/linux-gemini-bt-hci0-next-20260831";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -86,6 +92,7 @@
     linux-gemini-w2-capability-candidate,
     linux-gemini-w4-connect-candidate,
     linux-gemini-gnss-candidate,
+    linux-gemini-bt-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -587,6 +594,64 @@
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
+    };
+
+    # Radio-composition candidate: preserve W4 and the retained GNSS endpoint,
+    # then add one standard hci0 borrower on full-STP channel zero.  The three
+    # channel owners coexist through the shared controller; none replaces GNSS.
+    mainlineConsysGnssBtFull = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-bt-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
+      consysG2hBtEndpoint = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+    };
+
+    # Compile oracle for the independent HCI source branch before the final
+    # kernel integration lands.  It proves BT+W4 config/DT/linkage only; the
+    # full profile above deliberately continues to require the GNSS owner.
+    mainlineConsysBtHciBuildCheck = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-bt-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2hBtEndpoint = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
+      unattendedRecovery = true;
     };
 
     # W1 follows the hardware-passed W0 CMD53 portal read. It sends only the
@@ -1204,6 +1269,25 @@
       ];
     };
 
+    # Same retained GNSS/gpsd system with BlueZ enabled for the standard hci0
+    # endpoint.  Bluetooth is additive: W4 and /dev/gnss0 remain enabled.
+    mainlineNixosGnssBtSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiGnssDevice = "/dev/gnss0";
+          _module.args.geminiGnssBringup = true;
+          _module.args.geminiBluetooth = true;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1264,6 +1348,23 @@
         unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
       '';
 
+    mainlineNixosGnssBtSquashfs =
+      buildPkgs.runCommand "mainline-nixos-gnss-bt-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosGnssBtSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        basename ${mainlineNixosGnssBtSystemCross.config.system.build.toplevel} \
+          > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
+
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
       grep -Fqx 'session required pam_unix.so' ${mainlineSshdPam}
@@ -1313,6 +1414,26 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       # No leaseSelfAcceptToken: this experiment remains externally accepted.
+    };
+
+    mainlineNixosGnssBt = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineConsysGnssBtFull.kernel;
+      serviceabilityDtb = mainlineConsysGnssBtFull.serviceabilityDtb;
+      squashfs = mainlineNixosGnssBtSquashfs;
+      nixosToplevel = mainlineNixosGnssBtSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      consysFirmware = true;
+      gnssService = true;
+      bluetoothService = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      # No leaseSelfAcceptToken: radio composition remains externally accepted.
     };
 
     #############################################
@@ -1685,6 +1806,13 @@
       mainlineNixosGnssSquashfs = mainlineNixosGnssSquashfs;
       mainlineNixosGnssInitramfs = mainlineNixosGnss.initramfs;
       mainlineNixosGnssBundle = mainlineNixosGnss.bundle;
+      mainlineNixosGnssBtKernel = mainlineConsysGnssBtFull.kernel;
+      mainlineNixosGnssBtDtb = mainlineConsysGnssBtFull.serviceabilityDtb;
+      mainlineNixosGnssBtSquashfs = mainlineNixosGnssBtSquashfs;
+      mainlineNixosGnssBtInitramfs = mainlineNixosGnssBt.initramfs;
+      mainlineNixosGnssBtBundle = mainlineNixosGnssBt.bundle;
+      mainlineBtHciBuildCheckKernel = mainlineConsysBtHciBuildCheck.kernel;
+      mainlineBtHciBuildCheckDtb = mainlineConsysBtHciBuildCheck.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;

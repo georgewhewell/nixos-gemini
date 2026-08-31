@@ -1,7 +1,7 @@
-# Persistent G2h Bluetooth endpoint sharing the retained full-STP session.
+# Standard MT6797 HCI device over controller-owned full-STP channel zero.
 CONFIG_BT=y
-CONFIG_BT_MTK_CONSYS=y
-CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y
+CONFIG_BT_MTK6797_STP=y
+# CONFIG_BT_MTK6797_STP_KUNIT_TEST is not set
 
 # BlueZ SMP bonds require cmac(aes).  The ARM64 CE implementation alone does
 # not satisfy that template: keep the generic AES provider built into the
