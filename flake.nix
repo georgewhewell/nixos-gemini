@@ -665,7 +665,7 @@
         ixoo-kernel
         ixoo-candidate
         ;
-      linux-gemini = linux-gemini-w4-connect-candidate;
+      linux-gemini = linux-gemini;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -676,6 +676,8 @@
       wifiW1Forensic = true;
       wifiW2NicCapability = true;
       wifiW4Connect = true;
+      md1LkHandoffProbe = true;
+      md1BootStatusObserve = true;
       unattendedRecovery = true;
     };
 
