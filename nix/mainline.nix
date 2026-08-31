@@ -36,6 +36,8 @@
   touchscreenActivationOverlay ? false,
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
+  md1LkHandoffProbe ? false,
+  md1BootStatusObserve ? false,
   md1RemapObserve ? false,
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
@@ -85,6 +87,8 @@
     ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w1-ready.fragment]
     ++ lib.optionals (wifiW2NicCapability || wifiW4Connect) [./mainline-wifi-w2-capability.fragment]
     ++ lib.optionals wifiW4Connect [./mainline-wifi-w4-connect.fragment]
+    ++ lib.optionals md1LkHandoffProbe [./mainline-md1-lk-handoff.fragment]
+    ++ lib.optionals md1BootStatusObserve [./mainline-md1-boot-status-observe.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -228,12 +232,15 @@
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
     else "none";
   md1LkHandoffLabel =
+    if !md1LkHandoffProbe
     then "none"
+    else if md1BootStatusObserve
     then "lk-v2-load-evidence-plus-boot-status-read-only-dt-and-cmdline-gated-v9-no-md1-control"
     else if md1RemapObserve
     then "lk-v2-load-evidence-plus-infracfg-remap-lock-five-read-observation-dt-and-cmdline-gated-v10-no-md1-control"
     else "lk-v2-load-evidence-and-rmpu-remap-plan-read-only-dt-and-cmdline-gated-v9-secure-mpu-status-fatal-latch-provider-backend-unselected";
   md1BootStatusLabel =
+    if md1BootStatusObserve
     then "three-vendor-shaped-reads-per-ap-visible-status-word-plus-passive-ap-rchnum-raw-no-write-no-interpretation"
     else "none";
   md1RemapObserveLabel =
@@ -286,8 +293,6 @@
     + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
     + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
     + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
-    + lib.optionalString md1LkHandoffProbe " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1"
-    + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -988,10 +993,12 @@
           "$out/mt6797-gemini-pda-a72-admission.dtbo"
         test -s "$out/mt6797-gemini-pda-a72-admission.dtbo"
       ''}
+      ${lib.optionalString md1LkHandoffProbe ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo \
           "$out/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo"
       ''}
+      ${lib.optionalString md1BootStatusObserve ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-status-observe.dtbo \
           "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
@@ -1621,6 +1628,7 @@
         ''
         else ""
       }
+      ${lib.optionalString md1LkHandoffProbe ''
         # The source overlay is deliberately disabled.  This profile makes one
         # explicit, reviewable transition to okay; its separate built-in
         # module parameter remains the second required gate.  The driver maps
@@ -1641,6 +1649,7 @@
         cp "$out/gemini-md1-lk-handoff.dtb" "$out/gemini.dtb"
         echo 'md1-lk-handoff=dt-gate-okay cmdline-gate-required read-only-only' >> "$out/VALIDATION"
       ''}
+      ${lib.optionalString md1BootStatusObserve ''
         # The source overlay is disabled too. This is a separate, visible
         # transition and the built-in parameter remains the second gate. The
         # driver does only the vendor's three AP-side reads of each word, then
@@ -2239,6 +2248,7 @@
       else
         note "pstore=unavailable"
       fi
+      ${lib.optionalString md1LkHandoffProbe ''
       # MD1 probe itself ran during platform population.  Collect only its
       # bounded kernel evidence; this initramfs code neither retriggers it nor
       # accesses modem partitions, reserved memory, clocks, resets, CCIF, or
@@ -2265,6 +2275,7 @@
         note "md1_lk_handoff=not-observed after=3s action=inspect-cmdline-dt-and-dmesg"
       fi
       ''}
+      ${lib.optionalString md1BootStatusObserve ''
       # The driver was populated exactly once by the DT. Collect its result;
       # never interpret a value as execution, ownership, or permission to
       # modify MD1 state.
@@ -2788,10 +2799,12 @@
       echo "nix-md1-boot-status=${md1BootStatusLabel}"
       echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
       echo "md1-lk-handoff-contract=${
+        if md1LkHandoffProbe
         then "DT-status=okay plus built-in parameter; LK flag is accepted only as image-load evidence and execution remains unknown; metadata table and diagnostic RMPU/remap plan read-only; fence/secure-MPU-provider/backend source is explicitly unselected and has no hardware run path; public LK remap-lock/refusal evidence is source-only; mandatory unmap before partition-I/O/MPU/remap writes/power/reset/CCIF/CLDMA/DMA"
         else "none"
       }"
       echo "md1-boot-status-contract=${
+        if md1BootStatusObserve
         then "second DT-status=okay plus separate built-in parameter; exactly three reads of each AP-visible vendor status word followed by one passive raw AP-CCIF RCHNUM read after LK load evidence; no write/poll/retry/value interpretation, ACK, IRQ request, or ownership grant"
         else "none"
       }"
@@ -2801,10 +2814,12 @@
         else "none"
       }"
       echo "md1-lk-handoff-runtime-evidence=${
+        if md1LkHandoffProbe
         then "/run/md1-lk-handoff.dmesg and GEMINI_NIX_IXOO_PROBE md1_lk_handoff=*"
         else "none"
       }"
       echo "md1-boot-status-runtime-evidence=${
+        if md1BootStatusObserve
         then "/run/md1-boot-status.dmesg and GEMINI_NIX_IXOO_PROBE md1_boot_status=*"
         else "none"
       }"
