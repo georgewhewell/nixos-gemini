@@ -52,6 +52,19 @@
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }
     },
+    "linux-gemini-gnss-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788163391,
+        "narHash": "sha256-8PEsNu4yplwLfWbToEYIujfj4e7Hc2K8WGePbmML+8E=",
+        "path": "/mnt/Home/src/linux-gemini-gnss-persistent-trex",
+        "type": "path"
+      },
+      "original": {
+        "path": "/mnt/Home/src/linux-gemini-gnss-persistent-trex",
+        "type": "path"
+      }
+    },
     "linux-gemini-next": {
       "flake": false,
       "locked": {
@@ -146,6 +159,7 @@
         "ixoo-candidate": "ixoo-candidate",
         "ixoo-kernel": "ixoo-kernel",
         "linux-gemini": "linux-gemini",
+        "linux-gemini-gnss-candidate": "linux-gemini-gnss-candidate",
         "linux-gemini-next": "linux-gemini-next",
         "linux-gemini-w1-candidate": "linux-gemini-w1-candidate",
         "linux-gemini-w1-forensic-candidate": "linux-gemini-w1-forensic-candidate",
