@@ -94,7 +94,7 @@
     ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
-    ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment];
+    ++ lib.optionals a72Cpu8SramDiagnostic [./mainline-a72-cpu8-sram-diagnostic.fragment] 
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
   overlayLabel =
     if debugOverlay
