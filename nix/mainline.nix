@@ -39,8 +39,8 @@
   # owner.  The preceding read-only profile binds the regulator but leaves the
   # provider unpublished, which keeps the A72 binder at -EPROBE_DEFER and the
   # controller status at binder_snapshot_ret=-EAGAIN.
-  ixooRevision = "43bd2369b87322a903d4f05dbb56f6111ce9e9bb";
-  candidateRevision = "43bd2369b87322a903d4f05dbb56f6111ce9e9bb";
+  ixooRevision = "4c1143012226586dc13b24eb1042422f1b4dfa69";
+  candidateRevision = "4c1143012226586dc13b24eb1042422f1b4dfa69";
   profile = "a72-admission-live-trigger-candidate";
   ixooManifest = builtins.fromJSON (builtins.readFile (ixoo-kernel + "/kernel/manifest.json"));
   profileDefinition = ixooManifest.config.profiles.${profile};
@@ -1193,7 +1193,7 @@
                END { if (!column) exit 1; print sum + 0 }' /proc/interrupts
         }
 
-        record "stage=begin ixoo=43bd2369 provider_owner=required sram_p28_diagnostic=enabled cpu8_only=1 cpu9_veto=maxcpus-9"
+        record "stage=begin ixoo=4c114301 provider_owner=required sram_p28_diagnostic=enabled cpu8_only=1 cpu9_veto=maxcpus-9"
         wait_for_serviceability || fence serviceability-gate
         grep -Eq '(^| )maxcpus=9( |$)' /proc/cmdline || fence cmdline-maxcpus
         online=$(cat /sys/devices/system/cpu/online 2>/dev/null || true)

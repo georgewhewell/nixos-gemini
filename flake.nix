@@ -14,17 +14,16 @@
       flake = false;
     };
     ixoo-kernel = {
-      # Exact source/config commit behind ixoo's hardware-passed, read-only
-      # DA921x serviceability baseline.  Later ixoo work is intentionally not
-      # allowed to move this first reproduction target.
-      url = "github:ixoo/gemini-pda-mainline/7199e8229c6a805a941e33a6862956949dfebd3a";
+      # Current upstream A72 series, including the post-43bd held-isolation
+      # and SRAM-terminal fixes.  This local Trex checkout is an exact
+      # codeload snapshot of IXOO main at 4c114301.
+      url = "path:/mnt/Home/src/ixoo-gemini-a72-main-4c114301";
       flake = false;
     };
     linux-gemini = {
-      # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
-      # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
-      # experiments never consume a moving branch tip.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
+      # Trex-local A72 candidate source: tested platform base plus upstream
+      # DA9213 provider-release, held-isolation, and SRAM-diagnostic repairs.
+      url = "path:/mnt/Home/src/linux-gemini-a72-final-trex";
       flake = false;
     };
     ixoo-candidate = {
