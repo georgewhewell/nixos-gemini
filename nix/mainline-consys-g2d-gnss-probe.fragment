@@ -1,0 +1,7 @@
+# The GNSS function proof is implemented inside the existing G2d owner.  Its
+# separate DT boolean and read-only module parameter select the one bounded
+# GPIO69 LNA / GPS FUNC_CTRL on-off transaction.  Keep every Wi-Fi W0 and
+# Bluetooth proof gate out of this configuration.
+CONFIG_MTK_MT6797_CONSYS_G2D_POSTPATCH_OWNER=y
+# CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE is not set
+# CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST is not set

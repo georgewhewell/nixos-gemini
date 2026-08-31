@@ -494,6 +494,28 @@
       unattendedRecovery = true;
     };
 
+    # GNSS is a distinct successor to the common G2d post-patch pass.  It
+    # permits exactly one GPIO69 LNA / GPS FUNC_CTRL on-off proof inside the
+    # retained full-WMT lease, then the bootstrap fences and reset-holds
+    # CONSYS.  W0 and both Bluetooth proof gates are absent from this profile.
+    mainlineConsysG2dGnssProbe = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2dGnssProbe = true;
+      unattendedRecovery = true;
+    };
+
     # W0 is a successor to the retained G2d full-WMT lifecycle.  It adds only
     # the exact GEN3 WCIR portal observation; GNSS and Bluetooth proof gates
     # remain absent from both DT command line and kernel configuration.
@@ -1254,6 +1276,10 @@
       mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
       mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
       mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
+      mainlineConsysG2dGnssProbeKernel = mainlineConsysG2dGnssProbe.kernel;
+      mainlineConsysG2dGnssProbeDtb = mainlineConsysG2dGnssProbe.serviceabilityDtb;
+      mainlineConsysG2dGnssProbeInitramfs = mainlineConsysG2dGnssProbe.probeInitramfs;
+      mainlineConsysG2dGnssProbeBundle = mainlineConsysG2dGnssProbe.bundle;
       mainlineConsysG2dWifiW0Kernel = mainlineConsysG2dWifiW0.kernel;
       mainlineConsysG2dWifiW0Dtb = mainlineConsysG2dWifiW0.serviceabilityDtb;
       mainlineConsysG2dWifiW0Initramfs = mainlineConsysG2dWifiW0.probeInitramfs;

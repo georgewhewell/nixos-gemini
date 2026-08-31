@@ -14,6 +14,7 @@
   consysG2bOverlay ? false,
   consysG2cPatchOverlay ? false,
   consysG2dPostpatchOverlay ? false,
+  consysG2dGnssProbe ? false,
   wifiW0Observe ? false,
   consysFirmware ? false,
   gpuStagedOverlay ? false,
@@ -64,6 +65,7 @@
     ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
     ++ lib.optionals consysG2cPatchOverlay [./mainline-consys-g2c-patch.fragment]
     ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
+    ++ lib.optionals consysG2dGnssProbe [./mainline-consys-g2d-gnss-probe.fragment]
     ++ lib.optionals wifiW0Observe [./mainline-wifi-w0.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
@@ -113,6 +115,10 @@
   consysG2dPostpatchLabel =
     if consysG2dPostpatchOverlay
     then "emi-identity-postid-full-wmt-hash-pinned-patch-postpatch-no-radio-client-v1"
+    else "none";
+  consysG2dGnssLabel =
+    if consysG2dGnssProbe
+    then "gpio69-lna-gps-funcctrl-on-off-one-shot-v1"
     else "none";
   wifiW0Label = if wifiW0Observe then "gen3-cmd53-wcir-only-v1" else "none";
   consysFirmwareAvailable = consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay;
@@ -183,6 +189,7 @@
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
     + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
+    + lib.optionalString consysG2dGnssProbe " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_gnss_probe=1"
     + lib.optionalString wifiW0Observe " mt6797_wifi_ahb_wcir.enable_experimental_wifi_wcir_observe=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
@@ -195,6 +202,7 @@
     + lib.optionalString consysG2bOverlay "-consys-g2b"
     + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
     + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
+    + lib.optionalString consysG2dGnssProbe "-gnss-probe"
     + lib.optionalString wifiW0Observe "-wifi-w0"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
@@ -226,6 +234,8 @@
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
+    assert !consysG2dGnssProbe || consysG2dPostpatchOverlay;
+    assert !(consysG2dGnssProbe && wifiW0Observe);
     assert !wifiW0Observe || consysG2dPostpatchOverlay;
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
@@ -465,8 +475,16 @@
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2D_POSTPATCH_OWNER=y' .config
         ! grep -q '^CONFIG_MTK_MT6797_CONSYS_G2B_OWNER=' .config
         ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
+        ${lib.optionalString (!wifiW0Observe) ''
+          ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=' .config
+        ''}
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2dGnssProbe ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2D_POSTPATCH_OWNER=y' .config
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST=' .config
       ''}
       ${lib.optionalString wifiW0Observe ''
         grep -Fqx 'CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=y' .config
@@ -980,10 +998,33 @@
           test "$(fdtget "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner status)" = okay
           fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
             | grep -Fqx 'mediatek,experimental-g2d-postpatch-owner'
+          ${
+            if consysG2dGnssProbe
+            then ''
+              fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+                | grep -Fqx 'mediatek,experimental-g2d-gnss-probe'
+            ''
+            else ''
+              fdtput -d "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+                mediatek,experimental-g2d-gnss-probe
+              ! fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+                | grep -Fqx 'mediatek,experimental-g2d-gnss-probe'
+            ''
+          }
           ${lib.optionalString wifiW0Observe ''
             fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
               | grep -Fqx 'mediatek,experimental-wifi-wcir-observe'
           ''}
+          ${lib.optionalString (!wifiW0Observe) ''
+            fdtput -d "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              mediatek,experimental-wifi-wcir-observe
+            ! fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+              | grep -Fqx 'mediatek,experimental-wifi-wcir-observe'
+          ''}
+          ! fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            mediatek,experimental-g2e-bt-function-owner >/dev/null 2>&1
+          ! fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
+            mediatek,experimental-g2f-bt-hci-proof-owner >/dev/null 2>&1
           # PIO has no child endpoint and neither owner declares a function
           # client. The kernel config also excludes BTIF transport/HCI.
           test -z "$(fdtget -l "$out/gemini-consys.dtb" /serial@1100c000)"
@@ -992,6 +1033,7 @@
           echo 'consys-g2d-overlay=passed' >> "$out/VALIDATION"
           echo 'consys-g2d-owner=exclusive-g2c-disabled' >> "$out/VALIDATION"
           echo 'consys-g2d-radio-clients=disabled' >> "$out/VALIDATION"
+          ${lib.optionalString consysG2dGnssProbe "echo 'gnss-g2d=gpio69-lna-gps-funcctrl-on-off-only-w0-bt-proof-disabled' >> \"$out/VALIDATION\""}
           ${lib.optionalString wifiW0Observe "echo 'wifi-w0=cmd53-wcir-only-gnss-bt-disabled' >> \"$out/VALIDATION\""}
         ''
         else ''
@@ -1940,6 +1982,7 @@
       echo "nix-consys-g2b=${consysG2bLabel}"
       echo "nix-consys-g2c-patch=${consysG2cPatchLabel}"
       echo "nix-consys-g2d-postpatch=${consysG2dPostpatchLabel}"
+      echo "nix-consys-g2d-gnss=${consysG2dGnssLabel}"
       echo "nix-wifi-w0=${wifiW0Label}"
       echo "nix-consys-firmware=${consysFirmwareLabel}"
       echo "nix-gpu-staged=${gpuStagedLabel}"
