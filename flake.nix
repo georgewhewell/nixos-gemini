@@ -543,7 +543,7 @@
         ixoo-kernel
         ixoo-candidate
         ;
-      linux-gemini = linux-gemini-next;
+      linux-gemini = linux-gemini;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -606,7 +606,7 @@
         ixoo-kernel
         ixoo-candidate
         ;
-      linux-gemini = linux-gemini-next;
+      linux-gemini = linux-gemini;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -637,7 +637,7 @@
         ixoo-kernel
         ixoo-candidate
         ;
-      linux-gemini = linux-gemini-next;
+      linux-gemini = linux-gemini;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
