@@ -1136,11 +1136,6 @@
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 compatible \
               mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi
             # G2d performs resource/EMI preflight only; W4 owns start, IRQ, and stop.
-            # The base owner has no phandle; publish this exact W4 supplier link.
-            fdtput -t x "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
-              phandle 0x91
-            fdtput -t x "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
-              linux,phandle 0x91
             fdtput "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner \
               mediatek,experimental-wifi-w4-retained-owner
             fdtput -t s "$out/gemini-consys.dtb" /wifi@180f0000 status okay
@@ -1160,8 +1155,6 @@
               mediatek,experimental-wifi-w2-nic-capability
             fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
               mediatek,experimental-wifi-w3-session
-            fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
-              mediatek,retained-owner 0x91
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 compatible)" = \
               'mediatek,mt6797-wifi-ahb-w4-platform mediatek,wifi'
             test "$(fdtget "$out/gemini-consys.dtb" /wifi@180f0000 status)" = okay
@@ -1180,8 +1173,6 @@
               grep -Fqx 'mediatek,experimental-wifi-w3-session'
             fdtget -p "$out/gemini-consys.dtb" /consys-g2d-postpatch-owner | \
               grep -Fqx 'mediatek,experimental-wifi-w4-retained-owner'
-            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
-              mediatek,retained-owner)" = 91
           ''}
           # PIO has no child endpoint and neither owner declares a function
           # client. The kernel config also excludes BTIF transport/HCI.
