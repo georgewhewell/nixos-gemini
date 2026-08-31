@@ -241,7 +241,7 @@
     else "lk-v2-load-evidence-and-rmpu-remap-plan-read-only-dt-and-cmdline-gated-v9-secure-mpu-status-fatal-latch-provider-backend-unselected";
   md1BootStatusLabel =
     if md1BootStatusObserve
-    then "three-vendor-shaped-reads-per-ap-visible-status-word-plus-passive-ap-rchnum-raw-no-write-no-interpretation"
+    then "three-vendor-shaped-reads-per-ap-visible-status-word-plus-passive-ap-ccif-con-busy-start-rchnum-ack-raw-no-write-no-interpretation"
     else "none";
   md1RemapObserveLabel =
     if md1RemapObserve
@@ -1675,7 +1675,7 @@
         fdtput -t s "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 status okay
         test "$(fdtget "$out/gemini-md1-boot-status.dtb" /modem-boot-status@10201300 status)" = okay
         cp "$out/gemini-md1-boot-status.dtb" "$out/gemini.dtb"
-        echo 'md1-boot-status=dt-gate-okay cmdline-gate-required three-reads-per-word passive-ap-rchnum-raw no-write-no-interpretation' >> "$out/VALIDATION"
+        echo 'md1-boot-status=dt-gate-okay cmdline-gate-required three-reads-per-word passive-ap-ccif-con-busy-start-rchnum-ack-raw no-write-no-interpretation' >> "$out/VALIDATION"
       ''}
       ${lib.optionalString md1RemapObserve ''
         # The source overlay remains disabled.  Making it okay here is one
@@ -2825,7 +2825,7 @@
       }"
       echo "md1-boot-status-contract=${
         if md1BootStatusObserve
-        then "second DT-status=okay plus separate built-in parameter; exactly three reads of each AP-visible vendor status word followed by one passive raw AP-CCIF RCHNUM read after LK load evidence; no write/poll/retry/value interpretation, ACK, IRQ request, or ownership grant"
+        then "second DT-status=okay plus separate built-in parameter; exactly three reads of each AP-visible vendor status word followed by one passive raw AP-CCIF CON/BUSY/START/RCHNUM/ACK snapshot after LK load evidence; no write/poll/retry/value interpretation, ACK, IRQ request, or ownership grant"
         else "none"
       }"
       echo "md1-remap-observe-contract=${
