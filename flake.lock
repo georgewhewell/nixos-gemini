@@ -33,8 +33,8 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788192245,
-        "narHash": "sha256-OI0/55M8WLFzx9BVj71bvyBkmFwihMTAtVZCZ9zAQD4=",
+        "lastModified": 1788192352,
+        "narHash": "sha256-N8RWHVgHFG82cOfiXJLiHXzJqV/8JYR1mzYUEoOIk2k=",
         "path": "/home/grw/src/linux-gemini-p22-combined-next-20260831",
         "type": "path"
       },
