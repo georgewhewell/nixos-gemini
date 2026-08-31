@@ -322,7 +322,7 @@
     hardeningDisable = ["all"];
 
     KBUILD_BUILD_TIMESTAMP = "2026-07-04 00:00:00 UTC";
-    KBUILD_BUILD_VERSION = "1";
+    KBUILD_BUILD_VERSION = "2";
     KBUILD_BUILD_USER = "gemini-pda";
     KBUILD_BUILD_HOST = "devvm";
     KCONFIG_NOTIMESTAMP = "1";
