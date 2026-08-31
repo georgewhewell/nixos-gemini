@@ -125,8 +125,8 @@
     "linux-gemini-w4-connect-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788177797,
-        "narHash": "sha256-8uQjNMa7eopJk/Z/zfqM24S+KZBUO9YU/Z1zQPoAjzo=",
+        "lastModified": 1788178593,
+        "narHash": "sha256-ChM855FnvphvRvp5eKEdSk5Qx1xIZXOYpu+1xp8VybU=",
         "path": "/mnt/Home/src/linux-gemini-w2-polling-trex",
         "type": "path"
       },
