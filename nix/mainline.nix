@@ -350,11 +350,25 @@
 	# CPU8 diagnostic candidates reserve two exact private pages after ramoops.
 	# These source-checked fingerprints intentionally differ only for that DT.
 	admissionBaseDtbSha256 = "c113d7d5b121fbee4e8a1090d04f8fa9e1afd7981b8cbc3edac93555064fb646";
+  cacheTopologyBaseDtbSha256 = "dd4cf932526c02e5c7b48e80c4e89ece8d33647a87e2699e8c00d714053fe861";
   # Same reviewed A72 topology after the existing, structurally validated
   # serviceability transform (CONSYS/BTIF remain disabled).
   serviceabilityBaseDtbSha256 = "22b7b4158f88a2ad8bb752dbf1d3cfbae4234efd95356b1c5dc044fd7824f613";
 	admissionServiceabilityBaseDtbSha256 = "0e6cdd5edf677e992386ef501456d241d7e599054e1c38756c594836bdb19b24";
+  cacheTopologyServiceabilityBaseDtbSha256 = "a75ffc04e465282f84921e8ca55bc47d5a325967d78c4ec6e4b28b4b28c47660";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+  selectedBaseDtbSha256 =
+    if cacheTopologyObserver
+    then cacheTopologyBaseDtbSha256
+    else if a72Cpu8SramDiagnostic
+    then admissionBaseDtbSha256
+    else baseDtbSha256;
+  selectedServiceabilityBaseDtbSha256 =
+    if cacheTopologyObserver
+    then cacheTopologyServiceabilityBaseDtbSha256
+    else if a72Cpu8SramDiagnostic
+    then admissionServiceabilityBaseDtbSha256
+    else serviceabilityBaseDtbSha256;
   profileCombinationValid =
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -1047,7 +1061,7 @@
       # Device Tree output is compiler-independent and must match the reviewed
       # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
       test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        ${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}
+        ${selectedBaseDtbSha256}
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
@@ -1116,10 +1130,10 @@
         substituteInPlace "$providerBuilder" \
           --replace-fail \
             'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
-            'BASE_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}' \
+            'BASE_DTB_SHA256=${selectedBaseDtbSha256}' \
           --replace-fail \
             'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
-            'OUTPUT_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}'
+            'OUTPUT_DTB_SHA256=${selectedServiceabilityBaseDtbSha256}'
       fi
       if grep -Fq $'\tfdtput -d "$temporary" "$AW9523" "$property"' "$providerBuilder"; then
         substituteInPlace "$providerBuilder" \
@@ -1133,7 +1147,7 @@
         > "$out/VALIDATION"
       chmod 0644 "$out/gemini-base.dtb"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-	        ${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}
+	        ${selectedServiceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay
