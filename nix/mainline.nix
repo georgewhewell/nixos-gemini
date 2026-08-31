@@ -343,6 +343,7 @@
       kernelMakeFlags=(
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
+        LOCALVERSION=
       )
       make "''${kernelMakeFlags[@]}" defconfig
       scripts/kconfig/merge_config.sh \
