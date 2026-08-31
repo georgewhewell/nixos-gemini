@@ -753,7 +753,7 @@
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
     buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
-      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
+      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3 buildPkgs.binutils];
     } ''
       mkdir -p "$out"
       cp -R ${ixoo-candidate} candidate
@@ -1110,6 +1110,25 @@
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = disabled
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = disabled
         cp "$out/gemini-a72-cpu8-sram.dtb" "$out/gemini.dtb"
+        # The architecture-owned late-CPU profile deliberately publishes no
+        # token until this static record verifies the *running* IKCONFIG,
+        # GNU build ID, and forced command line.  It is composed after every
+        # diagnostic overlay, while the DTB is still static at boot.
+        grep -Fq '0x5968c24f1904c055, 0x9dea25480c41fbc7,' \
+          ${linux-gemini}/arch/arm64/kernel/mt6797_psci.c
+        python3 ${./a72-provenance.py} \
+          --dtb "$out/gemini.dtb" \
+          --vmlinux ${kernel}/vmlinux \
+          --kernel-config ${kernel}/kernel.config \
+          --image ${kernel}/Image \
+          --cmdline '${kernelCmdline}' \
+          --source-revision '${kernelRevision}' \
+          --fdtput "$(command -v fdtput)" \
+          | tee -a "$out/VALIDATION"
+        test "$(fdtget "$out/gemini.dtb" /chosen/gemini-late-cpu-provenance compatible)" = \
+          planet,gemini-a72-runtime-binding-v1
+        test "$(fdtget "$out/gemini.dtb" /chosen/gemini-late-cpu-provenance profile-id)" = \
+          mt6797-a53-a72-a41-v7
         echo 'a72-cpu8-sram-diagnostic=overlay-composed cpu8-only cpu9-veto=maxcpus-9' \
           >> "$out/VALIDATION"
       ''}
