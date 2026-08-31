@@ -225,6 +225,7 @@
     then "cpu8-trace-header-read-only-v1"
     else if a72Cpu8SramDiagnostic
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
+    else "none";
   md1LkHandoffLabel =
     if !md1LkHandoffProbe
     then "none"
