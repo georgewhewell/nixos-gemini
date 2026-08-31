@@ -165,7 +165,10 @@
     + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
   # These three inputs are generated from the same locked DTS and the same
   # unconditional provider/USB transforms for every exported profile.
-  baseDtbSha256 = "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
+  # The reviewed CPU8 chain replaces the deleted a72_power node with the
+  # disabled a72_platform_state/DVFSP access-controller topology.  Pin the
+  # resulting base DTB rather than accepting the retired topology's hash.
+  baseDtbSha256 = "2ba8f57caad4d1723f658bd925fdbd79c155f7f2a08e6321c83a59f1936443e1";
   serviceabilityBaseDtbSha256 = "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
