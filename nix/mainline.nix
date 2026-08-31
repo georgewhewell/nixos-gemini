@@ -367,14 +367,17 @@
 	admissionServiceabilityBaseDtbSha256 = "0e6cdd5edf677e992386ef501456d241d7e599054e1c38756c594836bdb19b24";
   cacheTopologyServiceabilityBaseDtbSha256 = "a75ffc04e465282f84921e8ca55bc47d5a325967d78c4ec6e4b28b4b28c47660";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+  # The combined radio source already carries the reviewed cache-topology
+  # base DT. The MD1 p22 profile consumes that exact source but never enables
+  # the CPU admission/observer path; pin its real DT hashes explicitly.
   selectedBaseDtbSha256 =
-    if cacheTopologyObserver
+    if cacheTopologyObserver || md1BootCandidate
     then cacheTopologyBaseDtbSha256
     else if a72Cpu8SramDiagnostic
     then admissionBaseDtbSha256
     else baseDtbSha256;
   selectedServiceabilityBaseDtbSha256 =
-    if cacheTopologyObserver
+    if cacheTopologyObserver || md1BootCandidate
     then cacheTopologyServiceabilityBaseDtbSha256
     else if a72Cpu8SramDiagnostic
     then admissionServiceabilityBaseDtbSha256
@@ -1066,9 +1069,13 @@
 	  # Most variants retain ixoo's reviewed base DT byte-for-byte.  The A72
 	  # candidate intentionally adds two private retained pages, so its source
 	  # assertions replace that stale whole-DTB fingerprint.
-	  ${lib.optionalString (!a72Cpu8SramDiagnostic) ''
+	  ${lib.optionalString (!a72Cpu8SramDiagnostic && !md1BootCandidate) ''
 	    test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
 	      ${baseDtbSha256}
+	  ''}
+	  ${lib.optionalString md1BootCandidate ''
+	    test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
+	      ${cacheTopologyBaseDtbSha256}
 	  ''}
 	  ${lib.optionalString a72Cpu8SramDiagnostic ''
 	    grep -Fq 'a72-transition-ledger@444f1000' \
