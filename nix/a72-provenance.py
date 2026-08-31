@@ -83,6 +83,7 @@ def main() -> None:
     parser.add_argument("--cmdline", required=True)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--fdtput", required=True)
+    parser.add_argument("--fdtget", required=True)
     args = parser.parse_args()
 
     raw_config = kernel_config_blob(args.vmlinux)
@@ -143,7 +144,7 @@ def main() -> None:
     for name, value in values.items():
         fdtput_bytes(args.fdtput, args.dtb, name, value)
 
-    properties = command(args.fdtput.replace("fdtput", "fdtget"), "-p", str(args.dtb), NODE).splitlines()
+    properties = command(args.fdtget, "-p", str(args.dtb), NODE).splitlines()
     expected = {
         "name", "compatible", "schema-version", "profile-id", "target-cpus", "target-mpidrs",
         *values.keys(),

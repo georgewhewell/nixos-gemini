@@ -1124,6 +1124,7 @@
           --cmdline '${kernelCmdline}' \
           --source-revision '${kernelRevision}' \
           --fdtput "$(command -v fdtput)" \
+          --fdtget "$(command -v fdtget)" \
           | tee -a "$out/VALIDATION"
         test "$(fdtget "$out/gemini.dtb" /chosen/gemini-late-cpu-provenance compatible)" = \
           planet,gemini-a72-runtime-binding-v1
