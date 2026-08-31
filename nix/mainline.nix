@@ -500,7 +500,7 @@
       + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
       + lib.optionalString fgadcActivationOverlay "-fgadc-active"
       + lib.optionalString deviceActivationOverlay "-device-activation"
-      + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram";
+      + lib.optionalString a72Cpu8SramDiagnostic "-a72-cpu8-sram" 
       + lib.optionalString deviceActivationOverlay "-device-activation";
     version = "7.1.3";
     src = linux-gemini;
