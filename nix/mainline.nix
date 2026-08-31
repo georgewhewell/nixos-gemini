@@ -565,6 +565,8 @@
         grep -Fqx 'CONFIG_BT=y' .config
         grep -Fqx 'CONFIG_BT_MTK_CONSYS=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y' .config
+        grep -Fqx 'CONFIG_CRYPTO_CMAC=y' .config
+        grep -Fqx 'CONFIG_CRYPTO_AES=y' .config
       ''}
       ${lib.optionalString wifiW0Observe ''
         grep -E '^CONFIG_MTK_MT6797_WIFI_AHB_[A-Z0-9_]+=' .config || true

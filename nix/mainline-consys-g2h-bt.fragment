@@ -3,3 +3,8 @@ CONFIG_BT=y
 CONFIG_BT_MTK_CONSYS=y
 CONFIG_MTK_MT6797_CONSYS_G2H_BT_ENDPOINT=y
 
+# BlueZ SMP bonds require cmac(aes).  The ARM64 CE implementation alone does
+# not satisfy that template: keep the generic AES provider built into the
+# recovery image so pairing cannot depend on an unavailable module.
+CONFIG_CRYPTO_CMAC=y
+CONFIG_CRYPTO_AES=y
