@@ -1278,6 +1278,7 @@
     mainlineNixosGnssSystemCross = nixpkgs-old.lib.nixosSystem {
       system = buildSystem;
       modules = [
+        ./nixos/firmware.nix
         ./nixos/mainline-configuration.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = null;
@@ -1286,6 +1287,7 @@
           # This candidate shares the controller with W4; it does not claim a
           # Bluetooth endpoint until one has been independently evidenced.
           _module.args.geminiBluetooth = false;
+          _module.args.geminiConsysFirmware = true;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1299,12 +1301,14 @@
     mainlineNixosGnssBtSystemCross = nixpkgs-old.lib.nixosSystem {
       system = buildSystem;
       modules = [
+        ./nixos/firmware.nix
         ./nixos/mainline-configuration.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = null;
           _module.args.geminiGnssDevice = "/dev/gnss0";
           _module.args.geminiGnssBringup = true;
           _module.args.geminiBluetooth = true;
+          _module.args.geminiConsysFirmware = true;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1333,6 +1337,36 @@
         mksquashfs store-contents $out \
           -comp xz -b 131072 -noappend -all-root -no-progress
       '';
+
+    mainlineRadioFirmwareBuildAssertions = nixosSystem: let
+      firmware = nixosSystem.config.hardware.firmware;
+      toplevel = nixosSystem.config.system.build.toplevel;
+    in ''
+      test -L ${toplevel}/firmware
+      test "$(readlink ${toplevel}/firmware)" = "${firmware}/lib/firmware"
+      firmware_root=${firmware}/lib/firmware
+      test "$(stat -c %s "$firmware_root/WMT_SOC.cfg")" = 80
+      test "$(sha256sum "$firmware_root/WMT_SOC.cfg" | cut -d' ' -f1)" = \
+        f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+      test "$(stat -c %s "$firmware_root/ROMv3_patch_1_1_hdr.bin")" = 46472
+      test "$(sha256sum "$firmware_root/ROMv3_patch_1_1_hdr.bin" | cut -d' ' -f1)" = \
+        5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+      test "$(stat -c %s "$firmware_root/ROMv3_patch_1_0_hdr.bin")" = 210904
+      test "$(sha256sum "$firmware_root/ROMv3_patch_1_0_hdr.bin" | cut -d' ' -f1)" = \
+        450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+      copied_firmware=store-contents/$(basename ${firmware})/lib/firmware
+      test -e "$copied_firmware/WMT_SOC.cfg"
+      test -e "$copied_firmware/ROMv3_patch_1_1_hdr.bin"
+      test -e "$copied_firmware/ROMv3_patch_1_0_hdr.bin"
+      grep -Fq gemini-consys-firmware-ready.service \
+        ${toplevel}/etc/systemd/system/gemini-gnss-w4.service
+      ${buildPkgs.lib.optionalString nixosSystem.config.hardware.bluetooth.enable ''
+        grep -Fq gemini-consys-firmware-ready.service \
+          ${toplevel}/etc/systemd/system/bluetooth.service
+      ''}
+      grep -Fq systemd-udevd.service \
+        ${toplevel}/etc/systemd/system/gemini-consys-firmware-ready.service
+    '';
 
     nixosSquashfs =
       mkSquashfs buildPkgs nixosSystemCross.config.system.build.toplevel;
@@ -1366,6 +1400,7 @@
         }}/store-paths); do
           cp -a "$path" store-contents/
         done
+        ${mainlineRadioFirmwareBuildAssertions mainlineNixosGnssSystemCross}
         basename ${mainlineNixosGnssSystemCross.config.system.build.toplevel} \
           > store-contents/.gemini-system
         mksquashfs store-contents "$out" \
@@ -1383,6 +1418,7 @@
         }}/store-paths); do
           cp -a "$path" store-contents/
         done
+        ${mainlineRadioFirmwareBuildAssertions mainlineNixosGnssBtSystemCross}
         basename ${mainlineNixosGnssBtSystemCross.config.system.build.toplevel} \
           > store-contents/.gemini-system
         mksquashfs store-contents "$out" \

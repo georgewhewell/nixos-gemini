@@ -10,6 +10,7 @@
   geminiGnssDevice ? null,
   geminiGnssBringup ? false,
   geminiBluetooth ? false,
+  geminiConsysFirmware ? false,
   ...
 }: {
   assertions = [
@@ -24,6 +25,14 @@
     {
       assertion = !geminiGnssBringup || geminiGnssDevice != null;
       message = "GNSS W4 bring-up requires the retained /dev/gnss0 profile";
+    }
+    {
+      assertion = !geminiGnssBringup || geminiConsysFirmware;
+      message = "GNSS W4 bring-up requires Stage2 CONSYS firmware";
+    }
+    {
+      assertion = !geminiBluetooth || geminiConsysFirmware;
+      message = "Bluetooth bring-up requires Stage2 CONSYS firmware";
     }
   ];
   nixpkgs.overlays = [
@@ -132,6 +141,46 @@
     nowait = true;
     listenany = false;
   };
+
+  # NixOS deliberately keeps firmware in the immutable system closure rather
+  # than assuming an FHS /lib. The custom Stage1 already carries the same
+  # three files; expose their exact Stage2 closure through both the standard
+  # firmware_class path and /lib/firmware before any radio consumer runs.
+  system.activationScripts.geminiConsysFirmware = lib.mkIf geminiConsysFirmware {
+    deps = ["udevd"];
+    text = ''
+      mkdir -p /lib
+      ln -sfn ${config.hardware.firmware}/lib/firmware /lib/firmware
+    '';
+  };
+  systemd.services.gemini-consys-firmware-ready = lib.mkIf geminiConsysFirmware {
+    description = "Verify Gemini CONSYS firmware before radio bring-up";
+    wantedBy = ["multi-user.target"];
+    after = ["systemd-udevd.service"];
+    before = ["gemini-gnss-w4.service" "bluetooth.service"];
+    requires = ["systemd-udevd.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -eu
+      firmware=${config.hardware.firmware}/lib/firmware
+      test -L /lib/firmware
+      test "$(readlink -f /lib/firmware)" = "$(readlink -f "$firmware")"
+      test -r /sys/module/firmware_class/parameters/path
+      test "$(cat /sys/module/firmware_class/parameters/path)" = "$firmware"
+      test "$(stat -c %s "$firmware/WMT_SOC.cfg")" = 80
+      test "$(${pkgs.coreutils}/bin/sha256sum "$firmware/WMT_SOC.cfg" | cut -d' ' -f1)" = \
+        f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+      test "$(stat -c %s "$firmware/ROMv3_patch_1_1_hdr.bin")" = 46472
+      test "$(${pkgs.coreutils}/bin/sha256sum "$firmware/ROMv3_patch_1_1_hdr.bin" | cut -d' ' -f1)" = \
+        5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+      test "$(stat -c %s "$firmware/ROMv3_patch_1_0_hdr.bin")" = 210904
+      test "$(${pkgs.coreutils}/bin/sha256sum "$firmware/ROMv3_patch_1_0_hdr.bin" | cut -d' ' -f1)" = \
+        450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+    '';
+  };
   services.udev.extraRules = lib.optionalString (geminiGnssDevice != null) ''
     SUBSYSTEM=="gnss", KERNEL=="gnss0", TAG+="systemd"
   '';
@@ -143,8 +192,12 @@
     description = "Bring up Gemini W4 before registering GNSS";
     wantedBy = ["multi-user.target"];
     wants = ["sys-subsystem-net-devices-wlan0.device"];
-    after = ["sys-subsystem-net-devices-wlan0.device"];
+    after = [
+      "gemini-consys-firmware-ready.service"
+      "sys-subsystem-net-devices-wlan0.device"
+    ];
     before = ["gpsd.service"];
+    requires = ["gemini-consys-firmware-ready.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -179,6 +232,10 @@
   hardware.bluetooth = lib.mkIf geminiBluetooth {
     enable = true;
     powerOnBoot = true;
+  };
+  systemd.services.bluetooth = lib.mkIf geminiBluetooth {
+    after = ["gemini-consys-firmware-ready.service"];
+    requires = ["gemini-consys-firmware-ready.service"];
   };
   programs.ssh.package = pkgs.openssh.override {
     withFIDO = false;

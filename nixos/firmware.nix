@@ -22,6 +22,18 @@
       cp ${../blobs/pcm_deepidle.bin} $out/lib/firmware/pcm_deepidle.bin
       cp ${../blobs/pcm_sodi.bin} $out/lib/firmware/pcm_sodi.bin
       cp ${../blobs/pcm_suspend.bin} $out/lib/firmware/pcm_suspend.bin
+
+      # These three bare filenames are the production WMT bootstrap ABI.
+      # Fail the build if the retained local evidence changes silently.
+      test "$(stat -c %s $out/lib/firmware/WMT_SOC.cfg)" = 80
+      test "$(sha256sum $out/lib/firmware/WMT_SOC.cfg | cut -d' ' -f1)" = \
+        f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+      test "$(stat -c %s $out/lib/firmware/ROMv3_patch_1_1_hdr.bin)" = 46472
+      test "$(sha256sum $out/lib/firmware/ROMv3_patch_1_1_hdr.bin | cut -d' ' -f1)" = \
+        5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+      test "$(stat -c %s $out/lib/firmware/ROMv3_patch_1_0_hdr.bin)" = 210904
+      test "$(sha256sum $out/lib/firmware/ROMv3_patch_1_0_hdr.bin | cut -d' ' -f1)" = \
+        450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
     '')
   ];
 }
