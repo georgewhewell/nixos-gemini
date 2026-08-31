@@ -1661,8 +1661,6 @@
       mainlineNixosGnssSquashfs = mainlineNixosGnssSquashfs;
       mainlineNixosGnssInitramfs = mainlineNixosGnss.initramfs;
       mainlineNixosGnssBundle = mainlineNixosGnss.bundle;
-      mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
-      mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
