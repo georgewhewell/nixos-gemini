@@ -831,6 +831,7 @@
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_DERIVED_ADMISSION=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_STATE=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_SNAPSHOT_OBSERVER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_STATE_DECODERS=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_CLOCK_BACKEND=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_DVFSP_BIGIDVFS_BACKEND=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_BIGIDVFS_SRAM_OWNER=y' .config
@@ -1778,6 +1779,15 @@
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller compatible)" = \
           mediatek,mt6797-a72-admission-controller
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller status)" = okay
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-physical-source-observer compatible)" = \
+          mediatek,mt6797-a72-physical-source-observer
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-physical-source-observer status)" = okay
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /a72-physical-source-observer mediatek,platform-state)" = \
+          "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /a72-platform-state@10222000 phandle)"
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /a72-physical-source-observer mediatek,clock-backend)" = \
+          "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /dvfsp-clock-backend@1001a000 phandle)"
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /a72-physical-source-observer mediatek,bigidvfs-backend)" = \
+          "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /dvfsp-bigidvfs-backend phandle)"
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/a72-admission-trace@444f0000 compatible)" = \
           planet,gemini-a72-admission-trace
         test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/ramoops@44410000 reg)" = \
@@ -1835,7 +1845,7 @@
           planet,gemini-a72-runtime-binding-v1
         test "$(fdtget "$out/gemini.dtb" /chosen/gemini-late-cpu-provenance profile-id)" = \
           mt6797-a53-a72-a41-v7
-        echo 'a72-cpu8-sram-diagnostic=overlay-composed cpu8-only cpu9-veto=maxcpus-9' \
+        echo 'a72-admission=overlay-composed cpu8-auto cpu9-manual-after-ack maxcpus=9 live-clock-snapshot-read-only' \
           >> "$out/VALIDATION"
       ''}
       ${lib.optionalString cacheTopologyObserver ''

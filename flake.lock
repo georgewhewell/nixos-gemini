@@ -59,8 +59,8 @@
     "linux-gemini-combined-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788206305,
-        "narHash": "sha256-MbUCykjGBDgoqEPMP6/NcCunFqR39gCJQ4KegV6PIFU=",
+        "lastModified": 1788206772,
+        "narHash": "sha256-ZcMH8GPe+8LIAuMmFWpcR5C7wvg33IR4VDFMtrmWRJI=",
         "path": "/home/grw/src/linux-gemini-combined-cpu9-gnss-20260831",
         "type": "path"
       },
