@@ -46,13 +46,13 @@
     "linux-gemini-gnss-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788170298,
-        "narHash": "sha256-SCPvJjD/BU3fRRJJp74YMgXbPPUPgh1x+EYG9jciUT8=",
-        "path": "/mnt/Home/src/linux-gemini-radio-persistent-trex",
+        "lastModified": 1788202216,
+        "narHash": "sha256-BicPordn+xt13A8IU78MQosc+gabegv6Zh3CSB8mVU4=",
+        "path": "/home/grw/src/linux-gemini-gnss-endpoint-v2-20260831",
         "type": "path"
       },
       "original": {
-        "path": "/mnt/Home/src/linux-gemini-radio-persistent-trex",
+        "path": "/home/grw/src/linux-gemini-gnss-endpoint-v2-20260831",
         "type": "path"
       }
     },

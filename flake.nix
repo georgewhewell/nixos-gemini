@@ -60,9 +60,9 @@
       flake = false;
     };
     linux-gemini-gnss-candidate = {
-      # Committed G2g endpoint source: retained STP, exact active GPS WMT and
-      # Gemini GPIO69 LNA chronology. This never moves an accepted source pin.
-      url = "path:/mnt/Home/src/linux-gemini-radio-persistent-trex";
+      # Reviewed G2g endpoint source: retained STP, exact active GPS WMT,
+      # GPIO69 LNA chronology and endpoint diagnostics.
+      url = "path:/home/grw/src/linux-gemini-gnss-endpoint-v2-20260831";
       flake = false;
     };
     ixoo-candidate = {
@@ -530,9 +530,9 @@
       unattendedRecovery = true;
     };
 
-    # G2g retains the hardware-passed G2d full-STP session and publishes one
-    # GNSS class endpoint. Opening it is the only path that raises GPIO69 and
-    # sends GPS FUNC_CTRL-on; close lowers GPIO69 before FUNC_CTRL-off.
+    # G2g attaches channel 2 after W4 starts the shared full-STP session, then
+    # publishes one GNSS class endpoint. Opening it is the only path that raises
+    # GPIO69 and sends GPS FUNC_CTRL-on; close lowers GPIO69 before FUNC_CTRL-off.
     mainlineConsysG2gGnss = import ./nix/mainline.nix {
       inherit
         buildPkgs
@@ -548,7 +548,10 @@
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
       consysG2gGnssEndpoint = true;
-      consysG2hBtEndpoint = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
       unattendedRecovery = true;
     };
 
@@ -572,7 +575,10 @@
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
       consysG2gGnssEndpoint = true;
-      consysG2hBtEndpoint = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW2NicCapability = true;
+      wifiW4Connect = true;
       platformEnablement = true;
       displayOverlay = true;
       audioOverlay = true;
@@ -1167,6 +1173,7 @@
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiGnssDevice = null;
+          _module.args.geminiBluetooth = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1185,7 +1192,10 @@
         {
           _module.args.geminiLeaseSelfAcceptToken = null;
           _module.args.geminiGnssDevice = "/dev/gnss0";
-          _module.args.geminiBluetooth = true;
+          _module.args.geminiGnssBringup = true;
+          # This candidate shares the controller with W4; it does not claim a
+          # Bluetooth endpoint until one has been independently evidenced.
+          _module.args.geminiBluetooth = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1298,7 +1308,7 @@
       displayActivation = true;
       consysFirmware = true;
       gnssService = true;
-      bluetoothService = true;
+      bluetoothService = false;
       provisionStore = true;
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;

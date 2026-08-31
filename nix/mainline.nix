@@ -347,7 +347,9 @@
     assert !wifiW0Observe || consysG2dPostpatchOverlay;
     assert !consysG2gGnssEndpoint || consysG2dPostpatchOverlay;
     assert !consysG2hBtEndpoint || consysG2dPostpatchOverlay;
-    assert !consysG2gGnssEndpoint || (!wifiW0Observe && !wifiW1FirmwareReadyProof && !wifiW2NicCapability && !wifiW4Connect);
+    # G2g has no independent controller start: its endpoint attaches only
+    # after W4 owns the shared active full-STP session.
+    assert !consysG2gGnssEndpoint || wifiW4Connect;
     assert !wifiW1FirmwareReadyProof || (consysG2dPostpatchOverlay && wifiW0Observe);
     assert !wifiW1Forensic || wifiW1FirmwareReadyProof;
     assert !wifiW2NicCapability || (wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);

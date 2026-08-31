@@ -8,6 +8,7 @@
   lib,
   geminiLeaseSelfAcceptToken ? null,
   geminiGnssDevice ? null,
+  geminiGnssBringup ? false,
   geminiBluetooth ? false,
   ...
 }: {
@@ -19,6 +20,10 @@
     {
       assertion = geminiGnssDevice == null || geminiGnssDevice == "/dev/gnss0";
       message = "the Gemini GNSS profile accepts only the retained /dev/gnss0 endpoint";
+    }
+    {
+      assertion = !geminiGnssBringup || geminiGnssDevice != null;
+      message = "GNSS W4 bring-up requires the retained /dev/gnss0 profile";
     }
   ];
   nixpkgs.overlays = [
@@ -130,8 +135,41 @@
   services.udev.extraRules = lib.optionalString (geminiGnssDevice != null) ''
     SUBSYSTEM=="gnss", KERNEL=="gnss0", TAG+="systemd"
   '';
+  # W4 owns the sole controller start.  /dev/gnss0 cannot exist until wlan0
+  # has been opened, and dhcpcd is neither ordered nor sufficient for that
+  # transition when the interface has no association.  Bring it up explicitly;
+  # this does not scan, associate, configure an address, or start DHCP.
+  systemd.services.gemini-gnss-w4 = lib.mkIf geminiGnssBringup {
+    description = "Bring up Gemini W4 before registering GNSS";
+    wantedBy = ["multi-user.target"];
+    wants = ["sys-subsystem-net-devices-wlan0.device"];
+    after = ["sys-subsystem-net-devices-wlan0.device"];
+    before = ["gpsd.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      TimeoutStartSec = "45s";
+    };
+    script = ''
+      set -eu
+      for attempt in $(seq 1 30); do
+        if [ -e /sys/class/net/wlan0 ]; then
+          break
+        fi
+        echo "gemini-gnss-w4: waiting for wlan0 attempt=$attempt"
+        sleep 1
+      done
+      if [ ! -e /sys/class/net/wlan0 ]; then
+        echo "gemini-gnss-w4: wlan0 missing after 30s"
+        exit 1
+      fi
+      ${pkgs.iproute2}/bin/ip link set dev wlan0 up
+      ${pkgs.iproute2}/bin/ip -brief link show dev wlan0
+    '';
+  };
   systemd.services.gpsd = lib.mkIf (geminiGnssDevice != null) {
-    after = ["dev-gnss0.device"];
+    after = ["gemini-gnss-w4.service" "dev-gnss0.device"];
+    requires = lib.optional geminiGnssBringup "gemini-gnss-w4.service";
     unitConfig.BindsTo = ["dev-gnss0.device"];
     serviceConfig = {
       Restart = "on-failure";

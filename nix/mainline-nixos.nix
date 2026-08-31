@@ -11,6 +11,9 @@
   unattendedRecovery ? false,
   inputDiagnostics ? false,
   displayActivation ? false,
+  consysFirmware ? false,
+  gnssService ? false,
+  bluetoothService ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
@@ -20,10 +23,14 @@ assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
+assert builtins.isBool consysFirmware;
+assert builtins.isBool gnssService;
+assert builtins.isBool bluetoothService;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
+assert !gnssService || consysFirmware;
 let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists.  Derive the p29 filename from the immutable Nix store path so a
@@ -58,6 +65,22 @@ let
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
     test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
       5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
+    ${if consysFirmware then ''
+      cp ${../blobs/WMT_SOC.cfg} root/lib/firmware/WMT_SOC.cfg
+      cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
+        root/lib/firmware/ROMv3_patch_1_1_hdr.bin
+      cp ${../blobs/ROMv3_patch_1_0_hdr.bin} \
+        root/lib/firmware/ROMv3_patch_1_0_hdr.bin
+      test "$(stat -c %s root/lib/firmware/WMT_SOC.cfg)" = 80
+      test "$(sha256sum root/lib/firmware/WMT_SOC.cfg | cut -d' ' -f1)" = \
+        f4a59b622a4e0c1470e475ce33f3edae43b27f1fbdeba54dc7cf07503d132880
+      test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_1_hdr.bin)" = 46472
+      test "$(sha256sum root/lib/firmware/ROMv3_patch_1_1_hdr.bin | cut -d' ' -f1)" = \
+        5732c0730380e937b48ad169f2805b65e8d4a178265566c5083cb2cc2d249f1e
+      test "$(stat -c %s root/lib/firmware/ROMv3_patch_1_0_hdr.bin)" = 210904
+      test "$(sha256sum root/lib/firmware/ROMv3_patch_1_0_hdr.bin | cut -d' ' -f1)" = \
+        450c2b0949cf879217ac9aef81b18b860982f0e69340784b448b54365d8cf630
+    '' else ""}
     cp ${authorizedKeys} root/root/.ssh/authorized_keys
     chmod 0700 root/root root/root/.ssh
     chmod 0600 root/root/.ssh/authorized_keys
@@ -537,7 +560,7 @@ let
     ${if displayActivation then ''
       grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
       grep -Fq 'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' root/init
-      activation_line=$(grep -n -F '    activate_display' root/init | tail -n 1 | cut -d: -f1)
+      activation_line=$(grep -nx -F 'activate_display' root/init | cut -d: -f1)
       watchdog_line=$(grep -n -F 'start_watchdog_lease' root/init | tail -n 1 | cut -d: -f1)
       test "$watchdog_line" -lt "$activation_line"
     '' else ''
