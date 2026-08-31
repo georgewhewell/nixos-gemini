@@ -1,0 +1,7 @@
+# Persistent G2g GNSS endpoint. The G2d fragment supplies the exact proven
+# firmware/post-patch chronology; this adds only the retained channel-2 client.
+CONFIG_GNSS=y
+CONFIG_GNSS_MTK_CONSYS=y
+# CONFIG_GNSS_MTK_CONSYS_KUNIT_TEST is not set
+CONFIG_MTK_MT6797_CONSYS_G2G_GNSS_ENDPOINT=y
+# CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER_KUNIT_TEST is not set

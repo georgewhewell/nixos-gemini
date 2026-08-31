@@ -54,6 +54,12 @@
       url = "path:/mnt/Home/src/linux-gemini-w2-capability-trex";
       flake = false;
     };
+    linux-gemini-gnss-candidate = {
+      # Committed G2g endpoint source: retained STP, exact active GPS WMT and
+      # Gemini GPIO69 LNA chronology. This never moves an accepted source pin.
+      url = "path:/mnt/Home/src/linux-gemini-gnss-persistent-trex";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -73,6 +79,7 @@
     linux-gemini-w1-candidate,
     linux-gemini-w1-forensic-candidate,
     linux-gemini-w2-capability-candidate,
+    linux-gemini-gnss-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -514,6 +521,27 @@
       sshAccess = true;
       usbHostOverlay = true;
       consysG2dPostpatchOverlay = true;
+      unattendedRecovery = true;
+    };
+
+    # G2g retains the hardware-passed G2d full-STP session and publishes one
+    # GNSS class endpoint. Opening it is the only path that raises GPIO69 and
+    # sends GPS FUNC_CTRL-on; close lowers GPIO69 before FUNC_CTRL-off.
+    mainlineConsysG2gGnss = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-gnss-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
       unattendedRecovery = true;
     };
 
@@ -1327,6 +1355,10 @@
       mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
       mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
       mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
+      mainlineConsysG2gGnssKernel = mainlineConsysG2gGnss.kernel;
+      mainlineConsysG2gGnssDtb = mainlineConsysG2gGnss.serviceabilityDtb;
+      mainlineConsysG2gGnssInitramfs = mainlineConsysG2gGnss.probeInitramfs;
+      mainlineConsysG2gGnssBundle = mainlineConsysG2gGnss.bundle;
       mainlineWifiW1ReadyKernel = mainlineWifiW1Ready.kernel;
       mainlineWifiW1ReadyDtb = mainlineWifiW1Ready.serviceabilityDtb;
       mainlineWifiW1ReadyInitramfs = mainlineWifiW1Ready.probeInitramfs;

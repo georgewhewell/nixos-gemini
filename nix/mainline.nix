@@ -14,6 +14,7 @@
   consysG2bOverlay ? false,
   consysG2cPatchOverlay ? false,
   consysG2dPostpatchOverlay ? false,
+  consysG2gGnssEndpoint ? false,
   wifiW0Observe ? false,
   wifiW1FirmwareReadyProof ? false,
   wifiW1Forensic ? false,
@@ -67,6 +68,7 @@
     ++ lib.optionals consysG2bOverlay [./mainline-consys-g2b.fragment]
     ++ lib.optionals consysG2cPatchOverlay [./mainline-consys-g2c-patch.fragment]
     ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
+    ++ lib.optionals consysG2gGnssEndpoint [./mainline-consys-g2g-gnss.fragment]
     ++ lib.optionals (wifiW0Observe || wifiW1FirmwareReadyProof || wifiW2NicCapability) [./mainline-wifi-w0.fragment]
     ++ lib.optionals (wifiW1FirmwareReadyProof || wifiW2NicCapability) [./mainline-wifi-w1-ready.fragment]
     ++ lib.optionals wifiW2NicCapability [./mainline-wifi-w2-capability.fragment]
@@ -118,6 +120,10 @@
   consysG2dPostpatchLabel =
     if consysG2dPostpatchOverlay
     then "emi-identity-postid-full-wmt-hash-pinned-patch-postpatch-no-radio-client-v1"
+    else "none";
+  consysG2gGnssLabel =
+    if consysG2gGnssEndpoint
+    then "retained-full-stp-gpio69-func-ctrl-dev-gnss-v1"
     else "none";
   wifiW0Label = if wifiW0Observe then "gen3-cmd53-wcir-only-v1" else "none";
   wifiW1Label =
@@ -201,6 +207,7 @@
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
     + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
+    + lib.optionalString consysG2gGnssEndpoint " mt6797_consys_g2d_postpatch_owner.enable_experimental_g2g_gnss_endpoint=1"
     + lib.optionalString wifiW0Observe " mt6797_wifi_ahb_wcir.enable_experimental_wifi_wcir_observe=1"
     + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
     + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
@@ -215,6 +222,7 @@
     + lib.optionalString consysG2bOverlay "-consys-g2b"
     + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
     + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
+    + lib.optionalString consysG2gGnssEndpoint "-consys-g2g-gnss"
     + lib.optionalString wifiW0Observe "-wifi-w0"
     + lib.optionalString wifiW1FirmwareReadyProof (
       if wifiW2NicCapability then "" else if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
@@ -251,6 +259,8 @@
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
     assert !wifiW0Observe || consysG2dPostpatchOverlay;
+    assert !consysG2gGnssEndpoint || consysG2dPostpatchOverlay;
+    assert !consysG2gGnssEndpoint || (!wifiW0Observe && !wifiW1FirmwareReadyProof && !wifiW2NicCapability);
     assert !wifiW1FirmwareReadyProof || (consysG2dPostpatchOverlay && wifiW0Observe);
     assert !wifiW1Forensic || wifiW1FirmwareReadyProof;
     assert !wifiW2NicCapability || (wifiW1FirmwareReadyProof && wifiW0Observe && consysG2dPostpatchOverlay);
@@ -504,6 +514,13 @@
         ! grep -q '^CONFIG_MTK_MT6797_BTIF_TRANSPORT=' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_AFE_GPS_REGISTER_SETTING is not set' .config
         grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_LIVE is not set' .config
+      ''}
+      ${lib.optionalString consysG2gGnssEndpoint ''
+        grep -Fqx 'CONFIG_GNSS=y' .config
+        grep -Fqx 'CONFIG_GNSS_MTK_CONSYS=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_G2G_GNSS_ENDPOINT=y' .config
+        ! grep -q '^CONFIG_GNSS_MTK_CONSYS_KUNIT_TEST=' .config
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER_KUNIT_TEST=' .config
       ''}
       ${lib.optionalString wifiW0Observe ''
         grep -E '^CONFIG_MTK_MT6797_WIFI_AHB_[A-Z0-9_]+=' .config || true
@@ -2011,6 +2028,7 @@
       echo "nix-consys-g2b=${consysG2bLabel}"
       echo "nix-consys-g2c-patch=${consysG2cPatchLabel}"
       echo "nix-consys-g2d-postpatch=${consysG2dPostpatchLabel}"
+      echo "nix-consys-g2g-gnss=${consysG2gGnssLabel}"
       echo "nix-wifi-w0=${wifiW0Label}"
       echo "nix-wifi-w1=${wifiW1Label}"
       echo "nix-wifi-w2=${wifiW2Label}"
