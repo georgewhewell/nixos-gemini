@@ -828,6 +828,7 @@
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_CAPABILITY_PROFILE=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_P30_PROTOCOL_MODEL=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_P24_TRANSACTION_OWNER_MODEL=y' .config
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_SMPEN=y' .config
         grep -Fqx 'CONFIG_ARM64_MT6797_A72_DERIVED_ADMISSION=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_STATE=y' .config
         grep -Fqx 'CONFIG_MTK_MT6797_A72_PLATFORM_SNAPSHOT_OBSERVER=y' .config
