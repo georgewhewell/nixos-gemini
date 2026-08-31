@@ -665,6 +665,8 @@
       ''}
       ${lib.optionalString consysG2hBtEndpoint ''
         grep -Fqx 'CONFIG_BT=y' .config
+        grep -Fqx 'CONFIG_BT_BREDR=y' .config
+        grep -Fqx 'CONFIG_BT_LE=y' .config
         grep -Fqx 'CONFIG_BT_MTK6797_STP=y' .config
         ! grep -q '^CONFIG_BT_MTK6797_STP_KUNIT_TEST=' .config
         grep -Fqx 'CONFIG_CRYPTO_CMAC=y' .config

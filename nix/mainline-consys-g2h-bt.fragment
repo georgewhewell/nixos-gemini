@@ -1,5 +1,7 @@
 # Standard MT6797 HCI device over controller-owned full-STP channel zero.
 CONFIG_BT=y
+CONFIG_BT_BREDR=y
+CONFIG_BT_LE=y
 CONFIG_BT_MTK6797_STP=y
 # CONFIG_BT_MTK6797_STP_KUNIT_TEST is not set
 
