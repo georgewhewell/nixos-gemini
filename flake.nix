@@ -41,6 +41,13 @@
       url = "path:/mnt/Home/src/linux-gemini-w1-firmware-source";
       flake = false;
     };
+    linux-gemini-w1-forensic-candidate = {
+      # Keep causal instrumentation separate from the earlier W1 READY image.
+      # The source is a committed, independent Trex clone; this profile is
+      # build/stage-only and never changes an accepted candidate's pin.
+      url = "path:/mnt/Home/src/linux-gemini-w2-trex";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -58,6 +65,7 @@
     linux-gemini,
     linux-gemini-next,
     linux-gemini-w1-candidate,
+    linux-gemini-w1-forensic-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -522,6 +530,30 @@
       consysG2dPostpatchOverlay = true;
       wifiW0Observe = true;
       wifiW1FirmwareReadyProof = true;
+      unattendedRecovery = true;
+    };
+
+    # W1 forensic successor to the safely failed READY candidate. It carries
+    # the same deliberately fenced device policy, but its committed kernel
+    # records every causal portal and PALDO cleanup result before any next
+    # hardware review. This output is not authorization to flash.
+    mainlineWifiW1Forensic = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w1-forensic-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
       unattendedRecovery = true;
     };
 
@@ -1268,6 +1300,10 @@
       mainlineWifiW1ReadyDtb = mainlineWifiW1Ready.serviceabilityDtb;
       mainlineWifiW1ReadyInitramfs = mainlineWifiW1Ready.probeInitramfs;
       mainlineWifiW1ReadyBundle = mainlineWifiW1Ready.bundle;
+      mainlineWifiW1ForensicKernel = mainlineWifiW1Forensic.kernel;
+      mainlineWifiW1ForensicDtb = mainlineWifiW1Forensic.serviceabilityDtb;
+      mainlineWifiW1ForensicInitramfs = mainlineWifiW1Forensic.probeInitramfs;
+      mainlineWifiW1ForensicBundle = mainlineWifiW1Forensic.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

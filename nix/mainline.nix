@@ -16,6 +16,7 @@
   consysG2dPostpatchOverlay ? false,
   wifiW0Observe ? false,
   wifiW1FirmwareReadyProof ? false,
+  wifiW1Forensic ? false,
   consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
@@ -119,7 +120,10 @@
   wifiW0Label = if wifiW0Observe then "gen3-cmd53-wcir-only-v1" else "none";
   wifiW1Label =
     if wifiW1FirmwareReadyProof
-    then "bounded-full-firmware-start-ready-no-irq-no-netdev-v1"
+    then
+      if wifiW1Forensic
+      then "bounded-full-firmware-start-ready-forensic-no-irq-no-netdev-v1"
+      else "bounded-full-firmware-start-ready-no-irq-no-netdev-v1"
     else "none";
   consysFirmwareAvailable =
     consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay ||
@@ -205,7 +209,9 @@
     + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
     + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
     + lib.optionalString wifiW0Observe "-wifi-w0"
-    + lib.optionalString wifiW1FirmwareReadyProof "-wifi-w1-ready"
+    + lib.optionalString wifiW1FirmwareReadyProof (
+      if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+    )
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -238,6 +244,7 @@
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
     assert !wifiW0Observe || consysG2dPostpatchOverlay;
     assert !wifiW1FirmwareReadyProof || (consysG2dPostpatchOverlay && wifiW0Observe);
+    assert !wifiW1Forensic || wifiW1FirmwareReadyProof;
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -345,7 +352,9 @@
       + lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"
       + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
       + lib.optionalString wifiW0Observe "-wifi-w0"
-      + lib.optionalString wifiW1FirmwareReadyProof "-wifi-w1-ready"
+      + lib.optionalString wifiW1FirmwareReadyProof (
+        if wifiW1Forensic then "-wifi-w1-forensic" else "-wifi-w1-ready"
+      )
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
