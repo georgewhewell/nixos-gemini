@@ -293,6 +293,8 @@
     + lib.optionalString wifiW1FirmwareReadyProof " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w1_firmware_preflight=1"
     + lib.optionalString wifiW2NicCapability " mt6797_wifi_ahb_w1_firmware.enable_experimental_wifi_w2_nic_capability=1"
     + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
+    + lib.optionalString md1LkHandoffProbe " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1"
+    + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
