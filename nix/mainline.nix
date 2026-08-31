@@ -187,7 +187,7 @@
   baseDtbSha256 = "f1262332ce232dac56c78c9d3d3e1fa390ebfd2209540fa4ca023b89cb871250";
   # Same reviewed A72 topology after the existing, structurally validated
   # serviceability transform (CONSYS/BTIF remain disabled).
-  serviceabilityBaseDtbSha256 = "88cee4bc481ddf31da72fc8bf2e1100d9b4ff23034902034848846bf0e3766e7";
+  serviceabilityBaseDtbSha256 = "22b7b4158f88a2ad8bb752dbf1d3cfbae4234efd95356b1c5dc044fd7824f613";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert
