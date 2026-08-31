@@ -1342,8 +1342,6 @@
       firmware = nixosSystem.config.hardware.firmware;
       toplevel = nixosSystem.config.system.build.toplevel;
     in ''
-      test -L ${toplevel}/firmware
-      test "$(readlink ${toplevel}/firmware)" = "${firmware}/lib/firmware"
       firmware_root=${firmware}/lib/firmware
       test "$(stat -c %s "$firmware_root/WMT_SOC.cfg")" = 80
       test "$(sha256sum "$firmware_root/WMT_SOC.cfg" | cut -d' ' -f1)" = \
@@ -1358,6 +1356,9 @@
       test -e "$copied_firmware/WMT_SOC.cfg"
       test -e "$copied_firmware/ROMv3_patch_1_1_hdr.bin"
       test -e "$copied_firmware/ROMv3_patch_1_0_hdr.bin"
+      grep -Fq "${firmware}/lib/firmware" ${toplevel}/activate
+      grep -Fq "ln -sfn ${firmware}/lib/firmware /lib/firmware" \
+        ${toplevel}/activate
       grep -Fq gemini-consys-firmware-ready.service \
         ${toplevel}/etc/systemd/system/gemini-gnss-w4.service
       ${buildPkgs.lib.optionalString nixosSystem.config.hardware.bluetooth.enable ''
