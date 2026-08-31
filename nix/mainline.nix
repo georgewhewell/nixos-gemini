@@ -118,7 +118,7 @@
     else "none";
   consysG2dGnssLabel =
     if consysG2dGnssProbe
-    then "gpio69-lna-gps-funcctrl-on-off-one-shot-v1"
+    then "gpio69-lna-mt6797-mode-dir-di-do-gps-funcctrl-on-off-one-shot-v2"
     else "none";
   wifiW0Label = if wifiW0Observe then "gen3-cmd53-wcir-only-v1" else "none";
   consysFirmwareAvailable = consysFirmware || consysG2cPatchOverlay || consysG2dPostpatchOverlay;
@@ -664,6 +664,9 @@
       runHook preBuild
       export SOURCE_DATE_EPOCH=1783123200
       unset NIX_LDFLAGS
+      ${lib.optionalString consysG2dGnssProbe ''
+        tools/gemini/test-consys-g2d-probe-contract.sh
+      ''}
       kernelMakeFlags=(
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
