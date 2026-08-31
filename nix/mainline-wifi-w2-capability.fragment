@@ -1,0 +1,3 @@
+# W2 retains W1's full firmware/READY transaction, then accepts only the
+# vendor CID 0x80 port-1 NIC-capability event through a fresh RX1 IRQ.
+CONFIG_MTK_MT6797_WIFI_AHB_W2_NIC_CAPABILITY=y

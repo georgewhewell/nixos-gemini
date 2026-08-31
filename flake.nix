@@ -48,6 +48,12 @@
       url = "path:/mnt/Home/src/linux-gemini-w2-trex";
       flake = false;
     };
+    linux-gemini-w2-capability-candidate = {
+      # W2 is an independent committed Trex worktree. It reuses the passed W1
+      # transaction, then proves the vendor NIC-capability IRQ path only.
+      url = "path:/mnt/Home/src/linux-gemini-w2-capability-trex";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -66,6 +72,7 @@
     linux-gemini-next,
     linux-gemini-w1-candidate,
     linux-gemini-w1-forensic-candidate,
+    linux-gemini-w2-capability-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -554,6 +561,30 @@
       wifiW0Observe = true;
       wifiW1FirmwareReadyProof = true;
       wifiW1Forensic = true;
+      unattendedRecovery = true;
+    };
+
+    # W2 is the shortest source-backed successor to W1 READY. It issues only
+    # CMD_ID_GET_NIC_CAPABILITY and accepts only its fresh port-1 RX1 IRQ
+    # event. It does not expose a persistent WLAN transport or netdev.
+    mainlineWifiW2Capability = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-w2-capability-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      wifiW1FirmwareReadyProof = true;
+      wifiW1Forensic = true;
+      wifiW2NicCapability = true;
       unattendedRecovery = true;
     };
 
@@ -1304,6 +1335,10 @@
       mainlineWifiW1ForensicDtb = mainlineWifiW1Forensic.serviceabilityDtb;
       mainlineWifiW1ForensicInitramfs = mainlineWifiW1Forensic.probeInitramfs;
       mainlineWifiW1ForensicBundle = mainlineWifiW1Forensic.bundle;
+      mainlineWifiW2CapabilityKernel = mainlineWifiW2Capability.kernel;
+      mainlineWifiW2CapabilityDtb = mainlineWifiW2Capability.serviceabilityDtb;
+      mainlineWifiW2CapabilityInitramfs = mainlineWifiW2Capability.probeInitramfs;
+      mainlineWifiW2CapabilityBundle = mainlineWifiW2Capability.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;
