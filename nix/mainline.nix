@@ -568,11 +568,13 @@
       # Keep the build decisive on the A72 path rather than failing on an
       # unrelated optional collector that an upstream profile deliberately
       # omits.
-      grep -Fqx 'CONFIG_ARM64_MT6797_A72_PROVIDER_OWNER=y' .config
-      grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
-      grep -Fqx 'CONFIG_MTK_MT6797_A72_DEFAULT_OFF_BINDER=y' .config
-      grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_CONTROLLER=y' .config
-      grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_LIVE_TRIGGER=y' .config
+      ${lib.optionalString a72Cpu8SramDiagnostic ''
+        grep -Fqx 'CONFIG_ARM64_MT6797_A72_PROVIDER_OWNER=y' .config
+        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_DEFAULT_OFF_BINDER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_CONTROLLER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_LIVE_TRIGGER=y' .config
+      ''}
       set +e
       # The selected CPU8 profile ends with its own explicit local version;
       # accepting the read-only profile's old value here would reintroduce the
