@@ -1743,8 +1743,14 @@
 	        test $((ramoops_start + ramoops_size)) -le "$trace_start"
 	        test $((trace_start + trace_size)) -le "$ledger_start"
 	        test $((ledger_start + ledger_size)) -le "$remainder_start"
-        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = disabled
-        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = disabled
+        ${lib.optionalString (!wifiW4Connect) ''
+          test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = disabled
+          test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = disabled
+        ''}
+        ${lib.optionalString wifiW4Connect ''
+          test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = okay
+          test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = okay
+        ''}
         cp "$out/gemini-a72-cpu8-sram.dtb" "$out/gemini.dtb"
         # The architecture-owned late-CPU profile deliberately publishes no
         # token until this static record verifies the *running* IKCONFIG,
