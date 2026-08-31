@@ -2787,6 +2787,8 @@
       echo "nix-debug-overlay=${overlayLabel}"
       echo "nix-storage-overlay=${storageLabel}"
       echo "nix-access=${accessLabel}"
+      echo "usb-build-tag=${usbBuildTag}"
+      echo "usb-build-serial=${usbBuildSerial}"
       echo "nix-rootfs-probe=${rootfsLabel}"
       echo "nix-usb-host=${usbHostLabel}"
       echo "nix-consys-identity=${consysIdentityLabel}"
