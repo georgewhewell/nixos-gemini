@@ -34,12 +34,12 @@
       "flake": false,
       "locked": {
         "lastModified": 1788194731,
-        "narHash": "sha256-vC5ZNofVAZWfLv9uJMXWLp+XXG5dFPaluLgYKxSxcyQ=",
-        "path": "/home/grw/src/linux-gemini-p22-combined-next-20260831",
+        "narHash": "sha256-nRdwAbbBJ4L50dEwsQZvCFq47rIJ8aJN4T8dZCvPrJ0=",
+        "path": "/home/grw/src/linux-gemini-p22-combined-v2-20260831",
         "type": "path"
       },
       "original": {
-        "path": "/home/grw/src/linux-gemini-p22-combined-next-20260831",
+        "path": "/home/grw/src/linux-gemini-p22-combined-v2-20260831",
         "type": "path"
       }
     },
