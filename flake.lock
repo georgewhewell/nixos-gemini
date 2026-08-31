@@ -33,13 +33,13 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788198366,
-        "narHash": "sha256-Wx031XAugMqF94zJic0l/whzaiPNZYPQWE8IpSY6hxM=",
-        "path": "/home/grw/src/linux-gemini-a72-postsuccess-watchdog-handoff-20260831",
+        "lastModified": 1788199034,
+        "narHash": "sha256-iCYCufT0u/3atb0qB3u9M92SgOyZkh6W20fju4Z5yBE=",
+        "path": "/home/grw/src/linux-gemini-wifi-w4-ccif-next-20260831",
         "type": "path"
       },
       "original": {
-        "path": "/home/grw/src/linux-gemini-a72-postsuccess-watchdog-handoff-20260831",
+        "path": "/home/grw/src/linux-gemini-wifi-w4-ccif-next-20260831",
         "type": "path"
       }
     },

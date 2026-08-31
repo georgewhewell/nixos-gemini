@@ -21,9 +21,9 @@
       flake = false;
     };
     linux-gemini = {
-      # Trex-local A72 candidate source: tested platform base plus upstream
-      # DA9213 provider-release, held-isolation, and SRAM-diagnostic repairs.
-      url = "path:/home/grw/src/linux-gemini-a72-postsuccess-watchdog-handoff-20260831";
+      # Trex-local combined candidate: the CPU8-watchdog handoff base plus
+      # reviewed W4 command framing and passive MD1 CCIF-start observation.
+      url = "path:/home/grw/src/linux-gemini-wifi-w4-ccif-next-20260831";
       flake = false;
     };
     linux-gemini-next = {
