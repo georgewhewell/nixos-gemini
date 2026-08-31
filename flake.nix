@@ -629,6 +629,8 @@
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
     };
 
     # Compile oracle for the independent HCI source branch before the final
@@ -654,7 +656,16 @@
       wifiW2NicCapability = true;
       wifiW4Connect = true;
       a72Cpu8SramDiagnostic = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
       unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
     };
 
     # W1 follows the hardware-passed W0 CMD53 portal read. It sends only the
