@@ -1064,8 +1064,8 @@
         test -s "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-cldma-prepare.dtbo \
           "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
-      ''}
         test -s "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
@@ -1748,8 +1748,7 @@
           '0 10014000 0 1e00 0 10015000 0 1e00 0 10219000 0 1e00 0 1021a000 0 1e00 0 10209000 0 1000 0 1020a000 0 1000'
         fdtget -p "$out/gemini-md1-cldma-prepare.dtb" /modem-cldma@10014000 \
           | grep -Fqx 'mediatek,stage-dma-rings-inert'
-
-
+        echo 'md1-boot-candidate=single-enabled-p22-overlay plus six-cmdline-gates one-vector-write then-bounded-GO-NO-GO-oracle no-irq-no-cldma-no-ccci; cldma-prepare=compiled-and-validated-disabled' >> "$out/VALIDATION"
       ''}
       ${lib.optionalString md1LkHandoffProbe ''
         # The source overlay is deliberately disabled.  This profile makes one
