@@ -1090,6 +1090,23 @@
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller compatible)" = \
           mediatek,mt6797-a72-admission-controller
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /a72-admission-controller status)" = okay
+        test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/a72-admission-trace@444f0000 compatible)" = \
+          planet,gemini-a72-admission-trace
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/ramoops@44410000 reg)" = \
+          '0 44410000 0 e0000'
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/a72-admission-trace@444f0000 reg)" = \
+          '0 444f0000 0 1000'
+        test "$(fdtget -t x "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/memory@444f1000 reg)" = \
+          '0 444f1000 0 f000'
+        fdtget -p "$out/gemini-a72-cpu8-sram.dtb" /reserved-memory/a72-admission-trace@444f0000 \
+          | grep -Fqx no-map
+        ramoops_start=$((0x44410000))
+        ramoops_size=$((0x000e0000))
+        trace_start=$((0x444f0000))
+        trace_size=$((0x00001000))
+        remainder_start=$((0x444f1000))
+        test $((ramoops_start + ramoops_size)) -le "$trace_start"
+        test $((trace_start + trace_size)) -le "$remainder_start"
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /consys@18070000 status)" = disabled
         test "$(fdtget "$out/gemini-a72-cpu8-sram.dtb" /serial@1100c000 status)" = disabled
         cp "$out/gemini-a72-cpu8-sram.dtb" "$out/gemini.dtb"
