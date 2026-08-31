@@ -1406,8 +1406,8 @@
         preflight() {
           dump || return
           status=$(status_path) || return 1
-          status=$(cat "$status")
-          case "$status" in
+          status_text=$(cat "$status")
+          case "$status_text" in
             *'ledger_state=retained-terminal'*)
               echo "preflight=blocked reason=retained-terminal-ledger action=ack-ledger"; return 1 ;;
             *'ledger_state=retained-incomplete'*)
@@ -1422,8 +1422,8 @@
         ack_ledger() {
           dump || return
           status=$(status_path) || return 1
-          status=$(cat "$status")
-          case "$status" in
+          status_text=$(cat "$status")
+          case "$status_text" in
             *'state=armed'*'trigger_consumed=0'*'ledger_state=retained-terminal'*) ;;
             *) echo "ack_ledger=blocked reason=terminal-ledger-not-present"; return 1 ;;
           esac
