@@ -494,6 +494,27 @@
       unattendedRecovery = true;
     };
 
+    # W0 is a successor to the retained G2d full-WMT lifecycle.  It adds only
+    # the exact GEN3 WCIR portal observation; GNSS and Bluetooth proof gates
+    # remain absent from both DT command line and kernel configuration.
+    mainlineConsysG2dWifiW0 = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-next;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      wifiW0Observe = true;
+      unattendedRecovery = true;
+    };
+
     # Critical-path GPU identity experiment. It keeps the accepted recovery
     # substrate, then exclusively votes RT5735 and all four MFG domains,
     # enables BG3D, reads immutable Mali-T880 identity/features, and unwinds.
@@ -1233,6 +1254,10 @@
       mainlineConsysG2dPostpatchDtb = mainlineConsysG2dPostpatch.serviceabilityDtb;
       mainlineConsysG2dPostpatchInitramfs = mainlineConsysG2dPostpatch.probeInitramfs;
       mainlineConsysG2dPostpatchBundle = mainlineConsysG2dPostpatch.bundle;
+      mainlineConsysG2dWifiW0Kernel = mainlineConsysG2dWifiW0.kernel;
+      mainlineConsysG2dWifiW0Dtb = mainlineConsysG2dWifiW0.serviceabilityDtb;
+      mainlineConsysG2dWifiW0Initramfs = mainlineConsysG2dWifiW0.probeInitramfs;
+      mainlineConsysG2dWifiW0Bundle = mainlineConsysG2dWifiW0.bundle;
       mainlineGpuStagedKernel = mainlineGpuStaged.kernel;
       mainlineGpuStagedDtb = mainlineGpuStaged.serviceabilityDtb;
       mainlineGpuStagedInitramfs = mainlineGpuStaged.probeInitramfs;

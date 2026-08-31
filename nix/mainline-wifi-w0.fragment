@@ -1,0 +1,4 @@
+# W0 is a single, gated GEN3 portal observation after the retained G2d lease.
+# It has no WLAN MAC, IRQ, DMA, firmware, netdev, GNSS, or Bluetooth client.
+CONFIG_MTK_MT6797_WIFI_AHB_WCIR_OBSERVE=y
+# CONFIG_MTK_MT6797_WIFI_AHB_WCIR_KUNIT_TEST is not set
