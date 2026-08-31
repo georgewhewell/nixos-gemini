@@ -203,10 +203,28 @@
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
+  usbBuildTag =
+    if consysG2hBtEndpoint
+    then "radio-gnss-bt"
+    else if consysG2gGnssEndpoint
+    then "radio-gnss"
+    else if wifiW2NicCapability
+    then "wifi-w2"
+    else if wifiW1FirmwareReadyProof
+    then "wifi-w1"
+    else if consysG2dPostpatchOverlay
+    then "consys-g2d"
+    else if gpuFixedOppOverlay
+    then "gpu-panfrost"
+    else if platformEnablement
+    then "platform"
+    else "baseline";
+  usbBuildSerial = "NIX-${builtins.substring 0 16 (builtins.hashString "sha256" "${kernelRevision}:${variantSuffix}")}";
+  usbIdentityCmdline = "g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-${usbBuildTag} g_ether.iSerialNumber=${usbBuildSerial}";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
