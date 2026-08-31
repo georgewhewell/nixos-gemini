@@ -33,13 +33,13 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788189547,
-        "narHash": "sha256-wOQqUkipwzMjZcOOAzf7487n87OxS/Pwx4JIEDxh7n8=",
-        "path": "/mnt/Home/src/linux-gemini-a72-final-trex",
+        "lastModified": 1788190435,
+        "narHash": "sha256-gdiYwWDF0pLH31qq2o8r9iX+hwtNJg4WMWmK5oH2dXU=",
+        "path": "/home/grw/src/linux-gemini-p22-combined-next-20260831",
         "type": "path"
       },
       "original": {
-        "path": "/mnt/Home/src/linux-gemini-a72-final-trex",
+        "path": "/home/grw/src/linux-gemini-p22-combined-next-20260831",
         "type": "path"
       }
     },

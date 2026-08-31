@@ -23,7 +23,7 @@
     linux-gemini = {
       # Trex-local A72 candidate source: tested platform base plus upstream
       # DA9213 provider-release, held-isolation, and SRAM-diagnostic repairs.
-      url = "path:/mnt/Home/src/linux-gemini-a72-final-trex";
+      url = "path:/home/grw/src/linux-gemini-p22-combined-next-20260831";
       flake = false;
     };
     ixoo-candidate = {
