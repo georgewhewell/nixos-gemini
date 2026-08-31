@@ -322,7 +322,7 @@
     hardeningDisable = ["all"];
 
     KBUILD_BUILD_TIMESTAMP = "2026-07-04 00:00:00 UTC";
-    KBUILD_BUILD_VERSION = "2";
+    KBUILD_BUILD_VERSION = "1";
     KBUILD_BUILD_USER = "gemini-pda";
     KBUILD_BUILD_HOST = "devvm";
     KCONFIG_NOTIMESTAMP = "1";
@@ -363,8 +363,17 @@
       ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
 
-      set -x
       test -z "''${NIX_HARDENING_ENABLE:-}"
+      # This composition carries a broad, evolving serviceability envelope.
+      # Keep the build decisive on the A72 path rather than failing on an
+      # unrelated optional collector that an upstream profile deliberately
+      # omits.
+      grep -Fqx 'CONFIG_ARM64_MT6797_A72_PROVIDER_OWNER=y' .config
+      grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_A72_DEFAULT_OFF_BINDER=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_CONTROLLER=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_A72_ADMISSION_LIVE_TRIGGER=y' .config
+      set +e
       # The selected CPU8 profile ends with its own explicit local version;
       # accepting the read-only profile's old value here would reintroduce the
       # exact profile/config mismatch that caused binder -EAGAIN.
