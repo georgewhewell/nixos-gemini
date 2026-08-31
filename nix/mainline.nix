@@ -143,6 +143,21 @@
     then "cpu8-trace-header-read-only-v1"
     else if a72Cpu8SramDiagnostic
     then "cpu8-one-shot-sram-p28-diagnostic-v1"
+  md1LkHandoffLabel =
+    if !md1LkHandoffProbe
+    then "none"
+    else if md1BootStatusObserve
+    then "lk-v2-load-evidence-plus-boot-status-read-only-dt-and-cmdline-gated-v9-no-md1-control"
+    else if md1RemapObserve
+    then "lk-v2-load-evidence-plus-infracfg-remap-lock-five-read-observation-dt-and-cmdline-gated-v10-no-md1-control"
+    else "lk-v2-load-evidence-and-rmpu-remap-plan-read-only-dt-and-cmdline-gated-v9-secure-mpu-status-fatal-latch-provider-backend-unselected";
+  md1BootStatusLabel =
+    if md1BootStatusObserve
+    then "three-vendor-shaped-reads-per-ap-visible-status-word-plus-passive-ap-rchnum-raw-no-write-no-interpretation"
+    else "none";
+  md1RemapObserveLabel =
+    if md1RemapObserve
+    then "five-infracfg-ao-reads-after-validated-lk-plan-no-write-no-ownership"
     else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
