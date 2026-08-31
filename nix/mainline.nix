@@ -185,9 +185,13 @@
   # disabled a72_platform_state/DVFSP access-controller topology.  Pin the
   # resulting base DTB rather than accepting the retired topology's hash.
   baseDtbSha256 = "f1262332ce232dac56c78c9d3d3e1fa390ebfd2209540fa4ca023b89cb871250";
+	# CPU8 diagnostic candidates reserve two exact private pages after ramoops.
+	# These source-checked fingerprints intentionally differ only for that DT.
+	admissionBaseDtbSha256 = "c113d7d5b121fbee4e8a1090d04f8fa9e1afd7981b8cbc3edac93555064fb646";
   # Same reviewed A72 topology after the existing, structurally validated
   # serviceability transform (CONSYS/BTIF remain disabled).
   serviceabilityBaseDtbSha256 = "22b7b4158f88a2ad8bb752dbf1d3cfbae4234efd95356b1c5dc044fd7824f613";
+	admissionServiceabilityBaseDtbSha256 = "0e6cdd5edf677e992386ef501456d241d7e599054e1c38756c594836bdb19b24";
   usbPlatformDtbSha256 = "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert
@@ -771,10 +775,10 @@
       substituteInPlace "$providerBuilder" \
         --replace-fail \
           'BASE_DTB_SHA256=380205e0546c1b87f4ce6b4c34fcd734a22dc42e3b1c3145044d396a16e00709' \
-          'BASE_DTB_SHA256=${baseDtbSha256}' \
+	          'BASE_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionBaseDtbSha256 else baseDtbSha256}' \
         --replace-fail \
           'OUTPUT_DTB_SHA256=d7dba05efa272c8264c8ea15c776fb88c21a0012603214b49dfd9e2893e87d48' \
-          'OUTPUT_DTB_SHA256=${serviceabilityBaseDtbSha256}'
+	          'OUTPUT_DTB_SHA256=${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}'
       substituteInPlace "$providerBuilder" \
         --replace-fail \
           $'\tfdtput -d "$temporary" "$AW9523" "$property"' \
@@ -785,7 +789,7 @@
         > "$out/VALIDATION"
       chmod 0644 "$out/gemini-base.dtb"
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-        ${serviceabilityBaseDtbSha256}
+	        ${if a72Cpu8SramDiagnostic then admissionServiceabilityBaseDtbSha256 else serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay
