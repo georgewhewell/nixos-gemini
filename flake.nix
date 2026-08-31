@@ -545,6 +545,36 @@
       unattendedRecovery = true;
     };
 
+    # Integrated GNSS system candidate: retain the proven eMMC, dual-USB,
+    # display, audio and read-only board-observation substrate while replacing
+    # the short-lived G2g probe with the persistent /dev/gnss0 owner.  Active
+    # touchscreen and FGADC remain separate until this radio composition has
+    # survived its first full NixOS/gpsd hardware cycle.
+    mainlineConsysG2gGnssFull = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-gnss-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      consysG2dPostpatchOverlay = true;
+      consysG2gGnssEndpoint = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+    };
+
     # W1 follows the hardware-passed W0 CMD53 portal read. It sends only the
     # SHA-pinned image, proves WCIR.READY, then fences IRQ delivery and every
     # WLAN client because the vendor tree has no isolated post-enable IRQ
@@ -898,6 +928,25 @@
         ./nixos/mainline-configuration.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+          _module.args.geminiGnssDevice = null;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
+    # Experimental systems never carry the baseline self-accept capability.
+    # gpsd starts only after the retained GNSS class device exists and remains
+    # localhost/read-only until the chipset command protocol is evidenced.
+    mainlineNixosGnssSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiGnssDevice = "/dev/gnss0";
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -932,21 +981,39 @@
 
     # Linux SquashFS names the zlib codec "gzip".  Keep this distinct from
     # the vendor-kernel XZ payload and install it under a new p29 filename.
-    mainlineNixosSquashfs = buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
-      nativeBuildInputs = [buildPkgs.squashfsTools];
-    } ''
-      mkdir -p store-contents
-      for path in $(cat ${buildPkgs.closureInfo {
-        rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
-      }}/store-paths); do
-        cp -a "$path" store-contents/
-      done
-      basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
-        > store-contents/.gemini-system
-      mksquashfs store-contents "$out" \
-        -comp gzip -b 131072 -noappend -all-root -no-progress
-      unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
-    '';
+    mainlineNixosSquashfs =
+      buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
+          > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
+
+    mainlineNixosGnssSquashfs =
+      buildPkgs.runCommand "mainline-nixos-gnss-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosGnssSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        basename ${mainlineNixosGnssSystemCross.config.system.build.toplevel} \
+          > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -977,6 +1044,25 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosGnss = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineConsysG2gGnssFull.kernel;
+      serviceabilityDtb = mainlineConsysG2gGnssFull.serviceabilityDtb;
+      squashfs = mainlineNixosGnssSquashfs;
+      nixosToplevel = mainlineNixosGnssSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      consysFirmware = true;
+      gnssService = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      # No leaseSelfAcceptToken: this experiment remains externally accepted.
     };
 
     #############################################
@@ -1334,6 +1420,11 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineNixosGnssKernel = mainlineConsysG2gGnssFull.kernel;
+      mainlineNixosGnssDtb = mainlineConsysG2gGnssFull.serviceabilityDtb;
+      mainlineNixosGnssSquashfs = mainlineNixosGnssSquashfs;
+      mainlineNixosGnssInitramfs = mainlineNixosGnss.initramfs;
+      mainlineNixosGnssBundle = mainlineNixosGnss.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;

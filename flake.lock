@@ -55,8 +55,8 @@
     "linux-gemini-gnss-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788163391,
-        "narHash": "sha256-8PEsNu4yplwLfWbToEYIujfj4e7Hc2K8WGePbmML+8E=",
+        "lastModified": 1788167890,
+        "narHash": "sha256-ftUf1bEferH77BBskMPuzgq3io0ZEGxKTqAQeDE3mdE=",
         "path": "/mnt/Home/src/linux-gemini-gnss-persistent-trex",
         "type": "path"
       },
