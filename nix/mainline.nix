@@ -1081,7 +1081,7 @@
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
     buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
-      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
+      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3];
     } ''
       mkdir -p "$out"
       cp -R ${ixoo-candidate} candidate
