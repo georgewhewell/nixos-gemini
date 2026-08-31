@@ -993,6 +993,16 @@
           "$out/mt6797-gemini-pda-a72-admission.dtbo"
         test -s "$out/mt6797-gemini-pda-a72-admission.dtbo"
       ''}
+      ${lib.optionalString md1LkHandoffProbe ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo \
+          "$out/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo"
+        test -s "$out/mt6797-gemini-pda-md1-lk-handoff-probe.dtbo"
+      ''}
+      ${lib.optionalString md1BootStatusObserve ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-status-observe.dtbo \
+          "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
+        test -s "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
+      ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
