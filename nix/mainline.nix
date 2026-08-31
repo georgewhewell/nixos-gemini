@@ -694,10 +694,19 @@
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
-      # Device Tree output is compiler-independent and must match the reviewed
-      # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
-      test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        ${baseDtbSha256}
+	  # Most variants retain ixoo's reviewed base DT byte-for-byte.  The A72
+	  # candidate intentionally adds two private retained pages, so its source
+	  # assertions replace that stale whole-DTB fingerprint.
+	  ${lib.optionalString (!a72Cpu8SramDiagnostic) ''
+	    test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
+	      ${baseDtbSha256}
+	  ''}
+	  ${lib.optionalString a72Cpu8SramDiagnostic ''
+	    grep -Fq 'a72-transition-ledger@444f1000' \
+	      arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+	    grep -Fq 'gemini,initialize-empty' \
+	      arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts
+	  ''}
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
