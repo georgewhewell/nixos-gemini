@@ -1317,10 +1317,19 @@
 	    test -n "$w4_emi_provider"
 	    fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
 	      mediatek,emi-mpu "$w4_emi_provider"
+            # The PALDO supplies belong to the composed G2d owner too.  Copy
+            # both live phandles rather than importing a stale base-DT value.
+            w4_bt_paldo="$(fdtget -t x "$out/gemini-consys.dtb" \
+              /consys-g2d-postpatch-owner vcn33-bt-supply)"
+            w4_wifi_paldo="$(fdtget -t x "$out/gemini-consys.dtb" \
+              /consys-g2d-postpatch-owner vcn33-wifi-supply)"
+            test -n "$w4_bt_paldo"
+            test -n "$w4_wifi_paldo"
+            test "$w4_bt_paldo" != "$w4_wifi_paldo"
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
-              bt-paldo-supply 0x53
+              bt-paldo-supply "$w4_bt_paldo"
             fdtput -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
-              wifi-paldo-supply 0x54
+              wifi-paldo-supply "$w4_wifi_paldo"
             fdtput "$out/gemini-consys.dtb" /wifi@180f0000 \
               mediatek,experimental-wifi-w4-platform
             # W1/W2 execute with W4 as owner, and W3 gates the IRQ lifetime.
@@ -1338,6 +1347,10 @@
               '0 180f0000 0 1100'
 	    test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
 	      mediatek,emi-mpu)" = "$w4_emi_provider"
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              bt-paldo-supply)" = "$w4_bt_paldo"
+            test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 \
+              wifi-paldo-supply)" = "$w4_wifi_paldo"
             test "$(fdtget -t x "$out/gemini-consys.dtb" /wifi@180f0000 interrupts)" = \
               '0 11b 8'
             fdtget -p "$out/gemini-consys.dtb" /wifi@180f0000 | \
