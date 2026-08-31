@@ -311,7 +311,7 @@
     + lib.optionalString wifiW4Connect " mt6797_consys_g2d_postpatch_owner.enable_experimental_wifi_w4_retained_owner=1 mt6797_wifi_ahb_w3_session.enable_experimental_wifi_w3_session=1 mt6797_wifi_ahb_w4_platform.enable_experimental_wifi_w4_platform=1"
     + lib.optionalString md1LkHandoffProbe " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1"
     + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
-    + lib.optionalString md1BootCandidate " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner.enable_experimental_md1_boot_vector_release=1"
+    + lib.optionalString md1BootCandidate " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -1733,9 +1733,20 @@
           mediatek,mt6797-md1-cold-owner
         test "$(fdtget -t x "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner reg)" = \
           '0 10001000 0 1000 0 10209000 0 1000 0 1020a000 0 1000 0 1000c000 0 1000 0 20150000 0 118 0 20130000 0 1004 0 20060000 0 d0 0 260f0000 0 200 0 20140000 0 18 0 20120000 0 d0 0 200f0100 0 300 0 26010000 0 40 0 20000024 0 4 0 10201300 0 8'
-        fdtget -p "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner \
-          | grep -Fqx 'mediatek,stage-md1-boot-vector-release'
         cp "$out/gemini-md1-boot-candidate.dtb" "$out/gemini.dtb"
+        for property in mediatek,experimental-md1-cold-owner \
+                        mediatek,stage-cold-reset-held \
+                        mediatek,stage-md1-boot-vector-release; do
+          fdtget -p "$out/gemini.dtb" /modem-cold-owner | grep -Fqx "$property"
+        done
+        for parameter in mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 \
+                         mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 \
+                         mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 \
+                         mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 \
+                         mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 \
+                         mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1; do
+          grep -Fq "$parameter" ${kernel}/kernel.config
+        done
 
         fdtoverlay \
           -i "$out/gemini.dtb" \
@@ -2492,7 +2503,12 @@
       # The five DT drivers have already populated once. This only collects
       # their terminal evidence; it does not touch or retry MD1.
       dmesg 2>/dev/null | grep -E 'verified LK hand-off:|MD1 remap observed|MD1 secure EMI-MPU provider armed|MD1 WDT keys attempted|MD1 boot-vector|MD1 boot candidate' > /run/md1-boot-candidate.dmesg || true
-      if grep -Fq 'MD1 post-vector oracle GO:' /run/md1-boot-candidate.dmesg; then
+      cold_owner_param_dir=/sys/module/mt6797_md1_cold_owner_driver/parameters
+      cold_owner_gates="$(cat "$cold_owner_param_dir/enable_experimental_md1_cold_owner" 2>/dev/null || true) $(cat "$cold_owner_param_dir/enable_experimental_md1_boot_vector_release" 2>/dev/null || true)"
+      printf '%s\n' "$cold_owner_gates" > /run/md1-cold-owner-gates
+      if [ "$cold_owner_gates" != 'Y Y' ]; then
+        note "md1_boot_candidate=runtime-gates-not-armed values=$cold_owner_gates evidence=/run/md1-cold-owner-gates action=inspect-kbuild-module-prefix"
+      elif grep -Fq 'MD1 post-vector oracle GO:' /run/md1-boot-candidate.dmesg; then
         note "md1_boot_candidate=activity-observed evidence=/run/md1-boot-candidate.dmesg next=minimal-cldma-ccci-hs"
       elif grep -Fq 'MD1 post-vector oracle NO-GO:' /run/md1-boot-candidate.dmesg; then
         note "md1_boot_candidate=no-movement-bounded-100ms evidence=/run/md1-boot-candidate.dmesg action=watchdog-recovery-no-retry"
@@ -2997,6 +3013,16 @@
       echo "nix-md1-boot-status=${md1BootStatusLabel}"
       echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
       echo "nix-md1-boot-candidate=${md1BootCandidateLabel}"
+      echo "md1-cold-owner-applied-dt=${
+        if md1BootCandidate
+        then "final-gemini.dtb status=okay plus experimental-cold-owner,cold-reset-held,boot-vector-release properties build-validated"
+        else "none"
+      }"
+      echo "md1-cold-owner-runtime-gates=${
+        if md1BootCandidate
+        then "module=mt6797_md1_cold_owner_driver params=enable_experimental_md1_cold_owner=1,enable_experimental_md1_boot_vector_release=1 kernel-config-validated"
+        else "none"
+      }"
       echo "md1-lk-handoff-contract=${
         if md1LkHandoffProbe
         then "DT-status=okay plus built-in parameter; LK flag is accepted only as image-load evidence and execution remains unknown; metadata table and diagnostic RMPU/remap plan read-only; fence/secure-MPU-provider/backend source is explicitly unselected and has no hardware run path; public LK remap-lock/refusal evidence is source-only; mandatory unmap before partition-I/O/MPU/remap writes/power/reset/CCIF/CLDMA/DMA"
