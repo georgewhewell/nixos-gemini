@@ -1759,7 +1759,6 @@
         then "gemini-keyboard.dtb gemini-input-observe.dtb "
         else ""
       }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}${lib.optionalString a72Cpu8SramDiagnostic "gemini-a72-cpu8-sram.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
-      }${lib.optionalString touchscreenActivationOverlay "gemini-touchscreen-active.dtb "}${lib.optionalString fgadcActivationOverlay "gemini-fgadc-active.dtb "}${lib.optionalString deviceActivationOverlay "gemini-touchscreen-active.dtb gemini-fgadc-active.dtb gemini-device-activation.dtb "}Image.gz-dtb) > "$out/SHA256SUMS"
     '';
 
   # This is deliberately a small standalone ALSA-UAPI client, not a partial
