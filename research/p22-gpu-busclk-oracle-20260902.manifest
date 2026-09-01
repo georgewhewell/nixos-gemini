@@ -33,6 +33,6 @@ host_net_policy=required
 ssh_path_policy=fallback
 power_preflight_policy=none
 transaction_policy=observe-always-rollback
-initial_access_policy=known-host
+initial_access_policy=physical-rollback
 stage2_policy=none
 lease_seconds=90

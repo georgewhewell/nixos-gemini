@@ -255,9 +255,9 @@ require_manifest() {
     case "$TRANSACTION_POLICY" in persistent-acceptance|observe-always-rollback) ;; *) die "unknown transaction_policy" ;; esac
     case "$INITIAL_ACCESS_POLICY" in
         known-host) ;;
-        physical-candidate)
+        physical-candidate|physical-rollback)
             [ "$TRANSACTION_POLICY" = observe-always-rollback ] ||
-                die "physical-candidate initial access requires observe-always-rollback" ;;
+                die "physical initial access requires observe-always-rollback" ;;
         *) die "unknown initial_access_policy" ;;
     esac
     case "$WATCHDOG_PROFILE" in
@@ -398,8 +398,8 @@ if [ "$PROOF_LEASE" = yes ]; then
     [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
     [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "--proof-lease requires initramfs-petter manifest"
 fi
-if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ] && [ "$MODE" = --execute ]; then
-    [ "$PROOF_LEASE" = yes ] || die "physical-candidate initial access requires --proof-lease"
+if [ "$INITIAL_ACCESS_POLICY" != known-host ] && [ "$MODE" = --execute ]; then
+    [ "$PROOF_LEASE" = yes ] || die "physical initial access requires --proof-lease"
 fi
 if [ "$MODE" = --execute ] && [ "$TRANSACTION_POLICY" = observe-always-rollback ] &&
     [ "$PROOF_LEASE" != yes ]; then
@@ -577,7 +577,7 @@ physical_candidate_device_ssh() {
 }
 
 initial_device_ssh() {
-    if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ]; then
+    if [ "$INITIAL_ACCESS_POLICY" != known-host ]; then
         physical_candidate_device_ssh "$@"
     else
         device_ssh "$@"
@@ -643,11 +643,11 @@ test \"\$target\" != \"\$emmc\"p29
 ! grep -q \"^\$target \" /proc/mounts
 test \"\$(blockdev --getsize64 \"\$target\")\" -eq 16777216
 p22=\$(sha256sum \"\$target\" | cut -d' ' -f1)
-$(if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ]; then
-    printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA"
-else
-    printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA"
-fi)
+$(case "$INITIAL_ACCESS_POLICY" in
+    physical-candidate) printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA" ;;
+    physical-rollback) printf '%s\n' "test \"\$p22\" = $ROLLBACK_SHA" ;;
+    known-host) printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA" ;;
+esac)
 p30=\$(resolve_emmc_partition boot2)
 p31=\$(resolve_emmc_partition boot3)
 test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
@@ -982,7 +982,7 @@ start_supervisor() {
 }
 
 arm_initial_candidate_hostkey_mode() {
-    [ "$INITIAL_ACCESS_POLICY" = physical-candidate ] || return 0
+    [ "$INITIAL_ACCESS_POLICY" != known-host ] || return 0
     # start_capture has installed the run-specific Trex watcher.  Do not use
     # its candidate-key exception until the exact USB/MAC marker is present
     # and fresh; this is the same narrow path used after an ordinary flash.
