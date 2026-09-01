@@ -1,6 +1,8 @@
 # First real Panfrost bind, constrained to the captured LK clock and the
 # vendor type-12 voltage.  No other OPP exists, so devfreq cannot change the
-# clock or rail while the initial binding and idle tests are performed.
+# clock or rail while the initial binding and idle tests are performed.  The
+# source-proven INFRA_MFG_VCG bus clock remains a separate Panfrost clock so
+# runtime PM holds it across every GPU register transaction.
 CONFIG_PM=y
 CONFIG_PM_GENERIC_DOMAINS=y
 CONFIG_PM_GENERIC_DOMAINS_OF=y

@@ -54,6 +54,10 @@
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
+  gpuBusClockInSource =
+    lib.hasInfix
+    "<&infrasys CLK_INFRA_MFG_VCG>"
+    (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
   p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
   # This candidate must use the profile that carries the DA9213 membership
   # owner.  The preceding read-only profile binds the regulator but leaves the
@@ -745,6 +749,8 @@
         grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
+        grep -Fq '<&infrasys CLK_INFRA_MFG_VCG>' \
+          arch/arm64/boot/dts/mediatek/mt6797.dtsi
         grep -Fqx 'CONFIG_DRM=y' .config
         grep -Fqx 'CONFIG_DRM_PANFROST=y' .config
         grep -Fqx 'CONFIG_PM_DEVFREQ=y' .config
@@ -1490,6 +1496,9 @@
             | grep -Fqx 'regulator-boot-on'
           test "$(fdtget "$out/gemini-gpu.dtb" /syscon@13000000 status)" = okay
           test "$(fdtget "$out/gemini-gpu.dtb" /gpu@13040000 status)" = okay
+          test "$(fdtget -t s "$out/gemini-gpu.dtb" /gpu@13040000 clock-names)" = \
+            'core bus'
+          test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu@13040000 clocks | wc -w)" -eq 4
           fdtget -p "$out/gemini-gpu.dtb" /gpu@13040000 \
             | grep -Fqx 'operating-points-v2'
           test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-hz)" = \
