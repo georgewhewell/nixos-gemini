@@ -1,0 +1,54 @@
+# Canonical default full-NixOS console image.  The candidate may remain in
+# p22 only after its built-in baseline-self-accept-v1 contract and the host's
+# exact hardware checks pass.  Until then the Trex supervisor owns exact
+# Stage-A rollback.
+candidate=/mnt/Home/src/gemini-default-console-btop-20260902/boot-padded-p22.img
+candidate_sha256=af29f24c28e81bfa0ab51e79409cc80cca589c18f37b469a54181dc41f2f72e7
+candidate_size=16777216
+rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
+rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=gemini-mainline-success
+feature_policy=connectivity-no-radio
+acceptance_window_seconds=690
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31
+rootfs_policy=nixos-stage2
+host_net_policy=required
+ssh_path_policy=both
+power_preflight_policy=required
+transaction_policy=baseline-self-accept-or-rollback
+initial_access_policy=physical-rollback
+stage2_policy=watchdog-takeover-required
+stage1_watchdog_owner_marker=watchdog=petting
+stage1_handoff_path=/run/stage1-handoff
+stage2_watchdog_owner_unit=gemini-watchdog-takeover.service
+stage2_watchdog_state=active
+stage2_watchdog_evidence=stage2=multi-user watchdog=petting acceptance=baseline-self-accept-pending
+stage2_success_marker=/run/gemini-mainline-success
+stage2_store_source=/mnt/Home/src/gemini-default-console-btop-20260902/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
+stage2_store_sha256=8ab64d8d7a95de88b451f250906c6761acdfd968f6847a765152d220c1b58990
+stage2_store_size=101007360
+stage2_store_target=/nixos/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
+stage2_store_target_live=/gemian/nixos/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
+stage1_store_target=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+stage1_store_sha256=1aec7ab82d592e49da6e8c916d36cda097467855fdbd90a76b4d942a0b2a1da3
+stage1_store_size=100417536
+stage1_provision_wait_seconds=600
+lease_seconds=720

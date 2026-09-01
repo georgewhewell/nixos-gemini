@@ -1,10 +1,11 @@
 #!/bin/sh
 set -eu
 
-# Trex-owned observe-always-rollback supervisor. It starts before candidate
-# reboot and survives loss of the workstation harness. It never accepts a
-# candidate: after the bounded observation window it stages the immutable
-# rescue copy and invokes the reviewed Download Only p22 wrapper.
+# Trex-owned rollback supervisor. It starts before candidate reboot and
+# survives loss of the workstation harness. Ordinary proof runs always roll
+# back. A baseline self-accept run may terminate without another writer only
+# after the host publishes the exact candidate-SHA record and the already
+# running bounded BROM scan finishes normally without finding preloader.
 RUN_SHARED=$1
 CANDIDATE_STATE=$2
 RESCUE_IMAGE=$3
@@ -18,9 +19,12 @@ ROLLBACK_STATE=${10}
 ROLLBACK_LOG=${11}
 SUPERVISOR_STATE=${12}
 LEASE_SECONDS=${13:-90}
+SELF_ACCEPT_STATE=${14:-}
+CANDIDATE_SHA=${15:-}
 SIZE=16777216
 SUPERVISOR_TERMINAL=no
-ROLLBACK_WAIT_SECONDS=${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}
+ROLLBACK_WAIT_SECONDS=${16:-${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}}
+CANDIDATE_WAIT_SECONDS=${17:-300}
 # The candidate flash completes while the device is still leaving the
 # preloader session used for the write.  Give that first boot a short,
 # measured grace period, then keep an exact rescue writer scanning throughout
@@ -32,7 +36,7 @@ ROLLBACK_ARM_DELAY_SECONDS=${P22_SUPERVISOR_ARM_DELAY:-15}
 write_state() {
     printf '%s %s\n' "$1" "$(date -Is)" > "$SUPERVISOR_STATE"
     case "$1" in
-        supervisor_rollback_succeeded_rescue_verified|supervisor_rollback_failed|supervisor_rollback_unverified|supervisor_rollback_timeout|supervisor_blocked_*|supervisor_candidate_flash_failed)
+        supervisor_candidate_self_accepted|supervisor_rollback_succeeded_rescue_verified|supervisor_rollback_failed|supervisor_rollback_unverified|supervisor_rollback_timeout|supervisor_blocked_*|supervisor_candidate_flash_failed)
             SUPERVISOR_TERMINAL=yes ;;
     esac
 }
@@ -59,10 +63,40 @@ esac
 case "$ROLLBACK_ARM_DELAY_SECONDS" in
     ''|*[!0-9]*) write_state supervisor_blocked_bad_arm_delay; exit 2 ;;
 esac
+case "$ROLLBACK_WAIT_SECONDS" in
+    ''|*[!0-9]*) write_state supervisor_blocked_bad_rollback_wait; exit 2 ;;
+esac
+[ "$ROLLBACK_WAIT_SECONDS" -ge 1 ] || { write_state supervisor_blocked_bad_rollback_wait; exit 2; }
+case "$CANDIDATE_WAIT_SECONDS" in
+    ''|*[!0-9]*) write_state supervisor_blocked_bad_candidate_wait; exit 2 ;;
+esac
+[ "$CANDIDATE_WAIT_SECONDS" -ge 1 ] || { write_state supervisor_blocked_bad_candidate_wait; exit 2; }
 [ "$ACCEPTANCE_WINDOW" -lt "$LEASE_SECONDS" ] || { write_state supervisor_blocked_bad_window; exit 2; }
+if [ -n "$SELF_ACCEPT_STATE$CANDIDATE_SHA" ]; then
+    [ "$SELF_ACCEPT_STATE" = "$RUN_SHARED/candidate-self-accepted" ] || {
+        write_state supervisor_blocked_bad_self_accept_path
+        exit 2
+    }
+    case "$CANDIDATE_SHA" in
+        *[!0-9a-f]*|'') write_state supervisor_blocked_bad_candidate_sha; exit 2 ;;
+    esac
+    [ "${#CANDIDATE_SHA}" -eq 64 ] || {
+        write_state supervisor_blocked_bad_candidate_sha
+        exit 2
+    }
+fi
 write_state supervisor_waiting_candidate
 
-deadline=$(( $(date +%s) + 300 ))
+candidate_self_accepted() {
+    [ -n "$SELF_ACCEPT_STATE" ] || return 1
+    [ -f "$SELF_ACCEPT_STATE" ] || return 1
+    [ ! -L "$SELF_ACCEPT_STATE" ] || return 1
+    [ "$(stat -Lc %h "$SELF_ACCEPT_STATE" 2>/dev/null || true)" = 1 ] || return 1
+    [ "$(cat "$SELF_ACCEPT_STATE" 2>/dev/null || true)" = \
+        "candidate_self_accepted sha256=$CANDIDATE_SHA" ]
+}
+
+deadline=$(( $(date +%s) + CANDIDATE_WAIT_SECONDS ))
 candidate_failed=no
 while [ "$(date +%s)" -lt "$deadline" ]; do
     state=$(cat "$CANDIDATE_STATE" 2>/dev/null || true)
@@ -115,6 +149,10 @@ starttime_file=$RUN_SHARED/supervisor-rollback.starttime
 deadline=$rollback_deadline
 rollback_attempt=1
 while [ "$(date +%s)" -lt "$deadline" ]; do
+    if candidate_self_accepted; then
+        write_state supervisor_candidate_self_accepted
+        exit 0
+    fi
     rm -f "$ROLLBACK_STATE"
     setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
         "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
@@ -139,6 +177,15 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
     done
     state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
     if printf '%s\n' "$state" | grep -Fq 'flash_rc=1 '; then
+        # A healthy self-accepted candidate keeps its USB gadget online, so
+        # the in-flight BROM scan ends with the ordinary bounded timeout.
+        # Observe the exact candidate-SHA commit only at this quiescent point:
+        # never interrupt a scanner that might already own preloader/DA.
+        if candidate_self_accepted; then
+            wait "$launch_pid" 2>/dev/null || true
+            write_state supervisor_candidate_self_accepted
+            exit 0
+        fi
         # Flash Tool's own BROM scan is 120 seconds. Reap each missed scan and
         # immediately reopen the same exact p22-only rescue transaction. This
         # keeps coverage continuous from the first possible failed-kernel

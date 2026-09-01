@@ -940,7 +940,13 @@ test_stage2_store_staging_commands_are_safe_shell() {
     grep -Fq 'cat >' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp' \
         "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'mv ' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq "ln '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp' '/mnt/gemian/nixos/next-mainline.squashfs'" \
+        "$RUN_LOCAL/store-command-4.sh"
+    if grep -Fq "mv '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-4.sh"; then
+        echo 'stage2 provisioning regressed to clobbering rename' >&2
+        return 1
+    fi
     grep -Fq 'sync' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "test ! -L '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
@@ -959,7 +965,7 @@ test_stage2_store_staging_commands_are_safe_shell() {
     grep -Fq 'case "$available_kib" in' "$RUN_LOCAL/store-command-4.sh"
     grep -Fq '"$available_kib" -ge '\''2'\''' "$RUN_LOCAL/store-command-4.sh"
     stale_remove_line=$(grep -n -F "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
-        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
+        "$RUN_LOCAL/store-command-4.sh" | head -n 1 | cut -d: -f1)
     free_space_line=$(grep -n -F 'df -Pk /mnt/gemian/nixos' \
         "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
     stream_line=$(grep -n -F "cat > '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
