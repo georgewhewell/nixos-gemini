@@ -1,0 +1,21 @@
+================================================================================
+CHAPTER 06 ADVERSARIAL QUESTIONS: CELLULAR MODEM (MD1, CCCI & CLDMA)
+================================================================================
+
+[Q06.1] In the 161 MiB reserved DRAM memory region at `0x47000000`, what are the exact memory
+        offset layouts and headers expected by the modem bootloader for `md1rom`, `md1dsp`,
+        and `md1arm7`?
+        - Does the modem verify cryptographic signatures on these binaries before boot?
+
+[Q06.2] What is the exact handshake on the CCIF Hardware Mailbox (`0x10201000`) when the modem
+        encounters an exception?
+        - How does the AP differentiate between an unexpected modem crash and a graceful low-power
+          sleep transition without blocking kernel execution?
+
+[Q06.3] How does the modem detect SIM card hot-plug events across `ldo_vsim1` and `ldo_vsim2` on
+        the MT6351 PMIC?
+        - What is the debounce window before the baseband re-reads the SIM ATR (Answer To Reset)?
+
+[Q06.4] In the CLDMA ring descriptor protocol, what happens if the AP runs out of pre-allocated
+        RGPD receive buffers during a high-speed LTE downlink burst (> 150 Mbps)?
+        - Does the CLDMA hardware drop packets silently or trigger a ring buffer halt?

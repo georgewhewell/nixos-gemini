@@ -1,0 +1,16 @@
+================================================================================
+CHAPTER 07 ADVERSARIAL QUESTIONS: SENSORS, THERMAL & SENSOR CO-PROCESSOR (SCP)
+================================================================================
+
+[Q07.1] The Cortex-M4 Sensor Co-Processor (SCP @ 0x10500000) can access `I2C1` to poll the ST
+        LSM6DS3 IMU while the 10-core AP is in deep suspend.
+        - How is hardware I2C bus ownership arbitrated between the Linux `i2c-mt65xx` driver and
+          the SCP firmware to prevent concurrent bus collisions when the AP wakes up?
+
+[Q07.2] In `auxadc_thermal.c`, why is `MT6797_TS_MCU2` (Medium Cluster) shared across three
+        thermal zones (`tz_bank_2`, `tz_bank_3`, `tz_bank_4`)?
+        - What is the exact mathematical slope and ADC intercept formula used to convert raw
+          AuxADC channel 11 voltages into millidegrees Celsius?
+
+[Q07.3] How does the clamshell Hall Lid Switch (`GPIO66`) debounce noisy lid transitions?
+        - What hardware filter time constant is configured in the MT6797 pinctrl EINT block?

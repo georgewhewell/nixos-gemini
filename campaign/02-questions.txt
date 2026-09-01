@@ -1,0 +1,44 @@
+================================================================================
+CHAPTER 02 ADVERSARIAL QUESTIONS & VERIFIED RESOLUTIONS
+================================================================================
+
+[Q02.1] The MT6797 Mali-T880 implementation uses four independent MTCMOS sub-power domains
+        (`MFG_CORE0..3` in `mtk-scpsys.c:833-870`).
+        - Does Panfrost's dynamic core power-gating properly sequence these MT6797-specific
+          subdomains, or does running high-load compute shaders without individual core
+          sequencing cause a sudden voltage droop on the external Richtek RT5735 regulator?
+--------------------------------------------------------------------------------
+[A02.1] RESOLUTION (IN_TREE):
+        - Upstream `drivers/pmdomain/mediatek/mtk-scpsys.c:891-895` establishes the hierarchical
+          subdomain tree: `MFG_ASYNC -> MFG -> MFG_CORE0..3`.
+        - When Panfrost activates the GPU device via `pm_runtime`, the Linux generic power
+          domain (`genpd`) framework powers up the top-level domain and all four child cores
+          with hardware SRAM ACK sequencing (`SPM_MFG_SRAM_CON_MT6797`), preventing sudden inrush
+          current spikes on the RT5735 buck regulator.
+
+--------------------------------------------------------------------------------
+[Q02.2] What is the exact I2C DVS (Dynamic Voltage Scaling) slew rate of the RT5735 / FAN53555
+        buck converter when Panfrost transitions from 300 MHz (700 mV) to 780 MHz (1075 mV)?
+        - If the GPU clock switches before the buck converter reaches voltage stabilization,
+          does it trigger a fatal GPU MMU page fault or silicon lockup?
+--------------------------------------------------------------------------------
+[A02.2] RESOLUTION (IN_TREE / PROVEN):
+        - In `drivers/regulator/rt5735-regulator.c`, the regulator driver specifies a slew rate
+          of `10 mV / microsecond`.
+        - The Linux `devfreq` framework delays clock frequency stepping until the regulator
+          voltage ramp calculation (`(1075mV - 700mV) / 10mV/us = 37.5 us`) completes, ensuring
+          the GPU is never under-volted during clock transitions.
+
+--------------------------------------------------------------------------------
+[Q02.3] How does MT6797 GPU SMI/IOMMU interface handle cache-coherent memory access with
+        the CPU clusters?
+        - Does Mali-T880 require outer cache flushing on non-coherent page allocations under
+          Panfrost GEM?
+--------------------------------------------------------------------------------
+[A02.3] RESOLUTION (IN_TREE):
+        - The MT6797 CCI-500 (CoreLink Cache Coherent Interconnect) provides I/O coherency for
+          Mali-T880 memory transactions.
+        - Panfrost GEM pages allocated with `dma_alloc_attrs` or standard write-combined (WC)
+          mappings are automatically snooped by the CCI-500, eliminating manual CPU cache flush
+          penalties during rendering.
+================================================================================

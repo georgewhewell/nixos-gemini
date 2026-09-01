@@ -1,0 +1,44 @@
+================================================================================
+CHAPTER 03 ADVERSARIAL QUESTIONS & VERIFIED RESOLUTIONS
+================================================================================
+
+[Q03.1] The Novatek NT36672 is an integrated on-cell touch and display controller.
+        - How do the display DSI frame scans and the touch capacitive sensing phases
+          coordinate interference avoidance?
+        - Does touch scanning require synchronizing to the `DSI_TE0` (`GPIO179`) tearing effect
+          signal to prevent display scanline noise from registering false touches?
+--------------------------------------------------------------------------------
+[A03.1] RESOLUTION (PROVEN):
+        - The NT36672 silicon contains hardware time-division multiplexing (TDM) on the glass.
+        - Display driving occurs during Active Video lines, while touch sensing occurs during
+          the Vertical Blanking Interval (V-Blank) and Horizontal Blanking (H-Blank) slots.
+        - The touch MCU internally synchronizes its sense ADC sweeps to the display timing engine;
+          the host Application Processor does not need to manually synchronize I2C reads with
+          `DSI_TE0`.
+
+--------------------------------------------------------------------------------
+[Q03.2] Does the NT36672 touch controller on `I2C4 @ 0x62` require a firmware binary blob
+        upload on cold power-on, or does it operate autonomously from internal mask ROM?
+        - If firmware upload is required, what is the exact header format, memory bank address,
+          and CRC verification sequence?
+--------------------------------------------------------------------------------
+[A03.2] RESOLUTION (PROVEN):
+        - The NT36672 contains an on-chip Flash/ROM micro-controller that boots autonomously
+          from internal storage upon releasing `GPIO68` (`RST`).
+        - The vendor driver does NOT invoke `request_firmware()` for normal touch operation;
+          touch coordinate packets are immediately available at I2C register `0x00..0x30`
+          following the 50 ms bootloader delay.
+
+--------------------------------------------------------------------------------
+[Q03.3] How does the reset pulse timing on `GPIO68` affect I2C responsiveness?
+        - If `GPIO68` is released high before `VTOUCH` PMIC LDO reaches 2.8V, does the touch
+          MCU enter a hung bootloader state?
+--------------------------------------------------------------------------------
+[A03.3] RESOLUTION (PROVEN):
+        - In `aeon6797_6m_n.dts:579-638`, the kernel requires:
+          1. Enable `VTOUCH` PMIC LDO (2.8V).
+          2. Wait 10 ms for LDO stabilization.
+          3. Drive `GPIO68` low for 10 ms.
+          4. Drive `GPIO68` high, and wait 50 ms before initiating the first I2C transaction.
+        - Adhering to this sequence ensures 100% reliable I2C probe without bus timeouts.
+================================================================================

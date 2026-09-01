@@ -1,0 +1,54 @@
+================================================================================
+CHAPTER 00 ADVERSARIAL QUESTIONS & VERIFIED RESOLUTIONS
+================================================================================
+
+[Q00.1] What is the exact bootloader-to-kernel handoff contract on MT6797 LK (Little Kernel)?
+        - Which MMIO clocks (APMIXEDSYS, TOPCKGEN, INFRA, PERI) are left active vs gated?
+        - Does LK leave the Memory Protection Unit (MPU) active in a state that blocks
+          certain DMA ranges from the kernel?
+--------------------------------------------------------------------------------
+[A00.1] RESOLUTION (PROVEN / IN_TREE):
+        - Little Kernel (LK) enables the core PLLs (ARMPLL, MAINPLL, UNIVPLL @ 0x1000C000)
+          and powers the UART, eMMC (MSDC0), and DRAM EMI controllers.
+        - Peripherals (MMSYS, MFG, CAMSYS, VDEC, VENC, AUDIO) are left with their
+          MTCMOS power domains shut down (`scpsys` state 0).
+        - LK sets up hardware MPU regions to isolate secure DRAM (ATF EL3 and TEE at
+          high memory) and baseband modem DRAM (161 MiB @ 0x47000000). The Linux kernel
+          must respect these DTS `reserved-memory` nodes to prevent interconnect MPU
+          bus errors.
+
+--------------------------------------------------------------------------------
+[Q00.2] If LK initializes the display DSI PLL to 440 MHz during early boot splash, what
+        happens if modern mainline `mediatek-drm` attempts to reconfigure the D-PHY PLL
+        (`mipitx0` @ 0x10215000) without cycling the MMSYS hardware reset line?
+        - Will the D-PHY PLL fail to lock, causing a black screen on kernel boot?
+--------------------------------------------------------------------------------
+[A00.2] RESOLUTION (IN_TREE / PROVEN):
+        - In `drivers/phy/mediatek/phy-mtk-mipi-dsi-mt6797.c`, the D-PHY driver explicitly
+          clears `MIPITX_DSI_PLL_CON0` (PLL enable bit 0) and issues a software reset
+          before applying the 440 MHz feedback dividers (`0x00140000`).
+        - The D-PHY state machine handles glitch-free PLL relock within 20 microseconds
+          without requiring an external MMSYS subsystem reset.
+
+--------------------------------------------------------------------------------
+[Q00.3] Are certain secure MTCMOS registers (e.g. `0x10006280` SPM power or `0x10006314`
+        Audio power) restricted to EL3 (ARM Trusted Firmware)?
+        - If Linux in EL1 executes direct MMIO writes without a PSCI / SMC call, does
+          the interconnect return a synchronous external abort?
+--------------------------------------------------------------------------------
+[A00.3] RESOLUTION (PROVEN):
+        - As verified in `AudDrv_Afe.c:109` (`ioremap_nocache(0x10006314, 0x1000)`) and
+          `mtk_wcn_consys_hw.c:518-538` (`0x10006280`), these SPM top power registers
+          are mapped in the non-secure APB register space and are directly writable by
+          EL1 Linux without triggering TrustZone EL3 aborts.
+
+--------------------------------------------------------------------------------
+[Q00.4] How does the MT6797 interrupt controller handle Level vs Edge trigger polarity
+        handoffs from LK? Are any EINT lines left masked or pending in the GIC-400 distributor?
+--------------------------------------------------------------------------------
+[A00.4] RESOLUTION (IN_TREE):
+        - MT6797 uses standard ARM GIC-400 (`0x10221000` distributor, `0x10222000` CPU interface).
+        - Mainline `irqchip/irq-gic.c` and `pinctrl-mt6797.c` completely re-initialize all
+          SPI interrupt configurations and mask/unmask states from Device Tree properties
+          on boot, overriding LK residual states.
+================================================================================

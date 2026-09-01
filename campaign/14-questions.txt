@@ -1,0 +1,16 @@
+================================================================================
+CHAPTER 14 ADVERSARIAL QUESTIONS: HARDWARE CRYPTO ACCELERATORS & SECURITY
+================================================================================
+
+[Q14.1] Does the Inside-Secure SafeXcel EIP-93 cryptographic engine at `0x10210000` require a
+        firmware binary microcode blob loaded into its internal descriptor RAM before hardware
+        AES/SHA DMA rings can execute, or is it completely autonomous ASIC logic?
+
+[Q14.2] How does the MT6797 hardware True Random Number Generator (TRNG) gather physical
+        entropy?
+        - Does it sample thermal ring oscillator jitter on the analog die, and what is its
+          maximum continuous bit generation rate under heavy CPU load?
+
+[Q14.3] In the event of a secure world (TrustZone / TEE) fault, how does the MT6797 hardware
+        crypto engine protect secret keys stored in eFuses from leaking into non-secure EL1
+        memory space?

@@ -1,0 +1,44 @@
+================================================================================
+CHAPTER 04 ADVERSARIAL QUESTIONS & VERIFIED RESOLUTIONS
+================================================================================
+
+[Q04.1] The Awinic AW8736 speaker amplifiers on `GPIO243` (Left) and `GPIO244` (Right) use
+        1-wire Mode 3 pulse modulation (3 pulses of 2 microseconds width).
+        - If kernel scheduling latency or interrupt handling stretches a pulse beyond
+          10 microseconds, will the amplifier latch into Mode 1 (low power) or shut down?
+        - Does this GPIO sequence require disabling local CPU interrupts (`spin_lock_irqsave`)
+          during execution?
+--------------------------------------------------------------------------------
+[A04.1] RESOLUTION (PROVEN):
+        - In `AudDrv_Gpio.c:442-475`, the AW8736 1-wire protocol specifies:
+          - High pulse width: $0.5\mu\text{s} - 10\mu\text{s}$ (Target: $2\mu\text{s}$)
+          - Low pulse width: $0.5\mu\text{s} - 10\mu\text{s}$ (Target: $2\mu\text{s}$)
+          - Latch time: $> 20\mu\text{s}$ (triggers mode change).
+        - If an interrupt preemption occurs between pulses, the amplifier latches into whatever
+          pulse count was completed prior to the pause.
+        - Therefore, the pulse generation loop MUST execute under `local_irq_save()` or
+          `spin_lock_irqsave()` to guarantee deterministic timing.
+
+--------------------------------------------------------------------------------
+[Q04.2] How does the MT6351 PMIC integrated analog codec handle DC offset compensation on
+        the headphone DAC output (`SetDcCompenSation` in `mt_soc_codec_63xx.c`)?
+        - If DC calibration is omitted during probe, does it cause audible popping or risk
+          damaging sensitive low-impedance earphones upon stream startup?
+--------------------------------------------------------------------------------
+[A04.2] RESOLUTION (IN_TREE / PROVEN):
+        - Upstream `sound/soc/mediatek/mt6797/mt6797-afe-pcm.c` and MT6351 codec driver
+          integrate automated hardware DC offset calibration during codec initialization.
+        - The hardware applies a slow, ramped DC cancellation trim to zero the output differential
+          voltage before closing the headphone output switches, eliminating transient pops.
+
+--------------------------------------------------------------------------------
+[Q04.3] In the AFE interconnect matrix (`mt6797-interconnection.h`), which crossbar registers
+        must be cleared during stream teardown to prevent analog audio leakage or audible hiss
+        when transitioning between speaker and headphone playback?
+--------------------------------------------------------------------------------
+[A04.3] RESOLUTION (IN_TREE):
+        - `AFE_CONN0` through `AFE_CONN4` (connecting `I00/I01` to `O01/O02` and `O03/O04`) must
+          be set to `0x0000` upon `hw_free()`.
+        - The upstream ASoC DAPM (Dynamic Audio Power Management) widgets handle this automatically
+          by tearing down interconnect paths when streams close.
+================================================================================

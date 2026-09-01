@@ -1,0 +1,17 @@
+================================================================================
+CHAPTER 10 ADVERSARIAL QUESTIONS: CAMERA & IMAGE SIGNAL PROCESSOR (CAMSYS)
+================================================================================
+
+[Q10.1] The Samsung S5K4H8 (Rear) and Hynix HI551 (Front) camera sensors share `I2C1` with the
+        AW9523B keyboard controller and AW9120 LED driver.
+        - What happens to keyboard scan latency when the camera driver performs large multi-byte
+          I2C register burst writes during active video capture?
+        - Does the I2C bus arbiter enforce fair queuing?
+
+[Q10.2] Discrete LDO switches `GPIO73` (2.8V AVDD) and `GPIO254` (1.2V DVDD) power the camera
+        sensors.
+        - What is the mandatory power stabilization delay between enabling AVDD/DVDD and
+          releasing sensor reset (`GPIO32`/`GPIO33`) to prevent sensor I2C state machine lockup?
+
+[Q10.3] How does the SENINF0..7 CSI-2 receiver handle virtual channel multiplexing when both
+        front and rear cameras are probed simultaneously?

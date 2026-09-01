@@ -1,0 +1,15 @@
+================================================================================
+CHAPTER 11 ADVERSARIAL QUESTIONS: STORAGE (MSDC0 EMMC & MSDC1 MICROSD)
+================================================================================
+
+[Q11.1] When operating the MSDC0 eMMC interface in HS400 mode (200 MHz DDR, 8-bit bus), how
+        does the upstream `mtk-sd.c` driver perform data strobe delay line calibration on MT6797?
+        - Does it require dynamic retuning when the SoC temperature changes from 25°C to 65°C?
+
+[Q11.2] Does the MicroSD slot (MSDC1) support SDR104 (208 MHz 1.8V signaling)?
+        - Which PMIC LDO powers the SD card voltage level shifter (`VMCH` vs `VMC`), and does
+          it properly handle 3.3V-to-1.8V dynamic voltage switching without dropping the card?
+
+[Q11.3] How does MSDC0 handle command queueing (CMDQ) under Linux eMMC blk-mq?
+        - Are there known hardware FIFO errata on MT6797 MSDC0 when executing high-queue-depth
+          random writes?

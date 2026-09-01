@@ -1,0 +1,17 @@
+================================================================================
+CHAPTER 08 ADVERSARIAL QUESTIONS: POWER MANAGEMENT, BATTERY & CHARGING
+================================================================================
+
+[Q08.1] During Deep Suspend-to-RAM (`deep`), how does the SPM hardware sequencer verify that
+        LPDDR3 DRAM is in Self-Refresh mode before it powers down the 26 MHz main crystal
+        oscillator?
+        - If the oscillator is gated prematurely, does it corrupt DRAM memory contents?
+
+[Q08.2] When the Texas Instruments BQ25890 switching charger negotiates Pump Express Plus (PE+)
+        12V high-voltage charging, what protection mechanism prevents an inductive voltage spike
+        from destroying the MT6351 PMIC VBUS input pin if the user suddenly unplugs the USB-C
+        charging cable during maximum 24W current draw?
+
+[Q08.3] How does the MT6351 Coulomb Counter (FGADC) handle thermal drift on the 10 mOhm current
+        sense shunt resistor?
+        - Does Linux apply dynamic temperature compensation to the coulomb count integration?

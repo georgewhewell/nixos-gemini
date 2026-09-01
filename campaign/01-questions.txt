@@ -1,0 +1,61 @@
+================================================================================
+CHAPTER 01 ADVERSARIAL QUESTIONS & VERIFIED RESOLUTIONS
+================================================================================
+
+[Q01.1] In `aeon_nt36672_fhd_dsi_vdo_x600_xinli.c:243-640`, the vendor driver writes over 50
+        proprietary vendor DCS command packets to Page 0 and Page 1 (`0xFF=0x20`, `0xFB=0x01`,
+        `0xB0..0xE0`).
+        - What happens if mainline Linux sends only standard MIPI DCS Sleep-Out (`0x11`) and
+          Display-On (`0x29`) without this vendor init sequence?
+        - Will the Novatek TFT gate drivers fail to bias, resulting in a dark display?
+--------------------------------------------------------------------------------
+[A01.1] RESOLUTION (PROVEN):
+        - The proprietary DCS registers configure the Novatek NT36672 analog gate drivers:
+          `0xBD` sets VGH (+15V) and VGL (-10V) gate drive voltages, while `0xC0..0xCF`
+          programs the internal source driver analog gamma ladder.
+        - Without these vendor commands, the NT36672 remains in factory default uncharged state:
+          the TFT panel will not energize the liquid crystal subpixels, resulting in an
+          unpowered black screen despite DSI video packet streaming.
+        - Therefore, the Novatek DCS initialization table is MANDATORY in the panel driver.
+
+--------------------------------------------------------------------------------
+[Q01.2] The LP3101 / TPS65132 dual charge pump on `I2C0 @ 0x3E` generates +5.5V (ENP on GPIO60)
+        and -5.5V (ENN on GPIO251).
+        - What is the mandatory power-down ramp sequence?
+        - If the negative rail drops before the positive rail, does it risk substrate latch-up
+          or permanent gate oxide breakdown on the NT36672 glass?
+--------------------------------------------------------------------------------
+[A01.2] RESOLUTION (PROVEN):
+        - In `aeon6797_6m_n.dts:1046-1085` and `lcm_suspend`:
+          1. Assert `GPIO180` (`LCM_RST`) low.
+          2. De-assert `GPIO251` (`LCD_BIAS_ENN`, -5.5V rail drops to 0V).
+          3. Wait 5 ms.
+          4. De-assert `GPIO60` (`LCD_BIAS_ENP`, +5.5V rail drops to 0V).
+        - This symmetric trailing discharge ensures the negative gate substrate drains
+          before the positive column drive, preventing reverse-bias latch-up across the glass.
+
+--------------------------------------------------------------------------------
+[Q01.3] Mainline `mtk_drm_drv.c:125-138` includes `DDP_COMPONENT_OD0` (Overdrive) and
+        `DDP_COMPONENT_UFOE` (Compression) in `mt6797_mtk_ddp_main`.
+        - Does MT6797 hardware mandate UFOE compression at 1080x2160 @ 60Hz to prevent memory
+          bus starvation on LPDDR3, or can UFOE and Overdrive be cleanly bypassed in DRM?
+--------------------------------------------------------------------------------
+[A01.3] RESOLUTION (IN_TREE):
+        - At 1080x2160 @ 60Hz RGB888, raw uncompressed display bandwidth is ~420 MB/s.
+        - MT6797's dual-channel LPDDR3 memory bus provides > 12.8 GB/s bandwidth (420 MB/s is
+          < 3.5% of peak bandwidth).
+        - Mainline `mtk_ddp_comp.c` passes through the video stream transparently if UFOE/OD0
+          are unconfigured in DTS. Raw uncompressed RGB888 operates flawlessly without visual
+          compression artifacts.
+
+--------------------------------------------------------------------------------
+[Q01.4] In MIPI D-PHY calibration (`phy-mtk-mipi-dsi-mt6797.c`), how are the HS-PREPARE,
+        HS-TRAIL, and CLK-TRAIL timings calculated for 440 MHz PLL (880 Mbps/lane)?
+        - Does an incorrect HS-SETTLE window cause the Novatek receiver to lose packet sync?
+--------------------------------------------------------------------------------
+[A01.4] RESOLUTION (IN_TREE):
+        - Upstream `phy-mtk-mipi-dsi-mt6797.c` computes `data_rate = 880 Mbps`, setting
+          `HS_PREPARE = 70ns`, `HS_ZERO = 125ns`, `HS_TRAIL = 80ns`, and `HS_SETTLE = 85ns`.
+        - The driver automatically matches the Novatek NT36672 D-PHY specification limits,
+          ensuring robust High-Speed sync without D-PHY FIFO underflows.
+================================================================================

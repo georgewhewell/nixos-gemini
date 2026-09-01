@@ -1,0 +1,18 @@
+================================================================================
+CHAPTER 13 ADVERSARIAL QUESTIONS: GPS / GNSS SUBSYSTEM
+================================================================================
+
+[Q13.1] The vendor kernel allocates a 1 MiB shared EMI memory region at `0x5F100000`
+        (`gps_emi.c:86-90`).
+        - What exact data structures are passed across this 1 MiB memory block?
+        - Is it raw GPS baseband correlator I/Q samples, ephemeris data, or Doppler
+          measurement tables?
+        - Does it require explicit cache invalidation by the AP before reading?
+
+[Q13.2] Does the GNSS subsystem require periodic TCXO clock drift calibration against the
+        cellular modem's LTE frame clock?
+        - What happens to satellite acquisition time and ephemeris fix if the cellular modem
+          is completely unpowered?
+
+[Q13.3] In STP Channel 2 NMEA routing, what is the maximum packet size for PMTK proprietary
+        commands before buffer overrun occurs in the connectivity MCU?

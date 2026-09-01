@@ -1,0 +1,9 @@
+candidate=/mnt/Home/src/p22-combined-a72-cpu8-watchdog-handoff-built-20260831/boot-padded-p22.img
+candidate_sha256=a94770f9864435271a5fdd02db3615ebd6730c9eefc261d8c1e97e7d0b38d897
+candidate_size=16777216
+preflash_p22_sha256=aa08f1baecb27b9a166fdd535bb46315d871baa18f4277e5c42a90bdb8454f83
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+capture_root=/mnt/Home/src/p22-combined-a72-cpu8-watchdog-handoff-built-20260831/captures

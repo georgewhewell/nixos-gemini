@@ -1,0 +1,16 @@
+================================================================================
+CHAPTER 09 ADVERSARIAL QUESTIONS: USB TYPE-C & POWER DELIVERY
+================================================================================
+
+[Q09.1] The Gemini PDA features two physical USB-C ports: Left Port (OTG/Device + Charging) and
+        Right Port (Host/UART).
+        - How do the dual Fairchild FUSB301A CC controllers prevent power conflicts if the user
+          plugs chargers into BOTH USB-C ports simultaneously?
+        - Does the hardware automatically isolate and disconnect the Right Port VBUS rail?
+
+[Q09.2] How is the Right USB-C port multiplexed between USB Host mode and the MT6797 Debug UART?
+        - Which physical GPIO pin controls the high-speed analog switch, and what is its default
+          pull-up state on cold boot?
+
+[Q09.3] What is the maximum current supply capability of the Left USB port when operating in
+        OTG Host mode powering external USB flash drives or keyboards?

@@ -1,0 +1,17 @@
+================================================================================
+CHAPTER 12 ADVERSARIAL QUESTIONS: KEYBOARD, REAR LEDS & CAMERA FLASH
+================================================================================
+
+[Q12.1] In `aw9523_key.c`, why is `MATRIX_SCAN_NANO_SECONDS_FAST` configured to 1 ms while slow
+        scan is 10 ms?
+        - How does the AW9523B matrix debouncing algorithm prevent key rollover ghosting when
+          three keys sharing a common row and column are depressed simultaneously?
+
+[Q12.2] The AW9120 rear breathing LED controller uses embedded microcode in SRAM.
+        - What happens if the clamshell lid is opened (`GPIO66` Hall switch triggers) while
+          the AW9120 is midway through a 1500 ms breathing cycle?
+        - Does the driver immediately issue an I2C power-down or allow the cycle to complete?
+
+[Q12.3] Does the Texas Instruments LM3643 camera flash driver on `I2C @ 0x63` enforce a hardware
+        strobe safety timeout to prevent thermal damage to the flash LED if `GPIO90` is held
+        high continuously?

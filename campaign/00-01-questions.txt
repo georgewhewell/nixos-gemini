@@ -1,0 +1,163 @@
+====================================================================================================
+PLANET COMPUTERS GEMINI PDA (MT6797) — ADVERSARIAL RESEARCH QUESTION BANK
+====================================================================================================
+Location: campaign/00-01-questions.txt
+Generated: 2026-08-30
+Purpose: High-difficulty, unyielding technical questions designed to expose unverified assumptions,
+         undocumented firmware protocols, timing races, power sequencing traps, and architectural edge cases.
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 00: ROADMAP, BRING-UP DAG & EPISTEMIC FRAMEWORK
+----------------------------------------------------------------------------------------------------
+[Q0.1] What is the exact bootloader-to-kernel handoff contract on MT6797 LK (Little Kernel)? Which registers,
+       clocks, and power domains are left active vs gated when LK jumps to the Linux ARM64 kernel entry point?
+[Q0.2] If LK initializes the DSI PLL to 440 MHz during early boot splash, what happens if modern mainline
+       `mediatek-drm` attempts to reconfigure the D-PHY PLL (`mipitx0` @ 0x10215000) without cycling the
+       MMSYS reset line? Will the D-PHY PLL fail to achieve lock, causing a blank screen on boot?
+[Q0.3] Are certain secure MTCMOS registers (e.g. `0x10006280` SPM power or `0x10006314` Audio power) restricted
+       to EL3 (ARM Trusted Firmware)? If Linux in EL1 executes direct MMIO writes without a PSCI / SMC call,
+       does the interconnect return a synchronous external abort?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 01: DISPLAY SUBSYSTEM (DRM/KMS, MMSYS & NOVATEK NT36672)
+----------------------------------------------------------------------------------------------------
+[Q1.1] In `aeon_nt36672_fhd_dsi_vdo_x600_xinli.c:243-640`, the vendor driver writes over 50 proprietary vendor
+       DCS command packets to Page 0 and Page 1 (`0xFF=0x20`, `0xFB=0x01`, `0xB0..0xE0`). What happens if mainline
+       Linux sends standard MIPI DCS Sleep-Out (`0x11`) and Display-On (`0x29`) without these vendor init tables?
+       Will the Novatek TFT gate drivers fail to bias, resulting in a dark display?
+[Q1.2] The LP3101 / TPS65132 dual charge pump on `I2C0 @ 0x3E` generates +5.5V (ENP on GPIO60) and -5.5V (ENN
+       on GPIO251). What is the mandatory power-down ramp sequence? If the negative rail drops before the positive
+       rail, does it risk substrate latch-up or permanent gate oxide breakdown on the NT36672 glass?
+[Q1.3] Mainline `mtk_drm_drv.c:125-138` includes `DDP_COMPONENT_OD0` (Overdrive) and `DDP_COMPONENT_UFOE`
+       (Compression) in `mt6797_mtk_ddp_main`. Does MT6797 hardware mandate UFOE compression at 1080x2160 @ 60Hz
+       to prevent memory bus underruns on LPDDR3, or can UFOE and Overdrive be completely bypassed?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 02: GPU & GRAPHICS (ARM MALI-T880 MP4 & PANFROST)
+----------------------------------------------------------------------------------------------------
+[Q2.1] The MT6797 Mali-T880 implementation uses four independent MTCMOS sub-power domains (`MFG_CORE0..3` in
+       `mtk-scpsys.c:833-870`). Does Panfrost's dynamic core power-gating properly sequence these MT6797-specific
+       subdomains, or does running high-load compute shaders without individual core sequencing cause a sudden
+       voltage droop on the external Richtek RT5735 buck regulator?
+[Q2.2] What is the exact I2C DVS (Dynamic Voltage Scaling) slew rate of the RT5735 / FAN53555 regulator when
+       Panfrost transitions from 300 MHz (700 mV) to 780 MHz (1075 mV)? If the GPU clock switches before the
+       buck converter reaches voltage stabilization, does it trigger a fatal GPU MMU page fault?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 03: TOUCHSCREEN SUBSYSTEM (NOVATEK NT36672 / SOLOMON SSD2092)
+----------------------------------------------------------------------------------------------------
+[Q3.1] The Novatek NT36672 is an integrated on-cell touch and display controller. How do the display DSI frame
+       scans and the touch capacitive sensing phases coordinate interference avoidance? Does touch scanning
+       require synchronizing to the `DSI_TE0` (`GPIO179`) tearing effect signal to prevent display line noise?
+[Q3.2] Does the NT36672 touch controller on `I2C4 @ 0x62` require a firmware binary blob upload on cold power-on,
+       or does it operate from on-die mask ROM? If firmware upload is required, what is the exact header format
+       and CRC algorithm?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 04: AUDIO SUBSYSTEM (AFE, MT6351 CODEC & AW8736 STEREO AMPS)
+----------------------------------------------------------------------------------------------------
+[Q4.1] The Awinic AW8736 speaker amplifiers on `GPIO243` (Left) and `GPIO244` (Right) use 1-wire Mode 3 pulse
+       modulation (3 pulses of 2 microseconds). If kernel scheduling latency or interrupt handling stretches a
+       pulse beyond 10 microseconds, will the amplifier latch into Mode 1 (low power) or enter shutdown? Does
+       this GPIO sequence require disabling local CPU interrupts during execution?
+[Q4.2] How does the MT6351 PMIC integrated analog codec handle DC offset compensation on the headphone DAC
+       output (`SetDcCompenSation` in `mt_soc_codec_63xx.c`)? If DC calibration is omitted, does it cause audible
+       popping or damage low-impedance earphones upon stream startup?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 05: CONNECTIVITY (WI-FI, BLUETOOTH, FM RADIO & CONSYS)
+----------------------------------------------------------------------------------------------------
+[Q5.1] The CONSYS connectivity silicon returns chip ID `0x0279` at `0x18070008`. Does the on-chip MT6630/MT6631
+       connectivity MCU require a monolithic firmware patch (`WIFI_RAM_CODE_6797` / `ROMv3_patch_1_0_hdr.bin`)
+       downloaded over BTIF before Bluetooth or FM radio can function, or is Bluetooth operational from ROM?
+[Q5.2] What is the exact DMA buffer alignment requirement for the BTIF serial DMA controller at `0x11000a00` /
+       `0x11000a80`? Does it require 16-byte alignment and uncached coherent memory to prevent DMA FIFO underrun?
+[Q5.3] For FM radio, how does the MT6630/MT6631 connectivity die synchronize its digital audio clock with the
+       SoC's `APLL2` (24.576 MHz) on `I2S_IN_2`? Does the MT6797 AFE require the internal Asynchronous Sample
+       Rate Converter (ASRC) enabled on `AFE_CONN` to prevent clock slip and sample drops?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 06: CELLULAR MODEM (MT6797 MD1 BASEBAND, CCCI & CLDMA)
+----------------------------------------------------------------------------------------------------
+[Q6.1] In the 161 MiB reserved DRAM memory region at `0x47000000`, what are the exact memory offset layouts and
+       headers expected by the modem bootloader for `md1rom`, `md1dsp`, and `md1arm7`?
+[Q6.2] What is the exact handshake on the CCIF Hardware Mailbox (`0x10201000`) when the modem encounters an
+       exception? How does the AP differentiate between an unexpected modem crash and a graceful sleep transition?
+[Q6.3] How does the modem detect SIM card hot-plug events across `ldo_vsim1` and `ldo_vsim2` on the MT6351 PMIC?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 07: SENSORS, THERMAL & SENSOR CO-PROCESSOR (SCP)
+----------------------------------------------------------------------------------------------------
+[Q7.1] The Cortex-M4 Sensor Co-Processor (SCP @ 0x10500000) can access `I2C1` to poll the ST LSM6DS3 IMU while
+       the 10-core AP is asleep. How is hardware bus ownership arbitrated between the Linux `i2c-mt65xx` driver
+       and the SCP firmware to prevent concurrent bus collisions when the AP wakes up?
+[Q7.2] In `auxadc_thermal.c`, why is `MT6797_TS_MCU2` (Medium Cluster) shared across three thermal zones (`tz_bank_2`,
+       `tz_bank_3`, `tz_bank_4`)? What is the exact mathematical slope and ADC intercept formula used to convert
+       raw AuxADC channel 11 voltages into millidegrees Celsius?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 08: POWER MANAGEMENT, BATTERY, CHARGING & SUSPEND
+----------------------------------------------------------------------------------------------------
+[Q8.1] During Deep Suspend-to-RAM (`deep`), how does the SPM hardware sequencer verify that LPDDR3 DRAM is in
+       Self-Refresh mode before it powers down the 26 MHz main crystal oscillator? If the oscillator is gated
+       prematurely, does it corrupt DRAM memory state?
+[Q8.2] When the Texas Instruments BQ25890 switching charger negotiates Pump Express Plus (PE+) 12V high-voltage
+       charging, what protection mechanism prevents an inductive voltage spike from destroying the MT6351 PMIC
+       VBUS input pin if the user suddenly unplugs the USB-C charging cable during maximum 24W current draw?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 09: USB TYPE-C & POWER DELIVERY
+----------------------------------------------------------------------------------------------------
+[Q9.1] The Gemini PDA features two physical USB-C ports: Left Port (OTG/Device + Charging) and Right Port
+       (Host/UART). How do the dual Fairchild FUSB301A CC controllers prevent power conflict if the user plugs
+       chargers into BOTH USB-C ports simultaneously? Does the hardware disconnect the Right Port VBUS rail?
+[Q9.2] How is the Right USB-C port multiplexed between USB Host mode and the MT6797 Debug UART? Which GPIO
+       controls the high-speed analog switch?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 10: CAMERA & IMAGE SIGNAL PROCESSOR (CAMSYS, SENINF & DIP)
+----------------------------------------------------------------------------------------------------
+[Q10.1] The Samsung S5K4H8 (Rear) and Hynix HI551 (Front) camera sensors share `I2C1` with the AW9523B keyboard
+        controller and AW9120 LED driver. What happens to keyboard scan latency when the camera driver performs
+        large multi-byte I2C register burst writes during active video capture?
+[Q10.2] Discrete LDO switches `GPIO73` (2.8V AVDD) and `GPIO254` (1.2V DVDD) power the camera sensors. What is
+        the mandatory delay between enabling AVDD/DVDD and releasing sensor reset (`GPIO32`/`GPIO33`) to prevent
+        sensor I2C state machine lockup?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 11: STORAGE SUBSYSTEM (MSDC0 EMMC & MSDC1 MICROSD)
+----------------------------------------------------------------------------------------------------
+[Q11.1] When operating the MSDC0 eMMC interface in HS400 mode (200 MHz DDR, 8-bit bus), how does the upstream
+        `mtk-sd.c` driver perform data strobe delay line calibration on MT6797? Does it require dynamic retuning
+        when the SoC temperature changes from 25°C to 65°C?
+[Q11.2] Does the MicroSD slot (MSDC1) support SDR104 (208 MHz 1.8V signaling)? Which PMIC LDO powers the SD
+        card voltage level shifter (`VMCH` vs `VMC`), and does it properly handle 3.3V-to-1.8V switching?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 12: KEYBOARD, REAR LEDS & CAMERA FLASH
+----------------------------------------------------------------------------------------------------
+[Q12.1] In `aw9523_key.c`, why is `MATRIX_SCAN_NANO_SECONDS_FAST` configured to 1 ms while slow scan is 10 ms?
+        How does the AW9523B matrix debouncing algorithm prevent key rollover ghosting when three keys sharing a
+        common row and column are depressed simultaneously?
+[Q12.2] The AW9120 rear breathing LED controller uses embedded microcode. What happens if the clamshell lid
+        is opened (`GPIO66` Hall switch triggers) while the AW9120 is midway through a 1500 ms breathing cycle?
+        Does the driver immediately issue an I2C power-down or let the cycle complete?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 13: GPS / GNSS SUBSYSTEM
+----------------------------------------------------------------------------------------------------
+[Q13.1] The vendor kernel allocates a 1 MiB shared EMI memory region at `0x5F100000` (`gps_emi.c:86-90`). What
+        exact data structures are passed across this 1 MiB memory block? Is it raw GPS baseband correlator I/Q
+        samples, ephemeris data, or Doppler measurement tables?
+[Q13.2] Does the GNSS subsystem require periodic TCXO clock drift calibration against the cellular modem's
+        LTE frame clock, and what happens to satellite lock if the cellular modem is powered off?
+
+----------------------------------------------------------------------------------------------------
+CHAPTER 14: HARDWARE CRYPTOGRAPHIC ACCELERATORS & SECURITY
+----------------------------------------------------------------------------------------------------
+[Q14.1] Does the Inside-Secure SafeXcel EIP-93 cryptographic engine at `0x10210000` require a firmware binary
+        microcode blob loaded into its internal descriptor RAM before hardware AES/SHA rings can execute, or
+        is it completely autonomous ASIC logic?
+[Q14.2] How does the MT6797 hardware True Random Number Generator (TRNG) gather entropy? Does it sample thermal
+        ring oscillator jitter on the analog die, and what is its maximum continuous bit generation rate?
+====================================================================================================
