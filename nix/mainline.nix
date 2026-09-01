@@ -257,7 +257,7 @@
     else "none";
   md1BootCandidateLabel =
     if md1BootCandidate
-    then "single-vendor-boot-vector-write-after-LK-remap-attestation-and-active-CCF-power-sequence-then-100ms-bounded-observation-no-transport"
+    then "single-vendor-boot-vector-write-after-LK-remap-attestation-and-active-CCF-power-sequence-then-100ms-immediate-oracle-plus-five-second-passive-boot-status-ccif-register-observation-no-transport"
     else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
@@ -2502,14 +2502,16 @@
       ${lib.optionalString md1BootCandidate ''
       # The five DT drivers have already populated once. This only collects
       # their terminal evidence; it does not touch or retry MD1.
-      dmesg 2>/dev/null | grep -E 'verified LK hand-off:|MD1 remap observed|MD1 secure EMI-MPU provider armed|MD1 WDT keys attempted|MD1 boot-vector|MD1 boot candidate' > /run/md1-boot-candidate.dmesg || true
+      dmesg 2>/dev/null | grep -E 'verified LK hand-off:|MD1 remap observed|MD1 secure EMI-MPU provider armed|MD1 WDT keys attempted|MD1 boot-vector|MD1 passive post-vector|MD1 boot candidate' > /run/md1-boot-candidate.dmesg || true
       cold_owner_param_dir=/sys/module/mt6797_md1_cold_owner_driver/parameters
       cold_owner_gates="$(cat "$cold_owner_param_dir/enable_experimental_md1_cold_owner" 2>/dev/null || true) $(cat "$cold_owner_param_dir/enable_experimental_md1_boot_vector_release" 2>/dev/null || true)"
       printf '%s\n' "$cold_owner_gates" > /run/md1-cold-owner-gates
       if [ "$cold_owner_gates" != 'Y Y' ]; then
         note "md1_boot_candidate=runtime-gates-not-armed values=$cold_owner_gates evidence=/run/md1-cold-owner-gates action=inspect-kbuild-module-prefix"
+      elif grep -Fq 'MD1 post-vector oracle GO:' /run/md1-boot-candidate.dmesg && grep -Fq 'MD1 passive post-vector observation: complete=1 polls=5000' /run/md1-boot-candidate.dmesg; then
+        note "md1_boot_candidate=activity-observed-passive-complete evidence=/run/md1-boot-candidate.dmesg next=device-oracle-review-before-any-handshake"
       elif grep -Fq 'MD1 post-vector oracle GO:' /run/md1-boot-candidate.dmesg; then
-        note "md1_boot_candidate=activity-observed evidence=/run/md1-boot-candidate.dmesg next=minimal-cldma-ccci-hs"
+        note "md1_boot_candidate=immediate-activity-passive-incomplete evidence=/run/md1-boot-candidate.dmesg action=retain-logs-no-retry"
       elif grep -Fq 'MD1 post-vector oracle NO-GO:' /run/md1-boot-candidate.dmesg; then
         note "md1_boot_candidate=no-movement-bounded-100ms evidence=/run/md1-boot-candidate.dmesg action=watchdog-recovery-no-retry"
       else
@@ -3040,7 +3042,7 @@
       }"
       echo "md1-boot-candidate-contract=${
         if md1BootCandidate
-        then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us AP/CCIF delta oracle; terminal GO requires a fresh status/CCIF delta and terminal NO-GO records the bounded quiet snapshot, no retry/IRQ/CLDMA/shared-memory/CCCI"
+        then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us immediate AP/CCIF delta oracle; after GO schedule only 5000x1ms boot-status and CCIF busy/RCHNUM/ACK reads; terminal GO requires a fresh status/CCIF delta and terminal NO-GO records the bounded quiet snapshot, no retry/write/IRQ/CLDMA/HWO/shared-memory/CCCI"
         else "none"
       }"
       echo "md1-lk-handoff-runtime-evidence=${

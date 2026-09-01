@@ -81,9 +81,10 @@
     };
     linux-gemini-md1-boot-candidate = {
       # Separate committed p22 candidate: current combined radio lineage plus
-      # the source-backed, bounded MD1 boot-vector experiment. Normal outputs
-      # retain their existing input and default-disabled MD1 source overlay.
-      url = "path:/home/grw/src/linux-gemini-cellular-p22-candidate-20260831";
+      # the source-backed, bounded MD1 boot-vector experiment and its passive
+      # post-vector register observer. Normal outputs retain their existing
+      # input and default-disabled MD1 source overlay.
+      url = "path:/home/grw/src/linux-gemini-md1-passive-observe-20260902";
       flake = false;
     };
     ixoo-candidate = {
@@ -1128,7 +1129,8 @@
     # Full serviceability p22 candidate. It keeps the currently combined W4,
     # GNSS and hci0 envelope but does not request any A72 admission; CPU8/9
     # remain capped. The one MD1 transaction is separately gated in its own
-    # source DTBO and by six built-in parameters.
+    # source DTBO and by six built-in parameters. Its five-second follow-up
+    # reads only boot-status and CCIF registers; handshake and CLDMA stay inert.
     mainlineMd1BootCandidate = import ./nix/mainline.nix {
       inherit
         buildPkgs

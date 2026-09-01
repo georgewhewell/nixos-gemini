@@ -85,13 +85,13 @@
     "linux-gemini-md1-boot-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788269803,
-        "narHash": "sha256-gwCMp7hnDTrbIz1FHPKoc/Mako7Py6a8kRh14QFU3ck=",
-        "path": "/home/grw/src/linux-gemini-cellular-p22-candidate-20260831",
+        "lastModified": 1788303260,
+        "narHash": "sha256-yYGQc7+t9sCvY7x2lR6+g1JEklMhyc+JZb4wLJIDJPs=",
+        "path": "/home/grw/src/linux-gemini-md1-passive-observe-20260902",
         "type": "path"
       },
       "original": {
-        "path": "/home/grw/src/linux-gemini-cellular-p22-candidate-20260831",
+        "path": "/home/grw/src/linux-gemini-md1-passive-observe-20260902",
         "type": "path"
       }
     },
