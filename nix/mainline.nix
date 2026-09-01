@@ -58,6 +58,10 @@
     lib.hasInfix
     "<&infrasys CLK_INFRA_MFG_VCG>"
     (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
+  gpuResetInSource =
+    lib.hasInfix
+    "resets = <&watchdog MT6797_TOPRGU_MFG_SW_RST>;"
+    (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
   p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
   # This candidate must use the profile that carries the DA9213 membership
   # owner.  The preceding read-only profile binds the regulator but leaves the
@@ -751,6 +755,14 @@
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
         grep -Fq '<&infrasys CLK_INFRA_MFG_VCG>' \
           arch/arm64/boot/dts/mediatek/mt6797.dtsi
+        ${lib.optionalString gpuResetInSource ''
+          grep -Fq 'resets = <&watchdog MT6797_TOPRGU_MFG_SW_RST>;' \
+            arch/arm64/boot/dts/mediatek/mt6797.dtsi
+          grep -Fq '.reset_pulse_us = 1,' drivers/watchdog/mtk_wdt.c
+          grep -Fq '.reset_on_init = true,' drivers/gpu/drm/panfrost/panfrost_drv.c
+          grep -Fq 'return reset_control_reset(pfdev->rstc);' \
+            drivers/gpu/drm/panfrost/panfrost_device.c
+        ''}
         grep -Fqx 'CONFIG_DRM=y' .config
         grep -Fqx 'CONFIG_DRM_PANFROST=y' .config
         grep -Fqx 'CONFIG_PM_DEVFREQ=y' .config
@@ -1499,12 +1511,19 @@
           test "$(fdtget -t s "$out/gemini-gpu.dtb" /gpu@13040000 clock-names)" = \
             'core bus'
           test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu@13040000 clocks | wc -w)" -eq 4
+          ${lib.optionalString gpuResetInSource ''
+            test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu@13040000 resets)" = \
+              "$(fdtget -t x "$out/gemini-gpu.dtb" /watchdog@10007000 phandle) 2"
+          ''}
           fdtget -p "$out/gemini-gpu.dtb" /gpu@13040000 \
             | grep -Fqx 'operating-points-v2'
           test "$(fdtget -t x "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-hz)" = \
             '0 1dd50620'
           test "$(fdtget -t u "$out/gemini-gpu.dtb" /gpu-opp-table/opp-500500000 opp-microvolt)" = 975000
           echo 'gpu-fixed-opp=panfrost-500500000hz-975000uv-passed' >> "$out/VALIDATION"
+          ${lib.optionalString gpuResetInSource ''
+            echo 'gpu-reset=toprgu-mfg-id-2-provider-owned-1us-pulse' >> "$out/VALIDATION"
+          ''}
           echo 'gpu-dvfs=disabled-single-opp' >> "$out/VALIDATION"
         ''
         else ''
