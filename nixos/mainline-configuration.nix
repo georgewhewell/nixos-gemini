@@ -255,6 +255,7 @@
     shell = "${pkgs.busybox}/bin/ash";
     openssh.authorizedKeys.keyFiles = [./authorized_keys];
   };
+  services.getty.autologinUser = "root";
 
   # NixOS 23.05's generated unit set expects logind and its PAM helper.  Keep
   # those small pieces plus a standalone D-Bus daemon, while omitting the rest
@@ -502,6 +503,7 @@
   environment.systemPackages = lib.mkForce (
     [
       pkgs.busybox
+      pkgs.btop
       config.systemd.package
       pkgs.iproute2
       pkgs.usbutils
