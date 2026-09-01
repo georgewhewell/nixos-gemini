@@ -1,9 +1,153 @@
 # Gemini mainline bring-up handoff
 
-Snapshot: 2026-08-31 04:36 CEST.  This is a live handoff to a Codex running
+Snapshot: 2026-08-31 09:15 CEST.  This is a live handoff to a Codex running
 on `trex`.  Three delegated workers are intentionally still running, so their
 branches and artifacts may advance after this snapshot.  Inspect the current
 worktrees and Trex units before repeating work.
+
+## 09:37 CEST authoritative update
+
+Wi-Fi W1 firmware READY passed in one exact p22-only hardware cycle.  This
+supersedes the 09:15 timeout diagnosis and every earlier current-p22 hash:
+
+```text
+current p22 SHA-256:
+3f3cfbc0df2c96d715d0dd079cec34e36294b042f85454ba9d0afe487f358618
+
+Linux: eaa7505dbddc50acc20302662adc98d11b2564d2
+Nix:   c6937dc6c80a1b7d841523b54ed9234ae55ee0bd
+stage: /mnt/Home/src/w1-firmware-forensic-p22-candidate-20260831-v1-stage
+capture: /mnt/Home/src/w1-firmware-forensic-p22-one-shot-20260831-v1/captures/p22-one-shot-20260831-093439-400282
+```
+
+Flash Tool invoked once, wrote only partition `boot`/p22, returned success,
+and the complete 16 MiB postflash readback byte-matched the candidate.  The
+predecessor capture remains exact `d07891e...f99dd`; no retry or rollback ran.
+The decisive W1 telemetry was:
+
+```text
+function-enable: IOEx 0x00 -> 0x02, IORx 0x02
+driver-own: ret=0, polls=8, requests=1, WHLPCR last=0x00000100
+config sections 0/1: ret=0, exact ACK sequence/status, three polls each
+IDLM: 5840/5840 and 8992/8992 bytes
+EMI: sections 2/3 copied (0x50e20 and 0xff70), close ret=0
+WIFI_START: ret=0
+READY: ret=0, WCIR raw=0x00300279, polls=5
+post-ready: WHISR=0x82, all release counts zero
+cleanup: IOEx restored to zero; PALDO causal=0 cleanup=0 fatal=0
+```
+
+WMT14/RF calibration, gadget SSH, RTL SSH, pstore and watchdog also passed.
+This proves the MT6797 Wi-Fi firmware/portal/EMI/start/READY path.  It does
+**not** yet prove IRQ delivery, a netdev, association or traffic: the image
+deliberately requested no Wi-Fi IRQ and fenced every client.  The Wi-Fi lane
+has moved directly to the exact post-READY NIC-capability command/event and a
+fresh IRQ source, with a maintained wlan/netdev as the target.
+
+## 09:15 CEST authoritative update
+
+The current p22 remains the W1 safe-fail image at
+`d07891e271ca3f331a61a0175787b629823eacb999d1d83aa73f9cb6b29f99dd`.
+After the host reboot, the board again booted that image, exposed the gadget
+through Trex, and reported CPUs `0-7` online.  The initramfs deliberately
+expired its userspace watchdog lease at 139 seconds; the 31-second MTK
+watchdog then reset the board and the `0525:a4a2` USB gadget re-enumerated.
+That is a fresh unattended-reset proof, not a missing watchdog feeder.
+
+The W1 timeout comparison is now sharper.  The exact vendor Gen3 source is
+`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/connectivity/wlan/gen3/nic/nic_pwr_mgt.c:147-223`.
+Its real driver-own loop permits 2048 ms, sleeps 900--1000 us, and rewrites
+`WHLPCR_FW_OWN_REQ_CLR` every 256 iterations.  The W1 candidate instead used
+only 256 x 8 us.  The Wi-Fi worker is mirroring the vendor loop exactly and
+adding stage/register evidence before preparing a second candidate; no second
+flash has been authorized yet.
+
+IXOO upstream was refreshed to exact tip
+`4c1143012226586dc13b24eb1042422f1b4dfa69`.  Their preceding hardware run
+crossed isolation but stopped at the SRAM binder/result boundary with
+`-EPROTO`; CPU8 remained offline and PSCI `CPU_ON` was not reached.  The new
+tip only deploys an SRAM/P28 diagnostic on IXOO's own boot2 and awaits a
+physical boot.  Our A72 worker is rebuilding from that evidence against the
+current recovery/network/display baseline.  On this device the rule remains
+strictly p22 only: never copy IXOO's p30 deployment target.
+
+Cellular v8 is staged, dormant and unflashed at
+`/mnt/Home/src/md1-lk-handoff-p22-candidate-20260831-v8` (Linux
+`767e75c3acc22c055c54d19f7ac0616459ccf6cd`).  It adds a source-shaped secure
+EMI-MPU provider which captures SMC status and irreversibly fatal-latches any
+attempted partial transaction.  The final config intentionally leaves this
+and the MD1 fence disabled.  It is a safety substrate, not a viable modem yet;
+the lane continues on the exact boot-vector/reset/power/clock/CCIF ownership
+sequence.
+
+## 09:00 CEST authoritative update
+
+This update supersedes every older `current p22` statement.  Bluetooth G2f
+first passed one isolated hardware cycle from GNSS-v2, proving PALDO,
+BT `FUNC_CTRL` on/off, bounded private-H4 Reset and Read Local Version, and
+clean shutdown/fence.  Its capture is:
+
+```text
+/mnt/Home/src/g2f-bt-p22-candidate-20260831-v1/captures/p22-one-shot-20260831-054320-106996
+Bluetooth p22 SHA-256: 18749fe32257bd45bfca461dee7137086dcb6d25842510cb3b826f5ee03ee2c4
+```
+
+Wi-Fi W1 was then attempted exactly once.  The write/readback and recovery
+path passed, but the radio milestone safely failed before firmware READY:
+
+```text
+current p22 SHA-256:
+d07891e271ca3f331a61a0175787b629823eacb999d1d83aa73f9cb6b29f99dd
+
+candidate: /mnt/Home/src/w1-firmware-ready-candidate-20260831-v4-stage
+capture:   /mnt/Home/src/w1-firmware-ready-p22-one-shot-20260831-v4/captures/p22-one-shot-20260831-085702-293795
+Linux tip: 4f790caaf0272835f53c84ca45da778cc153035b
+Nix tip:   6bb595741608b6cc8ce0aa59c0533103844d3f61
+```
+
+The common path and W0 still passed (`WMT14`, RF-cal, and WCIR
+`0x00100279 ready=0`).  W1 returned `-ETIMEDOUT` about 7 ms after the W0
+observation and fenced/reset cleanly; both SSH paths and watchdog recovery
+returned.  No IRQ or netdev was claimed.  In the exact built source, the only
+timeouts early enough to fit this observation are function-enable IORx and
+driver-own; DOWNLOAD_CONFIG acknowledgement and READY each have roughly
+one-second bounded polls.  This is a strong narrowing, not yet a confirmed
+stage.  The active Wi-Fi lane is adding causal stage/register/cleanup logs
+before any second attempt, while the hardware lane maps every return path and
+performs no write.
+
+## 05:40 CEST authoritative update
+
+This update supersedes every older statement below about the current p22
+image or GNSS being untested.  The corrected GNSS-v2 candidate completed one
+and only one p22-only write, with no retry and no rollback:
+
+```text
+current p22 SHA-256:
+366db0043b21c3f1d124138fc3830511a648d8d14d1669c2e780a033148f2c47
+
+Linux tip: c88b14542158de2cad0bd68ede1a55d0d834fb15
+Nix tip:   d5dff08e2e1af0a62531f32a19068aa72e83cb1e
+candidate: /mnt/Home/src/gnss-p22-candidate-20260831-v2-pinctrl
+capture:   /mnt/Home/src/gnss-p22-candidate-20260831-v2-pinctrl/captures/p22-one-shot-20260831-053523-55814
+```
+
+Flash Tool returned success and exact 16 MiB p22 readback passed.  Both
+gadget and RTL SSH returned, and unattended recovery remained healthy.  The
+decisive hardware output was:
+
+```text
+WMT14 result=0
+G2d GNSS probe passed: GPIO69 LNA init/on/off and GPS FUNC_CTRL on/off acknowledged; bootstrap will fence/reset
+G2d RF calibration event: len=378 prefix=00 01
+```
+
+The supported GPIO69 mux/output-only pinctrl correction therefore resolves
+the earlier `-ENOTSUPP` failure.  This proves the bounded GNSS power/control
+path and cleanup acknowledgement; it does not yet prove UART data or a
+position fix.  The hardware lane has moved directly to the bounded Bluetooth
+G2f HCI Reset/Read Local Version candidate, with its new manifest required to
+name the current p22 hash above.
 
 ## 05:22 CEST authoritative update
 

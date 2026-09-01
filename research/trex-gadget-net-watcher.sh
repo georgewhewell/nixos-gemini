@@ -10,6 +10,7 @@ STATE=$2
 GADGET_MAC=42:00:15:19:82:00
 GADGET_USB=0525:a4a2
 HOST_ADDRESS=10.15.19.81/24
+DEVICE_ROUTE=10.15.19.82/32
 
 log() {
     printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"
@@ -29,7 +30,7 @@ safe_iface() {
     esac
 }
 
-log "watcher=start gadget_mac=$GADGET_MAC usb=$GADGET_USB address=$HOST_ADDRESS"
+log "watcher=start gadget_mac=$GADGET_MAC usb=$GADGET_USB address=$HOST_ADDRESS route=$DEVICE_ROUTE"
 while :; do
     if ! lsusb -d "$GADGET_USB" >/dev/null 2>&1; then
         log "identity=absent usb=$GADGET_USB"
@@ -57,6 +58,15 @@ while :; do
         log "action=address-replace result=failed iface=$iface address=$HOST_ADDRESS"
     else
         log "action=address-replace result=ok iface=$iface address=$HOST_ADDRESS"
+    fi
+    # A second 10.15.19.0/24 USB network exists on Trex.  Its equal-cost
+    # connected route otherwise wins after this gadget disconnects and
+    # re-enumerates.  Reassert an exact route only after both the USB VID:PID
+    # and gadget MAC identify the Gemini interface.
+    if ! sudo -n ip route replace "$DEVICE_ROUTE" dev "$iface" src "${HOST_ADDRESS%/*}"; then
+        log "action=route-replace result=failed iface=$iface route=$DEVICE_ROUTE"
+    else
+        log "action=route-replace result=ok iface=$iface route=$DEVICE_ROUTE"
     fi
     sleep 1
 done
