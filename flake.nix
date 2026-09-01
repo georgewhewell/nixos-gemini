@@ -432,6 +432,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -453,6 +454,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -475,6 +477,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -496,6 +499,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -517,6 +521,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -538,6 +543,7 @@
         ixoo-candidate
         ;
       linux-gemini = linux-gemini-next;
+      extendedPlatformDtb = true;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
