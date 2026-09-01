@@ -29,12 +29,13 @@ die() {
 }
 
 usage() {
-    echo "usage: $0 [--manifest PATH] [--proof-lease] --dry-run | --execute" >&2
+    echo "usage: $0 [--manifest PATH] [--proof-lease | --self-accept] --dry-run | --execute" >&2
     exit 2
 }
 
 MODE=
 PROOF_LEASE=no
+SELF_ACCEPT=no
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --manifest)
@@ -50,6 +51,11 @@ while [ "$#" -gt 0 ]; do
         --proof-lease)
             [ "$PROOF_LEASE" = no ] || usage
             PROOF_LEASE=yes
+            shift
+            ;;
+        --self-accept)
+            [ "$SELF_ACCEPT" = no ] || usage
+            SELF_ACCEPT=yes
             shift
             ;;
         *) usage ;;
@@ -131,6 +137,10 @@ STAGE2_READINESS_CONNECT_TIMEOUT_SECONDS=2
 # finish restoring p22 before that boot reaches SSH, so recovery readback must
 # cover the measured gate plus USB/dropbear settling time.
 RECOVERY_SSH_TIMEOUT_SECONDS=90
+SUPERVISOR_CANDIDATE_WAIT_SECONDS=300
+SUPERVISOR_ROLLBACK_WAIT_SECONDS=300
+TRANSACTION_MARGIN_SECONDS=120
+TRANSACTION_LEASE_SECONDS=
 ACCEPTANCE_COMMITTED=no
 ATTEMPT_COUNTER=0
 TOOL_PID_FILE=
@@ -146,6 +156,15 @@ SUPERVISOR_UNIT=
 SUPERVISOR_STATE=
 ROLLBACK_RESCUE_IMAGE=
 SUPERVISOR_KEEP=no
+SELF_ACCEPT_STATE=
+
+derive_transaction_lease_seconds() {
+    candidate_wait=$1
+    acceptance_window=$2
+    rollback_wait=$3
+    margin=$4
+    printf '%s\n' "$((candidate_wait + acceptance_window + rollback_wait + margin))"
+}
 
 load_manifest() {
     [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -252,12 +271,14 @@ require_manifest() {
     case "$HOST_NET_POLICY" in none|required) ;; *) die "unknown host_net_policy" ;; esac
     case "$SSH_PATH_POLICY" in fallback|both) ;; *) die "unknown ssh_path_policy" ;; esac
     case "$POWER_PREFLIGHT_POLICY" in none|required) ;; *) die "unknown power_preflight_policy" ;; esac
-    case "$TRANSACTION_POLICY" in persistent-acceptance|observe-always-rollback) ;; *) die "unknown transaction_policy" ;; esac
+    case "$TRANSACTION_POLICY" in persistent-acceptance|observe-always-rollback|baseline-self-accept-or-rollback) ;; *) die "unknown transaction_policy" ;; esac
     case "$INITIAL_ACCESS_POLICY" in
         known-host) ;;
         physical-candidate|physical-rollback)
-            [ "$TRANSACTION_POLICY" = observe-always-rollback ] ||
-                die "physical initial access requires observe-always-rollback" ;;
+            case "$TRANSACTION_POLICY" in
+                observe-always-rollback|baseline-self-accept-or-rollback) ;;
+                *) die "physical initial access requires a rollback-supervised transaction" ;;
+            esac ;;
         *) die "unknown initial_access_policy" ;;
     esac
     case "$WATCHDOG_PROFILE" in
@@ -333,14 +354,20 @@ require_manifest() {
             [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "stage2 watchdog takeover requires watchdog_profile=initramfs-petter"
             [ "$SSH_PATH_POLICY" = both ] || die "stage2 watchdog takeover requires ssh_path_policy=both"
             [ "$POWER_PREFLIGHT_POLICY" = required ] || die "stage2 watchdog takeover requires power_preflight_policy=required"
-            [ "$TRANSACTION_POLICY" = observe-always-rollback ] || die "stage2 watchdog takeover requires observe-always-rollback"
+            case "$TRANSACTION_POLICY" in
+                observe-always-rollback|baseline-self-accept-or-rollback) ;;
+                *) die "stage2 watchdog takeover requires rollback supervision" ;;
+            esac
             [ -n "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "manifest field is missing: stage1_watchdog_owner_marker"
             [ "$STAGE1_WATCHDOG_OWNER_MARKER" = watchdog=petting ] || die "stage1_watchdog_owner_marker must be watchdog=petting"
             [ "$STAGE1_HANDOFF_PATH" = /run/stage1-handoff ] || die "stage1_handoff_path must be /run/stage1-handoff"
             [ -n "$STAGE2_WATCHDOG_OWNER_UNIT" ] || die "manifest field is missing: stage2_watchdog_owner_unit"
             [ -n "$STAGE2_WATCHDOG_STATE" ] || die "manifest field is missing: stage2_watchdog_state"
             [ "$STAGE2_WATCHDOG_STATE" = active ] || die "stage2_watchdog_state must be active"
-            [ "$STAGE2_WATCHDOG_EVIDENCE" = 'stage2=multi-user watchdog=petting acceptance=external' ] || die "stage2_watchdog_evidence does not match the Stage2 handoff contract"
+            case "$TRANSACTION_POLICY:$STAGE2_WATCHDOG_EVIDENCE" in
+                observe-always-rollback:'stage2=multi-user watchdog=petting acceptance=external'|baseline-self-accept-or-rollback:'stage2=multi-user watchdog=petting acceptance=baseline-self-accept-pending') ;;
+                *) die "stage2_watchdog_evidence does not match the Stage2 handoff contract" ;;
+            esac
             [ -n "$STAGE2_SUCCESS_MARKER" ] || die "manifest field is missing: stage2_success_marker"
             [ "$STAGE2_SUCCESS_MARKER" = /run/gemini-mainline-success ] || die "stage2_success_marker must be /run/gemini-mainline-success"
             [ -n "$STAGE2_STORE_SOURCE" ] || die "manifest field is missing: stage2_store_source"
@@ -390,6 +417,10 @@ load_manifest
 [ -n "$STAGE1_PROVISION_WAIT_SECONDS" ] || STAGE1_PROVISION_WAIT_SECONDS=65
 require_manifest
 
+TRANSACTION_LEASE_SECONDS=$(derive_transaction_lease_seconds \
+    "$SUPERVISOR_CANDIDATE_WAIT_SECONDS" "$ACCEPTANCE_WINDOW_SECONDS" \
+    "$SUPERVISOR_ROLLBACK_WAIT_SECONDS" "$TRANSACTION_MARGIN_SECONDS")
+
 # Leave ten seconds for the remote size/hash/move/sync contract after the
 # bounded stream exits. The accepted profiles yield 55s, 110s, 230s and 590s.
 PROVISION_UPLOAD_TIMEOUT_SECONDS=$((STAGE1_PROVISION_WAIT_SECONDS - 10))
@@ -398,12 +429,25 @@ if [ "$PROOF_LEASE" = yes ]; then
     [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
     [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "--proof-lease requires initramfs-petter manifest"
 fi
+if [ "$SELF_ACCEPT" = yes ]; then
+    [ "$MODE" = --execute ] || die "--self-accept requires --execute"
+    [ "$PROOF_LEASE" = no ] || die "--self-accept and --proof-lease are mutually exclusive"
+    [ "$TRANSACTION_POLICY" = baseline-self-accept-or-rollback ] ||
+        die "--self-accept requires baseline-self-accept-or-rollback"
+    [ "$STAGE2_POLICY" = watchdog-takeover-required ] ||
+        die "--self-accept requires full NixOS Stage2"
+fi
 if [ "$INITIAL_ACCESS_POLICY" != known-host ] && [ "$MODE" = --execute ]; then
-    [ "$PROOF_LEASE" = yes ] || die "physical initial access requires --proof-lease"
+    [ "$PROOF_LEASE" = yes ] || [ "$SELF_ACCEPT" = yes ] ||
+        die "physical initial access requires --proof-lease or --self-accept"
 fi
 if [ "$MODE" = --execute ] && [ "$TRANSACTION_POLICY" = observe-always-rollback ] &&
     [ "$PROOF_LEASE" != yes ]; then
     die "observe-always-rollback requires --proof-lease; persistent acceptance is disabled"
+fi
+if [ "$MODE" = --execute ] && [ "$TRANSACTION_POLICY" = baseline-self-accept-or-rollback ] &&
+    [ "$SELF_ACCEPT" != yes ]; then
+    die "baseline self-accept transaction requires --self-accept"
 fi
 
 if [ "$WATCHDOG_PROFILE" = initramfs-petter ]; then
@@ -740,7 +784,11 @@ test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
 test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
 test ! -e '$init_target'
 test ! -L '$init_target'
-mv '$provision_tmp' '$init_target'
+# Both names are in the same p29 directory. link(2) is atomic and refuses an
+# existing destination, so a concurrent creator can never be overwritten.
+ln '$provision_tmp' '$init_target'
+test \"\$(stat -Lc %i '$provision_tmp')\" = \"\$(stat -Lc %i '$init_target')\"
+rm -- '$provision_tmp'
 sync
 test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
 test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
@@ -797,6 +845,11 @@ start_capture() {
     TRANSACTION_UNIT=p22-transaction-$run_name
     SUPERVISOR_UNIT=p22-proof-$run_name
     ROLLBACK_RESCUE_IMAGE=$RUN_SHARED/rollback-rescue.img
+    if [ "$TRANSACTION_POLICY" = baseline-self-accept-or-rollback ]; then
+        SELF_ACCEPT_STATE=$RUN_SHARED/candidate-self-accepted
+    else
+        SELF_ACCEPT_STATE=
+    fi
     XML_RUN_FILE=$RUN_SHARED/download-only-p22.xml
     printf 'preflight %s mode=%s\n' "$(date -Is)" "$MODE" > "$RUN_LOCAL/state"
     initial_device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
@@ -805,10 +858,11 @@ start_capture() {
 p22=\$(resolve_emmc_partition boot)
 sha256sum \"\$p22\"" > "$RUN_LOCAL/p22-pre-hash"
     # Acquire a Trex-owned transaction lease before staging any image.  The
-    # service is bounded by its holder script and survives loss of this SSH
+    # service is bounded by the complete candidate-state, acceptance and
+    # rollback envelopes plus a fixed margin. It survives loss of this SSH
     # session; a second harness cannot enter the writer lane concurrently.
     trex_scp "$ROOT/research/p22-trex-transaction-holder.sh" "trex:$RUN_SHARED/p22-trex-transaction-holder.sh" >/dev/null
-    trex_ssh "chmod 700 '$RUN_SHARED/p22-trex-transaction-holder.sh'; systemd-run --user --unit='$TRANSACTION_UNIT' --collect --quiet '$RUN_SHARED/p22-trex-transaction-holder.sh' '$TRANSACTION_LOCK_FILE' '$RUN_SHARED/transaction-owner' 900"
+    trex_ssh "chmod 700 '$RUN_SHARED/p22-trex-transaction-holder.sh'; systemd-run --user --unit='$TRANSACTION_UNIT' --collect --quiet '$RUN_SHARED/p22-trex-transaction-holder.sh' '$TRANSACTION_LOCK_FILE' '$RUN_SHARED/transaction-owner' '$TRANSACTION_LEASE_SECONDS'"
     transaction_ready=no
     transaction_wait=0
     while [ "$transaction_wait" -lt 15 ]; do
@@ -864,7 +918,7 @@ stop_capture() {
     if [ "$SUPERVISOR_KEEP" = yes ]; then
         supervisor_state=$(trex_ssh "cat '$RUN_SHARED/supervisor.state'" 2>/dev/null || true)
         case "$supervisor_state" in
-            supervisor_rollback_succeeded_rescue_verified\ *|supervisor_rollback_failed\ *|supervisor_rollback_unverified\ *|supervisor_rollback_timeout\ *|supervisor_candidate_flash_failed\ *|supervisor_blocked_*) SUPERVISOR_KEEP=no ;;
+            supervisor_candidate_self_accepted\ *|supervisor_rollback_succeeded_rescue_verified\ *|supervisor_rollback_failed\ *|supervisor_rollback_unverified\ *|supervisor_rollback_timeout\ *|supervisor_candidate_flash_failed\ *|supervisor_blocked_*) SUPERVISOR_KEEP=no ;;
         esac
     fi
     if [ "$SUPERVISOR_KEEP" = yes ]; then
@@ -957,13 +1011,20 @@ verify_lease_expiry_evidence() {
 }
 
 start_supervisor() {
-    [ "$TRANSACTION_POLICY" = observe-always-rollback ] || return 0
+    case "$TRANSACTION_POLICY" in
+        observe-always-rollback|baseline-self-accept-or-rollback) ;;
+        *) return 0 ;;
+    esac
     SUPERVISOR_STATE=$RUN_SHARED/supervisor.state
+    supervisor_candidate_sha=
+    if [ -n "$SELF_ACCEPT_STATE" ]; then
+        supervisor_candidate_sha=$CANDIDATE_SHA
+    fi
     rm -f "$SUPERVISOR_STATE"
     # This service is Trex-owned and independent of the local harness. It
     # starts before candidate reboot, then owns the always-rollback decision
     # if the harness or its SSH session disappears.
-    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML_RUN_FILE' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE' '$LEASE_SECONDS'"
+    trex_ssh "systemd-run --user --unit='$SUPERVISOR_UNIT' --collect --quiet '$RUN_SHARED/p22-proof-supervisor.sh' '$RUN_SHARED' '$STATE' '$ROLLBACK_RESCUE_IMAGE' '$ROLLBACK_SHA' '$STAGE_IMAGE' '$XML_RUN_FILE' '$FLASH_LOCK_FILE' '$ACCEPTANCE_WINDOW_SECONDS' '$RUN_SHARED/flash-wrapper.sh' '$RUN_SHARED/supervisor-rollback.state' '$RUN_SHARED/supervisor-rollback.log' '$SUPERVISOR_STATE' '$LEASE_SECONDS' '$SELF_ACCEPT_STATE' '$supervisor_candidate_sha' '$SUPERVISOR_ROLLBACK_WAIT_SECONDS' '$SUPERVISOR_CANDIDATE_WAIT_SECONDS'"
     supervisor_ready=no
     supervisor_wait=0
     while [ "$supervisor_wait" -lt 15 ]; do
@@ -1041,6 +1102,94 @@ sha256sum \"\$p22\" \"\$p30\" \"\$p31\"" \
         sleep 3
     done
     return 1
+}
+
+publish_self_acceptance() {
+    [ "$SELF_ACCEPT" = yes ] || return 1
+    [ "$SELF_ACCEPT_STATE" = "$RUN_SHARED/candidate-self-accepted" ] || return 1
+    accept_record="candidate_self_accepted sha256=$CANDIDATE_SHA"
+    accept_tmp=$SELF_ACCEPT_STATE.tmp.$$
+    umask 077
+    printf '%s\n' "$accept_record" > "$accept_tmp"
+    mv "$accept_tmp" "$SELF_ACCEPT_STATE"
+    [ "$(cat "$SELF_ACCEPT_STATE")" = "$accept_record" ] || return 1
+    trex_ssh "test \"\$(cat '$SELF_ACCEPT_STATE')\" = '$accept_record'"
+}
+
+wait_supervisor_self_accept() {
+    [ -n "$SUPERVISOR_STATE" ] || return 1
+    deadline=$(( $(date +%s) + 360 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        supervisor_state=$(trex_ssh "cat '$SUPERVISOR_STATE'" 2>/dev/null || true)
+        case "$supervisor_state" in
+            supervisor_candidate_self_accepted\ *)
+                SUPERVISOR_KEEP=no
+                return 0
+                ;;
+            supervisor_rollback_succeeded_rescue_verified\ *)
+                SUPERVISOR_KEEP=no
+                return 2
+                ;;
+            supervisor_waiting_candidate\ *|supervisor_rollback_armed\ *) ;;
+            supervisor_rollback_failed\ *|supervisor_rollback_unverified\ *|supervisor_rollback_timeout\ *|supervisor_blocked_*|supervisor_candidate_flash_failed\ *)
+                SUPERVISOR_KEEP=no
+                return 1
+                ;;
+        esac
+        sleep 2
+    done
+    return 1
+}
+
+verify_self_accepted_candidate() {
+    CANDIDATE_HOSTKEY_MODE=yes
+    device_ssh "$EMMC_RESOLVER
+set -eu
+p22=\$(resolve_emmc_partition boot)
+p30=\$(resolve_emmc_partition boot2)
+p31=\$(resolve_emmc_partition boot3)
+test \"\$(sha256sum \"\$p22\" | cut -d' ' -f1)\" = $CANDIDATE_SHA
+test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
+test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
+test \"\$(cat /run/unattended-recovery.accepted)\" = unattended_recovery=healthy
+test -d /run/unattended-recovery.baseline-self-accept.lock
+test -f '$STAGE2_STORE_TARGET_LIVE'
+test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test \"\$(systemctl is-system-running)\" = running
+test \"\$(systemctl is-active '$STAGE2_WATCHDOG_OWNER_UNIT')\" = active
+grep -Eq '^/dev/mmcblk[0-9]+p29 /gemian ext4 ro,' /proc/mounts
+ip -4 -o addr show | grep -Fq ' $EXPECTED_GADGET_IP/24 '
+ip -4 -o addr show | grep -Fq ' $EXPECTED_ETHERNET_IP/'
+test \"\$(cat /sys/class/drm/card0-DSI-1/status)\" = connected
+test \"\$(cat /sys/class/drm/card0-DSI-1/enabled)\" = enabled
+test -c /dev/fb0
+test \"\$(cat /sys/class/tty/tty0/active)\" = tty1
+test \"\$(systemctl is-active autovt@tty1.service)\" = active
+tty1_pid=\$(systemctl show -p MainPID --value autovt@tty1.service)
+case \"\$tty1_pid\" in ''|*[!0-9]*) exit 1 ;; esac
+test \"\$(awk '/^Uid:/ {print \$2; exit}' \"/proc/\$tty1_pid/status\")\" = 0
+test \"\$(readlink \"/proc/\$tty1_pid/fd/0\")\" = /dev/tty1
+case \"\$(cat \"/proc/\$tty1_pid/comm\")\" in ash|sh) ;; *) exit 1 ;; esac
+test -x /run/current-system/sw/bin/btop
+btop_version=\$(/bin/busybox timeout 5 /run/current-system/sw/bin/btop --version)
+test "\$btop_version" = 'btop version: 1.2.13'
+keyboard_event=
+for event in /sys/class/input/event*; do
+  test \"\$(cat \"\$event/device/name\" 2>/dev/null || true)\" = keyboard-matrix || continue
+  event_name=\${event##*/}
+  event_node=/dev/input/\$event_name
+  test -c \"\$event_node\" && test -r \"\$event_node\" || continue
+  event_capability=\$(cat \"\$event/device/capabilities/ev\" 2>/dev/null || true)
+  case \"\$event_capability\" in ''|*[!0-9a-fA-F]*) continue ;; esac
+  test \$((0x\$event_capability & 2)) -ne 0 || continue
+  key_capability=\$(cat \"\$event/device/capabilities/key\" 2>/dev/null || true)
+  printf '%s\n' \"\$key_capability\" | grep -Eq '[1-9a-fA-F]' || continue
+  keyboard_event=\$event_node
+done
+test -n \"\$keyboard_event\"
+sha256sum \"\$p22\" \"\$p30\" \"\$p31\" '$STAGE2_STORE_TARGET_LIVE'
+" > "$RUN_LOCAL/final-partition-hashes" 2>&1
 }
 
 # shellcheck disable=SC2329 # reached through the EXIT/INT/TERM cleanup trap
@@ -1151,7 +1300,7 @@ cleanup() {
     stop_capture
     if [ "$rc" -ne 0 ] && [ -n "${RUN_LOCAL:-}" ] && [ -f "$RUN_LOCAL/state" ]; then
         case "$(cat "$RUN_LOCAL/state" 2>/dev/null || true)" in
-            accepted_p22*|recovered_known_good_p22*|recovery_failed*|recovery_flash_failed*|recovery_validation_failed*|manual_reset_required_*|recovery_blocked_*|recovered_but_proof_failed_*|lease_proof_passed_recovered_stage_a*) ;;
+            accepted_p22*|accepted_self_p22*|recovered_known_good_p22*|recovery_failed*|recovery_flash_failed*|recovery_validation_failed*|manual_reset_required_*|recovery_blocked_*|recovered_but_proof_failed_*|recovered_but_self_accept_failed_*|lease_proof_passed_recovered_stage_a*) ;;
             *) printf 'harness_failed rc=%s %s\n' "$rc" "$(date -Is)" > "$RUN_LOCAL/state" ;;
         esac
     fi
@@ -1245,6 +1394,10 @@ test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
 grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
+test -f '$STAGE2_STORE_TARGET_LIVE'
+test ! -L '$STAGE2_STORE_TARGET_LIVE'
+test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
 grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
 test -s \"$STAGE1_HANDOFF_PATH\"
 grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
@@ -1263,6 +1416,57 @@ test \"\$(cat /sys/class/watchdog/watchdog0/identity)\" = \"$EXPECTED_WATCHDOG_I
 test \"\$(cat /sys/class/watchdog/watchdog0/state)\" = \"$EXPECTED_WATCHDOG_STATE\"
 test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
 test -r /sys/class/watchdog/watchdog0/bootstatus
+$(if [ "${TRANSACTION_POLICY:-}" = baseline-self-accept-or-rollback ]; then
+    cat <<'EOF'
+test "$(cat /run/unattended-recovery.accepted)" = unattended_recovery=healthy
+test -d /run/unattended-recovery.baseline-self-accept.lock
+test "$(systemctl show -p Result --value gemini-baseline-self-accept.service)" = success
+test "$(systemctl show -p ExecMainStatus --value gemini-baseline-self-accept.service)" = 0
+expected_system=$(cat /run/gemini-lease-expected-system)
+test "$(readlink -f /run/current-system)" = "$expected_system"
+capability=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^gemini\.baseline_lease_capability=//p')
+case "$capability" in gemini-baseline-lease-v1-*) ;; *) exit 1 ;; esac
+test "$(printf %s "$capability" | wc -c)" -eq 89
+grep -Fqx "GEMINI_MAINLINE_NIXOS: baseline_self_accept=accepted capability=$capability system=$expected_system health=exact" /run/stage1.log
+grep -Fqx 'GEMINI_MAINLINE_NIXOS: unattended_recovery=lease-accepted lease_enforcer=holding' /run/stage1.log
+test "$(cat /run/gemini-display-activation)" = 'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration'
+test "$(cat /sys/class/drm/card0-DSI-1/status)" = connected
+test "$(cat /sys/class/drm/card0-DSI-1/enabled)" = enabled
+test -c /dev/dri/card0
+test -c /dev/fb0
+test "$(cat /sys/class/tty/tty0/active)" = tty1
+test "$(systemctl is-active autovt@tty1.service)" = active
+systemctl show -p ExecStart --value autovt@tty1.service | grep -Fq -- ' --autologin root '
+tty1_pid=$(systemctl show -p MainPID --value autovt@tty1.service)
+case "$tty1_pid" in ''|*[!0-9]*) exit 1 ;; esac
+test "$tty1_pid" -gt 1
+test "$(awk '/^Uid:/ {print $2; exit}' "/proc/$tty1_pid/status")" = 0
+test "$(readlink "/proc/$tty1_pid/fd/0")" = /dev/tty1
+case "$(cat "/proc/$tty1_pid/comm")" in ash|sh) ;; *) exit 1 ;; esac
+test -x /run/current-system/sw/bin/btop
+btop_version=$(/bin/busybox timeout 5 /run/current-system/sw/bin/btop --version)
+test "$btop_version" = 'btop version: 1.2.13'
+keyboard_event=
+keyboard_ev=
+for event in /sys/class/input/event*; do
+  test "$(cat "$event/device/name" 2>/dev/null || true)" = keyboard-matrix || continue
+  event_name=${event##*/}
+  event_node=/dev/input/$event_name
+  test -c "$event_node" && test -r "$event_node" || continue
+  event_capability=$(cat "$event/device/capabilities/ev" 2>/dev/null || true)
+  case "$event_capability" in ''|*[!0-9a-fA-F]*) continue ;; esac
+  test $((0x$event_capability & 2)) -ne 0 || continue
+  key_capability=$(cat "$event/device/capabilities/key" 2>/dev/null || true)
+  printf '%s\n' "$key_capability" | grep -Eq '[1-9a-fA-F]' || continue
+  keyboard_event=$event_node
+  keyboard_ev=$event_capability
+done
+test -n "$keyboard_event"
+printf 'baseline-self-accept=verified capability=%s system=%s\n' "$capability" "$expected_system"
+printf 'display=connected-enabled fb0=yes tty1=active root-shell-pid=%s\n' "$tty1_pid"
+printf 'btop=exec-smoke-pass keyboard_path=enumerated-readable-ev_key node=%s ev=%s physical_event=unproven\n' "$keyboard_event" "$keyboard_ev"
+EOF
+fi)
 printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"
 printf 'stage1_handoff_path=%s\\n' \"$STAGE1_HANDOFF_PATH\"
 printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
@@ -1854,7 +2058,8 @@ if ! arm_initial_candidate_hostkey_mode; then
     exit 1
 fi
 if ! request_reboot; then
-    if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+    if [ "$TRANSACTION_POLICY" = observe-always-rollback ] ||
+        [ "$TRANSACTION_POLICY" = baseline-self-accept-or-rollback ]; then
         if ! wait_supervisor_rollback || ! verify_recovered_stage_a; then
             printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
             exit 1
@@ -1867,7 +2072,53 @@ if ! request_reboot; then
     fi
 fi
 CANDIDATE_HOSTKEY_MODE=yes
-if [ "$PROOF_LEASE" = yes ]; then
+if [ "$SELF_ACCEPT" = yes ]; then
+    self_validation=no
+    if accept_candidate_until_deadline; then
+        self_validation=yes
+    else
+        printf 'self_accept_candidate_validation_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    fi
+    if [ "$self_validation" = yes ] && publish_self_acceptance; then
+        set +e
+        wait_supervisor_self_accept
+        supervisor_accept_rc=$?
+        set -e
+        case "$supervisor_accept_rc" in
+            0)
+                if ! verify_self_accepted_candidate; then
+                    printf 'accepted_self_p22_final_readback_failed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+                    exit 1
+                fi
+                ACCEPTANCE_COMMITTED=yes
+                printf 'accepted_self_p22 %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+                exit 0
+                ;;
+            2)
+                if verify_recovered_stage_a; then
+                    printf 'recovered_but_self_accept_failed_supervisor_rollback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+                else
+                    printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+                fi
+                exit 1
+                ;;
+            *)
+                printf 'manual_reset_required_supervisor_self_accept_terminal %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+                exit 1
+                ;;
+        esac
+    fi
+    set +e
+    wait_supervisor_self_accept
+    supervisor_accept_rc=$?
+    set -e
+    if [ "$supervisor_accept_rc" -eq 2 ] && verify_recovered_stage_a; then
+        printf 'recovered_but_self_accept_failed_candidate_validation %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+        exit 1
+    fi
+    printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    exit 1
+elif [ "$PROOF_LEASE" = yes ]; then
     # Deliberately do not write the acceptance marker. recover() starts the
     # rollback tool first, then waits for the candidate lease to kill its
     # petter and expose the next watchdog/preloader window.
@@ -1918,7 +2169,8 @@ if [ "$ACCEPTANCE_COMMITTED" = yes ]; then
     # can never fall through to automatic recovery.
     exit 0
 fi
-if [ "$TRANSACTION_POLICY" = observe-always-rollback ]; then
+if [ "$TRANSACTION_POLICY" = observe-always-rollback ] ||
+    [ "$TRANSACTION_POLICY" = baseline-self-accept-or-rollback ]; then
     if ! wait_supervisor_rollback || ! verify_recovered_stage_a; then
         printf 'manual_reset_required_supervisor_or_readback %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
         exit 1
