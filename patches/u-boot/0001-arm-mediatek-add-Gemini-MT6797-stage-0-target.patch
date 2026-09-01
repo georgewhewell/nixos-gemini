@@ -1,0 +1,454 @@
+From 94a4e9d75d5497e53f6bc483582e0434ae6488d5 Mon Sep 17 00:00:00 2001
+From: georgewhewell <georgerw@gmail.com>
+Date: Wed, 2 Sep 2026 00:40:25 +0200
+Subject: [PATCH] arm: mediatek: add Gemini MT6797 stage-0 target
+
+---
+ arch/arm/dts/Makefile                         |  1 +
+ arch/arm/dts/mt6797-gemini-pda.dts            | 38 ++++++++
+ arch/arm/mach-mediatek/Kconfig                | 13 +++
+ arch/arm/mach-mediatek/Makefile               |  1 +
+ arch/arm/mach-mediatek/mt6797/Makefile        |  3 +
+ arch/arm/mach-mediatek/mt6797/init.c          | 32 +++++++
+ arch/arm/mach-mediatek/mt6797/lowlevel_init.S | 73 +++++++++++++++
+ board/planet/gemini/MAINTAINERS               |  8 ++
+ board/planet/gemini/Makefile                  |  3 +
+ board/planet/gemini/gemini.c                  | 93 +++++++++++++++++++
+ configs/mt6797_gemini_stage0_defconfig        | 34 +++++++
+ include/configs/mt6797.h                      |  8 ++
+ 12 files changed, 307 insertions(+)
+ create mode 100644 arch/arm/dts/mt6797-gemini-pda.dts
+ create mode 100644 arch/arm/mach-mediatek/mt6797/Makefile
+ create mode 100644 arch/arm/mach-mediatek/mt6797/init.c
+ create mode 100644 arch/arm/mach-mediatek/mt6797/lowlevel_init.S
+ create mode 100644 board/planet/gemini/MAINTAINERS
+ create mode 100644 board/planet/gemini/Makefile
+ create mode 100644 board/planet/gemini/gemini.c
+ create mode 100644 configs/mt6797_gemini_stage0_defconfig
+ create mode 100644 include/configs/mt6797.h
+
+diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
+index a02dad22..21550035 100644
+--- a/arch/arm/dts/Makefile
++++ b/arch/arm/dts/Makefile
+@@ -1072,6 +1072,7 @@ mt8371-genio-520-evk-ufs-dtbs := mt8371-genio-520-evk.dtb mt8371-genio-common-uf
+ mt8391-genio-720-evk-ufs-dtbs := mt8391-genio-720-evk.dtb mt8371-genio-common-ufs.dtbo
+ 
+ dtb-$(CONFIG_ARCH_MEDIATEK) += \
++	mt6797-gemini-pda.dtb \
+ 	mt7622-rfb.dtb \
+ 	mt7623a-unielec-u7623-02-emmc.dtb \
+ 	mt7622-bananapi-bpi-r64.dtb \
+diff --git a/arch/arm/dts/mt6797-gemini-pda.dts b/arch/arm/dts/mt6797-gemini-pda.dts
+new file mode 100644
+index 00000000..48707a26
+--- /dev/null
++++ b/arch/arm/dts/mt6797-gemini-pda.dts
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-2.0 OR MIT
++
++/dts-v1/;
++
++/ {
++	model = "Planet Computers Gemini PDA";
++	compatible = "planet,gemini-pda", "mediatek,mt6797";
++	#address-cells = <2>;
++	#size-cells = <2>;
++
++	aliases {
++		serial0 = &serial_null;
++	};
++
++	chosen {
++		stdout-path = &serial_null;
++	};
++
++	serial_null: serial {
++		compatible = "nulldev-serial";
++	};
++
++	memory@40001000 {
++		device_type = "memory";
++		reg = <0 0x40001000 0 0x03ffe000>;
++	};
++
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++
++		stage0-trace@43fff000 {
++			reg = <0 0x43fff000 0 0x1000>;
++			no-map;
++		};
++	};
++};
+diff --git a/arch/arm/mach-mediatek/Kconfig b/arch/arm/mach-mediatek/Kconfig
+index 5e6c50ca..04e322d6 100644
+--- a/arch/arm/mach-mediatek/Kconfig
++++ b/arch/arm/mach-mediatek/Kconfig
+@@ -4,6 +4,7 @@ config SYS_SOC
+ 	default "mediatek"
+ 
+ config SYS_VENDOR
++	default "planet" if TARGET_MT6797
+ 	default "mediatek"
+ 
+ choice
+@@ -75,6 +76,15 @@ config TARGET_MT7988
+ 	  including UART, SPI, SPI flash, USB3.0, MMC, NAND, SNFI, PWM, PCIe,
+ 	  10 Gigabit Ethernet , I2C, and PCIe.
+ 
++config TARGET_MT6797
++	bool "MediaTek MT6797 SoC"
++	select ARM64
++	help
++	  The MediaTek MT6797 is an ARM64 SoC with two Cortex-A72 cores and
++	  two four-core Cortex-A53 clusters. This target supports a U-Boot
++	  proper payload chainloaded by the vendor LK boot loader after DRAM
++	  and platform firmware initialization.
++
+ config TARGET_MT8183
+ 	bool "MediaTek MT8183 SoC"
+ 	select ARM64
+@@ -161,6 +171,7 @@ config MTK_MEM_MAP_DDR_SIZE
+ 	default 0x200000000 if TARGET_MT7987 || TARGET_MT7988 || TARGET_MT8188 || TARGET_MT8195
+ 	default 0xc0000000 if TARGET_MT8365
+ 	default 0x80000000 if TARGET_MT7981 || TARGET_MT7986 || TARGET_MT8183
++	default 0x04000000 if TARGET_MT6797
+ 	default 0x40000000 if TARGET_MT7622 || TARGET_MT8512
+ 	default 0x20000000
+ 	help
+@@ -177,6 +188,7 @@ endif
+ 
+ config SYS_BOARD
+ 	string "Board name"
++	default "gemini" if TARGET_MT6797
+ 	default "mt7622" if TARGET_MT7622
+ 	default "mt7623" if TARGET_MT7623
+ 	default "mt7629" if TARGET_MT7629
+@@ -195,6 +207,7 @@ config SYS_BOARD
+ 	  be used.
+ 
+ config SYS_CONFIG_NAME
++	default "mt6797" if TARGET_MT6797
+ 	default "mt7623" if TARGET_MT7623
+ 	default "mt7629" if TARGET_MT7629
+ 	default "mt7981" if TARGET_MT7981
+diff --git a/arch/arm/mach-mediatek/Makefile b/arch/arm/mach-mediatek/Makefile
+index 35f748a7..eb11ba5e 100644
+--- a/arch/arm/mach-mediatek/Makefile
++++ b/arch/arm/mach-mediatek/Makefile
+@@ -5,6 +5,7 @@ obj-y	+= cpu.o
+ obj-$(CONFIG_MTK_TZ_MOVABLE)	+= tzcfg.o
+ obj-$(CONFIG_XPL_BUILD)	+= spl.o
+ 
++obj-$(CONFIG_TARGET_MT6797) += mt6797/
+ obj-$(CONFIG_TARGET_MT7622) += mt7622/
+ obj-$(CONFIG_TARGET_MT7623) += mt7623/
+ obj-$(CONFIG_TARGET_MT7629) += mt7629/
+diff --git a/arch/arm/mach-mediatek/mt6797/Makefile b/arch/arm/mach-mediatek/mt6797/Makefile
+new file mode 100644
+index 00000000..2df9763e
+--- /dev/null
++++ b/arch/arm/mach-mediatek/mt6797/Makefile
+@@ -0,0 +1,3 @@
++# SPDX-License-Identifier: GPL-2.0
++
++obj-y += init.o lowlevel_init.o
+diff --git a/arch/arm/mach-mediatek/mt6797/init.c b/arch/arm/mach-mediatek/mt6797/init.c
+new file mode 100644
+index 00000000..3f903ce7
+--- /dev/null
++++ b/arch/arm/mach-mediatek/mt6797/init.c
+@@ -0,0 +1,32 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <fdtdec.h>
++#include <init.h>
++#include <stdio.h>
++#include <linux/kernel.h>
++#include <asm/global_data.h>
++#include <asm/system.h>
++
++DECLARE_GLOBAL_DATA_PTR;
++
++int dram_init(void)
++{
++	return fdtdec_setup_mem_size_base();
++}
++
++phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
++{
++	/* Stay below LK's tags and the vendor persistent trace reservations. */
++	return min(gd->ram_top, (phys_addr_t)0x43fff000);
++}
++
++void reset_cpu(void)
++{
++	psci_system_reset();
++}
++
++int print_cpuinfo(void)
++{
++	printf("CPU:   MediaTek MT6797 (LK handoff)\n");
++	return 0;
++}
+diff --git a/arch/arm/mach-mediatek/mt6797/lowlevel_init.S b/arch/arm/mach-mediatek/mt6797/lowlevel_init.S
+new file mode 100644
+index 00000000..02bd0ee6
+--- /dev/null
++++ b/arch/arm/mach-mediatek/mt6797/lowlevel_init.S
+@@ -0,0 +1,73 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++#include <linux/linkage.h>
++
++#define GEMINI_TRACE_BASE	0x43fff000
++#define GEMINI_TRACE_MAGIC	0x31303042554d4547
++#define MT6797_WDT_BASE		0x10007000
++#define MT6797_WDT_RESTART_KEY	0x1971
++
++/*
++ * LK enters the payload with the boot tags in x0 and an active watchdog.
++ * Record the handoff before U-Boot changes exception state, caches or DRAM.
++ */
++.global save_boot_params
++save_boot_params:
++	mov	x8, #0xf000
++	movk	x8, #0x43ff, lsl #16
++	str	xzr, [x8, #0x00]
++	mov	x9, #1
++	str	x9, [x8, #0x08]
++	mov	x9, #0xa8
++	str	x9, [x8, #0x10]
++	mov	x9, #1
++	str	x9, [x8, #0x18]
++	adr	x9, _start
++	str	x9, [x8, #0x20]
++	stp	x0, x1, [x8, #0x28]
++	stp	x2, x3, [x8, #0x38]
++	mrs	x11, CurrentEL
++	str	x11, [x8, #0x48]
++	mrs	x9, mpidr_el1
++	str	x9, [x8, #0x50]
++	mrs	x9, cntfrq_el0
++	str	x9, [x8, #0x58]
++	mrs	x9, cntvct_el0
++	str	x9, [x8, #0x60]
++
++	cmp	x11, #0xc
++	b.eq	1f
++	cmp	x11, #0x8
++	b.eq	2f
++	mrs	x9, sctlr_el1
++	b	3f
++1:	mrs	x9, sctlr_el3
++	b	3f
++2:	mrs	x9, sctlr_el2
++3:	str	x9, [x8, #0x68]
++
++	mov	x10, #0x7000
++	movk	x10, #0x1000, lsl #16
++	ldr	w9, [x10, #0x00]
++	str	x9, [x8, #0x70]
++	ldr	w9, [x10, #0x04]
++	str	x9, [x8, #0x78]
++	ldr	w9, [x10, #0x0c]
++	str	x9, [x8, #0x80]
++	ldr	w9, [x10, #0x10]
++	str	x9, [x8, #0x88]
++	stp	xzr, xzr, [x8, #0x90]
++
++	mov	x9, #MT6797_WDT_RESTART_KEY
++	str	w9, [x10, #0x08]
++	dsb	sy
++	mov	x9, #0x4547
++	movk	x9, #0x554d, lsl #16
++	movk	x9, #0x3042, lsl #32
++	movk	x9, #0x3130, lsl #48
++	mvn	x11, x9
++	str	x11, [x8, #0xa0]
++	dsb	st
++	str	x9, [x8, #0x00]
++	dsb	sy
++	b	save_boot_params_ret
+diff --git a/board/planet/gemini/MAINTAINERS b/board/planet/gemini/MAINTAINERS
+new file mode 100644
+index 00000000..dd614acc
+--- /dev/null
++++ b/board/planet/gemini/MAINTAINERS
+@@ -0,0 +1,8 @@
++GEMINI PDA
++M:	George Whewell <georgerw@gmail.com>
++S:	Maintained
++F:	arch/arm/dts/mt6797-gemini-pda.dts
++F:	arch/arm/mach-mediatek/mt6797/
++F:	board/planet/gemini/
++F:	configs/mt6797_gemini_stage0_defconfig
++F:	include/configs/mt6797.h
+diff --git a/board/planet/gemini/Makefile b/board/planet/gemini/Makefile
+new file mode 100644
+index 00000000..9752996c
+--- /dev/null
++++ b/board/planet/gemini/Makefile
+@@ -0,0 +1,3 @@
++# SPDX-License-Identifier: GPL-2.0
++
++obj-y += gemini.o
+diff --git a/board/planet/gemini/gemini.c b/board/planet/gemini/gemini.c
+new file mode 100644
+index 00000000..4da4d4cc
+--- /dev/null
++++ b/board/planet/gemini/gemini.c
+@@ -0,0 +1,93 @@
++// SPDX-License-Identifier: GPL-2.0
++
++#include <stddef.h>
++#include <asm/cache.h>
++#include <asm/global_data.h>
++#include <asm/io.h>
++#include <asm/system.h>
++
++#define GEMINI_TRACE_BASE		0x43fff000
++#define GEMINI_TRACE_MAGIC		0x31303042554d4547ULL
++#define MT6797_WDT_BASE			0x10007000
++#define MT6797_WDT_RESTART		0x08
++#define MT6797_WDT_RESTART_KEY		0x1971
++
++struct gemini_stage0_trace {
++	u64 magic;
++	u64 version;
++	u64 length;
++	u64 stage;
++	u64 runtime_entry;
++	u64 args[4];
++	u64 current_el;
++	u64 mpidr;
++	u64 counter_frequency;
++	u64 entry_counter;
++	u64 sctlr;
++	u64 wdt_mode;
++	u64 wdt_length;
++	u64 wdt_status;
++	u64 wdt_interval;
++	u64 relocated_address;
++	u64 ram_top;
++	u64 magic_complement;
++};
++
++static_assert(offsetof(struct gemini_stage0_trace, stage) == 0x18);
++static_assert(offsetof(struct gemini_stage0_trace, args) == 0x28);
++static_assert(offsetof(struct gemini_stage0_trace, wdt_mode) == 0x70);
++static_assert(offsetof(struct gemini_stage0_trace, relocated_address) == 0x90);
++static_assert(offsetof(struct gemini_stage0_trace, magic_complement) == 0xa0);
++static_assert(sizeof(struct gemini_stage0_trace) == 0xa8);
++
++DECLARE_GLOBAL_DATA_PTR;
++
++static volatile struct gemini_stage0_trace *const trace =
++	(volatile struct gemini_stage0_trace *)GEMINI_TRACE_BASE;
++
++static void gemini_trace_flush(void)
++{
++	flush_dcache_range(GEMINI_TRACE_BASE, GEMINI_TRACE_BASE + 0x1000);
++	dsb();
++}
++
++static void gemini_stage(unsigned int stage, bool relocated)
++{
++	writel(MT6797_WDT_RESTART_KEY,
++	       (void __iomem *)(MT6797_WDT_BASE + MT6797_WDT_RESTART));
++
++	/* Make every post-relocation update commit-last, just like stage 1. */
++	trace->magic = 0;
++	gemini_trace_flush();
++	if (relocated) {
++		trace->relocated_address = gd->relocaddr;
++		trace->ram_top = gd->ram_top;
++	}
++	trace->stage = stage;
++	trace->magic_complement = ~GEMINI_TRACE_MAGIC;
++	gemini_trace_flush();
++	trace->magic = GEMINI_TRACE_MAGIC;
++	gemini_trace_flush();
++}
++
++int board_early_init_f(void)
++{
++	gemini_stage(2, false);
++	return 0;
++}
++
++int board_init(void)
++{
++	gemini_stage(3, false);
++	return 0;
++}
++
++int board_late_init(void)
++{
++	gemini_stage(4, true);
++
++	/* Do not pet or stop LK's watchdog: recovery is the stage-0 exit path. */
++	asm volatile("msr daifset, #0xf\n\tisb" ::: "memory");
++	for (;;)
++		wfi();
++}
+diff --git a/configs/mt6797_gemini_stage0_defconfig b/configs/mt6797_gemini_stage0_defconfig
+new file mode 100644
+index 00000000..b32f61fb
+--- /dev/null
++++ b/configs/mt6797_gemini_stage0_defconfig
+@@ -0,0 +1,34 @@
++CONFIG_ARM=y
++CONFIG_COUNTER_FREQUENCY=13000000
++CONFIG_POSITION_INDEPENDENT=y
++CONFIG_ARCH_MEDIATEK=y
++CONFIG_TEXT_BASE=0x40080000
++CONFIG_SYS_MALLOC_F_LEN=0x4000
++CONFIG_NR_DRAM_BANKS=1
++CONFIG_ENV_SIZE=0x1000
++CONFIG_DEFAULT_DEVICE_TREE="mt6797-gemini-pda"
++CONFIG_TARGET_MT6797=y
++CONFIG_SYS_LOAD_ADDR=0x40080000
++# CONFIG_PSCI_RESET is not set
++# CONFIG_EFI_LOADER is not set
++# CONFIG_DISPLAY_BOARDINFO is not set
++CONFIG_BOARD_EARLY_INIT_F=y
++CONFIG_BOARD_LATE_INIT=y
++# CONFIG_CMD_BOOTM is not set
++# CONFIG_CMD_BOOTI is not set
++# CONFIG_CMD_ELF is not set
++# CONFIG_CMD_GO is not set
++# CONFIG_CMD_EXPORTENV is not set
++# CONFIG_CMD_IMPORTENV is not set
++# CONFIG_CMD_EDITENV is not set
++# CONFIG_CMD_CRC32 is not set
++# CONFIG_CMD_MEMORY is not set
++# CONFIG_CMD_LOADB is not set
++# CONFIG_CMD_LOADS is not set
++# CONFIG_CMD_ITEST is not set
++# CONFIG_CMD_SETEXPR is not set
++# CONFIG_CMD_NET is not set
++# CONFIG_CMD_BLOCK_CACHE is not set
++CONFIG_BAUDRATE=921600
++CONFIG_DM_SERIAL=y
++CONFIG_NULLDEV_SERIAL=y
+diff --git a/include/configs/mt6797.h b/include/configs/mt6797.h
+new file mode 100644
+index 00000000..c453270b
+--- /dev/null
++++ b/include/configs/mt6797.h
+@@ -0,0 +1,8 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++
++#ifndef __MT6797_H
++#define __MT6797_H
++
++#define CFG_SYS_SDRAM_BASE	0x40001000
++
++#endif
+-- 
+2.54.0
+

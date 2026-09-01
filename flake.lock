@@ -110,7 +110,25 @@
         "linux-gemini-next": "linux-gemini-next",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
+        "u-boot-src": "u-boot-src",
         "vendor-kernel": "vendor-kernel"
+      }
+    },
+    "u-boot-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788272077,
+        "narHash": "sha256-96h4eOC4qfkfs++yXLJN0JfUHqj/6+TO0M98bcas3Gc=",
+        "owner": "u-boot",
+        "repo": "u-boot",
+        "rev": "cc8c034e78eba6b2a3845783889b80753bb1af1e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "u-boot",
+        "repo": "u-boot",
+        "rev": "cc8c034e78eba6b2a3845783889b80753bb1af1e",
+        "type": "github"
       }
     },
     "vendor-kernel": {

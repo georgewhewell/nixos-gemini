@@ -40,6 +40,11 @@
       url = "github:ixoo/gemini-pda-mainline/a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
       flake = false;
     };
+    u-boot-src = {
+      # Exact upstream base for the reviewable MT6797 stage-0 patch.
+      url = "github:u-boot/u-boot/cc8c034e78eba6b2a3845783889b80753bb1af1e";
+      flake = false;
+    };
   };
 
   outputs = {
@@ -51,6 +56,7 @@
     linux-gemini,
     linux-gemini-next,
     ixoo-candidate,
+    u-boot-src,
   }: let
     # Build system (your machine)
     buildSystem = "x86_64-linux";
@@ -80,6 +86,10 @@
 
     # Cross pkgs for aarch64
     crossPkgs = buildPkgs.pkgsCross.aarch64-multiplatform;
+
+    ubootStage0 = import ./nix/uboot-stage0.nix {
+      inherit buildPkgs crossPkgs u-boot-src;
+    };
 
     # Historical cross-compilers for controlled vendor-kernel comparisons.
     # The known-good binary identifies Debian GCC 6.3.0; nixpkgs 23.05 gives
@@ -1193,6 +1203,9 @@
       baselineProbeBootImgGcc6 = baselineProbeBootImgGcc6;
       usbNcmProbeBootImg = usbNcmProbeBootImg;
       probeInitramfs = probeInitramfs;
+      ubootStage0 = ubootStage0.uboot;
+      ubootStage0Initramfs = ubootStage0.inertInitramfs;
+      ubootStage0Bundle = ubootStage0.bundle;
       mainlineKernel = mainline.kernel;
       mainlineServiceabilityDtb = mainline.serviceabilityDtb;
       mainlineProbeInitramfs = mainline.probeInitramfs;
