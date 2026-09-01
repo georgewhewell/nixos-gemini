@@ -1,0 +1,38 @@
+# One-shot Panfrost bus-clock oracle.  The candidate is never accepted
+# persistently: the Trex supervisor restores Stage A after the uncommitted
+# watchdog lease expires, then the harness proves exact p22/p30/p31 readback.
+candidate=/mnt/Home/src/gemini-gpu-busclk-hardware-20260902/candidate-bundle/boot-padded-p22.img
+candidate_sha256=1570f2abdc3b40f906646ede60722d7674909426b57d27b5366ba3b688d4d725
+candidate_size=16777216
+rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
+rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=unattended_recovery=healthy
+feature_policy=connectivity-no-radio
+acceptance_window_seconds=80
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31
+rootfs_policy=enumeration-only
+host_net_policy=required
+ssh_path_policy=fallback
+power_preflight_policy=none
+transaction_policy=observe-always-rollback
+initial_access_policy=known-host
+stage2_policy=none
+lease_seconds=90

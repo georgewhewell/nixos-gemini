@@ -93,6 +93,7 @@ HOST_NET_POLICY=
 SSH_PATH_POLICY=
 POWER_PREFLIGHT_POLICY=
 TRANSACTION_POLICY=
+INITIAL_ACCESS_POLICY=
 # Full-NixOS candidates opt into the explicit Stage1 -> switch_root -> Stage2
 # contract below.  Existing probe-only manifests leave stage2_policy=none and
 # retain their previous validation semantics.
@@ -183,6 +184,7 @@ load_manifest() {
             ssh_path_policy) [ -z "$SSH_PATH_POLICY" ] || die "duplicate ssh_path_policy"; SSH_PATH_POLICY=$value ;;
             power_preflight_policy) [ -z "$POWER_PREFLIGHT_POLICY" ] || die "duplicate power_preflight_policy"; POWER_PREFLIGHT_POLICY=$value ;;
             transaction_policy) [ -z "$TRANSACTION_POLICY" ] || die "duplicate transaction_policy"; TRANSACTION_POLICY=$value ;;
+            initial_access_policy) [ -z "$INITIAL_ACCESS_POLICY" ] || die "duplicate initial_access_policy"; INITIAL_ACCESS_POLICY=$value ;;
             stage2_policy) [ -z "$STAGE2_POLICY" ] || die "duplicate stage2_policy"; STAGE2_POLICY=$value ;;
             stage1_watchdog_owner_marker) [ -z "$STAGE1_WATCHDOG_OWNER_MARKER" ] || die "duplicate stage1_watchdog_owner_marker"; STAGE1_WATCHDOG_OWNER_MARKER=$value ;;
             stage1_handoff_path) [ -z "$STAGE1_HANDOFF_PATH" ] || die "duplicate stage1_handoff_path"; STAGE1_HANDOFF_PATH=$value ;;
@@ -251,6 +253,13 @@ require_manifest() {
     case "$SSH_PATH_POLICY" in fallback|both) ;; *) die "unknown ssh_path_policy" ;; esac
     case "$POWER_PREFLIGHT_POLICY" in none|required) ;; *) die "unknown power_preflight_policy" ;; esac
     case "$TRANSACTION_POLICY" in persistent-acceptance|observe-always-rollback) ;; *) die "unknown transaction_policy" ;; esac
+    case "$INITIAL_ACCESS_POLICY" in
+        known-host) ;;
+        physical-candidate)
+            [ "$TRANSACTION_POLICY" = observe-always-rollback ] ||
+                die "physical-candidate initial access requires observe-always-rollback" ;;
+        *) die "unknown initial_access_policy" ;;
+    esac
     case "$WATCHDOG_PROFILE" in
         none)
             [ -z "$EXPECTED_WATCHDOG_IDENTITY$EXPECTED_WATCHDOG_STATE$EXPECTED_WATCHDOG_TIMEOUT" ] || die "watchdog fields are forbidden for watchdog_profile=none" ;;
@@ -375,6 +384,7 @@ load_manifest
 [ -n "$SSH_PATH_POLICY" ] || SSH_PATH_POLICY=fallback
 [ -n "$POWER_PREFLIGHT_POLICY" ] || POWER_PREFLIGHT_POLICY=none
 [ -n "$TRANSACTION_POLICY" ] || TRANSACTION_POLICY=persistent-acceptance
+[ -n "$INITIAL_ACCESS_POLICY" ] || INITIAL_ACCESS_POLICY=known-host
 [ -n "$STAGE2_POLICY" ] || STAGE2_POLICY=none
 [ -n "$LEASE_SECONDS" ] || LEASE_SECONDS=90
 [ -n "$STAGE1_PROVISION_WAIT_SECONDS" ] || STAGE1_PROVISION_WAIT_SECONDS=65
@@ -387,6 +397,9 @@ PROVISION_UPLOAD_TIMEOUT_SECONDS=$((STAGE1_PROVISION_WAIT_SECONDS - 10))
 if [ "$PROOF_LEASE" = yes ]; then
     [ "$MODE" = --execute ] || die "--proof-lease requires --execute"
     [ "$WATCHDOG_PROFILE" = initramfs-petter ] || die "--proof-lease requires initramfs-petter manifest"
+fi
+if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ] && [ "$MODE" = --execute ]; then
+    [ "$PROOF_LEASE" = yes ] || die "physical-candidate initial access requires --proof-lease"
 fi
 if [ "$MODE" = --execute ] && [ "$TRANSACTION_POLICY" = observe-always-rollback ] &&
     [ "$PROOF_LEASE" != yes ]; then
@@ -544,6 +557,33 @@ trex_scp() {
         -o ServerAliveCountMax=2 "$@"
 }
 
+physical_candidate_identity_allowed() {
+    # This policy exists only to recover an already-running candidate whose
+    # initramfs host key is generated per boot.  Bind the exception to the
+    # Gemini's physical gadget identity on Trex; the subsequent target probe
+    # still has to prove the manifest's exact candidate p22 and immutable
+    # p30/p31 hashes before any writer can start.
+    trex_ssh 'lsusb -d 0525:a4a2 >/dev/null 2>&1 && ip -o link show | grep -Eq "link/ether 42:00:15:19:82:00 "'
+}
+
+physical_candidate_device_ssh() {
+    physical_candidate_identity_allowed || return 1
+    timeout "$SSH_DEADLINE_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
+        -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
+        -o ConnectionAttempts=1 -o ServerAliveInterval=3 \
+        -o ServerAliveCountMax=2 -o ControlMaster=no -o ControlPath=none \
+        -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        root@10.15.19.82 "$@"
+}
+
+initial_device_ssh() {
+    if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ]; then
+        physical_candidate_device_ssh "$@"
+    else
+        device_ssh "$@"
+    fi
+}
+
 hash_size() {
     expected=$1
     image=$2
@@ -593,7 +633,7 @@ if test -e '$STAGE2_STORE_TARGET_LIVE'; then
   test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
 fi"
     fi
-    device_ssh "set -eu
+    initial_device_ssh "set -eu
 $EMMC_RESOLVER
 target=\$(resolve_emmc_partition boot)
 test \"\$target\" = \"\$(resolve_emmc_partition boot)\"
@@ -603,14 +643,18 @@ test \"\$target\" != \"\$emmc\"p29
 ! grep -q \"^\$target \" /proc/mounts
 test \"\$(blockdev --getsize64 \"\$target\")\" -eq 16777216
 p22=\$(sha256sum \"\$target\" | cut -d' ' -f1)
-test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA
+$(if [ "$INITIAL_ACCESS_POLICY" = physical-candidate ]; then
+    printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA"
+else
+    printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA"
+fi)
 p30=\$(resolve_emmc_partition boot2)
 p31=\$(resolve_emmc_partition boot3)
 test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
 test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
 sha256sum \"\$target\" \"\$p30\" \"\$p31\""
     if [ -n "$stage2_store_checks" ]; then
-        device_ssh "set -eu
+        initial_device_ssh "set -eu
 $stage2_store_checks"
     fi
 }
@@ -755,9 +799,9 @@ start_capture() {
     ROLLBACK_RESCUE_IMAGE=$RUN_SHARED/rollback-rescue.img
     XML_RUN_FILE=$RUN_SHARED/download-only-p22.xml
     printf 'preflight %s mode=%s\n' "$(date -Is)" "$MODE" > "$RUN_LOCAL/state"
-    device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
-    device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
-    device_ssh "$EMMC_RESOLVER
+    initial_device_ssh 'cat /sys/fs/pstore/console-ramoops-0' > "$RUN_LOCAL/pstore-pre" 2>/dev/null || true
+    initial_device_ssh 'dmesg' > "$RUN_LOCAL/dmesg-pre"
+    initial_device_ssh "$EMMC_RESOLVER
 p22=\$(resolve_emmc_partition boot)
 sha256sum \"\$p22\"" > "$RUN_LOCAL/p22-pre-hash"
     # Acquire a Trex-owned transaction lease before staging any image.  The
@@ -935,6 +979,24 @@ start_supervisor() {
         return 1
     fi
     SUPERVISOR_KEEP=yes
+}
+
+arm_initial_candidate_hostkey_mode() {
+    [ "$INITIAL_ACCESS_POLICY" = physical-candidate ] || return 0
+    # start_capture has installed the run-specific Trex watcher.  Do not use
+    # its candidate-key exception until the exact USB/MAC marker is present
+    # and fresh; this is the same narrow path used after an ordinary flash.
+    CANDIDATE_HOSTKEY_MODE=yes
+    wait=0
+    while [ "$wait" -lt 15 ]; do
+        if candidate_hostkey_allowed; then
+            return 0
+        fi
+        sleep 1
+        wait=$((wait + 1))
+    done
+    CANDIDATE_HOSTKEY_MODE=no
+    return 1
 }
 
 wait_supervisor_rollback() {
@@ -1785,6 +1847,10 @@ fi
 if ! start_supervisor; then
     # Do not reboot into a candidate without the durable rollback owner.
     printf 'recovery_blocked_supervisor_not_armed %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
+    exit 1
+fi
+if ! arm_initial_candidate_hostkey_mode; then
+    printf 'recovery_blocked_initial_candidate_identity %s\n' "$(date -Is)" > "$RUN_LOCAL/state"
     exit 1
 fi
 if ! request_reboot; then
