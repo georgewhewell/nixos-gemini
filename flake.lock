@@ -85,8 +85,8 @@
     "linux-gemini-md1-boot-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788257939,
-        "narHash": "sha256-bi0ePtVLvg16k1khNiR6c8Xxoj0WsbyQ3Hy19kyMLIM=",
+        "lastModified": 1788261249,
+        "narHash": "sha256-u/1ie2YnfjAQCHVl5/VkJ+Ievg77YDGzCivTtx0rbcI=",
         "path": "/home/grw/src/linux-gemini-cellular-p22-candidate-20260831",
         "type": "path"
       },
