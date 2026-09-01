@@ -5,6 +5,7 @@
   ixoo-kernel,
   linux-gemini,
   ixoo-candidate,
+  extendedPlatformDtb ? false,
   debugOverlay ? true,
   storageOverlay ? false,
   sshAccess ? false,
@@ -206,17 +207,21 @@
     + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
     + lib.optionalString fgadcActivationOverlay "-fgadc-active"
     + lib.optionalString deviceActivationOverlay "-device-activation";
-  # These three inputs are generated from the same locked DTS and the same
-  # unconditional provider/USB transforms for every exported profile.  Keep
-  # them independent of C-only kernel revisions: 07dc and 733110 produced
-  # byte-identical base DTBs, and selecting an unobserved hash by revision hid
-  # that invariant behind a false install-time failure.
+  # linux-gemini-next adds the VCN33 and GPU-devinfo nodes. Keep exact hashes
+  # for both pinned DT layouts instead of applying the newer hash to the
+  # accepted baseline source.
   baseDtbSha256 =
-    "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c";
+    if extendedPlatformDtb
+    then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
+    else "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
   serviceabilityBaseDtbSha256 =
-    "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8";
+    if extendedPlatformDtb
+    then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
+    else "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
   usbPlatformDtbSha256 =
-    "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610";
+    if extendedPlatformDtb
+    then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
+    else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
   profileCombinationValid =
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -741,8 +746,11 @@
 
       # Device Tree output is compiler-independent and must match the reviewed
       # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
-      test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        ${baseDtbSha256}
+      actual_base_dtb_sha256=$(sha256sum "$out/base.dtb" | cut -d' ' -f1)
+      if [ "$actual_base_dtb_sha256" != ${baseDtbSha256} ]; then
+        echo "base DT hash mismatch: expected=${baseDtbSha256} actual=$actual_base_dtb_sha256" >&2
+        exit 1
+      fi
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
