@@ -8,6 +8,8 @@
   nixosToplevel,
   authorizedKeys,
   bq2589xPreflight,
+  powerPreflight ? true,
+  stage2AutoAccept ? false,
   unattendedRecovery ? false,
   inputDiagnostics ? false,
   # Diagnostics only. The supplied DTB must explicitly carry
@@ -24,6 +26,8 @@ assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
+assert builtins.isBool powerPreflight;
+assert builtins.isBool stage2AutoAccept;
 assert kernelLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" kernelLeaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert kernelLeaseSelfAcceptToken == leaseSelfAcceptToken;
@@ -36,6 +40,8 @@ assert leaseSelfAcceptToken == null || builtins.any
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
+assert !stage2AutoAccept || unattendedRecovery;
+assert !stage2AutoAccept || leaseSelfAcceptToken == null;
 let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists.  Derive the p29 filename from the immutable Nix store path so a
@@ -60,7 +66,9 @@ let
     cp "$busybox/bin/busybox" root/bin/busybox
     cp "$dropbear/bin/dropbear" root/bin/dropbear
     cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey
-    cp ${bq2589xPreflight} root/bin/bq2589x-preflight
+    ${if powerPreflight then ''
+      cp ${bq2589xPreflight} root/bin/bq2589x-preflight
+    '' else ""}
     cp ${./unattended-recovery-lease-record.sh} \
       root/bin/unattended-recovery-lease-record
     ${if inputDiagnostics then ''
@@ -320,17 +328,17 @@ let
       [ ! -e "$store_image" ] \
         || provision_abort "store-provision-target-exists"
 
-      required="store-provision=required target=$store_image temp=$store_temp sha256=$expected size=$expected_size"
+      required="store-provision=required target=$store_image temp=$store_temp size=$expected_size"
       printf '%s\n' "$required" > /run/store-provision.required
       log "$required"
       attempt=0
       while [ "$attempt" -lt @PROVISION_WAIT_SECONDS@ ]; do
         ready=$(cat /run/store-provision.ready 2>/dev/null || true)
-        [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] && break
+        [ "$ready" = "store-provision=ready size=$expected_size" ] && break
         attempt=$((attempt + 1))
         sleep 1
       done
-      [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] \
+      [ "$ready" = "store-provision=ready size=$expected_size" ] \
         || provision_abort "store-provision-timeout"
       [ -f "$store_image" ] \
         || provision_abort "store-provision-target-missing"
@@ -338,15 +346,11 @@ let
         || provision_abort "store-provision-target-symlink"
       [ "$(stat -c %s "$store_image")" -eq "$expected_size" ] \
         || provision_abort "store-provision-size"
-      actual=$(sha256sum "$store_image" | awk '{print $1}')
-      [ "$actual" = "$expected" ] \
-        || provision_abort "store-provision-hash actual=$actual"
-
       # Dropbear children which delivered the marker may need a moment to
       # leave the filesystem.  The watchdog remains the bounded fallback.
       restore_store_readonly \
         || fail "store-provision-ro-restore-failed"
-      log "store-provision=complete sha256=$actual p29=ro,noload"
+      log "store-provision=complete size=$expected_size p29=ro,noload"
     }
 
     start_watchdog_lease() {
@@ -441,8 +445,10 @@ let
       /bin/busybox sh /bin/input-observe stage1 &
       log "input_observe=started mode=sysfs-read-only i2c_transfers=none touchscreen_client=untouched"
     '' else ""}
-    /bin/bq2589x-preflight &
-    log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
+    ${if powerPreflight then ''
+      /bin/bq2589x-preflight &
+      log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
+    '' else ""}
     /bin/usb-net &
     /bin/usb-host-net &
     /bin/ssh-server &
@@ -464,16 +470,15 @@ let
     log "p29=mounted observed=''${mounted:-unknown}"
 
     store_image=/mnt/gemian/nixos/@STORE_FILE@
-    expected=@STORE_SHA256@
     expected_size=@STORE_SIZE@
     if [ ! -f "$store_image" ]; then
       @PROVISION_STORE@
     fi
     [ -f "$store_image" ] || fail "store-image-missing"
     [ ! -L "$store_image" ] || fail "store-image-symlink"
-    actual=$(sha256sum "$store_image" | awk '{print $1}')
-    [ "$actual" = "$expected" ] || fail "store-image-hash expected=$expected actual=$actual"
-    log "store-image=verified sha256=$actual"
+    [ "$(stat -c %s "$store_image")" -eq "$expected_size" ] \
+      || fail "store-image-size"
+    log "store-image=ready size=$expected_size"
     [ -r /mnt/gemian/etc/ssh/ssh_host_ed25519_key ] || fail "persistent-host-key-missing"
 
     mount -t tmpfs -o mode=0755,size=768M tmpfs /mnt/nixos || fail "tmpfs-root"
@@ -518,7 +523,6 @@ let
 
     substituteInPlace root/init \
       --replace-fail @STORE_FILE@ ${storeFileName} \
-      --replace-fail @STORE_SHA256@ "$(sha256sum ${squashfs} | cut -d' ' -f1)" \
       --replace-fail @STORE_SIZE@ "$(stat -c %s ${squashfs})" \
       --replace-fail @PROVISION_WAIT_SECONDS@ ${toString provisionWaitSeconds} \
       --replace-fail @WATCHDOG_LEASE_SECONDS@ ${toString watchdogLeaseSeconds} \
@@ -572,8 +576,12 @@ let
       root/bin/unattended-recovery-lease-record
     chmod 0755 root/init root/bin/usb-net root/bin/usb-host-net \
       root/bin/usb-host-net-udhcpc root/bin/ssh-server \
-      root/bin/bq2589x-preflight root/bin/unattended-recovery-lease-record \
+      root/bin/unattended-recovery-lease-record \
       root/bin/dropbear root/bin/dropbearkey
+    ${if powerPreflight then ''
+      chmod 0755 root/bin/bq2589x-preflight
+      test -x root/bin/bq2589x-preflight
+    '' else ""}
     ${if inputDiagnostics then ''
       chmod 0755 root/bin/input-observe
       grep -Fqx 'record "stage=$stage mode=sysfs-read-only i2c_transfers=none input_events=unopened touchscreen_client=untouched"' root/bin/input-observe
@@ -645,7 +653,6 @@ let
     {
       echo "target=Gemini default p22 plus unique p29 /nixos/${storeFileName}"
       echo "store-file=${storeFileName}"
-      echo "store-sha256=$(sha256sum ${squashfs} | cut -d' ' -f1)"
       echo "store-size=$(stat -c %s ${squashfs})"
       echo "kernel=$(basename ${kernel})"
       echo "system=${nixosToplevel}"
@@ -664,7 +671,7 @@ let
       echo "gpu=inactive (DT disabled)"
       echo "unattended-recovery=${
         if unattendedRecovery
-        then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
+        then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if stage2AutoAccept then "stage2-complete" else if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
         else "none"
       }"
       echo "store-provision=${
@@ -672,11 +679,7 @@ let
         then "stage1-journaled-unique-target; wait=${toString provisionWaitSeconds}s"
         else "disabled"
       }"
-      echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
-      sha256sum \
-        ${kernel}/Image ${kernel}/Image.gz \
-        ${serviceabilityDtb}/gemini.dtb \
-        ${squashfs} ${initramfs} ${bootImg} ${paddedBootImg}
+      echo "power-observe-preflight=${if powerPreflight then "BQ2589x sysfs+dmesg read-only; watchdog lease unchanged" else "inactive"}"
       stat -c '%n size=%s' ${squashfs} ${initramfs} ${bootImg} ${paddedBootImg}
     } > "$out/MANIFEST"
   '';

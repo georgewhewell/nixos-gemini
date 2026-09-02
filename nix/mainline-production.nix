@@ -63,6 +63,10 @@ let
       grep -Fqx 'CONFIG_MMC_MTK=y' .config
       grep -Fqx 'CONFIG_USB_MTU3_GADGET=y' .config
       grep -Fqx 'CONFIG_USB_ETH_RNDIS=y' .config
+      grep -Fqx 'CONFIG_USB_MUSB_HOST=y' .config
+      grep -Fqx 'CONFIG_USB_MUSB_MEDIATEK=y' .config
+      grep -Fqx 'CONFIG_USB_RTL8152=y' .config
+      grep -Fqx 'CONFIG_TYPEC_FUSB301=y' .config
       grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
       grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
       grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config

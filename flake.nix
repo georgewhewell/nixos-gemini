@@ -37,7 +37,7 @@
       # Clean mainline foundation: the reviewed ixoo hardware support without
       # the later experimental A72/DVFSP framework, with display, USB gadget,
       # and keyboard enabled in the normal board description.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=de8e69028408638fb6874b32304dee68478446c4";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=bbf52176bc8a759ea90208a9e92009ff2a977a93";
       flake = false;
     };
     ixoo-candidate = {
@@ -827,6 +827,25 @@
       ];
     };
 
+    # Normal production boots retain the watchdog recovery boundary, but
+    # accept it directly once Stage 2 has reached its ordinary working state.
+    # The older candidate profile keeps its stricter, address-specific gate.
+    mainlineProductionNixosSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiConsoleKeymap = geminiConsoleKeymap;
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiAutoAcceptStage2 = true;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -869,6 +888,22 @@
       unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
     '';
 
+    mainlineProductionNixosSquashfs = buildPkgs.runCommand "mainline-production-nixos-zlib.squashfs" {
+      nativeBuildInputs = [buildPkgs.squashfsTools];
+    } ''
+      mkdir -p store-contents
+      for path in $(cat ${buildPkgs.closureInfo {
+        rootPaths = [mainlineProductionNixosSystemCross.config.system.build.toplevel];
+      }}/store-paths); do
+        cp -a "$path" store-contents/
+      done
+      basename ${mainlineProductionNixosSystemCross.config.system.build.toplevel} \
+        > store-contents/.gemini-system
+      mksquashfs store-contents "$out" \
+        -comp gzip -b 131072 -noappend -all-root -no-progress
+      unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+    '';
+
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
       grep -Fqx 'session required pam_unix.so' ${mainlineSshdPam}
@@ -898,6 +933,23 @@
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineProductionNixos = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineProduction.kernel;
+      serviceabilityDtb = mainlineProduction.serviceabilityDtb;
+      squashfs = mainlineProductionNixosSquashfs;
+      nixosToplevel = mainlineProductionNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      powerPreflight = false;
+      stage2AutoAccept = true;
+      unattendedRecovery = true;
+      inputDiagnostics = false;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
     };
 
     #############################################
@@ -1243,6 +1295,9 @@
       mainlineKernel = mainline.kernel;
       mainlineProductionKernel = mainlineProduction.kernel;
       mainlineProductionDtb = mainlineProduction.serviceabilityDtb;
+      mainlineProductionNixosSquashfs = mainlineProductionNixosSquashfs;
+      mainlineProductionNixosInitramfs = mainlineProductionNixos.initramfs;
+      mainlineProductionNixosBundle = mainlineProductionNixos.bundle;
       mainlineServiceabilityDtb = mainline.serviceabilityDtb;
       mainlineProbeInitramfs = mainline.probeInitramfs;
       mainlineProbeBootImg = mainline.probeBootImg;

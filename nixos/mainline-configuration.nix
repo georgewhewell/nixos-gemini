@@ -8,12 +8,17 @@
   lib,
   geminiConsoleKeymap,
   geminiLeaseSelfAcceptToken ? null,
+  geminiAutoAcceptStage2 ? false,
   ...
 }: {
   assertions = [
     {
       assertion = geminiLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" geminiLeaseSelfAcceptToken != null;
       message = "geminiLeaseSelfAcceptToken must be a versioned 64-hex baseline capability";
+    }
+    {
+      assertion = builtins.isBool geminiAutoAcceptStage2;
+      message = "geminiAutoAcceptStage2 must be a boolean";
     }
   ];
   nixpkgs.overlays = [
@@ -314,7 +319,19 @@
         echo "watchdog-owner=$(${pkgs.busybox}/bin/busybox cat /run/unattended-recovery.watchdog-owner)"
         echo "watchdog-state=$(${pkgs.busybox}/bin/busybox cat /sys/class/watchdog/watchdog0/state)"
       } > /run/gemini-mainline-success
-      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=${if geminiLeaseSelfAcceptToken == null then "external" else "baseline-self-accept-pending"}" \
+      ${lib.optionalString geminiAutoAcceptStage2 ''
+        printf '%s\n' unattended_recovery=healthy \
+          > /run/unattended-recovery.accepted.new
+        mv /run/unattended-recovery.accepted.new \
+          /run/unattended-recovery.accepted
+      ''}
+      echo "GEMINI_MAINLINE_NIXOS: stage2=multi-user watchdog=petting acceptance=${
+        if geminiAutoAcceptStage2
+        then "stage2-complete"
+        else if geminiLeaseSelfAcceptToken == null
+        then "external"
+        else "baseline-self-accept-pending"
+      }" \
         >> /run/stage1.log
     '';
   };
