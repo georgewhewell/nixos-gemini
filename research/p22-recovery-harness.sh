@@ -473,6 +473,7 @@ device_ssh_gadget() {
     fi
 }
 
+# shellcheck disable=SC2329 # selected by name in stream_stage2_store
 device_ssh_gadget_provision() {
     # Store stdin is a long-lived byte stream.  Do not inherit a user-level
     # ControlMaster socket: its mux can disappear while the Stage1 network is
@@ -493,6 +494,7 @@ device_ssh_gadget_provision() {
     fi
 }
 
+# shellcheck disable=SC2329 # selected by name in stream_stage2_store
 device_ssh_right_provision() {
     if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
@@ -714,17 +716,118 @@ stage_image() {
     trex_ssh "test \"\$(stat -Lc %s '$STAGE_IMAGE')\" -eq '$SIZE'; test \"\$(sha256sum '$STAGE_IMAGE' | cut -d' ' -f1)\" = '$expected'"
 }
 
+stage2_store_progress() {
+    phase=$1
+    detail=$2
+    record="stage2-store phase=$phase $detail"
+    printf '%s\n' "$record" >&2
+    if [ -n "${RUN_LOCAL:-}" ] && [ -d "$RUN_LOCAL" ]; then
+        printf '%s %s\n' "$(date -Is)" "$record" >> "$RUN_LOCAL/stage2-store-progress.log"
+    fi
+}
+
+stage2_store_offset() {
+    device_ssh_gadget "set -eu
+$EMMC_RESOLVER
+emmc=\$(resolve_emmc_device)
+p29=\"\$emmc\"p29
+mount_options=\$(awk -v source=\"\$p29\" '\$1 == source && \$2 == \"/mnt/gemian\" && \$3 == \"ext4\" { print \$4; exit }' /proc/mounts)
+case ",\$mount_options," in
+  *,rw,*) ;;
+  *) printf '%s\\n' closed; exit 0 ;;
+esac
+test ! -e '$init_target'
+test ! -L '$init_target'
+if test -e '$provision_tmp' || test -L '$provision_tmp'; then
+  test ! -L '$provision_tmp'
+  test -f '$provision_tmp'
+  test ! -b '$provision_tmp'
+  test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
+  offset=\$(stat -Lc %s '$provision_tmp')
+  test \"\$offset\" -le '$STAGE2_STORE_SIZE'
+else
+  offset=0
+fi
+printf '%s\\n' \"\$offset\""
+}
+
+stream_stage2_store() {
+    transport=$1
+    path_name=$2
+    offset=$(stage2_store_offset) || return 1
+    case "$offset" in
+        closed)
+            stage2_store_progress stopped \
+                "path=$path_name reason=p29-not-rw resume=retained"
+            return 2
+            ;;
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$offset" -le "$STAGE2_STORE_SIZE" ] || return 1
+    remaining=$((STAGE2_STORE_SIZE - offset))
+    required_kib=$(((remaining + 1023) / 1024))
+    if [ "$offset" -eq 0 ]; then
+        stream_command="cat > '$provision_tmp'"
+    else
+        stream_command="cat >> '$provision_tmp'"
+    fi
+    provision_command="set -eu
+$EMMC_RESOLVER
+test ! -e '$init_target'
+test ! -L '$init_target'
+if test '$offset' -eq 0; then
+  test ! -e '$provision_tmp'
+  test ! -L '$provision_tmp'
+else
+  test ! -L '$provision_tmp'
+  test -f '$provision_tmp'
+  test ! -b '$provision_tmp'
+  test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
+  test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$offset'
+fi
+# BusyBox df supports POSIX -P output and -k 1024-byte blocks. Pin both the
+# backing device and mountpoint, and require space only for the unsent suffix.
+emmc=\$(resolve_emmc_device)
+p29=\"\$emmc\"p29
+available_kib=\$(df -Pk /mnt/gemian/nixos | awk -v source=\"\$p29\" 'NR == 2 && \$1 == source && \$6 == \"/mnt/gemian\" { print \$4; exit }')
+case \"\$available_kib\" in
+  ''|*[!0-9]*) exit 1 ;;
+esac
+test \"\$available_kib\" -ge '$required_kib'
+$stream_command
+test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test ! -e '$init_target'
+test ! -L '$init_target'
+# Both names are in the same p29 directory. link(2) is atomic and refuses an
+# existing destination, so a concurrent creator can never be overwritten.
+ln '$provision_tmp' '$init_target'
+test \"\$(stat -Lc %i '$provision_tmp')\" = \"\$(stat -Lc %i '$init_target')\"
+rm -- '$provision_tmp'
+sync
+test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
+test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
+test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
+test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
+printf '%s\\n' '$ready_line' > /run/store-provision.ready
+test \"\$(cat /run/store-provision.ready)\" = '$ready_line'"
+    stage2_store_progress stream \
+        "path=$path_name offset=$offset remaining=$remaining total=$STAGE2_STORE_SIZE"
+    if ! dd if="$STAGE2_STORE_SOURCE" bs=1048576 iflag=skip_bytes \
+        skip="$offset" status=progress | "$transport" "$provision_command"; then
+        stage2_store_progress interrupted \
+            "path=$path_name resume=retained total=$STAGE2_STORE_SIZE"
+        return 1
+    fi
+    stage2_store_progress published \
+        "path=$path_name sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
+}
+
 provision_stage2_store() {
     [ "$STAGE2_POLICY" = watchdog-takeover-required ] || return 0
     init_target=/mnt$STAGE2_STORE_TARGET_LIVE
     init_stage1_target=/mnt$STAGE1_STORE_TARGET
     provision_tmp=$init_target.provision.tmp
-    # The manifest schema and source preflight already prove this is the exact,
-    # positive Stage2 byte count.  df -Pk reports 1024-byte blocks, so round
-    # the payload up before comparing it with p29's non-root-available space.
-    # No source establishes an ext4 metadata allowance for this transaction;
-    # do not invent a magic headroom value here.
-    required_kib=$(((STAGE2_STORE_SIZE + 1023) / 1024))
     STAGE2_STORE_TEMP=$provision_tmp
     required_line="store-provision=required target=$init_target temp=$provision_tmp sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
     ready_line="store-provision=ready sha256=$STAGE2_STORE_SHA size=$STAGE2_STORE_SIZE"
@@ -756,53 +859,22 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
     # log() prefixes every Stage1 line; require the complete emitted line so
     # a similarly named or embedded token cannot authorize provisioning.
     device_ssh_gadget "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: $required_line' /run/stage1.log" || return 1
-    provision_command="set -eu
-$EMMC_RESOLVER
-test ! -e '$init_target'
-if test -e '$provision_tmp' || test -L '$provision_tmp'; then
-  test ! -L '$provision_tmp'
-  test -f '$provision_tmp'
-  test ! -b '$provision_tmp'
-  test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
-  stale_size=\$(stat -Lc %s '$provision_tmp')
-  test \"\$stale_size\" -le '$STAGE2_STORE_SIZE'
-  rm -- '$provision_tmp'
-  test ! -e '$provision_tmp'
-  test ! -L '$provision_tmp'
-fi
-# BusyBox df supports POSIX -P output and -k 1024-byte blocks.  Pin both the
-# backing device and mountpoint: a nested mount must not authorize a p29 write.
-emmc=\$(resolve_emmc_device)
-p29=\"\$emmc\"p29
-available_kib=\$(df -Pk /mnt/gemian/nixos | awk -v source=\"\$p29\" 'NR == 2 && \$1 == source && \$6 == \"/mnt/gemian\" { print \$4; exit }')
-case \"\$available_kib\" in
-  ''|*[!0-9]*) exit 1 ;;
-esac
-test \"\$available_kib\" -ge '$required_kib'
-cat > '$provision_tmp'
-test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$STAGE2_STORE_SIZE'
-test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
-test ! -e '$init_target'
-test ! -L '$init_target'
-# Both names are in the same p29 directory. link(2) is atomic and refuses an
-# existing destination, so a concurrent creator can never be overwritten.
-ln '$provision_tmp' '$init_target'
-test \"\$(stat -Lc %i '$provision_tmp')\" = \"\$(stat -Lc %i '$init_target')\"
-rm -- '$provision_tmp'
-sync
-test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
-test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
-test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
-test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
-printf '%s\\n' '$ready_line' > /run/store-provision.ready
-test \"\$(cat /run/store-provision.ready)\" = '$ready_line'"
-    if ! device_ssh_right_provision "$provision_command" < "$STAGE2_STORE_SOURCE"; then
-        # The right RTL8156 stream has ended before this fallback starts.  The
-        # same remote transaction validates and removes only its exact owned
-        # temporary before a fresh gadget-path stream, so no writers overlap
-        # and the final target remains SHA-gated and atomically renamed.
-        device_ssh_gadget_provision "$provision_command" < "$STAGE2_STORE_SOURCE" || return 1
-    fi
+    right_rc=0
+    stream_stage2_store device_ssh_right_provision right-nic || right_rc=$?
+    case "$right_rc" in
+        0) ;;
+        1)
+            # The right RTL8156 stream has ended before this fallback starts.
+            # The gadget attempt re-reads the exact owned temporary size and
+            # streams only the unsent suffix. No writers overlap, and
+            # publication remains SHA-gated and no-clobber via link(2).
+            gadget_rc=0
+            stream_stage2_store device_ssh_gadget_provision gadget || gadget_rc=$?
+            [ "$gadget_rc" -eq 0 ] || return "$gadget_rc"
+            ;;
+        2) return 2 ;;
+        *) return 1 ;;
+    esac
     device_ssh_gadget "set -eu
 test \"\$(cat /run/store-provision.ready)\" = '$ready_line'
 test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
@@ -1767,10 +1839,18 @@ accept_candidate_until_deadline() {
         fi
         if [ "$STAGE2_POLICY" = watchdog-takeover-required ] &&
             [ "$STAGE2_STORE_PROVISIONED" != yes ]; then
-            if ! provision_stage2_store; then
-                sleep 1
-                continue
-            fi
+            provision_rc=0
+            provision_stage2_store || provision_rc=$?
+            case "$provision_rc" in
+                0) ;;
+                1) sleep 1; continue ;;
+                2)
+                    stage2_store_progress stopped \
+                        'path=none reason=p29-not-rw action=abort-acceptance'
+                    return 1
+                    ;;
+                *) return 1 ;;
+            esac
         fi
         old_validation_gadget_only=$VALIDATION_GADGET_ONLY
         if [ "$STAGE2_POLICY" = watchdog-takeover-required ]; then
