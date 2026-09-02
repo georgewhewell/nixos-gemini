@@ -15,7 +15,6 @@ sys_root=${GEMINI_BASELINE_ACCEPT_SYS_ROOT:-/sys}
 cmdline_file=${GEMINI_BASELINE_ACCEPT_CMDLINE_FILE:-$proc_root/cmdline}
 mounts_file=${GEMINI_BASELINE_ACCEPT_MOUNTS_FILE:-$proc_root/mounts}
 system_link=${GEMINI_BASELINE_ACCEPT_SYSTEM_LINK:-$run_root/current-system}
-system_prefix=${GEMINI_BASELINE_ACCEPT_SYSTEM_PREFIX:-/nix/store/nixos-system-gemini-mainline-nixos-}
 systemctl=${GEMINI_BASELINE_ACCEPT_SYSTEMCTL:-$system_link/sw/bin/systemctl}
 ip_fixture=${GEMINI_BASELINE_ACCEPT_IP_FILE:-}
 kmsg_file=${GEMINI_BASELINE_ACCEPT_KMSG_FILE:-/dev/kmsg}
@@ -51,6 +50,30 @@ valid_token() {
   suffix=${token#"$prefix"}
   [ "${#token}" -eq 89 ] && [ "${#suffix}" -eq 64 ] || return 1
   case "$suffix" in *[!0-9a-f]*) return 1 ;; esac
+}
+
+valid_system_path() {
+  path=$1
+  case "$path" in
+    /nix/store/*-nixos-system-gemini-mainline-nixos-?*) ;;
+    *) return 1 ;;
+  esac
+  store_name=${path#/nix/store/}
+  case "$store_name" in */*) return 1 ;; esac
+  store_hash=${store_name%%-*}
+  [ "${#store_hash}" -eq 32 ] || return 1
+  # Nix's base32 alphabet deliberately omits e, o, t and u.
+  case "$store_hash" in
+    *[!0123456789abcdfghijklmnpqrsvwxyz]*) return 1 ;;
+  esac
+  case "$store_name" in
+    "$store_hash"-nixos-system-gemini-mainline-nixos-?*) ;;
+    *) return 1 ;;
+  esac
+  system_suffix=${store_name#"$store_hash"-nixos-system-gemini-mainline-nixos-}
+  case "$system_suffix" in
+    ''|*[!A-Za-z0-9+._?=-]*) return 1 ;;
+  esac
 }
 
 unit_active() {
@@ -105,6 +128,7 @@ before_deadline() {
   case "$started$deadline$lease_seconds" in *[!0-9]*) return 1 ;; esac
   [ "$deadline" -ge "$started" ] || return 1
   [ "$deadline" -eq $((started + lease_seconds)) ] || return 1
+  # shellcheck disable=SC2016 # $1 belongs to awk, not this shell.
   now=$("$busybox" awk '{ sub(/\..*/, "", $1); print $1; exit }' \
     "$proc_root/uptime" 2>/dev/null || true)
   case "$now" in ''|*[!0-9]*) return 1 ;; esac
@@ -123,7 +147,7 @@ valid_token || fail invalid-capability
 
 expected_system=$("$busybox" cat "$expected_system_file" 2>/dev/null || true)
 current_system=$("$busybox" readlink -f "$system_link" 2>/dev/null || true)
-case "$expected_system" in "$system_prefix"*) ;; *) fail expected-system-invalid ;; esac
+valid_system_path "$expected_system" || fail expected-system-invalid
 [ "$current_system" = "$expected_system" ] || fail system-identity-mismatch
 "$busybox" grep -Fqx -- "GEMINI_MAINLINE_NIXOS: stage1=switch-root system=$expected_system" \
   "$handoff_file" || fail handoff-identity-mismatch
