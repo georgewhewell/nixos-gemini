@@ -130,6 +130,21 @@ test_provision_ssh_disables_control_master() {
     grep -Fx -- 'ServerAliveInterval=15' "$argv" >/dev/null
     grep -Fx -- 'ServerAliveCountMax=40' "$argv" >/dev/null
     grep -Fx -- 'StrictHostKeyChecking=no' "$argv" >/dev/null
+
+    # The real policy probe runs SSH. Prove that even a deliberately greedy
+    # probe cannot steal any bytes from the long-lived upload stdin.
+    candidate_hostkey_allowed() { cat >/dev/null; return 0; }
+    ssh() { cat > "$payload_capture"; }
+    payload=$RUN_LOCAL/payload
+    printf 'exact-stage2-upload-payload\n' > "$payload"
+    argv=$RUN_LOCAL/gadget-payload.argv
+    payload_capture=$RUN_LOCAL/gadget-payload.capture
+    device_ssh_gadget_provision 'true' < "$payload"
+    cmp "$payload" "$payload_capture"
+    argv=$RUN_LOCAL/right-payload.argv
+    payload_capture=$RUN_LOCAL/right-payload.capture
+    device_ssh_right_provision 'true' < "$payload"
+    cmp "$payload" "$payload_capture"
 }
 
 test_duplicate_flash_tool_rejected() {
@@ -524,6 +539,10 @@ EOF
         "$run/download.xml" "$run/global.lock" 3 "$fake_wrapper" \
         "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state"
     test "$(cat "$run/wrapper.count")" -eq 2
+    grep -Fq 'rollback phase=brom-scan attempt=1 scan-timeout=120s deadline-remaining=' \
+        "$run/rollback.log"
+    grep -Fq 'rollback phase=brom-scan attempt=2 scan-timeout=120s deadline-remaining=' \
+        "$run/rollback.log"
     grep -Fq 'rollback attempt 1 missed/failed rc=1' "$run/rollback.log"
     grep -Fq 'supervisor_rollback_succeeded_rescue_verified ' "$run/supervisor.state"
 }
@@ -924,7 +943,10 @@ test_stage2_store_staging_commands_are_safe_shell() {
         printf '%s\n' "$n" > "$RUN_LOCAL/store-command-count"
         printf '%s\n' "$1" > "$RUN_LOCAL/store-command-$n.sh"
         case "$1" in
-            *'offset=$(stat'*) printf '0\n'; return 0 ;;
+            *'offset=$(stat'*)
+                printf '%s\n' '0 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 absent'
+                return 0
+                ;;
             *'cat >'*) cat > "$RUN_LOCAL/store-stream-$n"; return 0 ;;
             *'test -f'*) return 1 ;;
             *'grep -Fqx'*) return 0 ;;
@@ -1013,9 +1035,10 @@ test_stage2_store_falls_back_once_to_gadget_after_right_failure() {
         case "$1" in
             *'offset=$(stat'*)
                 if [ -e "$retained" ]; then
-                    stat -Lc %s "$retained"
+                    printf '%s %s present\n' "$(stat -Lc %s "$retained")" \
+                        "$(sha256sum "$retained" | cut -d' ' -f1)"
                 else
-                    printf '0\n'
+                    printf '%s\n' '0 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 absent'
                 fi
                 return 0
                 ;;
@@ -1058,6 +1081,69 @@ test_stage2_store_falls_back_once_to_gadget_after_right_failure() {
         "$RUN_LOCAL/stage2-store-progress.log"
     grep -Fq 'stage2-store phase=published path=gadget' \
         "$RUN_LOCAL/stage2-store-progress.log"
+    test "$STAGE2_STORE_PROVISIONED" = yes
+}
+
+test_stage2_store_discards_only_authenticated_wrong_prefix() {
+    extract_stage2_store_functions "$TEST_ROOT/stage2-store-wrong-prefix-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/stage2-store-wrong-prefix-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-store-wrong-prefix-run
+    mkdir -p "$RUN_LOCAL"
+    printf 'exact stage2 payload after policy probe\n' > "$TEST_ROOT/stage2-wrong-prefix.squashfs"
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-wrong-prefix.squashfs
+    STAGE2_STORE_SIZE=$(stat -Lc %s "$STAGE2_STORE_SOURCE")
+    STAGE2_STORE_SHA=$(sha256sum "$STAGE2_STORE_SOURCE" | cut -d' ' -f1)
+    STAGE2_STORE_TARGET=/nixos/next-mainline.squashfs
+    STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
+    STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+    STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE1_STORE_SIZE=1
+    retained=$RUN_LOCAL/retained-wrong-prefix
+    # Model the proven failure: a policy SSH consumed the source prefix and
+    # the upload wrote a source suffix at offset zero.
+    dd if="$STAGE2_STORE_SOURCE" of="$retained" bs=1 skip=7 status=none
+    printf '0\n' > "$RUN_LOCAL/gadget-check-count"
+    device_ssh_gadget() {
+        checks=$(cat "$RUN_LOCAL/gadget-check-count")
+        checks=$((checks + 1))
+        printf '%s\n' "$checks" > "$RUN_LOCAL/gadget-check-count"
+        printf '%s\n' "$1" > "$RUN_LOCAL/gadget-check-$checks.sh"
+        case "$1" in
+            *'prefix_sha=$(sha256sum'*)
+                printf '%s %s present\n' "$(stat -Lc %s "$retained")" \
+                    "$(sha256sum "$retained" | cut -d' ' -f1)"
+                return 0
+                ;;
+            *"rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'"*)
+                rm "$retained"
+                return 0
+                ;;
+            *'grep -Fqx'*) return 0 ;;
+            *'cat /run/store-provision.ready'*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+    device_ssh_right_provision() {
+        cat > "$retained"
+        printf '%s\n' "$1" > "$RUN_LOCAL/right-command.sh"
+        return 0
+    }
+    device_ssh_gadget_provision() { : > "$RUN_LOCAL/unexpected-gadget"; return 1; }
+    provision_stage2_store
+    cmp "$STAGE2_STORE_SOURCE" "$retained"
+    test ! -e "$RUN_LOCAL/unexpected-gadget"
+    grep -Fq 'stage2-store phase=discard path=right-nic reason=prefix-sha-mismatch' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+    grep -Fq 'stage2-store phase=stream path=right-nic offset=0' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+    grep -Fq "test \"\$(sha256sum '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/gadget-check-5.sh"
+    grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/gadget-check-5.sh"
+    grep -Fq "cat > '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/right-command.sh"
     test "$STAGE2_STORE_PROVISIONED" = yes
 }
 
@@ -1525,6 +1611,7 @@ test_stage2_readiness_is_fast_gadget_only
 test_recovered_stage_a_readback_retries_exactly
 test_stage2_store_staging_commands_are_safe_shell
 test_stage2_store_falls_back_once_to_gadget_after_right_failure
+test_stage2_store_discards_only_authenticated_wrong_prefix
 test_stage2_store_readonly_is_terminal
 test_acceptance_stops_after_stage1_closes_p29
 test_stage2_exact_target_is_idempotent
