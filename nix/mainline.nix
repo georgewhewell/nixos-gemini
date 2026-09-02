@@ -31,9 +31,11 @@
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
   leaseSelfAcceptToken ? null,
+  maxCpus ? 8,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || unattendedRecovery;
+assert builtins.elem maxCpus [1 8];
 let
   lib = buildPkgs.lib;
 
@@ -177,8 +179,8 @@ let
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${toString maxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=${toString maxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
@@ -573,7 +575,7 @@ let
       ''}
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
       grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
-      grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
+      grep -Eq '^CONFIG_CMDLINE=".*maxcpus=${toString maxCpus}( |")' .config
       grep -Fqx '# CONFIG_SCSI is not set' .config
       grep -Fqx '# CONFIG_ATA is not set' .config
       grep -Fqx '# CONFIG_USB_CONFIGFS is not set' .config

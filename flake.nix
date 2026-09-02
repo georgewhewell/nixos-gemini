@@ -743,6 +743,25 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # Emergency profile for a Gemini whose battery is electrically absent.
+    # Keep only CPU0 (an A53), eMMC, the left-port gadget, SSH and watchdog;
+    # do not compose the display, right-port VBUS or peripheral overlays.
+    mainlineUsbOnlyLowPower = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      unattendedRecovery = true;
+      maxCpus = 1;
+    };
+
     # Manual-only staged ALSA boundary diagnostic over the existing fully
     # observable recovery profile. It adds a static helper to the initramfs
     # but never invokes it: default execution only observes the named card;
@@ -874,6 +893,21 @@
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosUsbOnlyLowPower = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineUsbOnlyLowPower.kernel;
+      serviceabilityDtb = mainlineUsbOnlyLowPower.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = false;
+      displayActivation = false;
+      provisionStore = false;
+      watchdogLeaseSeconds = 86400;
     };
 
     #############################################
@@ -1234,6 +1268,9 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineNixosUsbOnlyLowPowerKernel = mainlineUsbOnlyLowPower.kernel;
+      mainlineNixosUsbOnlyLowPowerDtb = mainlineUsbOnlyLowPower.serviceabilityDtb;
+      mainlineNixosUsbOnlyLowPowerBundle = mainlineNixosUsbOnlyLowPower.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
