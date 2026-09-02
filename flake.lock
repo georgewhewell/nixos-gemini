@@ -73,17 +73,17 @@
     "linux-gemini-production": {
       "flake": false,
       "locked": {
-        "lastModified": 1788351202,
-        "narHash": "sha256-UCIPMeBGbCiAd3MPAmhBWYjVVnkzAj/M5nogtT0Us0A=",
+        "lastModified": 1788355991,
+        "narHash": "sha256-tgmL/1l05KvtBlLxNFwrLp+CdQBxDQqR2CAQMfskscU=",
         "ref": "integration/production-next-hardware-20260902",
-        "rev": "9d16501a4568c6409c626285704446eee71376fa",
-        "revCount": 167,
+        "rev": "483fe52546f2c07f4799243511a2ac2d9aca90a6",
+        "revCount": 168,
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
         "ref": "integration/production-next-hardware-20260902",
-        "rev": "9d16501a4568c6409c626285704446eee71376fa",
+        "rev": "483fe52546f2c07f4799243511a2ac2d9aca90a6",
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }

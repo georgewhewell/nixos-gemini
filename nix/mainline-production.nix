@@ -37,6 +37,7 @@ let
     nativeBuildInputs = (with buildPkgs; [
       bc
       bison
+      dtc
       elfutils
       flex
       git
@@ -119,6 +120,15 @@ let
       cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb "$out/gemini.dtb"
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
+      for cpu_clock in \
+        0:1391000000 1:1391000000 2:1391000000 3:1391000000 \
+        100:1950000000 101:1950000000 102:1950000000 103:1950000000 \
+        200:2288000000 201:2288000000; do
+        cpu="''${cpu_clock%%:*}"
+        expected="''${cpu_clock#*:}"
+        test "$(fdtget -t u "$out/gemini.dtb" "/cpus/cpu@$cpu" clock-frequency)" = \
+          "$expected"
+      done
       test "$(make ARCH=arm64 CROSS_COMPILE=aarch64-unknown-linux-gnu- -s kernelrelease)" = \
         "7.1.3-gemini-production"
       runHook postInstall
