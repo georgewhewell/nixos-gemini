@@ -36,7 +36,7 @@
     linux-gemini-production = {
       # Immutable coordinated hardware candidate: reviewed camera and A72
       # ownership, production CONSYS/WLAN, and fixed-OPP Panfrost first light.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-next-hardware-20260902&rev=3d6d9fde73cc618bfb3259083f864b07c5e36c7d";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-next-hardware-20260902&rev=9d16501a4568c6409c626285704446eee71376fa";
       flake = false;
     };
     ixoo-candidate = {
@@ -946,6 +946,8 @@
       stage2AutoAccept = true;
       unattendedRecovery = true;
       inputDiagnostics = false;
+      wifiEnabled = true;
+      gpuEnabled = true;
       provisionStore = true;
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;

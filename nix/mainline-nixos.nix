@@ -15,6 +15,8 @@
   # Diagnostics only. The supplied DTB must explicitly carry
   # mt6797-gemini-pda-display-gated.dtbo when this is true.
   displayActivation ? false,
+  wifiEnabled ? false,
+  gpuEnabled ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
@@ -26,6 +28,8 @@ assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
+assert builtins.isBool wifiEnabled;
+assert builtins.isBool gpuEnabled;
 assert builtins.isBool powerPreflight;
 assert builtins.isBool stage2AutoAccept;
 assert kernelLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" kernelLeaseSelfAcceptToken != null;
@@ -673,8 +677,8 @@ let
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
       echo "microsd-activation=inactive (not composed)"
       echo "audio-playback-exercise=inactive (no helper in image)"
-      echo "consys-radios=inactive (DT disabled)"
-      echo "gpu=inactive (DT disabled)"
+      echo "consys-radios=${if wifiEnabled then "Wi-Fi enabled; Bluetooth/GNSS/FM remain disabled" else "inactive (DT disabled)"}"
+      echo "gpu=${if gpuEnabled then "Panfrost enabled at fixed 500500000 Hz / 975000 uV OPP" else "inactive (DT disabled)"}"
       echo "unattended-recovery=${
         if unattendedRecovery
         then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if stage2AutoAccept then "stage2-complete" else if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"

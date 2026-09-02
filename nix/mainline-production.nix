@@ -71,6 +71,7 @@ let
       grep -Fqx 'CONFIG_BATTERY_MT6351_FGADC=y' .config
       grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
       grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
+      grep -Fqx 'CONFIG_MTK_IOMMU=y' .config
       grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
       grep -Fqx 'CONFIG_PINCTRL_AW9523=y' .config
       grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' .config
