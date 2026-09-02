@@ -60,6 +60,8 @@ let
       grep -Fqx '# CONFIG_MODULES is not set' .config
       grep -Fqx 'CONFIG_CMDLINE_FORCE=y' .config
       grep -Eq '^CONFIG_CMDLINE="console=tty0 .*maxcpus=8 .*rdinit=/init' .config
+      grep -Fq ' watchdog.stop_on_reboot=0 ' .config
+      grep -Fqx 'CONFIG_WATCHDOG_NOWAYOUT=y' .config
       grep -Fqx 'CONFIG_SUSPEND=y' .config
       grep -Fqx 'CONFIG_KEXEC=y' .config
       grep -Fqx 'CONFIG_KEXEC_FILE=y' .config
