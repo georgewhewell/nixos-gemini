@@ -1788,7 +1788,7 @@
         test "$(fdtget "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner compatible)" = \
           mediatek,mt6797-md1-cold-owner
         test "$(fdtget -t x "$out/gemini-md1-boot-candidate.dtb" /modem-cold-owner reg)" = \
-          '0 10001000 0 1000 0 10209000 0 1000 0 1020a000 0 1000 0 1000c000 0 1000 0 20150000 0 118 0 20130000 0 1004 0 20060000 0 d0 0 260f0000 0 200 0 20140000 0 a0 0 20120000 0 d0 0 200f0100 0 300 0 26010000 0 40 0 20000024 0 4 0 10201300 0 8'
+          '0 10001000 0 1000 0 10209000 0 1000 0 1020a000 0 1000 0 10014000 0 1e00 0 10219000 0 1e00 0 1000c000 0 1000 0 20150000 0 118 0 20130000 0 1004 0 20060000 0 d0 0 260f0000 0 200 0 20140000 0 a0 0 20120000 0 d0 0 200f0100 0 300 0 26010000 0 40 0 20000024 0 4 0 10201300 0 8'
         cp "$out/gemini-md1-boot-candidate.dtb" "$out/gemini.dtb"
         for property in mediatek,experimental-md1-cold-owner \
                         mediatek,stage-cold-reset-held \
