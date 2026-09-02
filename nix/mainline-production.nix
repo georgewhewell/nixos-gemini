@@ -60,6 +60,9 @@ let
       grep -Fqx '# CONFIG_MODULES is not set' .config
       grep -Fqx 'CONFIG_CMDLINE_FORCE=y' .config
       grep -Eq '^CONFIG_CMDLINE="console=tty0 .*maxcpus=8 .*rdinit=/init' .config
+      grep -Fqx 'CONFIG_SUSPEND=y' .config
+      grep -Fqx 'CONFIG_KEXEC=y' .config
+      grep -Fqx 'CONFIG_KEXEC_FILE=y' .config
       grep -Fqx 'CONFIG_MMC_MTK=y' .config
       grep -Fqx 'CONFIG_USB_MTU3_GADGET=y' .config
       grep -Fqx 'CONFIG_USB_ETH_RNDIS=y' .config
