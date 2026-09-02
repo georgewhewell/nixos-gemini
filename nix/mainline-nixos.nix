@@ -620,7 +620,9 @@ let
     test "$(stat -c %s "$out")" -eq 16777216
   '';
 
-  bundle = buildPkgs.runCommand "gemini-mainline-nixos-bundle" {} ''
+  bundle = buildPkgs.runCommand "gemini-mainline-nixos-bundle" {
+    nativeBuildInputs = [buildPkgs.dtc];
+  } ''
     mkdir -p "$out"
     ln -s ${kernel} "$out/kernel"
     ln -s ${serviceabilityDtb}/gemini.dtb "$out/gemini-usb11-host.dtb"
@@ -628,6 +630,9 @@ let
     ln -s ${initramfs} "$out/initramfs.cpio.gz"
     ln -s ${bootImg} "$out/boot-raw.img"
     ln -s ${paddedBootImg} "$out/boot-padded-p22.img"
+    dt_status() {
+      fdtget ${serviceabilityDtb}/gemini.dtb "$1" status 2>/dev/null || printf absent
+    }
     {
       echo "target=Gemini default p22 plus unique p29 /nixos/${storeFileName}"
       echo "store-file=${storeFileName}"
@@ -642,10 +647,10 @@ let
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "display-activation=${if displayActivation then "stage1 watchdog-gated 14000000.syscon/activate_drm; DSI IRQ before host registration" else "none"}"
-      echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
-      echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
+      echo "touchscreen-status=$(dt_status /i2c@11011000/touchscreen@62)"
+      echo "fgadc-status=$(dt_status /pwrap@1000d000/pmic/fuel-gauge-active)"
       echo "microsd-activation=inactive (not composed)"
-      echo "audio-playback-exercise=inactive (no helper in image)"
+      echo "audio-controller-status=$(dt_status /audio-controller@11220000)"
       echo "consys-radios=${
         if consysFirmware
         then "retained full-STP controller and W4 enabled; firmware in Stage1"
@@ -653,7 +658,8 @@ let
       }"
       echo "gnss-service=${if gnssService then "gpsd on retained /dev/gnss0 endpoint" else "inactive"}"
       echo "bluetooth-service=${if bluetoothService then "BlueZ classic+LE on standard hci0 endpoint" else "inactive"}"
-      echo "gpu=inactive (DT disabled)"
+      echo "gpu-status=$(dt_status /gpu@13040000)"
+      echo "md1-cold-owner-status=$(dt_status /modem-cold-owner)"
       echo "unattended-recovery=${
         if unattendedRecovery
         then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
