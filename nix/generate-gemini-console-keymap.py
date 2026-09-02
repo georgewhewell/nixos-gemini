@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Gemini US console map from Linux's pinned default keymap."""
+"""Generate the Gemini UK console map from Linux's pinned default keymap."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ def require_anchor(
     return actual
 
 
-def apply_gemini_us_layer(default_maps: dict[int, list[int]]) -> dict[int, list[int]]:
+def apply_gemini_gb_layer(default_maps: dict[int, list[int]]) -> dict[int, list[int]]:
     maps = {table: values.copy() for table, values in default_maps.items()}
 
     # These are internal defkeymap values, before the kernel's U(x) boundary.
@@ -163,14 +163,11 @@ def apply_gemini_us_layer(default_maps: dict[int, list[int]]) -> dict[int, list[
         )
     maps[3] = shift_fn
 
-    # The active DT intentionally retains KEY_APOSTROPHE at this physical
-    # position to remain compatible with the proven 3.18/Gemian map.  Correct
-    # its US silkscreen meaning in the VT map instead.  Copy the pinned Linux
-    # KEY_BACKSLASH Ctrl/Shift+Ctrl/Alt/Ctrl+Alt semantics rather than retaining
-    # KEY_APOSTROPHE's Ctrl-G and Meta-apostrophe behavior.  Shift+Alt table 9
-    # remains deliberately absent, like the pinned Linux default.
-    for table in (0, 1, 4, 5, 8, 12):
-        maps[table][40] = maps[table][43]
+    # Match Gemian's canonical planet_vndr/gemini(gb) base and Shift legends.
+    # The physical apostrophe key remains KEY_APOSTROPHE at the input boundary.
+    maps[1][3] = latin('"')
+    maps[1][4] = 0x00A3
+    maps[1][40] = latin("~")
     maps[1][51] = latin("/")
     maps[1][52] = latin("?")
 
@@ -182,8 +179,9 @@ def apply_gemini_us_layer(default_maps: dict[int, list[int]]) -> dict[int, list[
 
     fn = maps[2]
     for keycode, character in {
-        2: "~",
-        3: "`",
+        2: "|",
+        3: "#",
+        4: "\\",
         6: "<",
         7: ">",
         8: "[",
@@ -194,10 +192,10 @@ def apply_gemini_us_layer(default_maps: dict[int, list[int]]) -> dict[int, list[
         24: "-",
         25: "=",
         36: "_",
-        37: ";",
-        38: '"',
+        37: "@",
+        38: ";",
         40: ":",
-        50: "'",
+        50: "`",
     }.items():
         fn[keycode] = latin(character)
 
@@ -206,8 +204,12 @@ def apply_gemini_us_layer(default_maps: dict[int, list[int]]) -> dict[int, list[
     # U+00A3^0xf000 (0xf0a3) and U+20AC^0xf000 (0xd0ac), not their code points.
     # Linux v7.1 VTs default to K_UNICODE; a caller must not load this map into
     # a console deliberately switched to a non-Unicode keyboard mode.
-    fn[4] = 0x00A3
     fn[5] = 0x20AC
+    fn[31] = 0x00DF
+    fn[34] = 0x014B
+    fn[35] = 0x00F7
+    fn[44] = 0x00AB
+    fn[45] = 0x00BB
     fn[52] = 0x263A
 
     fn[15] = k_caps
@@ -272,7 +274,7 @@ def main() -> int:
 
     try:
         source = read_regular(args.source, "defkeymap source")
-        maps = apply_gemini_us_layer(parse_default_maps(source))
+        maps = apply_gemini_gb_layer(parse_default_maps(source))
         output = encode_bkeymap(maps)
         write_new(args.output, output)
     except (OSError, ValueError, struct.error) as exc:

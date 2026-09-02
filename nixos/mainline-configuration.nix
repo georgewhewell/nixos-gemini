@@ -151,8 +151,9 @@
       RemainAfterExit = true;
     };
     script = ''
-      ${pkgs.kbd}/bin/kbd_mode -u -C /dev/tty1
       ${pkgs.busybox}/bin/busybox loadkmap < ${geminiConsoleKeymap}
+      # KDSKBMODE recomputes held modifiers from the now-current table.
+      ${pkgs.kbd}/bin/kbd_mode -u -C /dev/tty1
     '';
   };
 

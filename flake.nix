@@ -88,7 +88,7 @@
     # The keyboard's physical Fn key is KEY_LEFTMETA (keycode 125).  Build the
     # proven Gemini console layer from the exact default keymap shipped by the
     # kernel used in the normal image.
-    geminiConsoleKeymap = buildPkgs.runCommand "gemini-us.bkeymap" {
+    geminiConsoleKeymap = buildPkgs.runCommand "gemini-gb.bkeymap" {
       nativeBuildInputs = [buildPkgs.python3];
     } ''
       python3 ${./nix/generate-gemini-console-keymap.py} \
