@@ -135,13 +135,17 @@
   };
   services.getty.autologinUser = "root";
 
-  # Linux reports the physical Fn key as KEY_LEFTMETA.  Put tty1 in Unicode
-  # mode, then load the Gemini layer before presenting the normal root login.
+  # Linux reports the physical Fn key as KEY_LEFTMETA.  The standard console
+  # setup can rewrite the regular AltGr table while getty is starting, so load
+  # the Gemini layer only after both console setup and tty1's getty are active.
   systemd.services.gemini-console-keymap = {
     description = "Load the Gemini physical keyboard console map";
     wantedBy = ["multi-user.target"];
-    after = ["systemd-vconsole-setup.service"];
-    before = ["getty@tty1.service"];
+    after = [
+      "systemd-vconsole-setup.service"
+      "reload-systemd-vconsole-setup.service"
+      "getty@tty1.service"
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
