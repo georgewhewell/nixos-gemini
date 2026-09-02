@@ -1302,7 +1302,9 @@
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiGnssDevice = null;
+          _module.args.geminiGnssBringup = false;
           _module.args.geminiBluetooth = false;
+          _module.args.geminiConsysFirmware = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
