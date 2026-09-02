@@ -41,6 +41,9 @@
   md1RemapObserve ? false,
   md1BootCandidate ? false,
   md1CellularCandidate ? false,
+  md1MainlineFirmwareLoad ? false,
+  md1FirmwarePackage ? null,
+  md1FirmwareNames ? [],
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
   a72Cpu8Interactive ? false,
@@ -56,7 +59,27 @@
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
   md1CellularKernelRevision =
-    "92e7926ebcba3dca8ebecd0d5629eed51a92db0a";
+    "9b501ccd5347019e056f7b3153ba95957bbcd6c0";
+  md1FirmwareNamesValid =
+    lib.length md1FirmwareNames >= 1
+    && lib.length md1FirmwareNames <= 3
+    && lib.all (name:
+      builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*" name != null
+      && !lib.hasPrefix "/" name
+      && !lib.hasInfix ".." name) md1FirmwareNames;
+  md1FirmwareDtso = buildPkgs.writeText "mt6797-md1-mainline-firmware.dtso" ''
+    /dts-v1/;
+    /plugin/;
+    / {
+      fragment@0 {
+        target-path = "/modem-cold-owner";
+        __overlay__ {
+          mediatek,stage-mainline-firmware-load;
+          firmware-name = "${builtins.concatStringsSep "\", \"" md1FirmwareNames}";
+        };
+      };
+    };
+  '';
   gpuBusClockInSource =
     lib.hasInfix
     "<&infrasys CLK_INFRA_MFG_VCG>"
@@ -280,6 +303,10 @@
     if md1CellularCandidate
     then "standard-wwan-at-and-raw-ip-over-ccci-cldma-after-positive-md1-go-and-hs1-hs2"
     else "none";
+  md1MainlineFirmwareLabel =
+    if md1MainlineFirmwareLoad
+    then "explicit-request-firmware-split-images-structurally-validated-before-reset-held-copy"
+    else "default-off-no-filenames-or-blobs-assumed";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
@@ -336,6 +363,7 @@
     + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
     + lib.optionalString md1BootCandidate " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1"
     + lib.optionalString md1CellularCandidate " mtk_mt6797_ccci.enable=1"
+    + lib.optionalString md1MainlineFirmwareLoad " mt6797_md1_cold_owner_driver.enable_experimental_md1_firmware_load=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -540,6 +568,9 @@
     assert !md1CellularCandidate || md1BootCandidate;
     assert !md1CellularCandidate || unattendedRecovery;
     assert !md1CellularCandidate || kernelRevision == md1CellularKernelRevision;
+    assert !md1MainlineFirmwareLoad || md1CellularCandidate;
+    assert !md1MainlineFirmwareLoad || md1FirmwarePackage != null;
+    assert !md1MainlineFirmwareLoad || md1FirmwareNamesValid;
     assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
     assert !a72Cpu8Interactive || (a72Cpu8SramDiagnostic && a72Cpu8TraceOnly && unattendedRecovery && sshAccess);
     assert !cacheTopologyObserver || a72Cpu8SramDiagnostic;
@@ -1847,6 +1878,23 @@
           | grep -Fqx 'mediatek,stage-dma-rings-inert'
         echo 'md1-boot-candidate=single-enabled-p22-overlay plus six-cmdline-gates one-vector-write then-bounded-GO-NO-GO-oracle no-irq-no-cldma-no-ccci; cldma-prepare=compiled-and-validated-disabled' >> "$out/VALIDATION"
       ''}
+      ${lib.optionalString md1MainlineFirmwareLoad ''
+        dtc -@ -I dts -O dtb -o "$out/mt6797-md1-mainline-firmware.dtbo" \
+          ${md1FirmwareDtso}
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-mainline-firmware.dtb" \
+          "$out/mt6797-md1-mainline-firmware.dtbo"
+        fdtget -p "$out/gemini-md1-mainline-firmware.dtb" /modem-cold-owner \
+          | grep -Fqx 'mediatek,stage-mainline-firmware-load'
+        test "$(fdtget "$out/gemini-md1-mainline-firmware.dtb" \
+          /modem-cold-owner firmware-name)" = \
+          ${lib.escapeShellArg (builtins.concatStringsSep " " md1FirmwareNames)}
+        cp "$out/gemini-md1-mainline-firmware.dtb" "$out/gemini.dtb"
+        grep -Fq 'mt6797_md1_cold_owner_driver.enable_experimental_md1_firmware_load=1' \
+          ${kernel}/kernel.config
+        echo 'md1-mainline-firmware=explicit-package-and-names wrapper-plus-CHECK_HEADER-validated reset-held-recheck-before-copy' >> "$out/VALIDATION"
+      ''}
       ${lib.optionalString md1CellularCandidate ''
         # Compose transport only after the lifecycle overlay.  The source
         # transport overlay is disabled, then this one explicit profile makes
@@ -2187,8 +2235,18 @@
         dropbear = crossPkgs.pkgsStatic.dropbear;
         authorizedKeys = ../nixos/authorized_keys;
       }
+      // lib.optionalAttrs md1MainlineFirmwareLoad {
+        md1Firmware = md1FirmwarePackage;
+      }
     ) ''
       mkdir -p root/bin root/dev root/etc root/mnt/linux root/proc root/run root/sys/fs/pstore
+      ${lib.optionalString md1MainlineFirmwareLoad (
+        lib.concatMapStringsSep "\n" (name: ''
+          install -Dm0444 "$md1Firmware/lib/firmware/${name}" \
+            "root/lib/firmware/${name}"
+          test -s "root/lib/firmware/${name}"
+        '') md1FirmwareNames
+      )}
       ${lib.optionalString usbHostOverlay ''
         mkdir -p root/lib/firmware/rtl_nic
         cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
@@ -3174,6 +3232,7 @@
       echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
       echo "nix-md1-boot-candidate=${md1BootCandidateLabel}"
       echo "nix-md1-cellular-candidate=${md1CellularCandidateLabel}"
+      echo "nix-md1-mainline-firmware=${md1MainlineFirmwareLabel}"
       echo "md1-cold-owner-applied-dt=${
         if md1BootCandidate
         then "final-gemini.dtb status=okay plus experimental-cold-owner,cold-reset-held,boot-vector-release properties build-validated"
@@ -3208,6 +3267,11 @@
         if md1CellularCandidate
         then "DT status=okay only after the complete cold-owner/boot-vector overlay; built-in mtk_mt6797_ccci.enable=1; attach still rejects missing LK carveout or positive post-vector CLDMA activity; HS2 publishes WWAN_PORT_AT and standard raw-IP WWAN links; no Android ioctl, MBIM or QMI facade"
         else "none"
+      }"
+      echo "md1-mainline-firmware-contract=${
+        if md1MainlineFirmwareLoad
+        then "explicit package plus 1..3 validated firmware-name values in initramfs; independent DT and module gates; wrapper/CHECK_HEADER validation and reset-held recheck before copy"
+        else "off; retain validated LK image handoff and do not guess vendor firmware filenames"
       }"
       echo "md1-lk-handoff-runtime-evidence=${
         if md1LkHandoffProbe

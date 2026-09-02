@@ -12,8 +12,106 @@
   geminiBluetooth ? false,
   geminiConsysFirmware ? false,
   geminiCellular ? false,
+  geminiEuiccLpac ? false,
+  geminiLpacPackage ? null,
   ...
-}: {
+}: let
+  geminiEuiccTool = pkgs.writeShellApplication {
+    name = "gemini-euicc";
+    runtimeInputs = [
+      config.systemd.package
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.util-linux
+      geminiLpacPackage
+    ];
+    text = ''
+      usage() {
+        echo "usage: gemini-euicc {probe|info|list|download|enable} [lpac arguments]" >&2
+        exit 64
+      }
+
+      [ "$#" -ge 1 ] || usage
+      if (( EUID != 0 )); then
+        echo "gemini-euicc must run as root to own the modem port and ModemManager service" >&2
+        exit 77
+      fi
+      command_name=$1
+      shift
+      case "$command_name" in
+        probe|info)
+          [ "$#" -eq 0 ] || usage
+          lpac_args=(chip info)
+          ;;
+        list)
+          [ "$#" -eq 0 ] || usage
+          lpac_args=(profile list)
+          ;;
+        download)
+          [ "$#" -gt 0 ] || usage
+          lpac_args=(profile download "$@")
+          ;;
+        enable)
+          [ "$#" -gt 0 ] || usage
+          lpac_args=(profile enable "$@")
+          ;;
+        *) usage ;;
+      esac
+
+      if [ -n "''${GEMINI_EUICC_AT_DEVICE:-}" ]; then
+        devices=("$GEMINI_EUICC_AT_DEVICE")
+      else
+        mapfile -t devices < <(find /dev -maxdepth 1 -type c -name 'wwan*at*' -print)
+      fi
+      if [ "''${#devices[@]}" -ne 1 ] || [ ! -c "''${devices[0]}" ]; then
+        echo "need exactly one WWAN AT character device; set GEMINI_EUICC_AT_DEVICE explicitly" >&2
+        exit 69
+      fi
+
+      exec 9>/run/gemini-euicc.lock
+      flock -n 9 || {
+        echo "another eUICC transaction owns the AT port" >&2
+        exit 75
+      }
+      modem_manager_was_active=false
+      restore_modem_manager() {
+        if "$modem_manager_was_active"; then
+          systemctl start ModemManager.service
+        fi
+      }
+      trap restore_modem_manager EXIT
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      if systemctl is-active --quiet ModemManager.service; then
+        modem_manager_was_active=true
+        systemctl stop ModemManager.service
+      fi
+
+      if [ "$command_name" = probe ] || [ "$command_name" = info ]; then
+        transaction_timeout="''${GEMINI_EUICC_TIMEOUT:-45}"
+      else
+        transaction_timeout="''${GEMINI_EUICC_TIMEOUT:-900}"
+      fi
+      if ! [[ "$transaction_timeout" =~ ^[1-9][0-9]{0,3}$ ]] ||
+          (( transaction_timeout > 3600 )); then
+        echo "GEMINI_EUICC_TIMEOUT must be 1..3600 seconds" >&2
+        exit 64
+      fi
+      # lpac 2.3.0's AT reader does not terminate on EOF.  Bound every
+      # operation so a lost modem can never retain the port or leave the
+      # physical-SIM manager stopped indefinitely.
+      lpac_command=(timeout --signal=TERM --kill-after=5s "$transaction_timeout" \
+        ${geminiLpacPackage}/bin/lpac "''${lpac_args[@]}")
+      if ! LPAC_APDU=at LPAC_APDU_AT_DEVICE="''${devices[0]}" \
+          "''${lpac_command[@]}"; then
+        if [ "$command_name" = probe ] || [ "$command_name" = info ]; then
+          echo "no eUICC capability was established; physical-SIM ModemManager service will be restored" >&2
+        fi
+        exit 1
+      fi
+    '';
+  };
+in {
   assertions = [
     {
       assertion = geminiLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" geminiLeaseSelfAcceptToken != null;
@@ -38,6 +136,14 @@
     {
       assertion = !geminiCellular || geminiLeaseSelfAcceptToken == null;
       message = "the experimental cellular profile must retain external watchdog acceptance";
+    }
+    {
+      assertion = !geminiEuiccLpac || geminiCellular;
+      message = "lpac AT integration requires the standard cellular WWAN profile";
+    }
+    {
+      assertion = !geminiEuiccLpac || geminiLpacPackage != null;
+      message = "lpac AT integration requires an explicit target lpac package";
     }
   ];
   nixpkgs.overlays = [
@@ -541,6 +647,7 @@
     ++ lib.optionals (geminiGnssDevice != null) [pkgs.gpsd]
     ++ lib.optionals geminiBluetooth [pkgs.bluez]
     ++ lib.optionals geminiCellular [pkgs.modemmanager]
+    ++ lib.optionals geminiEuiccLpac [geminiLpacPackage geminiEuiccTool]
   );
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];

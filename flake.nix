@@ -91,7 +91,7 @@
       # Exact, committed CCCI/CLDMA WWAN series.  Keep this independent from
       # the passive MD1 profile: only the explicit cellular output consumes
       # the transport and its standard WWAN frontend.
-      url = "git+file:///home/grw/src/linux-gemini-cellular-mainline?rev=92e7926ebcba3dca8ebecd0d5629eed51a92db0a";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=codex/cellular-mainline-20260902&rev=9b501ccd5347019e056f7b3153ba95957bbcd6c0";
       flake = false;
     };
     ixoo-candidate = {
@@ -149,6 +149,15 @@
 
     # Cross pkgs for aarch64
     crossPkgs = buildPkgs.pkgsCross.aarch64-multiplatform;
+    # lpac's AT backend is sufficient for the CCCI WWAN character port.  Do
+    # not pull in unrelated USB MBIM or Qualcomm QMI transports, and disable
+    # PC/SC at CMake level; physical smart-card readers are not present here.
+    crossLpacAt = (crossPkgs.lpac.override {
+      withMbim = false;
+      withQmi = false;
+    }).overrideAttrs (old: {
+      cmakeFlags = old.cmakeFlags ++ ["-DLPAC_WITH_APDU_PCSC=OFF"];
+    });
 
     # Historical cross-compilers for controlled vendor-kernel comparisons.
     # The known-good binary identifies Debian GCC 6.3.0; nixpkgs 23.05 gives
@@ -1415,6 +1424,35 @@
           _module.args.geminiBluetooth = false;
           _module.args.geminiConsysFirmware = false;
           _module.args.geminiCellular = true;
+          # Keep eUICC probing out of the normal physical-SIM image.  Presence
+          # and the modem's CCHO/CGLA/CCHC support are not yet hardware-proven.
+          _module.args.geminiEuiccLpac = false;
+          _module.args.geminiLpacPackage = crossLpacAt;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
+    # Explicit opt-in evaluation of the established lpac AT backend.  The
+    # wrapper suspends ModemManager only for an invoked transaction, restores
+    # it on every exit, and treats `chip info` as a capability test rather than
+    # evidence that Gemini contains an eUICC.
+    mainlineNixosCellularEuiccSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiGnssDevice = null;
+          _module.args.geminiGnssBringup = false;
+          _module.args.geminiBluetooth = false;
+          _module.args.geminiConsysFirmware = false;
+          _module.args.geminiCellular = true;
+          _module.args.geminiEuiccLpac = true;
+          _module.args.geminiLpacPackage = crossLpacAt;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1551,6 +1589,22 @@
         mksquashfs store-contents "$out" \
           -comp gzip -b 131072 -noappend -all-root -no-progress
         unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
+
+    mainlineNixosCellularEuiccCheck =
+      buildPkgs.runCommand "mainline-nixos-cellular-euicc-check" {} ''
+        toplevel=${mainlineNixosCellularEuiccSystemCross.config.system.build.toplevel}
+        test -x "$toplevel/sw/bin/gemini-euicc"
+        test -x "$toplevel/sw/bin/lpac"
+        test -x "$toplevel/sw/bin/mmcli"
+        grep -Fq 'LPAC_APDU=at' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq 'LPAC_APDU_AT_DEVICE=' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq 'profile download' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq 'profile enable' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq 'ModemManager.service' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq 'GEMINI_EUICC_TIMEOUT' "$toplevel/sw/bin/gemini-euicc"
+        grep -Fq -- '--kill-after=5s' "$toplevel/sw/bin/gemini-euicc"
+        touch "$out"
       '';
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
@@ -2008,6 +2062,7 @@
       mainlineMd1CellularCandidateBundle = mainlineMd1CellularCandidate.bundle;
       mainlineMd1CellularCandidateP22 = mainlineMd1CellularCandidate.probeBoot2Img;
       mainlineNixosCellularSquashfs = mainlineNixosCellularSquashfs;
+      mainlineNixosCellularEuiccCheck = mainlineNixosCellularEuiccCheck;
       mainlineNixosCellularInitramfs = mainlineNixosCellular.initramfs;
       mainlineNixosCellularBundle = mainlineNixosCellular.bundle;
       mainlineA72Cpu8SramDiagnosticKernel = mainlineA72Cpu8SramDiagnostic.kernel;

@@ -59,18 +59,19 @@
     "linux-gemini-cellular-candidate": {
       "flake": false,
       "locked": {
-        "lastModified": 1788325160,
-        "narHash": "sha256-x1ZdI9bhdw70FSVkYH8rXVya+TZ8N0tdFMtOh+ZkbdE=",
-        "ref": "refs/heads/codex/cellular-mainline-20260902",
-        "rev": "92e7926ebcba3dca8ebecd0d5629eed51a92db0a",
-        "revCount": 114,
+        "lastModified": 1788328697,
+        "narHash": "sha256-JczyvzrVQRaDzdv4lEIxm3hC1+xPzoMX1A9ueKnFawg=",
+        "ref": "codex/cellular-mainline-20260902",
+        "rev": "9b501ccd5347019e056f7b3153ba95957bbcd6c0",
+        "revCount": 115,
         "type": "git",
-        "url": "file:///home/grw/src/linux-gemini-cellular-mainline"
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
-        "rev": "92e7926ebcba3dca8ebecd0d5629eed51a92db0a",
+        "ref": "codex/cellular-mainline-20260902",
+        "rev": "9b501ccd5347019e056f7b3153ba95957bbcd6c0",
         "type": "git",
-        "url": "file:///home/grw/src/linux-gemini-cellular-mainline"
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }
     },
     "linux-gemini-combined-candidate": {
