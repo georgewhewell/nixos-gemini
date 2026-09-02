@@ -14,6 +14,29 @@ tree; they do not assert an immutable vendor revision, a successful build, or
 Gemini hardware behaviour. If a fact lacks a source, build, or device record,
 this guide says **could not determine** rather than filling the gap.
 
+## 2026-09-02 physical power boundary
+
+The owner has identified a broken battery connector. The Gemini presently has
+no battery buffering and is powered only from USB. Its recent short boot/reset
+cycles are therefore not evidence of a kernel, U-Boot, A72, GPU, or modem
+failure: USB input can collapse under a transient load, and LK leaves the
+BQ25896 charger watchdog running across the kernel handoff.
+
+The U-Boot experiment was removed before this diagnosis. p30 was restored to
+the retained stock image and verified by an on-device readback; p31 was never
+written. A Flash Tool write of the exact previously serviceable p22 baseline
+completed, but it did not survive the batteryless power cycle and was not
+followed by an on-device readback. No flasher is running and the Gemini is not
+currently enumerating on Trex.
+
+A code-only recovery candidate now keeps one A53 online, leaves display, GPU,
+CONSYS, modem, audio and the right USB host disabled, and adopts LK's BQ25896
+state while servicing its watchdog. It is BUILD-TESTED, not DEVICE-TESTED. The
+next hardware action requires a short cable and a powered data source that
+advertises at least BC1.2 CDP current; if that still droops, the connector or an
+equivalent buffered supply must be repaired. Do not attribute another reset to
+software while this electrical precondition is unmet.
+
 | Label | Meaning |
 | --- | --- |
 | SOURCE EXISTS | A named source, DT description, or retained record exists. It says nothing about a build or device. |
@@ -57,8 +80,8 @@ without a corresponding observation.
 | Audio | Current live ALSA card is `mt6797mt6351` with playback/capture nodes; AFE and machine-card probes succeed. | BOUND-UNVERIFIED: no physical playback/capture, jack, amp, or UCM result. |
 | Touch | Current InputObserve image keeps I2C4/client disabled. Cycle18 read-only activation nevertheless bound `1-0062`, detected `NT36772 trim 00 00 03 72 66 03 detected (1080x2160)`, created event2, and cleanly removed/restored disabled status (`/mnt/Home/src/gemini-live-probe-cycle18-touch-20260830/dmesg-applied:1885-1894`). | This proves identity/probe cleanup only, not physical touch. Keep normal image inactive pending a separately reviewed activation gate. |
 | Keyboard | Current matrix input0 is present and polling at 20 ms. User observation on 2026-09-02: ordinary physical keyboard use works, but the `Fn` modifier does not. | LOW-PRIORITY FUNCTIONAL GAP. Gate: bounded `evtest`/scan-code capture comparing `Fn` alone and `Fn` chords, then determine whether the loss is in the matrix driver, keymap, or userspace translation. LEDs/flash remain out of scope. |
-| UEFI and boot UX | WISHLIST, IMPLEMENTATION CHOSEN: keep stock LK/ATF, chainload U-Boot from p22, and use U-Boot's EFI loader, GOP and console input to run `systemd-bootaa64.efi`. | extlinux is only an early diagnostic fallback; EDK2 and upstream LK are not parallel ports. Gates include reliable display/GOP output, pre-boot keyboard input including modifiers, EFI-variable and ESP storage, deterministic DT/UKI handoff, and repeated `ExitBootServices()` plus recovery testing. |
-| Charger, battery and PMIC | BQ25896 observer is bound at `3-006b`, `online=1`, `Not charging` (`/mnt/Home/src/gemini-live-probe-cycle18-fg-preflight-20260830/dmesg-applied:1763-1770`); Cycle18 FG preflight with `activate=N` reported `ckpdn=0x1270 con0=0x29 osr=0x8`, no child/power_supply, and clean removal (`/mnt/Home/src/gemini-live-probe-cycle18-fg-preflight-20260830/dmesg-applied:1895-1901`). | BOUND-UNVERIFIED observer only. Battery capacity, charge control, CHR_STAT, and safe policy remain could not determine. |
+| UEFI and boot UX | WISHLIST. The p30 U-Boot experiment is removed and U-Boot is not the selected production route. The choice between a narrowly extended stock-LK handoff and a separately recoverable EDK2/EFI payload remains open. | Do not modify p30 again while power is unstable. Gates include reliable pre-boot display/GOP output, keyboard input including modifiers, EFI-variable and ESP storage, deterministic DT/UKI handoff, repeated `ExitBootServices()`, and a one-shot fallback that does not require held buttons. |
+| Charger, battery and PMIC | Historical Cycle18 evidence bound the BQ25896 observer and read the FGADC preflight. The owner has now identified a physically broken battery connector; current boots have no battery buffering. A BUILD-TESTED p22 rescue adopts LK's charger configuration and services its watchdog. | No present battery capacity or charging result is possible. USB-only boot remains electrically unproved; normal high-load A72/GPU/media/radio validation requires stable power, and likely connector repair. |
 | CONSYS, Bluetooth, GNSS, Wi-Fi and FM | SOURCE EXISTS for a dormant MT6797 WMT patch controller (`linux-gemini-platform@28c471502:drivers/soc/mediatek/mt6797-consys-wmt-patch.c:1-42,398-464`), whose current code requires a private full-STP lease before patch download. Stage A explicitly saw no WMT/BTIF/CONSYS device or firmware request (`research/HARDWARE_TEST_LEDGER.md:300-301`). | There is no live transport, identity read, firmware download, GNSS, Bluetooth, Wi-Fi or FM result. The next safe code gate is full STP validation; do not enable a radio client or release reset in a hardware test. |
 | Cellular, SIM and eSIM | WISHLIST: the stock Gemian oracle exposes the vendor MD1/CCCI, oFono and ConnMan control plane, but the installed physical SIM is reported by the owner as expired and cancelled. Registration failure or absent data on that profile is therefore not a modem-driver verdict. | The target flow is mainline-only CLI eSIM/eUICC inventory, active-SIM selection, profile download/enable and later registration/data validation with a live profile. Do not provision an eSIM under Android/Gemian or make a one-time Android setup boot a prerequisite; identify and implement the underlying SIM-mux, persistent-state and eUICC operations in the open stack. |
 | Watchdog / unattended recovery | Current live `/dev/watchdog0` is an active `mtk-wdt` with timeout 31 seconds and `nowayout=1`; boot dmesg and userspace petting are present, and Cycle18 overlay cleanup retained watchdog continuity. | This proves an active Linux watchdog path, not that a deliberate hang resets and recovers the device. Pre-init margin, reset observation, and unattended recovery remain could not determine; preserve exact candidate/rollback/readback and bounded recovery waits before any write. |
