@@ -37,7 +37,7 @@
       # Production foundation plus the reviewed, disabled-by-default Gemini
       # SP5509 -> SENINF -> CAMSV0 media pipeline.  Runtime activation remains
       # a deliberate hardware gate; the source pin stays immutable.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/next-production-20260902&rev=e98be0faa684ad56b4f3df14f5567f8d6eccf4fe";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-a72-camera-20260902&rev=77e3800a8d60cc1a0784c883e2a29e5c2e8a9ed1";
       flake = false;
     };
     ixoo-candidate = {

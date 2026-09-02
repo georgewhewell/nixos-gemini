@@ -74,6 +74,8 @@ let
       grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
       grep -Fqx 'CONFIG_PINCTRL_AW9523=y' .config
       grep -Fqx 'CONFIG_KEYBOARD_MATRIX=y' .config
+      grep -Fqx 'CONFIG_ARM64_MT6797_A72_SMPEN=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_A72_POWER=y' .config
       grep -Fqx 'CONFIG_NVMEM_MTK_ATAG_DEVINFO=y' .config
       grep -Fqx 'CONFIG_VIDEO_HI556=y' .config
       grep -Fqx 'CONFIG_VIDEO_MTK_MT6797_SENINF=y' .config
