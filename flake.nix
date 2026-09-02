@@ -22,8 +22,8 @@
     };
     linux-gemini = {
       # Exact hardware-passed 28c4715 display lineage plus the default-probe DT
-      # delta. Keep the local candidate commit immutable while it is reviewed.
-      url = "git+file:///home/grw/src/linux-gemini-display-default-proven-20260902?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";
+      # delta. Pin the immutable reviewed commit, never a moving branch tip.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";
       flake = false;
     };
     linux-gemini-next = {

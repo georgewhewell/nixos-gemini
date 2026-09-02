@@ -9,7 +9,7 @@ fail() { echo "test-mainline-p22-baseline: $*" >&2; exit 1; }
 
 # The locked input and the local platform checkout must name the reviewed DSI
 # fix. The Nix derivation independently checks ordering while it builds.
-grep -Fqx '      url = "git+file:///home/grw/src/linux-gemini-display-default-proven-20260902?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";' \
+grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";' \
   "$ROOT/flake.nix" || fail 'linux-gemini pin drifted'
 grep -Fq '"rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",' \
   "$ROOT/flake.lock" || fail 'linux-gemini lock drifted'

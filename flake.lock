@@ -43,13 +43,13 @@
         "rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",
         "revCount": 159,
         "type": "git",
-        "url": "file:///home/grw/src/linux-gemini-display-default-proven-20260902"
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
         "ref": "codex/display-default-proven-20260902",
         "rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",
         "type": "git",
-        "url": "file:///home/grw/src/linux-gemini-display-default-proven-20260902"
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }
     },
     "linux-gemini-next": {
