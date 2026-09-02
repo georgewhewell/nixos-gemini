@@ -84,7 +84,7 @@
       # the source-backed, bounded MD1 boot-vector experiment and its passive
       # post-vector register observer. Normal outputs retain their existing
       # input and default-disabled MD1 source overlay.
-      url = "path:/home/grw/src/linux-gemini-md1-passive-observe-20260902";
+      url = "path:/home/grw/src/linux-gemini-next-hw-20260902";
       flake = false;
     };
     ixoo-candidate = {
@@ -1126,11 +1126,10 @@
       deviceActivationOverlay = true;
     };
 
-    # Full serviceability p22 candidate. It keeps the currently combined W4,
-    # GNSS and hci0 envelope but does not request any A72 admission; CPU8/9
-    # remain capped. The one MD1 transaction is separately gated in its own
-    # source DTBO and by six built-in parameters. Its five-second follow-up
-    # reads only boot-status and CCIF registers; handshake and CLDMA stay inert.
+    # Two-lane p22 candidate: the vendor-clocked fixed-OPP GPU path plus the
+    # passive MD1 CLDMA observer.  Radio activation and A72 admission remain
+    # out so either result has a single owner and both retain the proven
+    # recovery/display/input substrate.
     mainlineMd1BootCandidate = import ./nix/mainline.nix {
       inherit
         buildPkgs
@@ -1144,13 +1143,7 @@
       storageOverlay = true;
       sshAccess = true;
       usbHostOverlay = true;
-      consysG2dPostpatchOverlay = true;
-      consysG2gGnssEndpoint = true;
-      consysG2hBtEndpoint = true;
-      wifiW0Observe = true;
-      wifiW1FirmwareReadyProof = true;
-      wifiW2NicCapability = true;
-      wifiW4Connect = true;
+      gpuFixedOppOverlay = true;
       md1BootCandidate = true;
       platformEnablement = true;
       displayOverlay = true;
