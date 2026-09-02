@@ -1,9 +1,10 @@
 # Canonical default full-NixOS console image.  The candidate may remain in
 # p22 only after its built-in baseline-self-accept-v1 contract and the host's
-# exact hardware checks pass.  Until then the Trex supervisor owns exact
-# Stage-A rollback.
-candidate=/mnt/Home/src/gemini-default-console-btop-20260902/boot-padded-p22.img
-candidate_sha256=af29f24c28e81bfa0ab51e79409cc80cca589c18f37b469a54181dc41f2f72e7
+# exact hardware checks pass.  Its forced kernel cmdline, Android header and
+# Stage2 service carry the same reviewed acceptance capability.  Until then
+# the Trex supervisor owns exact Stage-A rollback.
+candidate=/mnt/Home/src/gemini-baseline-token-fix-20260902/boot-padded-p22.img
+candidate_sha256=f20bdfbc6f6b933c29fb29c6cc15949d0ce87cadcc62874686ec64805ad7ce8e
 candidate_size=16777216
 rollback=/home/grw/src/nixos-gemini/artifacts/mainline-connectivity-reviewed-p22/boot-padded-p22.img
 rollback_sha256=1b5f808e494f8c91ec5feedcbce89bf018271b30b87ce3910082cd298d8817dc
@@ -42,7 +43,7 @@ stage2_watchdog_owner_unit=gemini-watchdog-takeover.service
 stage2_watchdog_state=active
 stage2_watchdog_evidence=stage2=multi-user watchdog=petting acceptance=baseline-self-accept-pending
 stage2_success_marker=/run/gemini-mainline-success
-stage2_store_source=/mnt/Home/src/gemini-default-console-btop-20260902/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
+stage2_store_source=/mnt/Home/src/gemini-baseline-token-fix-20260902/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
 stage2_store_sha256=8ab64d8d7a95de88b451f250906c6761acdfd968f6847a765152d220c1b58990
 stage2_store_size=101007360
 stage2_store_target=/nixos/mainline-nixos-s0k2iivg5cmyadcjqp6q45x7ry6wffyw-mainline-nixos-zlib.squashfs
