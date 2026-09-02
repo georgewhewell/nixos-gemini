@@ -14,6 +14,12 @@ EMMC_RESOLVER=
 TEST_ROOT=$(mktemp -d /mnt/Home/src/p22-recovery-harness-test.XXXXXX)
 trap 'rm -rf "$TEST_ROOT"' EXIT INT TERM
 
+extract_stage2_store_functions() {
+    output=$1
+    sed -n '/^stage2_store_progress() {/,/^prepare_local_capture_dir() {/p' \
+        "$HARNESS" | sed '$d' > "$output"
+}
+
 test_emmc_lineage_resolves_mmcbLK0_and_mmcbLK1() {
     # Exercise the resolver on synthetic sysfs/dev trees for both assignments.
     resolver=$ROOT/research/p22-emmc-lineage.sh
@@ -905,18 +911,20 @@ test_recovered_stage_a_readback_retries_exactly() (
 )
 
 test_stage2_store_staging_commands_are_safe_shell() {
-    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
-        > "$TEST_ROOT/stage2-store-function.sh"
+    extract_stage2_store_functions "$TEST_ROOT/stage2-store-function.sh"
     # shellcheck disable=SC1090,SC1091
     . "$TEST_ROOT/stage2-store-function.sh"
     RUN_LOCAL=$TEST_ROOT/stage2-store-run
     mkdir -p "$RUN_LOCAL"
-    n=0
+    printf '0\n' > "$RUN_LOCAL/store-command-count"
     : > "$TEST_ROOT/stage2-test.squashfs"
     device_ssh_gadget() {
+        n=$(cat "$RUN_LOCAL/store-command-count")
         n=$((n + 1))
+        printf '%s\n' "$n" > "$RUN_LOCAL/store-command-count"
         printf '%s\n' "$1" > "$RUN_LOCAL/store-command-$n.sh"
         case "$1" in
+            *'offset=$(stat'*) printf '0\n'; return 0 ;;
             *'cat >'*) cat > "$RUN_LOCAL/store-stream-$n"; return 0 ;;
             *'test -f'*) return 1 ;;
             *'grep -Fqx'*) return 0 ;;
@@ -937,41 +945,41 @@ test_stage2_store_staging_commands_are_safe_shell() {
     STAGE1_STORE_SIZE=1
     provision_stage2_store
     for command in "$RUN_LOCAL"/store-command-*.sh; do sh -n "$command"; done
-    grep -Fq 'cat >' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'cat >' "$RUN_LOCAL/store-command-5.sh"
     grep -Fq '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp' \
-        "$RUN_LOCAL/store-command-4.sh"
+        "$RUN_LOCAL/store-command-5.sh"
     grep -Fq "ln '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp' '/mnt/gemian/nixos/next-mainline.squashfs'" \
-        "$RUN_LOCAL/store-command-4.sh"
+        "$RUN_LOCAL/store-command-5.sh"
     if grep -Fq "mv '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
-        "$RUN_LOCAL/store-command-4.sh"; then
+        "$RUN_LOCAL/store-command-5.sh"; then
         echo 'stage2 provisioning regressed to clobbering rename' >&2
         return 1
     fi
-    grep -Fq 'sync' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-4.sh"
+    grep -Fq 'sync' "$RUN_LOCAL/store-command-5.sh"
+    grep -Fq '/run/store-provision.ready' "$RUN_LOCAL/store-command-5.sh"
     grep -Fq "test ! -L '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "test -f '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
     grep -Fq "stat -Lc %h '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq "test \"\$stale_size\" -le '1025'" \
+    grep -Fq "test \"\$offset\" -le '1025'" \
         "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
-        "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'df -Pk /mnt/gemian/nixos' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'resolve_emmc_device' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'p29="$emmc"p29' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq 'case "$available_kib" in' "$RUN_LOCAL/store-command-4.sh"
-    grep -Fq '"$available_kib" -ge '\''2'\''' "$RUN_LOCAL/store-command-4.sh"
-    stale_remove_line=$(grep -n -F "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
-        "$RUN_LOCAL/store-command-4.sh" | head -n 1 | cut -d: -f1)
+    grep -Fq 'df -Pk /mnt/gemian/nixos' "$RUN_LOCAL/store-command-5.sh"
+    grep -Fq 'resolve_emmc_device' "$RUN_LOCAL/store-command-5.sh"
+    grep -Fq 'p29="$emmc"p29' "$RUN_LOCAL/store-command-5.sh"
+    grep -Fq 'case "$available_kib" in' "$RUN_LOCAL/store-command-5.sh"
+    grep -Fq '"$available_kib" -ge '\''2'\''' "$RUN_LOCAL/store-command-5.sh"
     free_space_line=$(grep -n -F 'df -Pk /mnt/gemian/nixos' \
-        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
+        "$RUN_LOCAL/store-command-5.sh" | cut -d: -f1)
     stream_line=$(grep -n -F "cat > '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
-        "$RUN_LOCAL/store-command-4.sh" | cut -d: -f1)
-    test "$free_space_line" -gt "$stale_remove_line"
+        "$RUN_LOCAL/store-command-5.sh" | cut -d: -f1)
     test "$free_space_line" -lt "$stream_line"
+    link_line=$(grep -n -F "ln '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-5.sh" | cut -d: -f1)
+    remove_line=$(grep -n -F "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/store-command-5.sh" | cut -d: -f1)
+    test "$remove_line" -gt "$link_line"
     grep -Fq "grep -Fqx -- 'GEMINI_MAINLINE_NIXOS: store-provision=required target=/mnt/gemian/nixos/next-mainline.squashfs" \
         "$RUN_LOCAL/store-command-3.sh"
     ! grep -Fq "grep -Fqx -- 'store-provision=required" \
@@ -980,8 +988,7 @@ test_stage2_store_staging_commands_are_safe_shell() {
 }
 
 test_stage2_store_falls_back_once_to_gadget_after_right_failure() {
-    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
-        > "$TEST_ROOT/stage2-store-fallback-function.sh"
+    extract_stage2_store_functions "$TEST_ROOT/stage2-store-fallback-function.sh"
     # shellcheck disable=SC1090,SC1091
     . "$TEST_ROOT/stage2-store-fallback-function.sh"
     RUN_LOCAL=$TEST_ROOT/stage2-store-fallback-run
@@ -996,45 +1003,142 @@ test_stage2_store_falls_back_once_to_gadget_after_right_failure() {
     STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
     STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
     STAGE1_STORE_SIZE=1
-    gadget_checks=0
+    printf '0\n' > "$RUN_LOCAL/gadget-check-count"
+    retained=$RUN_LOCAL/retained-partial
     device_ssh_gadget() {
+        gadget_checks=$(cat "$RUN_LOCAL/gadget-check-count")
         gadget_checks=$((gadget_checks + 1))
+        printf '%s\n' "$gadget_checks" > "$RUN_LOCAL/gadget-check-count"
         printf '%s\n' "$1" > "$RUN_LOCAL/gadget-check-$gadget_checks.sh"
         case "$1" in
+            *'offset=$(stat'*)
+                if [ -e "$retained" ]; then
+                    stat -Lc %s "$retained"
+                else
+                    printf '0\n'
+                fi
+                return 0
+                ;;
             *'grep -Fqx'*) return 0 ;;
             *'cat /run/store-provision.ready'*) return 0 ;;
             *) return 1 ;;
         esac
     }
-    right_streams=0
     device_ssh_right_provision() {
-        right_streams=$((right_streams + 1))
-        cat > "$RUN_LOCAL/right-failed-stream"
+        dd bs=1 count=7 of="$retained" status=none
         printf '%s\n' "$1" > "$RUN_LOCAL/right-failed-command.sh"
+        : > "$RUN_LOCAL/right-streamed"
         return 1
     }
-    gadget_streams=0
     device_ssh_gadget_provision() {
-        gadget_streams=$((gadget_streams + 1))
-        cat > "$RUN_LOCAL/gadget-fallback-stream"
+        cat >> "$retained"
         printf '%s\n' "$1" > "$RUN_LOCAL/gadget-fallback-command.sh"
+        : > "$RUN_LOCAL/gadget-streamed"
         return 0
     }
     provision_stage2_store
-    test "$right_streams" -eq 1
-    test "$gadget_streams" -eq 1
-    cmp "$STAGE2_STORE_SOURCE" "$RUN_LOCAL/right-failed-stream"
-    cmp "$STAGE2_STORE_SOURCE" "$RUN_LOCAL/gadget-fallback-stream"
+    test -e "$RUN_LOCAL/right-streamed"
+    test -e "$RUN_LOCAL/gadget-streamed"
+    cmp "$STAGE2_STORE_SOURCE" "$retained"
     sh -n "$RUN_LOCAL/right-failed-command.sh"
-    cmp "$RUN_LOCAL/right-failed-command.sh" "$RUN_LOCAL/gadget-fallback-command.sh"
+    sh -n "$RUN_LOCAL/gadget-fallback-command.sh"
+    grep -Fq "cat > '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/right-failed-command.sh"
+    grep -Fq "test \"\$(stat -Lc %s '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp')\" -eq '7'" \
+        "$RUN_LOCAL/gadget-fallback-command.sh"
+    grep -Fq "cat >> '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
+        "$RUN_LOCAL/gadget-fallback-command.sh"
     grep -Fq "rm -- '/mnt/gemian/nixos/next-mainline.squashfs.provision.tmp'" \
         "$RUN_LOCAL/gadget-fallback-command.sh"
+    grep -Fq 'stage2-store phase=stream path=right-nic offset=0' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+    grep -Fq 'stage2-store phase=interrupted path=right-nic resume=retained' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+    grep -Fq 'stage2-store phase=stream path=gadget offset=7' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+    grep -Fq 'stage2-store phase=published path=gadget' \
+        "$RUN_LOCAL/stage2-store-progress.log"
     test "$STAGE2_STORE_PROVISIONED" = yes
 }
 
+test_stage2_store_readonly_is_terminal() {
+    extract_stage2_store_functions "$TEST_ROOT/stage2-store-readonly-function.sh"
+    # shellcheck disable=SC1090,SC1091
+    . "$TEST_ROOT/stage2-store-readonly-function.sh"
+    RUN_LOCAL=$TEST_ROOT/stage2-store-readonly-run
+    mkdir -p "$RUN_LOCAL"
+    printf 'exact stage2 payload\n' > "$TEST_ROOT/stage2-readonly.squashfs"
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_SOURCE=$TEST_ROOT/stage2-readonly.squashfs
+    STAGE2_STORE_SIZE=$(stat -Lc %s "$STAGE2_STORE_SOURCE")
+    STAGE2_STORE_SHA=$(sha256sum "$STAGE2_STORE_SOURCE" | cut -d' ' -f1)
+    STAGE2_STORE_TARGET=/nixos/next-mainline.squashfs
+    STAGE2_STORE_TARGET_LIVE=/gemian/nixos/next-mainline.squashfs
+    STAGE1_STORE_TARGET=/gemian/nixos/mainline-nixos-connectivity-m0.squashfs
+    STAGE1_STORE_SHA=0000000000000000000000000000000000000000000000000000000000000000
+    STAGE1_STORE_SIZE=1
+    printf '0\n' > "$RUN_LOCAL/gadget-check-count"
+    device_ssh_gadget() {
+        checks=$(cat "$RUN_LOCAL/gadget-check-count")
+        checks=$((checks + 1))
+        printf '%s\n' "$checks" > "$RUN_LOCAL/gadget-check-count"
+        printf '%s\n' "$1" > "$RUN_LOCAL/gadget-check-$checks.sh"
+        case "$1" in
+            *'offset=$(stat'*) printf 'closed\n'; return 0 ;;
+            *'grep -Fqx'*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+    device_ssh_right_provision() { : > "$RUN_LOCAL/unexpected-right"; return 1; }
+    device_ssh_gadget_provision() { : > "$RUN_LOCAL/unexpected-gadget"; return 1; }
+    set +e
+    provision_stage2_store
+    rc=$?
+    set -e
+    test "$rc" -eq 2
+    test ! -e "$RUN_LOCAL/unexpected-right"
+    test ! -e "$RUN_LOCAL/unexpected-gadget"
+    grep -Fq 'p29="$emmc"p29' "$RUN_LOCAL/gadget-check-4.sh"
+    grep -Fq '$2 == "/mnt/gemian" && $3 == "ext4"' \
+        "$RUN_LOCAL/gadget-check-4.sh"
+    grep -Fq '*,rw,*)' "$RUN_LOCAL/gadget-check-4.sh"
+    ! grep -Fq 'rm --' "$RUN_LOCAL/gadget-check-4.sh"
+    grep -Fq 'stage2-store phase=stopped path=right-nic reason=p29-not-rw resume=retained' \
+        "$RUN_LOCAL/stage2-store-progress.log"
+}
+
+test_acceptance_stops_after_stage1_closes_p29() (
+    sed -n '/^accept_candidate_until_deadline() {/,/^}/p' "$HARNESS" \
+        > "$TEST_ROOT/accept-readonly-function.sh"
+    # shellcheck disable=SC1091
+    . "$TEST_ROOT/accept-readonly-function.sh"
+    RUN_LOCAL=$TEST_ROOT/accept-readonly-run
+    mkdir -p "$RUN_LOCAL"
+    P22_WRITE_MARKER=no
+    ACCEPTANCE_WINDOW_SECONDS=600
+    STAGE2_POLICY=watchdog-takeover-required
+    STAGE2_STORE_PROVISIONED=no
+    PROOF_LEASE=no
+    device_ssh_gadget_fast() { return 0; }
+    provision_stage2_store() {
+        calls=$(cat "$RUN_LOCAL/calls")
+        printf '%s\n' "$((calls + 1))" > "$RUN_LOCAL/calls"
+        return 2
+    }
+    stage2_store_progress() { printf '%s %s\n' "$1" "$2" >> "$RUN_LOCAL/progress"; }
+    printf '0\n' > "$RUN_LOCAL/calls"
+    set +e
+    accept_candidate_until_deadline
+    rc=$?
+    set -e
+    test "$rc" -eq 1
+    test "$(cat "$RUN_LOCAL/calls")" -eq 1
+    grep -Fq 'stopped path=none reason=p29-not-rw action=abort-acceptance' \
+        "$RUN_LOCAL/progress"
+)
+
 test_stage2_exact_target_is_idempotent() {
-    sed -n '/^provision_stage2_store() {/,/^}/p' "$HARNESS" \
-        > "$TEST_ROOT/stage2-idempotent-function.sh"
+    extract_stage2_store_functions "$TEST_ROOT/stage2-idempotent-function.sh"
     # shellcheck disable=SC1091
     . "$TEST_ROOT/stage2-idempotent-function.sh"
     RUN_LOCAL=$TEST_ROOT/stage2-idempotent-run
@@ -1421,6 +1525,8 @@ test_stage2_readiness_is_fast_gadget_only
 test_recovered_stage_a_readback_retries_exactly
 test_stage2_store_staging_commands_are_safe_shell
 test_stage2_store_falls_back_once_to_gadget_after_right_failure
+test_stage2_store_readonly_is_terminal
+test_acceptance_stops_after_stage1_closes_p29
 test_stage2_exact_target_is_idempotent
 test_stage2_rendered_validation_requires_handoff
 test_stage2_lease_evidence_is_literal
