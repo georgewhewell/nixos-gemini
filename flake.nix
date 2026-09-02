@@ -34,10 +34,10 @@
       flake = false;
     };
     linux-gemini-production = {
-      # Clean mainline foundation: the reviewed ixoo hardware support without
-      # the later experimental A72/DVFSP framework, with display, USB gadget,
-      # and keyboard enabled in the normal board description.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=115f488918a937ce753a70ac884e9b8b29a74cc7";
+      # Production foundation plus the reviewed, disabled-by-default Gemini
+      # SP5509 -> SENINF -> CAMSV0 media pipeline.  Runtime activation remains
+      # a deliberate hardware gate; the source pin stays immutable.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/next-production-20260902&rev=e98be0faa684ad56b4f3df14f5567f8d6eccf4fe";
       flake = false;
     };
     ixoo-candidate = {
