@@ -14,6 +14,7 @@
   consysFirmware ? false,
   gnssService ? false,
   bluetoothService ? false,
+  cellularService ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
@@ -26,6 +27,7 @@ assert builtins.isBool displayActivation;
 assert builtins.isBool consysFirmware;
 assert builtins.isBool gnssService;
 assert builtins.isBool bluetoothService;
+assert builtins.isBool cellularService;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
@@ -658,6 +660,7 @@ let
       }"
       echo "gnss-service=${if gnssService then "gpsd on retained /dev/gnss0 endpoint" else "inactive"}"
       echo "bluetooth-service=${if bluetoothService then "BlueZ classic+LE on standard hci0 endpoint" else "inactive"}"
+      echo "cellular-service=${if cellularService then "ModemManager on standard WWAN AT port; raw-IP via WWAN rtnetlink; no auto-connect" else "inactive"}"
       echo "gpu-status=$(dt_status /gpu@13040000)"
       echo "md1-cold-owner-status=$(dt_status /modem-cold-owner)"
       echo "unattended-recovery=${

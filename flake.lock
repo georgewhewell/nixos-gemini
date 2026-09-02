@@ -56,6 +56,23 @@
         "type": "path"
       }
     },
+    "linux-gemini-cellular-candidate": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788325160,
+        "narHash": "sha256-x1ZdI9bhdw70FSVkYH8rXVya+TZ8N0tdFMtOh+ZkbdE=",
+        "ref": "refs/heads/codex/cellular-mainline-20260902",
+        "rev": "92e7926ebcba3dca8ebecd0d5629eed51a92db0a",
+        "revCount": 114,
+        "type": "git",
+        "url": "file:///home/grw/src/linux-gemini-cellular-mainline"
+      },
+      "original": {
+        "rev": "92e7926ebcba3dca8ebecd0d5629eed51a92db0a",
+        "type": "git",
+        "url": "file:///home/grw/src/linux-gemini-cellular-mainline"
+      }
+    },
     "linux-gemini-combined-candidate": {
       "flake": false,
       "locked": {
@@ -203,6 +220,7 @@
         "ixoo-kernel": "ixoo-kernel",
         "linux-gemini": "linux-gemini",
         "linux-gemini-bt-candidate": "linux-gemini-bt-candidate",
+        "linux-gemini-cellular-candidate": "linux-gemini-cellular-candidate",
         "linux-gemini-combined-candidate": "linux-gemini-combined-candidate",
         "linux-gemini-gnss-candidate": "linux-gemini-gnss-candidate",
         "linux-gemini-md1-boot-candidate": "linux-gemini-md1-boot-candidate",

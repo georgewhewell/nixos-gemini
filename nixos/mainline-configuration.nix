@@ -11,6 +11,7 @@
   geminiGnssBringup ? false,
   geminiBluetooth ? false,
   geminiConsysFirmware ? false,
+  geminiCellular ? false,
   ...
 }: {
   assertions = [
@@ -33,6 +34,10 @@
     {
       assertion = !geminiBluetooth || geminiConsysFirmware;
       message = "Bluetooth bring-up requires Stage2 CONSYS firmware";
+    }
+    {
+      assertion = !geminiCellular || geminiLeaseSelfAcceptToken == null;
+      message = "the experimental cellular profile must retain external watchdog acceptance";
     }
   ];
   nixpkgs.overlays = [
@@ -88,6 +93,30 @@
   networking.dhcpcd.extraConfig = "denyinterfaces usb0";
   networking.firewall.enable = false;
   networking.networkmanager.enable = false;
+  # CCCI stays a kernel-private firmware ABI.  ModemManager consumes only the
+  # standard WWAN AT port; raw-IP contexts remain standard WWAN rtnetlink
+  # devices managed with iproute2 until registration/data is hardware-proven.
+  services.dbus.packages = lib.optionals geminiCellular [pkgs.modemmanager];
+  services.udev.packages = lib.optionals geminiCellular [pkgs.modemmanager];
+  systemd.services.ModemManager = lib.mkIf geminiCellular {
+    description = "Modem Manager";
+    wantedBy = ["multi-user.target"];
+    aliases = ["dbus-org.freedesktop.ModemManager1.service"];
+    after = ["dbus.service" "systemd-udevd.service"];
+    requires = ["dbus.service"];
+    serviceConfig = {
+      Type = "dbus";
+      BusName = "org.freedesktop.ModemManager1";
+      ExecStart = "${pkgs.modemmanager}/bin/ModemManager";
+      Restart = "on-abort";
+      CapabilityBoundingSet = ["CAP_SYS_ADMIN" "CAP_NET_ADMIN"];
+      ProtectSystem = true;
+      ProtectHome = true;
+      PrivateTmp = true;
+      RestrictAddressFamilies = ["AF_NETLINK" "AF_UNIX" "AF_QIPCRTR"];
+      NoNewPrivileges = true;
+    };
+  };
 
   # The kernel's built-in g_ether driver and stage 1 create usb0.  Reassert
   # its static address after systemd/udev settle; the operation is idempotent.
@@ -511,6 +540,7 @@
     ]
     ++ lib.optionals (geminiGnssDevice != null) [pkgs.gpsd]
     ++ lib.optionals geminiBluetooth [pkgs.bluez]
+    ++ lib.optionals geminiCellular [pkgs.modemmanager]
   );
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];

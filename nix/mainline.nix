@@ -40,6 +40,7 @@
   md1BootStatusObserve ? false,
   md1RemapObserve ? false,
   md1BootCandidate ? false,
+  md1CellularCandidate ? false,
   a72Cpu8SramDiagnostic ? false,
   a72Cpu8TraceOnly ? false,
   a72Cpu8Interactive ? false,
@@ -54,6 +55,8 @@
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
+  md1CellularKernelRevision =
+    "92e7926ebcba3dca8ebecd0d5629eed51a92db0a";
   gpuBusClockInSource =
     lib.hasInfix
     "<&infrasys CLK_INFRA_MFG_VCG>"
@@ -105,6 +108,7 @@
     ++ lib.optionals md1LkHandoffProbe [./mainline-md1-lk-handoff.fragment]
     ++ lib.optionals md1BootStatusObserve [./mainline-md1-boot-status-observe.fragment]
     ++ lib.optionals md1BootCandidate [./mainline-md1-boot-candidate.fragment]
+    ++ lib.optionals md1CellularCandidate [./mainline-md1-cellular.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
@@ -272,6 +276,10 @@
     if md1BootCandidate
     then "single-vendor-boot-vector-write-after-LK-remap-attestation-and-active-CCF-power-sequence-then-100ms-immediate-oracle-plus-five-second-passive-boot-status-ccif-register-observation-no-transport"
     else "none";
+  md1CellularCandidateLabel =
+    if md1CellularCandidate
+    then "standard-wwan-at-and-raw-ip-over-ccci-cldma-after-positive-md1-go-and-hs1-hs2"
+    else "none";
   a72MaxCpus = if a72Cpu8SramDiagnostic then "9" else "8";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
@@ -279,7 +287,9 @@
     then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
     else "console=ttyS0,921600n8 earlycon maxcpus=${a72MaxCpus} nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 ${usbIdentityCmdline} clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   usbBuildTag =
-    if md1BootCandidate
+    if md1CellularCandidate
+    then "md1-cellular-candidate"
+    else if md1BootCandidate
     then "md1-boot-candidate"
     else if a72Cpu8SramDiagnostic && wifiW4Connect && md1BootStatusObserve &&
       consysG2gGnssEndpoint && consysG2hBtEndpoint
@@ -325,6 +335,7 @@
     + lib.optionalString md1LkHandoffProbe " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1"
     + lib.optionalString md1BootStatusObserve " mt6797_md1_boot_status_observe.enable_experimental_boot_status=1"
     + lib.optionalString md1BootCandidate " mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1"
+    + lib.optionalString md1CellularCandidate " mtk_mt6797_ccci.enable=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1";
   variantSuffix =
@@ -345,6 +356,7 @@
     + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
     + lib.optionalString wifiW4Connect "-wifi-w4-connect"
     + lib.optionalString md1BootCandidate "-md1-boot-candidate"
+    + lib.optionalString md1CellularCandidate "-md1-cellular-candidate"
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
@@ -525,6 +537,9 @@
       );
     assert !md1BootCandidate || unattendedRecovery;
     assert !md1BootCandidate || (!md1LkHandoffProbe && !md1BootStatusObserve && !md1RemapObserve);
+    assert !md1CellularCandidate || md1BootCandidate;
+    assert !md1CellularCandidate || unattendedRecovery;
+    assert !md1CellularCandidate || kernelRevision == md1CellularKernelRevision;
     assert !a72Cpu8TraceOnly || a72Cpu8SramDiagnostic;
     assert !a72Cpu8Interactive || (a72Cpu8SramDiagnostic && a72Cpu8TraceOnly && unattendedRecovery && sshAccess);
     assert !cacheTopologyObserver || a72Cpu8SramDiagnostic;
@@ -550,6 +565,7 @@
       + lib.optionalString wifiW2NicCapability "-wifi-w2-capability"
       + lib.optionalString wifiW4Connect "-wifi-w4-connect"
       + lib.optionalString md1BootCandidate "-md1-boot-candidate"
+      + lib.optionalString md1CellularCandidate "-md1-cellular-candidate"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
       + lib.optionalString platformEnablement "-platform"
@@ -1082,12 +1098,26 @@
         test -s "$out/mt6797-gemini-pda-md1-boot-status-observe.dtbo"
       ''}
       ${lib.optionalString md1BootCandidate ''
+        grep -Fqx 'CONFIG_MTK_MT6797_MD1_COLD_OWNER=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_MD1_LK_HANDOFF_PROBE=y' .config
+      ''}
+      ${lib.optionalString md1CellularCandidate ''
+        grep -Fqx 'CONFIG_WWAN=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CCCI=y' .config
+        ! grep -q '^CONFIG_MTK_CCCI_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString md1BootCandidate ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-boot-candidate.dtbo \
           "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-cldma-prepare.dtbo \
           "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
         test -s "$out/mt6797-gemini-pda-md1-cldma-prepare.dtbo"
+      ''}
+      ${lib.optionalString md1CellularCandidate ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-md1-ccci.dtbo \
+          "$out/mt6797-gemini-pda-md1-ccci.dtbo"
+        test -s "$out/mt6797-gemini-pda-md1-ccci.dtbo"
       ''}
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
@@ -1180,7 +1210,7 @@
   # and read-only I2C6/DA921x serviceability group, while keeping xHCI and SCP
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
-    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}${lib.optionalString cacheTopologyObserver "-cache-topology-observer"}" {
+    buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString wifiW0Observe "-wifi-w0"}${lib.optionalString wifiW1FirmwareReadyProof (if wifiW2NicCapability || wifiW4Connect then "" else "-wifi-w1-ready")}${lib.optionalString wifiW2NicCapability "-wifi-w2-capability"}${lib.optionalString wifiW4Connect "-wifi-w4-connect"}${lib.optionalString md1BootCandidate "-md1-boot-candidate"}${lib.optionalString md1CellularCandidate "-md1-cellular-candidate"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}${lib.optionalString cacheTopologyObserver "-cache-topology-observer"}" {
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3 buildPkgs.binutils];
     } ''
       mkdir -p "$out"
@@ -1817,6 +1847,30 @@
           | grep -Fqx 'mediatek,stage-dma-rings-inert'
         echo 'md1-boot-candidate=single-enabled-p22-overlay plus six-cmdline-gates one-vector-write then-bounded-GO-NO-GO-oracle no-irq-no-cldma-no-ccci; cldma-prepare=compiled-and-validated-disabled' >> "$out/VALIDATION"
       ''}
+      ${lib.optionalString md1CellularCandidate ''
+        # Compose transport only after the lifecycle overlay.  The source
+        # transport overlay is disabled, then this one explicit profile makes
+        # it okay; the built-in driver still requires enable=1 and positive
+        # post-vector CLDMA activity before it owns any ring or IRQ.
+        fdtoverlay \
+          -i "$out/gemini.dtb" \
+          -o "$out/gemini-md1-cellular.dtb" \
+          ${kernel}/mt6797-gemini-pda-md1-ccci.dtbo
+        test "$(fdtget "$out/gemini-md1-cellular.dtb" /modem@10014000 status)" = disabled
+        test "$(fdtget "$out/gemini-md1-cellular.dtb" /modem@10014000 compatible)" = \
+          mediatek,mt6797-ccci
+        test "$(fdtget -t x "$out/gemini-md1-cellular.dtb" /modem@10014000 reg)" = \
+          '0 10014000 0 1e00 0 10015000 0 1e00 0 10219000 0 1e00 0 1021a000 0 1e00 0 10209000 0 1000 0 1020a000 0 1000'
+        test "$(fdtget -t i "$out/gemini-md1-cellular.dtb" /modem@10014000 interrupts)" = \
+          '0 265 4 0 147 8 0 266 2'
+        test "$(fdtget "$out/gemini-md1-cellular.dtb" /modem@10014000 memory-region-names)" = \
+          md-shared
+        fdtput -t s "$out/gemini-md1-cellular.dtb" /modem@10014000 status okay
+        test "$(fdtget "$out/gemini-md1-cellular.dtb" /modem@10014000 status)" = okay
+        cp "$out/gemini-md1-cellular.dtb" "$out/gemini.dtb"
+        grep -Fq 'mtk_mt6797_ccci.enable=1' ${kernel}/kernel.config
+        echo 'md1-cellular=boot-owner-first then CCCI status=okay plus default-false enable parameter; positive post-vector CLDMA activity and HS1/HS2 still required' >> "$out/VALIDATION"
+      ''}
       ${lib.optionalString md1LkHandoffProbe ''
         # The source overlay is deliberately disabled.  This profile makes one
         # explicit, reviewable transition to okay; its separate built-in
@@ -1880,10 +1934,12 @@
         echo 'md1-remap-observe=dt-gate-okay cmdline-gate-required five-infracfg-reads no-write-no-ownership' >> "$out/VALIDATION"
       ''}
       ${lib.optionalString (touchscreenActivationOverlay || fgadcActivationOverlay) ''
-        # Explicit negative contracts: this full-NixOS baseline does not pull
-        # in the later MicroSD, GPU, or radio bring-up experiments.
+        # Explicit composition contracts: touchscreen/FGADC never pull in
+        # MicroSD or CONSYS, while an independently selected fixed-OPP GPU
+        # remains enabled after these later overlays are applied.
         test "$(fdtget "$out/gemini.dtb" /mmc@11240000 status)" = disabled
-        test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = \
+          ${if gpuFixedOppOverlay then "okay" else "disabled"}
         ${lib.optionalString (!wifiW4Connect) ''
           test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
           test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
@@ -3117,6 +3173,7 @@
       echo "nix-md1-boot-status=${md1BootStatusLabel}"
       echo "nix-md1-remap-observe=${md1RemapObserveLabel}"
       echo "nix-md1-boot-candidate=${md1BootCandidateLabel}"
+      echo "nix-md1-cellular-candidate=${md1CellularCandidateLabel}"
       echo "md1-cold-owner-applied-dt=${
         if md1BootCandidate
         then "final-gemini.dtb status=okay plus experimental-cold-owner,cold-reset-held,boot-vector-release properties build-validated"
@@ -3145,6 +3202,11 @@
       echo "md1-boot-candidate-contract=${
         if md1BootCandidate
         then "p22-only all-enabled five-node overlay plus six built-in cmdline gates; validate LK plan and locked remap, initial secure EMI-MPU, active CCF MD1 power, documented WDT key writes/readback samples, stage1 MPU, then one MD_BOOT_VECTOR_EN=1 write with exact readback and 1000x100us immediate AP/CCIF delta oracle; after GO schedule only 5000x1ms boot-status and CCIF busy/RCHNUM/ACK reads; terminal GO requires a fresh status/CCIF delta and terminal NO-GO records the bounded quiet snapshot, no retry/write/IRQ/CLDMA/HWO/shared-memory/CCCI"
+        else "none"
+      }"
+      echo "md1-cellular-contract=${
+        if md1CellularCandidate
+        then "DT status=okay only after the complete cold-owner/boot-vector overlay; built-in mtk_mt6797_ccci.enable=1; attach still rejects missing LK carveout or positive post-vector CLDMA activity; HS2 publishes WWAN_PORT_AT and standard raw-IP WWAN links; no Android ioctl, MBIM or QMI facade"
         else "none"
       }"
       echo "md1-lk-handoff-runtime-evidence=${

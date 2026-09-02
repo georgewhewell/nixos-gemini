@@ -1,0 +1,7 @@
+# Standard Linux WWAN frontend for the explicit MD1 cellular candidate.
+# The lifecycle prerequisites come from mainline-md1-boot-candidate.fragment;
+# DT status and the driver's default-false enable parameter remain separate.
+CONFIG_WWAN=y
+CONFIG_MTK_MT6797_CCCI=y
+# No hardware KUnit selection belongs in the p22 candidate.
+# CONFIG_MTK_CCCI_KUNIT_TEST is not set

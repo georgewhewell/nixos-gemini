@@ -87,6 +87,13 @@
       url = "path:/home/grw/src/linux-gemini-next-hw-20260902";
       flake = false;
     };
+    linux-gemini-cellular-candidate = {
+      # Exact, committed CCCI/CLDMA WWAN series.  Keep this independent from
+      # the passive MD1 profile: only the explicit cellular output consumes
+      # the transport and its standard WWAN frontend.
+      url = "git+file:///home/grw/src/linux-gemini-cellular-mainline?rev=92e7926ebcba3dca8ebecd0d5629eed51a92db0a";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -111,6 +118,7 @@
     linux-gemini-bt-candidate,
     linux-gemini-combined-candidate,
     linux-gemini-md1-boot-candidate,
+    linux-gemini-cellular-candidate,
     ixoo-candidate,
   }: let
     # Build system (your machine)
@@ -1157,6 +1165,38 @@
       fgadcActivationOverlay = true;
     };
 
+    # Explicit cellular successor to the passive MD1 candidate.  It preserves
+    # the complete boot owner and recovery envelope, then composes the disabled
+    # CCCI overlay and standard WWAN frontend behind one additional profile
+    # flag.  No ordinary output consumes this source or transport gate.
+    mainlineMd1CellularCandidate = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        ixoo-candidate
+        ;
+      linux-gemini = linux-gemini-cellular-candidate;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      gpuFixedOppOverlay = true;
+      md1BootCandidate = true;
+      md1CellularCandidate = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+    };
+
     # Full Stage-2 hardware candidate: preserve the accepted eMMC, watchdog,
     # display, input and BQ substrate while composing the vendor-clocked GPU,
     # transactional audio capture helper and passive MD1 CLDMA observer.
@@ -1305,6 +1345,7 @@
           _module.args.geminiGnssBringup = false;
           _module.args.geminiBluetooth = false;
           _module.args.geminiConsysFirmware = false;
+          _module.args.geminiCellular = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1329,6 +1370,7 @@
           # Bluetooth endpoint until one has been independently evidenced.
           _module.args.geminiBluetooth = false;
           _module.args.geminiConsysFirmware = true;
+          _module.args.geminiCellular = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1350,6 +1392,29 @@
           _module.args.geminiGnssBringup = true;
           _module.args.geminiBluetooth = true;
           _module.args.geminiConsysFirmware = true;
+          _module.args.geminiCellular = false;
+        }
+        {
+          nixpkgs.hostPlatform = targetSystem;
+          nixpkgs.buildPlatform = buildSystem;
+        }
+      ];
+    };
+
+    # Standard WWAN userspace for the cellular-only kernel candidate.  This
+    # does not start a private Android daemon and does not auto-connect a PDP
+    # context; ModemManager discovers the WWAN AT port and exposes mmcli/D-Bus.
+    mainlineNixosCellularSystemCross = nixpkgs-old.lib.nixosSystem {
+      system = buildSystem;
+      modules = [
+        ./nixos/mainline-configuration.nix
+        {
+          _module.args.geminiLeaseSelfAcceptToken = null;
+          _module.args.geminiGnssDevice = null;
+          _module.args.geminiGnssBringup = false;
+          _module.args.geminiBluetooth = false;
+          _module.args.geminiConsysFirmware = false;
+          _module.args.geminiCellular = true;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1468,6 +1533,26 @@
         unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
       '';
 
+    mainlineNixosCellularSquashfs =
+      buildPkgs.runCommand "mainline-nixos-cellular-zlib.squashfs" {
+        nativeBuildInputs = [buildPkgs.squashfsTools];
+      } ''
+        mkdir -p store-contents
+        for path in $(cat ${buildPkgs.closureInfo {
+          rootPaths = [mainlineNixosCellularSystemCross.config.system.build.toplevel];
+        }}/store-paths); do
+          cp -a "$path" store-contents/
+        done
+        toplevel=${mainlineNixosCellularSystemCross.config.system.build.toplevel}
+        test -x "$toplevel/sw/bin/mmcli"
+        test -L "$toplevel/etc/systemd/system/multi-user.target.wants/ModemManager.service"
+        grep -Fq 'ExecStart=' "$toplevel/etc/systemd/system/ModemManager.service"
+        basename "$toplevel" > store-contents/.gemini-system
+        mksquashfs store-contents "$out" \
+          -comp gzip -b 131072 -noappend -all-root -no-progress
+        unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
+      '';
+
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
       grep -Fqx 'session required pam_unix.so' ${mainlineSshdPam}
@@ -1537,6 +1622,24 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       # No leaseSelfAcceptToken: radio composition remains externally accepted.
+    };
+
+    mainlineNixosCellular = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineMd1CellularCandidate.kernel;
+      serviceabilityDtb = mainlineMd1CellularCandidate.serviceabilityDtb;
+      squashfs = mainlineNixosCellularSquashfs;
+      nixosToplevel = mainlineNixosCellularSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      cellularService = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      # No leaseSelfAcceptToken: transport activation remains externally accepted.
     };
 
     #############################################
@@ -1900,6 +2003,13 @@
       mainlineMd1BootCandidateDtb = mainlineMd1BootCandidate.serviceabilityDtb;
       mainlineMd1BootCandidateBundle = mainlineMd1BootCandidate.bundle;
       mainlineMd1BootCandidateP22 = mainlineMd1BootCandidate.probeBoot2Img;
+      mainlineMd1CellularCandidateKernel = mainlineMd1CellularCandidate.kernel;
+      mainlineMd1CellularCandidateDtb = mainlineMd1CellularCandidate.serviceabilityDtb;
+      mainlineMd1CellularCandidateBundle = mainlineMd1CellularCandidate.bundle;
+      mainlineMd1CellularCandidateP22 = mainlineMd1CellularCandidate.probeBoot2Img;
+      mainlineNixosCellularSquashfs = mainlineNixosCellularSquashfs;
+      mainlineNixosCellularInitramfs = mainlineNixosCellular.initramfs;
+      mainlineNixosCellularBundle = mainlineNixosCellular.bundle;
       mainlineA72Cpu8SramDiagnosticKernel = mainlineA72Cpu8SramDiagnostic.kernel;
       mainlineA72Cpu8SramDiagnosticDtb = mainlineA72Cpu8SramDiagnostic.serviceabilityDtb;
       mainlineA72Cpu8SramDiagnosticInitramfs = mainlineA72Cpu8SramDiagnostic.probeInitramfs;
