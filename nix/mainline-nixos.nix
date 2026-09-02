@@ -80,8 +80,6 @@ let
     '' else ""}
     cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
-    test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
-      5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
     cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
       root/lib/firmware/ROMv3_patch_1_1_hdr.bin
     cp ${../blobs/ROMv3_patch_1_0_hdr.bin} \
@@ -670,7 +668,7 @@ let
       echo "squashfs=compression gzip; mount read-only"
       echo "left-port=MTU3 gadget usb0 10.15.19.82/24"
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"
-      echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
+      echo "right-port-firmware=rtl_nic/rtl8156b-2.fw from pinned linux-firmware input"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
       echo "display-activation=${if displayActivation then "diagnostic-only Stage1 watchdog-gated 14000000.syscon/activate_drm" else "kernel-default-probe; no userspace gate"}"
       echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"

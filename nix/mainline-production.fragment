@@ -103,19 +103,25 @@ CONFIG_I2C=y
 CONFIG_I2C_MT65XX=y
 CONFIG_PINCTRL_AW9523=y
 
-# Build the complete camera media path into the monolithic image.  Its DT
-# route remains disabled until the coordinated sensor/receiver/capture test.
+# Build the complete camera and codec paths into the monolithic image. Their
+# DT routes remain disabled until coordinated hardware qualification.
 CONFIG_NVMEM=y
 CONFIG_NVMEM_MTK_ATAG_DEVINFO=y
 CONFIG_MEDIA_SUPPORT=y
 CONFIG_MEDIA_CONTROLLER=y
+CONFIG_MEDIA_PLATFORM_SUPPORT=y
+CONFIG_MEDIA_PLATFORM_DRIVERS=y
 CONFIG_VIDEO_DEV=y
+CONFIG_V4L_MEM2MEM_DRIVERS=y
 CONFIG_V4L2_FWNODE=y
 CONFIG_VIDEOBUF2_DMA_CONTIG=y
 CONFIG_VIDEO_HI556=y
 CONFIG_VIDEO_MTK_MT6797_SENINF=y
 CONFIG_VIDEO_MTK_MT6797_CAMSV=y
 CONFIG_COMMON_CLK_MT6797_CAMSYS=y
+CONFIG_REMOTEPROC=y
+CONFIG_MTK_SCP=y
+CONFIG_VIDEO_MEDIATEK_VCODEC=y
 
 # Integrated MT6797 connectivity.  Keep the complete CONSYS, BTIF/STP/WMT,
 # firmware, and WLAN ownership chain built in: firmware is available in Stage
@@ -142,6 +148,25 @@ CONFIG_MTK_MT6797_CONSYS_FIRMWARE_METADATA=y
 CONFIG_MTK_MT6797_CONSYS_WMT_PATCH_DOWNLOAD=y
 CONFIG_MTK_MT6797_CONSYS_WMT_POSTPATCH=y
 CONFIG_MT6797_WIFI=y
+
+# Package the standard shared-STP Bluetooth and GNSS endpoints. Their board
+# consumers remain disabled in the base DT and require an attended overlay.
+CONFIG_BT=y
+CONFIG_BT_MTK6797_STP=y
+CONFIG_GNSS=y
+CONFIG_GNSS_MTK_CONSYS=y
+
+# Package the dormant Gemini input and audio drivers without activating their
+# unqualified board nodes in the production DT.
+CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y
+CONFIG_IIO=y
+CONFIG_BMI160_I2C=y
+CONFIG_INPUT_REGULATOR_HAPTIC=y
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_SOC=y
+CONFIG_SND_SOC_MT6797=y
+CONFIG_SND_SOC_MT6797_MT6351=y
 
 # Panfrost first light uses the LK-proven 500.5 MHz clock at a single fixed
 # 975 mV OPP.  DVFS remains deliberately absent until this point renders and
