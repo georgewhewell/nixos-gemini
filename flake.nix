@@ -37,7 +37,7 @@
       # Clean mainline foundation: the reviewed ixoo hardware support without
       # the later experimental A72/DVFSP framework, with display, USB gadget,
       # and keyboard enabled in the normal board description.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=bbf52176bc8a759ea90208a9e92009ff2a977a93";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=115f488918a937ce753a70ac884e9b8b29a74cc7";
       flake = false;
     };
     ixoo-candidate = {

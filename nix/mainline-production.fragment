@@ -67,6 +67,14 @@ CONFIG_TYPEC=y
 CONFIG_TYPEC_FUSB301=y
 CONFIG_REGULATOR_FIXED_VOLTAGE=y
 
+# Preserve LK's BQ25896 charge policy while servicing its watchdog, and expose
+# the calibrated MT6351 current/coulomb counter through power_supply.
+CONFIG_POWER_SUPPLY=y
+CONFIG_CHARGER_BQ25890=y
+CONFIG_BATTERY_MT6351_FGADC=y
+# CONFIG_MT6351_FG_READONLY is not set
+# CONFIG_BQ25890_CHARGER_KUNIT_TEST is not set
+
 # Native display, enabled directly by mt6797-gemini-pda.dts.
 CONFIG_DRM=y
 CONFIG_DRM_MEDIATEK=y
