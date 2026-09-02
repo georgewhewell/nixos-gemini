@@ -199,7 +199,7 @@ new file mode 100644
 index 00000000..02bd0ee6
 --- /dev/null
 +++ b/arch/arm/mach-mediatek/mt6797/lowlevel_init.S
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,89 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +
 +#include <linux/linkage.h>
@@ -207,6 +207,10 @@ index 00000000..02bd0ee6
 +#define GEMINI_TRACE_BASE	0x43fff000
 +#define GEMINI_TRACE_MAGIC	0x31303042554d4547
 +#define MT6797_WDT_BASE		0x10007000
++#define MT6797_WDT_MODE		0x00
++#define MT6797_WDT_MODE_KEY	0x22000000
++#define MT6797_WDT_MODE_CLEAR	0x4a
++#define MT6797_WDT_MODE_SET	0x15
 +#define MT6797_WDT_RESTART_KEY	0x1971
 +
 +/*
@@ -259,6 +263,18 @@ index 00000000..02bd0ee6
 +	ldr	w9, [x10, #0x10]
 +	str	x9, [x8, #0x88]
 +	stp	xzr, xzr, [x8, #0x90]
++
++	/* Make expiry reset directly even if LK entered in IRQ/dual mode. */
++	ldr	w9, [x10, #MT6797_WDT_MODE]
++	mov	w12, #MT6797_WDT_MODE_CLEAR
++	bic	w9, w9, w12
++	mov	w12, #MT6797_WDT_MODE_SET
++	orr	w9, w9, w12
++	mov	w11, #0x2200
++	lsl	w11, w11, #16
++	orr	w9, w9, w11
++	str	w9, [x10, #MT6797_WDT_MODE]
++	dsb	sy
 +
 +	mov	x9, #MT6797_WDT_RESTART_KEY
 +	str	w9, [x10, #0x08]
@@ -451,4 +467,3 @@ index 00000000..c453270b
 +#endif
 -- 
 2.54.0
-

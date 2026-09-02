@@ -475,8 +475,9 @@ Consequences:
    second invocation from the live firmware (section 1.3).
 5. **AArch32 -> AArch64** is ATF's job and already done by the time U-Boot runs;
    there is no execution-state problem to solve in U-Boot.
-6. **Watchdog**: kick at the first instruction that can (stage-0 does it in
-   `save_boot_params`, `lowlevel_init.S:61-63`), then from `board_early_init_f`,
+6. **Watchdog**: record the inherited registers, force direct-reset mode, and
+   kick at the first instruction that can (stage-0 does this in
+   `save_boot_params`), then kick from `board_early_init_f`,
    `board_init`, `board_late_init`, and from the main loop via the WDT uclass with
    a driver that *does not* stop the counter at probe.
 7. **DTB for Linux**: U-Boot can either pass through the LK-fixed-up DTB from x0
@@ -504,7 +505,11 @@ CNTVCT and the four WDT registers into a 0xa8-byte record at `0x43fff000`, kicks
 the WDT with `0x1971`, magic-last commit), `board/planet/gemini/gemini.c` (stage
 markers 2/3/4 from `board_early_init_f`/`board_init`/`board_late_init`, each with a
 WDT kick, then `msr daifset, #0xf; wfi` forever: "Do not pet or stop LK's
-watchdog: recovery is the stage-0 exit path"). The carrier builder is
+watchdog: recovery is the stage-0 exit path"). After recording LK's original
+mode word, the first-instruction path preserves unrelated mode bits, clears
+`DUAL_MODE|IRQ|EXT_POL`, and sets `AUTO_RESTART|EXTEN|ENABLE` with the hardware
+write key before the first kick. Thus even an LK image that selected IRQ/dual
+mode cannot leave stage 0 waiting forever. The carrier builder is
 `/home/grw/src/nixos-gemini/tools/build-android-uboot-v0.py`.
 
 Acceptance: after the deliberate WDT reset the next recovery boot reads a valid
@@ -625,8 +630,9 @@ the SMC handoff are LK's). Keep vendor LK.
    `All CPU(s) started at EL2`; stage 0 records the exact registers.
 2. **Relocation into firmware reservations** if the RAM ceiling is not capped.
 3. **Inherited 10 s watchdog**: too slow to kick -> reset before USB enumerates;
-   `mtk_wdt` probe stops it -> recovery mechanism lost. Both are policy bugs to
-   avoid, not hardware limits.
+   `mtk_wdt` probe stops it -> recovery mechanism lost. Stage 0 now also forces
+   direct-reset mode before its first kick, so it does not trust LK's IRQ/dual
+   selection. These are policy bugs to avoid, not hardware limits.
 4. **DRAM retention across WDT reset** is unknown. Live WDT mode 0x35 lacks the
    DDR-reserve bit 0x80, so a missing stage-0 record cannot distinguish failed
    entry from lost DRAM.
@@ -660,8 +666,9 @@ the SMC handoff are LK's). Keep vendor LK.
 Proceed with **U-Boot, chainloaded from the unchanged vendor LK/ATF as the p22
 kernel payload**. Do not port upstream LK and do not replace p20/p21. Package
 U-Boot as gzip at 512 KiB-aligned `0x40080000` with a DTB appended and
-`bootopt=64S3,32N2,64N2`, cap relocation below `0x44000000`, kick the inherited
-watchdog first and keep it running, and give Trex a unique USB identity. Treat
+`bootopt=64S3,32N2,64N2`, cap relocation below `0x44000000`, put the inherited
+watchdog in direct-reset mode before the first kick, keep it running, and give
+Trex a unique USB identity. Treat
 EL2, x0 = DTB at 0x44000000, disabled MMU/caches and the historical once-only SMC
 as strong expectations for stage 0 to measure, not an exact decoded live ABI.
 
