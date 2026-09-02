@@ -80,6 +80,7 @@ let
       grep -Fqx 'CONFIG_VIDEO_MTK_MT6797_CAMSV=y' .config
       grep -Fqx 'CONFIG_COMMON_CLK_MT6797_CAMSYS=y' .config
       grep -Fqx 'CONFIG_SQUASHFS_ZLIB=y' .config
+      grep -Fqx 'CONFIG_FW_LOADER_COMPRESS_XZ=y' .config
       runHook postConfigure
     '';
 

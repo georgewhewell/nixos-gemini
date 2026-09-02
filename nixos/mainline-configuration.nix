@@ -74,6 +74,27 @@
   networking.dhcpcd.extraConfig = "denyinterfaces usb0";
   networking.firewall.enable = false;
   networking.networkmanager.enable = false;
+  # The MT6797 driver exposes a normal nl80211 interface.  Keep one owner and
+  # an empty, root-controlled supplicant so WPA2/WPA3 credentials can be added
+  # live without baking private network data into the image.  Nixpkgs' 2.10
+  # build enables nl80211, SAE and 802.11w/PMF.
+  networking.wireless = {
+    enable = true;
+    interfaces = ["wlan0"];
+    userControlled.enable = true;
+  };
+
+  # These three names are the firmware ABI used by the production CONSYS and
+  # WLAN drivers.  They are also present in Stage 1 for built-in probe-time
+  # requests; retain them here for later firmware reloads and recovery.
+  hardware.firmware = [
+    (pkgs.runCommandLocal "gemini-mt6797-wifi-firmware" {} ''
+      mkdir -p $out/lib/firmware
+      cp ${../blobs/ROMv3_patch_1_1_hdr.bin} $out/lib/firmware/ROMv3_patch_1_1_hdr.bin
+      cp ${../blobs/ROMv3_patch_1_0_hdr.bin} $out/lib/firmware/ROMv3_patch_1_0_hdr.bin
+      cp ${../blobs/WIFI_RAM_CODE_6797} $out/lib/firmware/WIFI_RAM_CODE_6797
+    '')
+  ];
 
   # The kernel's built-in g_ether driver and stage 1 create usb0.  Reassert
   # its static address after systemd/udev settle; the operation is idempotent.
@@ -418,6 +439,9 @@
     pkgs.btop
     config.systemd.package
     pkgs.iproute2
+    pkgs.iputils
+    pkgs.iw
+    pkgs.wpa_supplicant
     pkgs.usbutils
     pkgs.ethtool
   ];

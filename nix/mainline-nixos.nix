@@ -78,6 +78,12 @@ let
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
     test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
       5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f
+    cp ${../blobs/ROMv3_patch_1_1_hdr.bin} \
+      root/lib/firmware/ROMv3_patch_1_1_hdr.bin
+    cp ${../blobs/ROMv3_patch_1_0_hdr.bin} \
+      root/lib/firmware/ROMv3_patch_1_0_hdr.bin
+    cp ${../blobs/WIFI_RAM_CODE_6797} \
+      root/lib/firmware/WIFI_RAM_CODE_6797
     cp ${authorizedKeys} root/root/.ssh/authorized_keys
     chmod 0700 root/root root/root/.ssh
     chmod 0600 root/root/.ssh/authorized_keys
