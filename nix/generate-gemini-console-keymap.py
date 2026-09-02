@@ -205,6 +205,8 @@ def apply_gemini_gb_layer(default_maps: dict[int, list[int]]) -> dict[int, list[
     # Linux v7.1 VTs default to K_UNICODE; a caller must not load this map into
     # a console deliberately switched to a non-Unicode keyboard mode.
     fn[5] = 0x20AC
+    fn[21] = 0x2190
+    fn[22] = 0x2193
     fn[31] = 0x00DF
     fn[34] = 0x014B
     fn[35] = 0x00F7

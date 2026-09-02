@@ -135,6 +135,11 @@
   };
   services.getty.autologinUser = "root";
 
+  # Keep the built-in 16x32 font for the earliest kernel messages, then load
+  # the Unicode-complete 16x32 Terminus font in stage 2.  In particular, its
+  # unimap contains U+20AC for the UK keyboard's Fn+4 legend.
+  console.font = "${pkgs.terminus_font}/share/consolefonts/ter-v32n.psf.gz";
+
   # Linux reports the physical Fn key as KEY_LEFTMETA.  The standard console
   # setup can rewrite the regular AltGr table while getty is starting, so load
   # the Gemini layer only after both console setup and tty1's getty are active.
