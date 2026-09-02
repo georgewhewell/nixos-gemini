@@ -43,6 +43,7 @@
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
   } ''
     mkdir empty
+    touch --date=@${toString sourceDateEpoch} empty
     (
       cd empty
       find . -print0 | sort -z \
