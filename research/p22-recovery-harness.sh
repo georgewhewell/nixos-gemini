@@ -1321,10 +1321,6 @@ case \"\$tty1_pid\" in ''|*[!0-9]*) exit 1 ;; esac
 test \"\$(awk '/^Uid:/ {print \$2; exit}' \"/proc/\$tty1_pid/status\")\" = 0
 test \"\$(readlink \"/proc/\$tty1_pid/fd/0\")\" = /dev/tty1
 case \"\$(cat \"/proc/\$tty1_pid/comm\")\" in ash|sh) ;; *) exit 1 ;; esac
-test -x /run/current-system/sw/bin/btop
-test -x /run/current-system/sw/bin/timeout
-btop_version=\$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)
-test "\$btop_version" = 'btop version: 1.2.13'
 keyboard_event=
 for event in /sys/class/input/event*; do
   test \"\$(cat \"\$event/device/name\" 2>/dev/null || true)\" = keyboard-matrix || continue
@@ -1594,10 +1590,6 @@ test "$tty1_pid" -gt 1
 test "$(awk '/^Uid:/ {print $2; exit}' "/proc/$tty1_pid/status")" = 0
 test "$(readlink "/proc/$tty1_pid/fd/0")" = /dev/tty1
 case "$(cat "/proc/$tty1_pid/comm")" in ash|sh) ;; *) exit 1 ;; esac
-test -x /run/current-system/sw/bin/btop
-test -x /run/current-system/sw/bin/timeout
-btop_version=$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)
-test "$btop_version" = 'btop version: 1.2.13'
 keyboard_event=
 keyboard_ev=
 for event in /sys/class/input/event*; do
@@ -1616,7 +1608,7 @@ done
 test -n "$keyboard_event"
 printf 'baseline-self-accept=verified capability=%s system=%s\n' "$capability" "$expected_system"
 printf 'display=connected-enabled fb0=yes tty1=active root-shell-pid=%s\n' "$tty1_pid"
-printf 'btop=exec-smoke-pass keyboard_path=enumerated-readable-ev_key node=%s ev=%s physical_event=unproven\n' "$keyboard_event" "$keyboard_ev"
+printf 'keyboard_path=enumerated-readable-ev_key node=%s ev=%s physical_event=unproven\n' "$keyboard_event" "$keyboard_ev"
 EOF
 fi)
 printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"

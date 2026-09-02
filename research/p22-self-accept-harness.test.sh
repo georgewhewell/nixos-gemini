@@ -103,23 +103,7 @@ test "$wait_line" -lt "$readback_line"
 grep -Fq 'baseline_self_accept=accepted capability=' "$HARNESS"
 grep -Fq 'card0-DSI-1/status' "$HARNESS"
 grep -Fq -- '--autologin root' "$HARNESS"
-grep -Fq '/run/current-system/sw/bin/btop' "$HARNESS"
-grep -Fq 'test -x /run/current-system/sw/bin/timeout' "$HARNESS"
-# shellcheck disable=SC2016 # matching literal injected target shell
-grep -Fq 'btop_version=$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)' "$HARNESS"
-if grep -Fq '/bin/busybox timeout 5 /run/current-system/sw/bin/btop' "$HARNESS"; then
-    exit 1
-fi
-# shellcheck disable=SC2016 # matching literal injected target shell
-grep -Fq 'test "$btop_version" = '\''btop version: 1.2.13'\''' "$HARNESS"
-# A producer that emits the expected text and then fails must still fail the
-# command-substitution form. This is the pipefail-free BusyBox ash contract
-# used before acceptance publication.
-set +e
-sh -eu -c 'btop_version=$(sh -c '\''printf "%s\n" "btop version: 1.2.13"; exit 1'\''); test "$btop_version" = "btop version: 1.2.13"'
-btop_failure_rc=$?
-set -e
-test "$btop_failure_rc" -ne 0
+! grep -Fq '/run/current-system/sw/bin/btop' "$HARNESS"
 grep -Fq 'keyboard-matrix' "$HARNESS"
 grep -Fq 'physical_event=unproven' "$HARNESS"
 grep -Fq "ln '\$provision_tmp' '\$init_target'" "$HARNESS"
