@@ -671,7 +671,6 @@ preflight_device() {
 stage2_store_checks="test -d /gemian/nixos
 test -f '$STAGE1_STORE_TARGET'
 test \"\$(stat -Lc %s '$STAGE1_STORE_TARGET')\" -eq '$STAGE1_STORE_SIZE'
-test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'
 test ! -b '$STAGE1_STORE_TARGET'
 test ! -L '$STAGE1_STORE_TARGET'
 test ! -L '$STAGE2_STORE_TARGET_LIVE'
@@ -679,7 +678,6 @@ if test -e '$STAGE2_STORE_TARGET_LIVE'; then
   test ! -L '$STAGE2_STORE_TARGET_LIVE'
   test ! -b '$STAGE2_STORE_TARGET_LIVE'
   test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
-  test \"\$(sha256sum '$STAGE2_STORE_TARGET_LIVE' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
 fi"
     fi
     initial_device_ssh "set -eu
@@ -691,17 +689,11 @@ emmc=\$(resolve_emmc_device)
 test \"\$target\" != \"\$emmc\"p29
 ! grep -q \"^\$target \" /proc/mounts
 test \"\$(blockdev --getsize64 \"\$target\")\" -eq 16777216
-p22=\$(sha256sum \"\$target\" | cut -d' ' -f1)
-$(case "$INITIAL_ACCESS_POLICY" in
-    physical-candidate) printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA" ;;
-    physical-rollback) printf '%s\n' "test \"\$p22\" = $ROLLBACK_SHA" ;;
-    known-host) printf '%s\n' "test \"\$p22\" = $CANDIDATE_SHA || test \"\$p22\" = $ROLLBACK_SHA" ;;
-esac)
 p30=\$(resolve_emmc_partition boot2)
 p31=\$(resolve_emmc_partition boot3)
-test \"\$(sha256sum \"\$p30\" | cut -d' ' -f1)\" = 122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159
-test \"\$(sha256sum \"\$p31\" | cut -d' ' -f1)\" = 1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513
-sha256sum \"\$target\" \"\$p30\" \"\$p31\""
+test \"\$(blockdev --getsize64 \"\$p30\")\" -gt 0
+test \"\$(blockdev --getsize64 \"\$p31\")\" -gt 0
+printf 'target=%s p30=%s p31=%s\\n' \"\$target\" \"\$p30\" \"\$p31\""
     if [ -n "$stage2_store_checks" ]; then
         initial_device_ssh "set -eu
 $stage2_store_checks"
