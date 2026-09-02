@@ -2044,6 +2044,43 @@
     '';
   };
 
+  # Transactional Capture_1 probe derived from the stock-vendor routing
+  # oracle.  It discovers the capture PCM through ALSA control ioctls, keeps
+  # samples in memory, and restores and verifies all mixer values after the
+  # bounded probe.
+  audioCaptureExercise = crossPkgs.pkgsStatic.stdenv.mkDerivation {
+    pname = "gemini-audio-capture";
+    version = "1";
+    src = ./gemini-audio-capture.c;
+    dontUnpack = true;
+    dontPatchELF = true;
+    hardeningDisable = ["all"];
+    nativeBuildInputs = [buildPkgs.binutils];
+    buildPhase = ''
+      runHook preBuild
+      "$CC" -std=c11 -Wall -Wextra -Werror -Wpedantic -O2 -static \
+        "$src" -o gemini-audio-capture
+      grep -Fq 'SNDRV_CTL_IOCTL_PCM_NEXT_DEVICE' "$src"
+      grep -Fq 'SNDRV_PCM_STREAM_CAPTURE' "$src"
+      grep -Fq 'ELEM_READ(verify-restore)' "$src"
+      grep -Fq 'SNDRV_PCM_IOCTL_DROP' "$src"
+      ! grep -Fq 'GPIO234' "$src"
+      ! grep -Fq 'GPIO235' "$src"
+      ! grep -Fq 'SNDRV_PCM_STREAM_PLAYBACK' "$src"
+      runHook postBuild
+    '';
+    installPhase = ''
+      runHook preInstall
+      install -Dm0755 gemini-audio-capture "$out/bin/gemini-audio-capture"
+      readelf -h "$out/bin/gemini-audio-capture" | \
+        grep -Fq 'Machine:                           AArch64'
+      ! readelf -l "$out/bin/gemini-audio-capture" | \
+        grep -Fq 'Requesting program interpreter'
+      ! readelf -d "$out/bin/gemini-audio-capture" | grep -Fq '(NEEDED)'
+      runHook postInstall
+    '';
+  };
+
   # This is intentionally smaller and less privileged than a NixOS stage 1.
   # The baseline has no storage drivers at all.  The storage variant adds only
   # ixoo's already hardware-passed 25 MHz eMMC enumeration fragment: userspace
@@ -2064,7 +2101,7 @@
         wirelessRegdb = buildPkgs.wireless-regdb;
       }
       // lib.optionalAttrs audioHeadphoneTest {
-        inherit audioHeadphoneExercise;
+        inherit audioHeadphoneExercise audioCaptureExercise;
       }
       // lib.optionalAttrs sshAccess {
         dropbear = crossPkgs.pkgsStatic.dropbear;
@@ -2130,11 +2167,18 @@
       ${lib.optionalString audioHeadphoneTest ''
         cp "$audioHeadphoneExercise/bin/gemini-audio-headphone" \
           root/bin/gemini-audio-headphone
+        cp "$audioCaptureExercise/bin/gemini-audio-capture" \
+          root/bin/gemini-audio-capture
         readelf -h root/bin/gemini-audio-headphone | \
           grep -Fq 'Machine:                           AArch64'
         ! readelf -l root/bin/gemini-audio-headphone | \
           grep -Fq 'Requesting program interpreter'
         ! readelf -d root/bin/gemini-audio-headphone | grep -Fq '(NEEDED)'
+        readelf -h root/bin/gemini-audio-capture | \
+          grep -Fq 'Machine:                           AArch64'
+        ! readelf -l root/bin/gemini-audio-capture | \
+          grep -Fq 'Requesting program interpreter'
+        ! readelf -d root/bin/gemini-audio-capture | grep -Fq '(NEEDED)'
       ''}
       ${lib.optionalString powerObservePreflight ''
         cp ${./bq2589x-preflight.sh} root/bin/bq2589x-preflight
@@ -3000,6 +3044,8 @@
     ${lib.optionalString audioHeadphoneTest ''
       ln -s ${audioHeadphoneExercise}/bin/gemini-audio-headphone \
         "$out/gemini-audio-headphone"
+      ln -s ${audioCaptureExercise}/bin/gemini-audio-capture \
+        "$out/gemini-audio-capture"
     ''}
     ${lib.optionalString unattendedRecovery ''
       ln -s ${probeBoot2Img} "$out/boot-padded-p22.img"
@@ -3180,10 +3226,11 @@
       ''}
       ${lib.optionalString audioHeadphoneTest ''
         sha256sum ${audioHeadphoneExercise}/bin/gemini-audio-headphone
+        sha256sum ${audioCaptureExercise}/bin/gemini-audio-capture
       ''}
       stat -c '%n size=%s' ${probeBootImg} ${probeBoot2Img}
       } > "$out/MANIFEST"
   '';
 in {
-  inherit audioHeadphoneExercise kernel serviceabilityDtb probeInitramfs probeBootImg probeBoot2Img bundle;
+  inherit audioHeadphoneExercise audioCaptureExercise kernel serviceabilityDtb probeInitramfs probeBootImg probeBoot2Img bundle;
 }

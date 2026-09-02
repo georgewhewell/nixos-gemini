@@ -1991,6 +1991,7 @@
       mainlineUnattendedRecoveryDeviceActivationInitramfs = mainlineUnattendedRecoveryDeviceActivation.probeInitramfs;
       mainlineUnattendedRecoveryDeviceActivationBundle = mainlineUnattendedRecoveryDeviceActivation.bundle;
       mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneHelper = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.audioHeadphoneExercise;
+      mainlineUnattendedRecoveryDeviceActivationAudioCaptureHelper = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.audioCaptureExercise;
       mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneInitramfs = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.probeInitramfs;
       mainlineUnattendedRecoveryDeviceActivationAudioHeadphoneBundle = mainlineUnattendedRecoveryDeviceActivationAudioHeadphone.bundle;
       # Cross-compiled squashfs
