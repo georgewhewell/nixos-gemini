@@ -66,6 +66,7 @@
     lib.hasInfix
     "assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL2_D8>;"
     (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
+  combinedGpuMd1Source = md1BootCandidate && gpuMfg52mParentInSource;
   p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
   # This candidate must use the profile that carries the DA9213 membership
   # owner.  The preceding read-only profile binds the regulator but leaves the
@@ -1098,9 +1099,16 @@
 	    test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
 	      ${baseDtbSha256}
 	  ''}
-	  ${lib.optionalString md1BootCandidate ''
+	  ${lib.optionalString (md1BootCandidate && !combinedGpuMd1Source) ''
 	    test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
 	      ${cacheTopologyBaseDtbSha256}
+	  ''}
+	  ${lib.optionalString combinedGpuMd1Source ''
+	    grep -Fq 'assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL2_D8>;' \
+	      arch/arm64/boot/dts/mediatek/mt6797.dtsi
+	    grep -Fq 'resets = <&watchdog MT6797_TOPRGU_MFG_SW_RST>;' \
+	      arch/arm64/boot/dts/mediatek/mt6797.dtsi
+	    test -s "$out/mt6797-gemini-pda-md1-boot-candidate.dtbo"
 	  ''}
 	  ${lib.optionalString a72Cpu8SramDiagnostic ''
 	    grep -Fq 'a72-transition-ledger@444f1000' \
@@ -1111,10 +1119,13 @@
       cp .config "$out/kernel.config"
       cp System.map vmlinux "$out/"
 
-      # Device Tree output is compiler-independent and must match the reviewed
-      # Reviewed tree: ixoo's hardware-passed DT plus dormant CONSYS and BTIF.
-      test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
-        ${selectedBaseDtbSha256}
+      # Accepted baselines keep byte identity. The combined experimental tree
+      # is instead source- and structure-checked above: its GPU and MD1 edits
+      # deliberately change the compiled DTB.
+      ${lib.optionalString (!combinedGpuMd1Source) ''
+        test "$(sha256sum "$out/base.dtb" | cut -d' ' -f1)" = \
+          ${selectedBaseDtbSha256}
+      ''}
       # The full p22 candidate depends on the DSI pre-host-registration IRQ
       # ordering.  Keep this source-level guard adjacent to the locked kernel
       # revision so a future platform refresh cannot silently reintroduce the
@@ -1176,6 +1187,17 @@
       cp -R ${ixoo-candidate} candidate
       chmod -R u+w candidate
       providerBuilder=candidate/experiments/2026-08-17-mainline-da921x-readonly-provider-baseline/scripts/build-provider-dtb.sh
+      ${lib.optionalString combinedGpuMd1Source ''
+        # The combined experimental DT deliberately changes when either lane
+        # advances. Keep the builder's extensive semantic validation, but do
+        # not teach it a disposable whole-file fingerprint.
+        sed -i \
+          's#^readonly BASE_DTB_SHA256=.*$#readonly BASE_DTB_SHA256="$(sha256sum "$base_dtb" | cut -d " " -f1)"#' \
+          "$providerBuilder"
+        sed -i \
+          '/^\[\[ "$(sha256sum "$temporary"/,+1c\[[ -s "$temporary" ]] || die "derived provider DT is empty"' \
+          "$providerBuilder"
+      ''}
       # A72 final already carries these exact provider hashes and the
       # guarded AW9523 removal.  Apply the migration only to the retired
       # snapshot, retaining a fail-fast replacement when that snapshot is used.
@@ -1199,8 +1221,10 @@
         --output "$out/gemini-base.dtb" \
         > "$out/VALIDATION"
       chmod 0644 "$out/gemini-base.dtb"
-      test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
-	        ${selectedServiceabilityBaseDtbSha256}
+      ${lib.optionalString (!combinedGpuMd1Source) ''
+        test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
+	          ${selectedServiceabilityBaseDtbSha256}
+      ''}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       ${
         if usbHostOverlay

@@ -1157,20 +1157,18 @@
       fgadcActivationOverlay = true;
     };
 
-    # Cycle 18 full-NixOS baseline candidate. Keep the accepted Stage-2/eMMC
-    # lineage, both USB paths, BQ observer and watchdog self-accept intact.
-    # The DSI gate is released by the corresponding Stage-1 constructor only
-    # after watchdog ownership is established. Touchscreen and FGADC are
-    # explicit independent components; MicroSD is deliberately absent.
+    # Full Stage-2 hardware candidate: preserve the accepted eMMC, watchdog,
+    # display, input and BQ substrate while composing the vendor-clocked GPU,
+    # transactional audio capture helper and passive MD1 CLDMA observer.
     mainlineP22Baseline = import ./nix/mainline.nix {
       inherit
         buildPkgs
         oldPkgs
         crossPkgs
         ixoo-kernel
-        linux-gemini
         ixoo-candidate
         ;
+      linux-gemini = linux-gemini-md1-boot-candidate;
       debugOverlay = true;
       storageOverlay = true;
       sshAccess = true;
@@ -1178,13 +1176,14 @@
       platformEnablement = true;
       displayOverlay = true;
       audioOverlay = true;
+      audioHeadphoneTest = true;
+      gpuFixedOppOverlay = true;
+      md1BootCandidate = true;
       powerObserveOverlay = true;
       powerObservePreflight = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
-      touchscreenActivationOverlay = true;
-      fgadcActivationOverlay = true;
     };
 
     # CPU8-only SRAM/P28 terminal diagnostic over the proven full
