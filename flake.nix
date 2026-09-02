@@ -77,6 +77,17 @@
       config.allowUnfree = true;
     };
 
+    # The keyboard's physical Fn key is KEY_LEFTMETA (keycode 125).  Build the
+    # proven Gemini console layer from the exact default keymap shipped by the
+    # kernel used in the normal image.
+    geminiConsoleKeymap = buildPkgs.runCommand "gemini-us.bkeymap" {
+      nativeBuildInputs = [buildPkgs.python3];
+    } ''
+      python3 ${./nix/generate-gemini-console-keymap.py} \
+        --source ${linux-gemini}/drivers/tty/vt/defkeymap.c_shipped \
+        --output $out
+    '';
+
     # Old nixpkgs for gcc8 and cross-compilation
     oldPkgs = import nixpkgs-old {
       system = buildSystem;
@@ -792,6 +803,7 @@
         ./nixos/mainline-configuration.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+          _module.args.geminiConsoleKeymap = geminiConsoleKeymap;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1194,6 +1206,7 @@
   in {
     # Packages built on x86_64
     packages.${buildSystem} = {
+      geminiConsoleKeymap = geminiConsoleKeymap;
       kernel = vendorKernel;
       kernelBaselineGcc8 = vendorKernelBaselineGcc8;
       kernelBaselineGcc8Hardened = vendorKernelBaselineGcc8Hardened;

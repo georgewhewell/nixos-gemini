@@ -6,6 +6,7 @@
   config,
   pkgs,
   lib,
+  geminiConsoleKeymap,
   geminiLeaseSelfAcceptToken ? null,
   ...
 }: {
@@ -128,6 +129,23 @@
     openssh.authorizedKeys.keyFiles = [./authorized_keys];
   };
   services.getty.autologinUser = "root";
+
+  # Linux reports the physical Fn key as KEY_LEFTMETA.  Put tty1 in Unicode
+  # mode, then load the Gemini layer before presenting the normal root login.
+  systemd.services.gemini-console-keymap = {
+    description = "Load the Gemini physical keyboard console map";
+    wantedBy = ["multi-user.target"];
+    after = ["systemd-vconsole-setup.service"];
+    before = ["getty@tty1.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      ${pkgs.kbd}/bin/kbd_mode -u -C /dev/tty1
+      ${pkgs.busybox}/bin/busybox loadkmap < ${geminiConsoleKeymap}
+    '';
+  };
 
   # NixOS 23.05's generated unit set expects logind and its PAM helper.  Keep
   # those small pieces plus a standalone D-Bus daemon, while omitting the rest
