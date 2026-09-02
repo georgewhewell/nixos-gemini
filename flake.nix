@@ -33,6 +33,13 @@
       url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=da6e93b0bce1b62e0e38425938efe3ceba7cfc09";
       flake = false;
     };
+    linux-gemini-production = {
+      # Clean mainline foundation: the reviewed ixoo hardware support without
+      # the later experimental A72/DVFSP framework, with display, USB gadget,
+      # and keyboard enabled in the normal board description.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-foundation-20260902&rev=de8e69028408638fb6874b32304dee68478446c4";
+      flake = false;
+    };
     ixoo-candidate = {
       # Commit which froze and independently validated the boot2 candidate
       # derived from the kernel commit above.
@@ -54,6 +61,7 @@
     ixoo-kernel,
     linux-gemini,
     linux-gemini-next,
+    linux-gemini-production,
     ixoo-candidate,
     u-boot-src,
   }: let
@@ -339,6 +347,13 @@
         linux-gemini
         ixoo-candidate
         ;
+    };
+
+    # Production kernel packaging is intentionally separate from the retained
+    # experiment/recovery matrix until its first hardware boot is accepted.
+    mainlineProduction = import ./nix/mainline-production.nix {
+      inherit buildPkgs oldPkgs ixoo-kernel;
+      linux-gemini = linux-gemini-production;
     };
 
     # A binary-search control for the failed p30 attempt.  It retains ixoo's
@@ -1226,6 +1241,8 @@
       ubootStage0Initramfs = ubootStage0.inertInitramfs;
       ubootStage0Bundle = ubootStage0.bundle;
       mainlineKernel = mainline.kernel;
+      mainlineProductionKernel = mainlineProduction.kernel;
+      mainlineProductionDtb = mainlineProduction.serviceabilityDtb;
       mainlineServiceabilityDtb = mainline.serviceabilityDtb;
       mainlineProbeInitramfs = mainline.probeInitramfs;
       mainlineProbeBootImg = mainline.probeBootImg;

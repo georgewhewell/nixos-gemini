@@ -1,0 +1,83 @@
+# Normal Gemini PDA mainline kernel.  Start from ixoo's small, hardware-proven
+# LK handoff configuration, then enable only services present in the production
+# board DT.  Drivers are built in because Stage 1 has no module loader.
+CONFIG_LOCALVERSION="-gemini-production"
+# CONFIG_LOCALVERSION_AUTO is not set
+# CONFIG_MODULES is not set
+
+CONFIG_CMDLINE="console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 loglevel=7 log_buf_len=1M rdinit=/init panic=5 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-Mainline g_ether.iSerialNumber=GEMINI_MAINLINE clk_ignore_unused regulator_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 fw_devlink=rpm"
+CONFIG_CMDLINE_FORCE=y
+
+# Persistent recovery evidence and an ordinary visible console.
+CONFIG_PSTORE=y
+CONFIG_PSTORE_RAM=y
+CONFIG_PSTORE_CONSOLE=y
+# CONFIG_PSTORE_COMPRESS is not set
+CONFIG_VT=y
+CONFIG_VT_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
+CONFIG_FONT_TER16x32=y
+
+# The Stage-1/Stage-2 root and eMMC-resident Nix store.
+CONFIG_MTK_PMIC_WRAP=y
+CONFIG_MFD_MT6397=y
+CONFIG_REGULATOR=y
+CONFIG_REGULATOR_MT6351=y
+CONFIG_MMC=y
+CONFIG_MMC_BLOCK=y
+CONFIG_MMC_MTK=y
+CONFIG_BLK_DEV_LOOP=y
+CONFIG_EXT4_FS=y
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_ZLIB=y
+
+# Left USB-C: fixed peripheral role and the recovery Ethernet gadget.
+CONFIG_NET=y
+CONFIG_UNIX=y
+CONFIG_INET=y
+CONFIG_NETDEVICES=y
+CONFIG_USB_SUPPORT=y
+CONFIG_USB_GADGET=y
+CONFIG_USB_MTU3=y
+CONFIG_USB_MTU3_GADGET=y
+# CONFIG_USB_MTU3_HOST is not set
+# CONFIG_USB_MTU3_DUAL_ROLE is not set
+CONFIG_GENERIC_PHY=y
+CONFIG_PHY_MTK_TPHY=y
+CONFIG_USB_ETH=y
+CONFIG_USB_ETH_RNDIS=y
+# CONFIG_USB_CONFIGFS is not set
+# CONFIG_USB_MASS_STORAGE is not set
+
+# Native display, enabled directly by mt6797-gemini-pda.dts.
+CONFIG_DRM=y
+CONFIG_DRM_MEDIATEK=y
+CONFIG_DRM_PANEL_NOVATEK_NT36672E=y
+CONFIG_BACKLIGHT_CLASS_DEVICE=y
+CONFIG_MTK_MMSYS=y
+CONFIG_MTK_SMI=y
+# CONFIG_MTK_IOMMU is not set
+CONFIG_COMMON_CLK_MT6797_MMSYS=y
+CONFIG_MTK_SCPSYS=y
+CONFIG_PHY_MTK_MIPI_DSI=y
+CONFIG_REGULATOR_LP3101=y
+
+# Physical keyboard: AW9523 GPIO/pinctrl provider plus generic matrix input.
+CONFIG_INPUT=y
+CONFIG_INPUT_EVDEV=y
+CONFIG_INPUT_KEYBOARD=y
+CONFIG_KEYBOARD_MATRIX=y
+CONFIG_I2C=y
+CONFIG_I2C_MT65XX=y
+CONFIG_PINCTRL_AW9523=y
+
+# Retain the bootloader watchdog until Stage 1 opens it.
+CONFIG_WATCHDOG=y
+CONFIG_WATCHDOG_CORE=y
+CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y
+CONFIG_WATCHDOG_OPEN_TIMEOUT=90
+CONFIG_WATCHDOG_SYSFS=y
+CONFIG_MEDIATEK_WATCHDOG=y
+CONFIG_PANIC_ON_OOPS=y
+CONFIG_PANIC_TIMEOUT=5

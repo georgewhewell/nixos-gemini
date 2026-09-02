@@ -70,6 +70,24 @@
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }
     },
+    "linux-gemini-production": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788340931,
+        "narHash": "sha256-aV8rgPjYtDQOotcw89t65I1hdoyA0nONVd46t6r4Gbo=",
+        "ref": "integration/production-foundation-20260902",
+        "rev": "de8e69028408638fb6874b32304dee68478446c4",
+        "revCount": 111,
+        "type": "git",
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+      },
+      "original": {
+        "ref": "integration/production-foundation-20260902",
+        "rev": "de8e69028408638fb6874b32304dee68478446c4",
+        "type": "git",
+        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1787736819,
@@ -108,6 +126,7 @@
         "ixoo-kernel": "ixoo-kernel",
         "linux-gemini": "linux-gemini",
         "linux-gemini-next": "linux-gemini-next",
+        "linux-gemini-production": "linux-gemini-production",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
         "u-boot-src": "u-boot-src",
