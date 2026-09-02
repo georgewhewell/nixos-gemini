@@ -62,6 +62,10 @@
     lib.hasInfix
     "resets = <&watchdog MT6797_TOPRGU_MFG_SW_RST>;"
     (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
+  gpuMfg52mParentInSource =
+    lib.hasInfix
+    "assigned-clock-parents = <&topckgen CLK_TOP_UNIVPLL2_D8>;"
+    (builtins.readFile (linux-gemini + "/arch/arm64/boot/dts/mediatek/mt6797.dtsi"));
   p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
   # This candidate must use the profile that carries the DA9213 membership
   # owner.  The preceding read-only profile binds the regulator but leaves the

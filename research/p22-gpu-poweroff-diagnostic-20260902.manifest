@@ -1,0 +1,40 @@
+# One-shot Panfrost power-off diagnostic. The candidate selects the vendor's
+# 156 MHz MFG bus parent, adds read-only register snapshots, and performs one
+# bounded 200 ms shader transition poll only after the existing timeout.
+# It is never accepted persistently; the Trex supervisor restores the accepted
+# full-NixOS baseline after the uncommitted watchdog lease expires.
+candidate=/mnt/Home/src/gemini-gpu-poweroff-diagnostic-vendor-clock-20260902/boot-padded-p22.img
+candidate_sha256=45323858e1cfbb34e367f65e808f6471b48a2be515e6cfcf76a799588386d2be
+candidate_size=16777216
+rollback=/mnt/Home/src/gemini-baseline-system-path-fix-20260902/boot-padded-p22.img
+rollback_sha256=c096e1ee48b0413a2de4f391b846a061928497ba390d471d4507f0c6a0900949
+rollback_size=16777216
+target_partition=boot/p22
+target_device=/dev/mmcblk0p22
+scatter=/mnt/Home/src/nixos-gemini-flash-p22-20260829/Gemini_NixOS_boot_only.txt
+scatter_sha256=19f5d2cba03310e744056036fb9805dfc4686b54e2c25e08d532895efd6650f8
+xml=/mnt/Home/src/nixos-gemini-flash-p22-20260829/download-only-strix-4.xml
+xml_sha256=90eec878d01866f37f927f0e6d1d768517a758790d818d6252091fca7b212605
+stage_image=/mnt/Home/src/nixos-gemini-flash-p22-20260829/boot.img
+trex_capture_root=/mnt/Home/src/nixos-gemini-flash-p22-20260829
+expected_model=MT6797X
+expected_compatible=planet,gemini-pda
+expected_cmdline_token=maxcpus=8
+expected_cpu_online=0-7
+expected_gadget_ip=10.15.19.82
+expected_ethernet_ip=192.168.23.70
+expected_marker=unattended_recovery=healthy
+feature_policy=connectivity-no-radio
+acceptance_window_seconds=80
+watchdog_profile=initramfs-petter
+expected_watchdog_identity=mtk-wdt
+expected_watchdog_state=active
+expected_watchdog_timeout=31
+rootfs_policy=enumeration-only
+host_net_policy=required
+ssh_path_policy=fallback
+power_preflight_policy=none
+transaction_policy=observe-always-rollback
+initial_access_policy=physical-rollback
+stage2_policy=none
+lease_seconds=90
