@@ -199,7 +199,7 @@ new file mode 100644
 index 00000000..02bd0ee6
 --- /dev/null
 +++ b/arch/arm/mach-mediatek/mt6797/lowlevel_init.S
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,88 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +
 +#include <linux/linkage.h>
@@ -219,6 +219,23 @@ index 00000000..02bd0ee6
 + */
 +.global save_boot_params
 +save_boot_params:
++	/* Force direct reset before DRAM access; retain LK's mode for trace. */
++
++	mov	x10, #0x7000
++	movk	x10, #0x1000, lsl #16
++	ldr	w13, [x10, #MT6797_WDT_MODE]
++	mov	w12, #MT6797_WDT_MODE_CLEAR
++	bic	w9, w13, w12
++	mov	w12, #MT6797_WDT_MODE_SET
++	orr	w9, w9, w12
++	mov	w11, #0x2200
++	lsl	w11, w11, #16
++	orr	w9, w9, w11
++	str	w9, [x10, #MT6797_WDT_MODE]
++	mov	x9, #MT6797_WDT_RESTART_KEY
++	str	w9, [x10, #0x08]
++	dsb	sy
++
 +	mov	x8, #0xf000
 +	movk	x8, #0x43ff, lsl #16
 +	str	xzr, [x8, #0x00]
@@ -252,10 +269,7 @@ index 00000000..02bd0ee6
 +2:	mrs	x9, sctlr_el2
 +3:	str	x9, [x8, #0x68]
 +
-+	mov	x10, #0x7000
-+	movk	x10, #0x1000, lsl #16
-+	ldr	w9, [x10, #0x00]
-+	str	x9, [x8, #0x70]
++	str	x13, [x8, #0x70]
 +	ldr	w9, [x10, #0x04]
 +	str	x9, [x8, #0x78]
 +	ldr	w9, [x10, #0x0c]
@@ -264,21 +278,6 @@ index 00000000..02bd0ee6
 +	str	x9, [x8, #0x88]
 +	stp	xzr, xzr, [x8, #0x90]
 +
-+	/* Make expiry reset directly even if LK entered in IRQ/dual mode. */
-+	ldr	w9, [x10, #MT6797_WDT_MODE]
-+	mov	w12, #MT6797_WDT_MODE_CLEAR
-+	bic	w9, w9, w12
-+	mov	w12, #MT6797_WDT_MODE_SET
-+	orr	w9, w9, w12
-+	mov	w11, #0x2200
-+	lsl	w11, w11, #16
-+	orr	w9, w9, w11
-+	str	w9, [x10, #MT6797_WDT_MODE]
-+	dsb	sy
-+
-+	mov	x9, #MT6797_WDT_RESTART_KEY
-+	str	w9, [x10, #0x08]
-+	dsb	sy
 +	mov	x9, #0x4547
 +	movk	x9, #0x554d, lsl #16
 +	movk	x9, #0x3042, lsl #32
