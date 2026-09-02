@@ -224,7 +224,11 @@ this campaign; Luna/Terra have been materially more reliable.
 
 - Experimental boot writes are **p22 only** (`boot`, exactly 16 MiB,
   PARTUUID `fbc2c131-6392-4217-b51e-548a6edb03d0`).
-- Never write p29/p30/p31, the bootloader, GPT, or modem partitions p13-p16.
+- Never raw-write or reformat p29, write p30/p31, or modify the bootloader,
+  GPT, or modem partitions p13-p16.  The owner delegated Gemini hardware
+  stewardship on 2026-09-02; ordinary deployment may add a uniquely named,
+  hash-verified file inside the existing p29 filesystem only through a
+  no-clobber transaction that leaves all existing files intact.
 - p13-p16 may be read for evidence only.
 - Use one-entry `Download Only`; no automatic retry and no automatic rollback.
 - Resolve the live eMMC partition, size, PARTNAME/PARTUUID and current SHA-256
