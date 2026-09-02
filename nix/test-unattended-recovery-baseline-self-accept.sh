@@ -1,29 +1,30 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
 # Host-only acceptance-contract tests. No hardware paths are opened.
+# shellcheck disable=SC1007 # zsh/NixOS-compatible scoped CDPATH assignment
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WORK=$(mktemp -d /mnt/Home/src/nixos-gemini-baseline-accept-test.XXXXXX)
 trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 TOKEN=gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052
+SYSTEM_HASH=42h659ml5kvdmvwcp64i3dypmgwbg4wz
+SYSTEM=/nix/store/$SYSTEM_HASH-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade
 
 fail() { echo "test-unattended-recovery-baseline-self-accept: $*" >&2; exit 1; }
 
 make_fixture() {
   d=$1
-  system=$d/nix/store/nixos-system-gemini-mainline-nixos-test-baseline
   mkdir -p "$d/run" "$d/proc/440/fd" "$d/sys/class/watchdog/watchdog0" \
-    "$d/nix/store" "$d/bin"
+    "$d/bin"
   cat > "$d/bin/fake-busybox" <<'BUSYBOX'
 #!/bin/sh
 exec "$@"
 BUSYBOX
   chmod 0755 "$d/bin/fake-busybox"
-  ln -s "$system" "$d/run/current-system"
-  mkdir -p "$system/sw/bin"
-  printf '%s\n' "$system" > "$d/run/gemini-lease-expected-system"
-  printf '%s\n' "GEMINI_MAINLINE_NIXOS: stage1=switch-root system=$system" > "$d/run/stage1-handoff"
+  ln -s "$SYSTEM" "$d/run/current-system"
+  printf '%s\n' "$SYSTEM" > "$d/run/gemini-lease-expected-system"
+  printf '%s\n' "GEMINI_MAINLINE_NIXOS: stage1=switch-root system=$SYSTEM" > "$d/run/stage1-handoff"
   printf '%s\n' \
     'mainline NixOS reached multi-user.target' \
     'watchdog-owner=440' \
@@ -66,7 +67,6 @@ run_fixture() {
   GEMINI_BASELINE_ACCEPT_PROC_ROOT="$d/proc" \
   GEMINI_BASELINE_ACCEPT_SYS_ROOT="$d/sys" \
   GEMINI_BASELINE_ACCEPT_SYSTEMCTL="$d/bin/systemctl" \
-  GEMINI_BASELINE_ACCEPT_SYSTEM_PREFIX="$d/nix/store/nixos-system-gemini-mainline-nixos-" \
   GEMINI_BASELINE_ACCEPT_IP_FILE="$d/ip" \
   GEMINI_BASELINE_ACCEPT_KMSG_FILE="$d/kmsg" \
   GEMINI_BASELINE_ACCEPT_TOKEN="$TOKEN" \
@@ -94,11 +94,34 @@ test ! -e "$bad_token/run/unattended-recovery.accepted"
 
 bad_system=$WORK/bad-system
 make_fixture "$bad_system"
-rm "$bad_system/run/current-system"
-ln -s "$bad_system/nix/store/nixos-system-gemini-mainline-nixos-other" "$bad_system/run/current-system"
-mkdir -p "$bad_system/nix/store/nixos-system-gemini-mainline-nixos-other"
+ln -sfn "/nix/store/$SYSTEM_HASH-nixos-system-gemini-mainline-nixos-other" \
+  "$bad_system/run/current-system"
 if run_fixture "$bad_system"; then fail 'accepted mismatched Stage2 system'; fi
 test ! -e "$bad_system/run/unattended-recovery.accepted"
+
+assert_invalid_system_path() {
+  label=$1
+  path=$2
+  d=$WORK/$label
+  make_fixture "$d"
+  ln -sfn "$path" "$d/run/current-system"
+  printf '%s\n' "$path" > "$d/run/gemini-lease-expected-system"
+  printf '%s\n' "GEMINI_MAINLINE_NIXOS: stage1=switch-root system=$path" \
+    > "$d/run/stage1-handoff"
+  if run_fixture "$d"; then fail "accepted invalid system path: $label"; fi
+  test ! -e "$d/run/unattended-recovery.accepted"
+  grep -Fq 'baseline_self_accept=withheld reason=expected-system-invalid' \
+    "$d/run/stage1.log"
+}
+
+assert_invalid_system_path hash-short \
+  /nix/store/2h659ml5kvdmvwcp64i3dypmgwbg4wz-nixos-system-gemini-mainline-nixos-test
+assert_invalid_system_path hash-long \
+  /nix/store/042h659ml5kvdmvwcp64i3dypmgwbg4wz-nixos-system-gemini-mainline-nixos-test
+assert_invalid_system_path hash-alphabet \
+  /nix/store/e2h659ml5kvdmvwcp64i3dypmgwbg4wz-nixos-system-gemini-mainline-nixos-test
+assert_invalid_system_path wrong-name \
+  /nix/store/42h659ml5kvdmvwcp64i3dypmgwbg4wz-nixos-system-gemini-other-test
 
 late=$WORK/late
 make_fixture "$late"
