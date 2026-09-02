@@ -34,10 +34,9 @@
       flake = false;
     };
     linux-gemini-production = {
-      # Production foundation plus the reviewed, disabled-by-default Gemini
-      # SP5509 -> SENINF -> CAMSV0 media pipeline.  Runtime activation remains
-      # a deliberate hardware gate; the source pin stays immutable.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-a72-camera-20260902&rev=77e3800a8d60cc1a0784c883e2a29e5c2e8a9ed1";
+      # Immutable coordinated hardware candidate: reviewed camera and A72
+      # ownership, production CONSYS/WLAN, and fixed-OPP Panfrost first light.
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=integration/production-next-hardware-20260902&rev=3d6d9fde73cc618bfb3259083f864b07c5e36c7d";
       flake = false;
     };
     ixoo-candidate = {

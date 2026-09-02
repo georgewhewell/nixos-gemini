@@ -73,17 +73,17 @@
     "linux-gemini-production": {
       "flake": false,
       "locked": {
-        "lastModified": 1788348719,
-        "narHash": "sha256-CGXVjgWlacvgT2pDacEhWCnMX09Gpz4lWYq1nrrC12c=",
-        "ref": "integration/production-a72-camera-20260902",
-        "rev": "77e3800a8d60cc1a0784c883e2a29e5c2e8a9ed1",
-        "revCount": 150,
+        "lastModified": 1788350637,
+        "narHash": "sha256-jn+e9zBVb5JHOqdNnGd5l8djkvoVeLXfGQZSnqqloNs=",
+        "ref": "integration/production-next-hardware-20260902",
+        "rev": "3d6d9fde73cc618bfb3259083f864b07c5e36c7d",
+        "revCount": 164,
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
-        "ref": "integration/production-a72-camera-20260902",
-        "rev": "77e3800a8d60cc1a0784c883e2a29e5c2e8a9ed1",
+        "ref": "integration/production-next-hardware-20260902",
+        "rev": "3d6d9fde73cc618bfb3259083f864b07c5e36c7d",
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }

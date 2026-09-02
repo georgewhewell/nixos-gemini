@@ -81,6 +81,16 @@ let
       grep -Fqx 'CONFIG_VIDEO_MTK_MT6797_SENINF=y' .config
       grep -Fqx 'CONFIG_VIDEO_MTK_MT6797_CAMSV=y' .config
       grep -Fqx 'CONFIG_COMMON_CLK_MT6797_CAMSYS=y' .config
+      grep -Fqx 'CONFIG_CFG80211=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_RUNTIME_CONTROLLER=y' .config
+      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+      grep -Fqx 'CONFIG_MT6797_WIFI=y' .config
+      grep -Fqx 'CONFIG_REGULATOR_RT5735=y' .config
+      grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MFGSYS=y' .config
+      grep -Fqx 'CONFIG_DRM_PANFROST=y' .config
+      grep -Fqx 'CONFIG_PM_DEVFREQ=y' .config
+      grep -Fqx 'CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y' .config
       grep -Fqx 'CONFIG_SQUASHFS_ZLIB=y' .config
       grep -Fqx 'CONFIG_FW_LOADER_COMPRESS_XZ=y' .config
       runHook postConfigure
