@@ -9,9 +9,9 @@ fail() { echo "test-mainline-p22-baseline: $*" >&2; exit 1; }
 
 # The locked input and the local platform checkout must name the reviewed DSI
 # fix. The Nix derivation independently checks ordering while it builds.
-grep -Fqx '      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=28c47150235be70cf5b19ea8d9ce7a5473ec23f2";' \
+grep -Fqx '      url = "git+file:///home/grw/src/linux-gemini-display-default-proven-20260902?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";' \
   "$ROOT/flake.nix" || fail 'linux-gemini pin drifted'
-grep -Fq '"rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",' \
+grep -Fq '"rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",' \
   "$ROOT/flake.lock" || fail 'linux-gemini lock drifted'
 
 candidate=$(sed -n '/mainlineP22Baseline = import/,/    };/p' "$ROOT/flake.nix")
@@ -29,7 +29,9 @@ if printf '%s\n' "$candidate" | grep -Eq 'deviceActivationOverlay|audioHeadphone
   fail 'candidate enabled a retired all-or-nothing or unproven component'
 fi
 
-grep -Fqx '      displayActivation = true;' "$ROOT/flake.nix"
+if grep -Fqx '      displayActivation = true;' "$ROOT/flake.nix"; then
+  fail 'default/full Stage2 still enables the userspace display gate'
+fi
 grep -Fqx '      kernel = mainlineP22Baseline.kernel;' "$ROOT/flake.nix"
 grep -Fqx '      serviceabilityDtb = mainlineP22Baseline.serviceabilityDtb;' "$ROOT/flake.nix"
 grep -Fqx '      kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;' "$ROOT/flake.nix"
@@ -53,7 +55,7 @@ grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' \
   "$ROOT/nix/mainline-touchscreen-activation.fragment"
 grep -Fqx 'CONFIG_BATTERY_MT6351_FGADC=y' \
   "$ROOT/nix/mainline-fgadc-activation.fragment"
-grep -Fqx '  p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";' \
+grep -Fqx '  p22BaselinePlatformRevision = "d6b7b657e94a91734c380496566e2d2996ee5fce";' \
   "$ROOT/nix/mainline.nix"
 
 for contract in \
@@ -65,9 +67,17 @@ for contract in \
   grep -Fq -- "$contract" "$ROOT/nix/mainline.nix" || fail "missing DT/source contract: $contract"
 done
 
-grep -Fqx '      display_gate=/sys/devices/platform/14000000.syscon/activate_drm' \
+grep -Fq 'display-activation=kernel-default-probe-no-userspace-gate' \
+  "$ROOT/nix/mainline.nix"
+grep -Fq 'mt6797-gemini-pda-display-gated.dtbo' "$ROOT/nix/mainline.nix"
+grep -Fq 'mediatek,drm-on-demand >/dev/null 2>&1' "$ROOT/nix/mainline.nix"
+grep -Fq 'kernel-default-probe; no userspace gate' \
   "$ROOT/nix/mainline-nixos.nix"
-grep -Fq 'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
-  "$ROOT/nix/mainline-nixos.nix"
+grep -Fq 'console=tty0 console=ttyS0,921600n8' "$ROOT/nix/mainline.nix"
+grep -Fq 'fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32' "$ROOT/nix/mainline.nix"
+grep -Fqx '  services.getty.autologinUser = "root";' \
+  "$ROOT/nixos/mainline-configuration.nix"
+grep -Fq 'unit_active getty@tty1.service || fail tty1-getty-inactive' \
+  "$ROOT/nix/unattended-recovery-baseline-self-accept.sh"
 
 echo 'test-mainline-p22-baseline: PASS'

@@ -10,6 +10,8 @@
   bq2589xPreflight,
   unattendedRecovery ? false,
   inputDiagnostics ? false,
+  # Diagnostics only. The supplied DTB must explicitly carry
+  # mt6797-gemini-pda-display-gated.dtbo when this is true.
   displayActivation ? false,
   provisionStore ? false,
   provisionWaitSeconds ? 65,
@@ -412,6 +414,7 @@ let
       ) &
     }
 
+    ${if displayActivation then ''
     activate_display() {
       # The locked 28c4715 platform requests the DSI IRQ before registering
       # the MIPI host. Release the one-way MMSYS gate only after the watchdog
@@ -430,6 +433,7 @@ let
         > /run/gemini-display-activation
       log "display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration"
     }
+    '' else ""}
 
     @START_WATCHDOG@
     @ACTIVATE_DISPLAY@
@@ -651,7 +655,7 @@ let
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
       echo "ssh=stage1 Dropbear key-only all IPv4; stage2 OpenSSH key-only all IPv4"
-      echo "display-activation=${if displayActivation then "stage1 watchdog-gated 14000000.syscon/activate_drm; DSI IRQ before host registration" else "none"}"
+      echo "display-activation=${if displayActivation then "diagnostic-only Stage1 watchdog-gated 14000000.syscon/activate_drm" else "kernel-default-probe; no userspace gate"}"
       echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
       echo "microsd-activation=inactive (not composed)"

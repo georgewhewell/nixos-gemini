@@ -21,10 +21,9 @@
       flake = false;
     };
     linux-gemini = {
-      # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
-      # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
-      # experiments never consume a moving branch tip.
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
+      # Exact hardware-passed 28c4715 display lineage plus the default-probe DT
+      # delta. Keep the local candidate commit immutable while it is reviewed.
+      url = "git+file:///home/grw/src/linux-gemini-display-default-proven-20260902?ref=codex/display-default-proven-20260902&rev=d6b7b657e94a91734c380496566e2d2996ee5fce";
       flake = false;
     };
     linux-gemini-next = {
@@ -852,9 +851,8 @@
 
     mainlineNixos = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
-      # Cycle 18's full Stage-2/eMMC substrate with explicit active display,
-      # NT36772 and FGADC components. The profile cannot pull MicroSD from the
-      # retired all-or-nothing device-activation overlay.
+      # Full Stage-2/eMMC substrate. Native display probes during kernel boot;
+      # Stage1 does not own an activation boundary.
       kernel = mainlineP22Baseline.kernel;
       serviceabilityDtb = mainlineP22Baseline.serviceabilityDtb;
       squashfs = mainlineNixosSquashfs;
@@ -863,7 +861,6 @@
       bq2589xPreflight = ./nix/bq2589x-preflight.sh;
       unattendedRecovery = true;
       inputDiagnostics = true;
-      displayActivation = true;
       provisionStore = true;
       # Cycle 7 proved the RTL8156 Stage1 path but the one-time 100,421,632-byte
       # p29 install still exceeded 230 seconds.  Give the complete write,

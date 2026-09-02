@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788117142,
-        "narHash": "sha256-GuhrEVzqJHXb+rKhUr8rplYnwM/Maqv0KelwLP4k/tw=",
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
-        "revCount": 158,
+        "lastModified": 1788323638,
+        "narHash": "sha256-qak4kyhAZFvbYeTLqUy0ImDb2JrYkrtV0QhwlteQEF4=",
+        "ref": "codex/display-default-proven-20260902",
+        "rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",
+        "revCount": 159,
         "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "url": "file:///home/grw/src/linux-gemini-display-default-proven-20260902"
       },
       "original": {
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
+        "ref": "codex/display-default-proven-20260902",
+        "rev": "d6b7b657e94a91734c380496566e2d2996ee5fce",
         "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "url": "file:///home/grw/src/linux-gemini-display-default-proven-20260902"
       }
     },
     "linux-gemini-next": {

@@ -16,7 +16,7 @@ fail() { echo "test-unattended-recovery-baseline-self-accept: $*" >&2; exit 1; }
 make_fixture() {
   d=$1
   mkdir -p "$d/run" "$d/proc/440/fd" "$d/sys/class/watchdog/watchdog0" \
-    "$d/bin"
+    "$d/bin" "$d/dev"
   cat > "$d/bin/fake-busybox" <<'BUSYBOX'
 #!/bin/sh
 exec "$@"
@@ -30,9 +30,7 @@ BUSYBOX
     'watchdog-owner=440' \
     'watchdog-state=active' > "$d/run/gemini-mainline-success"
   printf '%s\n' 'result=pass watchdog_lease=unchanged remote_review_required=yes' > "$d/run/bq2589x-preflight.pass"
-  printf '%s\n' \
-    'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
-    > "$d/run/gemini-display-activation"
+  ln -s /dev/null "$d/dev/tty1"
   printf '%s\n' \
     'format=gemini-unattended-recovery-lease-v1' \
     'clock=monotonic-uptime-seconds' \
@@ -66,6 +64,7 @@ run_fixture() {
   GEMINI_BASELINE_ACCEPT_RUN_ROOT="$d/run" \
   GEMINI_BASELINE_ACCEPT_PROC_ROOT="$d/proc" \
   GEMINI_BASELINE_ACCEPT_SYS_ROOT="$d/sys" \
+  GEMINI_BASELINE_ACCEPT_DEV_ROOT="$d/dev" \
   GEMINI_BASELINE_ACCEPT_SYSTEMCTL="$d/bin/systemctl" \
   GEMINI_BASELINE_ACCEPT_IP_FILE="$d/ip" \
   GEMINI_BASELINE_ACCEPT_KMSG_FILE="$d/kmsg" \
@@ -80,11 +79,11 @@ grep -Fqx unattended_recovery=healthy "$ok/run/unattended-recovery.accepted"
 test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
 
-missing_display=$WORK/missing-display
-make_fixture "$missing_display"
-rm "$missing_display/run/gemini-display-activation"
-if run_fixture "$missing_display"; then fail 'accepted without display activation'; fi
-test ! -e "$missing_display/run/unattended-recovery.accepted"
+missing_tty1=$WORK/missing-tty1
+make_fixture "$missing_tty1"
+rm "$missing_tty1/dev/tty1"
+if run_fixture "$missing_tty1"; then fail 'accepted without root tty1'; fi
+test ! -e "$missing_tty1/run/unattended-recovery.accepted"
 
 bad_token=$WORK/bad-token
 make_fixture "$bad_token"

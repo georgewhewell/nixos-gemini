@@ -12,6 +12,7 @@ busybox=${GEMINI_BASELINE_ACCEPT_BUSYBOX:-/bin/busybox}
 run_root=${GEMINI_BASELINE_ACCEPT_RUN_ROOT:-/run}
 proc_root=${GEMINI_BASELINE_ACCEPT_PROC_ROOT:-/proc}
 sys_root=${GEMINI_BASELINE_ACCEPT_SYS_ROOT:-/sys}
+dev_root=${GEMINI_BASELINE_ACCEPT_DEV_ROOT:-/dev}
 cmdline_file=${GEMINI_BASELINE_ACCEPT_CMDLINE_FILE:-$proc_root/cmdline}
 mounts_file=${GEMINI_BASELINE_ACCEPT_MOUNTS_FILE:-$proc_root/mounts}
 system_link=${GEMINI_BASELINE_ACCEPT_SYSTEM_LINK:-$run_root/current-system}
@@ -28,7 +29,6 @@ expected_system_file=$run_root/gemini-lease-expected-system
 handoff_file=$run_root/stage1-handoff
 success_file=$run_root/gemini-mainline-success
 stage1_log=$run_root/stage1.log
-display_activation_file=$run_root/gemini-display-activation
 
 log() {
   line="GEMINI_MAINLINE_NIXOS: $*"
@@ -158,8 +158,10 @@ unit_active gemini-watchdog-takeover.service || fail watchdog-takeover-inactive
 unit_active gemini-mainline-usb.service || fail gadget-service-inactive
 unit_active gemini-input-observe.service || fail input-observe-inactive
 unit_active sshd.service || fail sshd-inactive
+unit_active getty@tty1.service || fail tty1-getty-inactive
 failed_units=$("$systemctl" --failed --no-legend --plain 2>/dev/null || true)
 [ -z "$failed_units" ] || fail failed-units-present
+[ -c "$dev_root/tty1" ] || fail tty1-device-missing
 
 "$busybox" grep -Eq '^/dev/mmcblk[0-9]+p29 /gemian ext4 ro,' "$mounts_file" || \
   fail p29-not-readonly
@@ -167,11 +169,6 @@ failed_units=$("$systemctl" --failed --no-legend --plain 2>/dev/null || true)
   fail store-not-readonly
 has_address '10.15.19.82/24' || fail gadget-address-missing
 has_address '192.168.23.70/' || fail right-nic-address-missing
-[ -r "$display_activation_file" ] || fail display-activation-missing
-"$busybox" grep -Fqx \
-  'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
-  "$display_activation_file" || fail display-activation-missing
-
 owner=$("$busybox" cat "$run_root/unattended-recovery.watchdog-owner" 2>/dev/null || true)
 watchdog_owned "$owner" || fail watchdog-owner-invalid
 [ "$("$busybox" cat "$sys_root/class/watchdog/watchdog0/identity" 2>/dev/null || true)" = mtk-wdt ] || \

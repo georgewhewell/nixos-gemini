@@ -44,7 +44,7 @@ let
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
-  p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
+  p22BaselinePlatformRevision = "d6b7b657e94a91734c380496566e2d2996ee5fce";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -218,15 +218,15 @@ let
   baseDtbSha256 =
     if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
+    else "5b942bca9e89bb05e31350cad14c629ab1ae4ffa1726b93bdc4c9813ffe783d2";
   serviceabilityBaseDtbSha256 =
     if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
+    else "2c452b00bd3e61e4fbb8622bc69e0b2ce85e8979c7972021468c7bcb9add488a";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
-    else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+    else "602b68bbfd04cad98d65462a3ca9bea2a569839b2e78e0da38c95060183d4724";
   profileCombinationValid =
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -702,6 +702,10 @@ let
       ${lib.optionalString displayOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display.dtbo \
           "$out/mt6797-gemini-pda-display.dtbo"
+        # Keep the former userspace gate available as a separately composed,
+        # diagnostics-only overlay. It is never applied to gemini.dtb here.
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-display-gated.dtbo \
+          "$out/mt6797-gemini-pda-display-gated.dtbo"
       ''}
       ${lib.optionalString audioOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-audio.dtbo \
@@ -1054,6 +1058,8 @@ let
             mediatek,i2c_lcd_bias
           test "$(fdtget "$out/gemini-display.dtb" /smi@14022000 status)" = okay
           test "$(fdtget "$out/gemini-display.dtb" /larb@14020000 status)" = okay
+          ! fdtget "$out/gemini-display.dtb" /syscon@14000000 \
+            mediatek,drm-on-demand >/dev/null 2>&1
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400d000 mediatek,larb)" = \
             "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400e000 mediatek,larb)" = \
@@ -1062,7 +1068,7 @@ let
             2>/dev/null | grep -Fqx okay
           ! fdtget "$out/gemini-display.dtb" /ovl@1400d000 iommus >/dev/null 2>&1
           ! fdtget "$out/gemini-display.dtb" /ovl@1400e000 iommus >/dev/null 2>&1
-          echo 'display-overlay=passed' >> "$out/VALIDATION"
+          echo 'display-overlay=passed kernel-default-probe-no-userspace-gate' >> "$out/VALIDATION"
         ''
         else ''
           cp "$out/gemini-gpu.dtb" "$out/gemini-display.dtb"
@@ -1252,7 +1258,7 @@ let
           echo 'touchscreen-activation=nt36772-i2c4-0x62-live-proven-passed' >> "$out/VALIDATION"
           echo 'fgadc-activation=mt6351-exact-0x28-osr8-live-proven-passed' >> "$out/VALIDATION"
           echo 'microsd-activation=mmc1-4bit-25mhz-3v-no-uhs-live-proven-passed' >> "$out/VALIDATION"
-          echo 'display-activation=deferred-until-userspace-writes-activate_drm' >> "$out/VALIDATION"
+          echo 'display-activation=kernel-default-probe-no-userspace-gate' >> "$out/VALIDATION"
         ''
         else ""
       }
@@ -1950,7 +1956,7 @@ let
       echo "nix-touchscreen-activation=${touchscreenActivationLabel}"
       echo "nix-fgadc-activation=${fgadcActivationLabel}"
       echo "nix-device-activation=${deviceActivationLabel}"
-      echo "display-activation=${if deviceActivationOverlay then "deferred: write 1 to 14000000.syscon/activate_drm only after SSH/watchdog validation" else "none"}"
+      echo "display-activation=${if displayOverlay then "kernel-default-probe; no userspace gate" else "inactive (DT disabled)"}"
       echo "nix-unattended-recovery=${unattendedRecoveryLabel}"
       echo "watchdog-config=${
         if unattendedRecovery
