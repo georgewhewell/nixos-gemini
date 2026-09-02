@@ -32,6 +32,9 @@
       dbus = prev.dbus.override {
         enableSystemd = false;
       };
+      v4l-utils = prev.v4l-utils.override {
+        withGUI = false;
+      };
       # NixOS 23.05's swraid module references these paths even though this
       # system has no software RAID and the initramfs is supplied separately.
       mdadm = prev.runCommand "mdadm-disabled" {} ''
@@ -444,6 +447,7 @@
     pkgs.wpa_supplicant
     pkgs.usbutils
     pkgs.ethtool
+    pkgs.v4l-utils
   ];
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
