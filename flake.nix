@@ -818,6 +818,7 @@
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiConsoleKeymap = geminiConsoleKeymap;
+          _module.args.geminiAutoAcceptStage2 = false;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
