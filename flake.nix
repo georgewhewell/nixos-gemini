@@ -760,7 +760,28 @@
       sshAccess = true;
       unattendedRecovery = true;
       maxCpus = 1;
+      usbPowerSurvivalOverlay = true;
     };
+
+    mainlineUsbOnlyPowerDtb = buildPkgs.runCommand
+      "gemini-usb-only-power-survival-dtb"
+      {nativeBuildInputs = [buildPkgs.dtc];}
+      ''
+        mkdir -p "$out"
+        fdtoverlay \
+          -i ${mainlineUsbOnlyLowPower.serviceabilityDtb}/gemini.dtb \
+          -o "$out/gemini.dtb" \
+          ${mainlineUsbOnlyLowPower.kernel}/mt6797-gemini-pda-usb-power-survival.dtbo
+        test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b status)" = okay
+        test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b compatible)" = \
+          'ti,bq25896 ti,bq25890'
+        fdtget -p "$out/gemini.dtb" /i2c@11007000/charger@6b \
+          | grep -Fqx 'ti,adopt-firmware-settings'
+        ! fdtget -p "$out/gemini.dtb" /i2c@11007000/charger@6b \
+          | grep -Fqx 'ti,read-only'
+        test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
+      '';
 
     # Manual-only staged ALSA boundary diagnostic over the existing fully
     # observable recovery profile. It adds a static helper to the initramfs
@@ -898,7 +919,7 @@
     mainlineNixosUsbOnlyLowPower = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
       kernel = mainlineUsbOnlyLowPower.kernel;
-      serviceabilityDtb = mainlineUsbOnlyLowPower.serviceabilityDtb;
+      serviceabilityDtb = mainlineUsbOnlyPowerDtb;
       squashfs = mainlineNixosSquashfs;
       nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
       authorizedKeys = ./nixos/authorized_keys;
@@ -1269,7 +1290,7 @@
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineNixosUsbOnlyLowPowerKernel = mainlineUsbOnlyLowPower.kernel;
-      mainlineNixosUsbOnlyLowPowerDtb = mainlineUsbOnlyLowPower.serviceabilityDtb;
+      mainlineNixosUsbOnlyLowPowerDtb = mainlineUsbOnlyPowerDtb;
       mainlineNixosUsbOnlyLowPowerBundle = mainlineNixosUsbOnlyLowPower.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;

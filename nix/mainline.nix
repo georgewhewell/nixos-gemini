@@ -32,6 +32,7 @@
   deviceActivationOverlay ? false,
   leaseSelfAcceptToken ? null,
   maxCpus ? 8,
+  usbPowerSurvivalOverlay ? false,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || unattendedRecovery;
@@ -74,6 +75,7 @@ let
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
+    ++ lib.optionals usbPowerSurvivalOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
@@ -213,7 +215,8 @@ let
     + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
     + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
     + lib.optionalString fgadcActivationOverlay "-fgadc-active"
-    + lib.optionalString deviceActivationOverlay "-device-activation";
+    + lib.optionalString deviceActivationOverlay "-device-activation"
+    + lib.optionalString usbPowerSurvivalOverlay "-usb-power-survival";
   # linux-gemini-next adds the VCN33 and GPU-devinfo nodes. Keep exact hashes
   # for both pinned DT layouts instead of applying the newer hash to the
   # accepted baseline source.
@@ -238,6 +241,8 @@ let
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !consysG2cPatchOverlay || unattendedRecovery;
     assert !consysG2dPostpatchOverlay || unattendedRecovery;
+    assert !(powerObserveOverlay && usbPowerSurvivalOverlay);
+    assert !usbPowerSurvivalOverlay || unattendedRecovery;
     assert
       !powerObservePreflight
       || (powerObserveOverlay && unattendedRecovery);
@@ -350,7 +355,8 @@ let
       + lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"
       + lib.optionalString touchscreenActivationOverlay "-touchscreen-active"
       + lib.optionalString fgadcActivationOverlay "-fgadc-active"
-      + lib.optionalString deviceActivationOverlay "-device-activation";
+      + lib.optionalString deviceActivationOverlay "-device-activation"
+      + lib.optionalString usbPowerSurvivalOverlay "-usb-power-survival";
     version = "7.1.3";
     src = linux-gemini;
     # Keep every fragment in the derivation input closure.  Rendering paths
@@ -520,6 +526,10 @@ let
         ! grep -q '^CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX_KUNIT_TEST=' .config
       ''}
       ${lib.optionalString powerObserveOverlay ''
+        grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
+        grep -Fqx 'CONFIG_CHARGER_BQ25890=y' .config
+      ''}
+      ${lib.optionalString usbPowerSurvivalOverlay ''
         grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
         grep -Fqx 'CONFIG_CHARGER_BQ25890=y' .config
       ''}
@@ -712,6 +722,10 @@ let
       ${lib.optionalString powerObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtbo \
           "$out/mt6797-gemini-pda-power-observe.dtbo"
+      ''}
+      ${lib.optionalString usbPowerSurvivalOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb-power-survival.dtbo \
+          "$out/mt6797-gemini-pda-usb-power-survival.dtbo"
       ''}
       ${lib.optionalString inputObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtbo \
