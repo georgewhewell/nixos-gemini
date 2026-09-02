@@ -29,6 +29,15 @@ completed, but it did not survive the batteryless power cycle and was not
 followed by an on-device readback. No flasher is running and the Gemini is not
 currently enumerating on Trex.
 
+Trex's kernel journal narrows the last failure boundary. The mainline USB
+gadget enumerated at 05:56:17 CEST and remained present until 06:00:50. Two
+seconds later `MT65xx Preloader` appeared, disconnected after three seconds,
+and then repeated in short bursts through 06:39:28 without returning to the
+mainline gadget. The later USB-only rescue Flash Tool run started at 06:47:35,
+found no BROM device during its bounded 120-second scan, and made no write.
+This proves that the old p22 image reached Linux before the cycling began; it
+does not distinguish charger-watchdog expiry from an unrelated load transient.
+
 A code-only recovery candidate now keeps one A53 online, leaves display, GPU,
 CONSYS, modem, audio and the right USB host disabled, and adopts LK's BQ25896
 state while servicing its watchdog. It is BUILD-TESTED, not DEVICE-TESTED. The
