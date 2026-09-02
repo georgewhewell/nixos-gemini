@@ -478,7 +478,9 @@ device_ssh_gadget_provision() {
     # Store stdin is a long-lived byte stream.  Do not inherit a user-level
     # ControlMaster socket: its mux can disappear while the Stage1 network is
     # still healthy and turns the upload into a local Broken pipe.
-    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+    # The host-key policy probe uses its own SSH command. Isolate that probe
+    # from the inherited upload stdin so only the provisioning SSH sees bytes.
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed </dev/null; then
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -o 'ProxyCommand=ssh -o ControlMaster=no -o ControlPath=none -W %h:%p trex' -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
@@ -496,7 +498,8 @@ device_ssh_gadget_provision() {
 
 # shellcheck disable=SC2329 # selected by name in stream_stage2_store
 device_ssh_right_provision() {
-    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed; then
+    # This function also inherits the Stage2 byte stream on stdin.
+    if [ "$CANDIDATE_HOSTKEY_MODE" = yes ] && candidate_hostkey_allowed </dev/null; then
         timeout "$PROVISION_UPLOAD_TIMEOUT_SECONDS" ssh -i /home/grw/.ssh/id_ed25519 \
             -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=8 \
             -o ConnectionAttempts=1 -o ServerAliveInterval=15 \
@@ -726,7 +729,7 @@ stage2_store_progress() {
     fi
 }
 
-stage2_store_offset() {
+stage2_store_probe() {
     device_ssh_gadget "set -eu
 $EMMC_RESOLVER
 emmc=\$(resolve_emmc_device)
@@ -745,28 +748,102 @@ if test -e '$provision_tmp' || test -L '$provision_tmp'; then
   test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
   offset=\$(stat -Lc %s '$provision_tmp')
   test \"\$offset\" -le '$STAGE2_STORE_SIZE'
+  prefix_sha=\$(sha256sum '$provision_tmp' | cut -d' ' -f1)
+  temp_state=present
 else
   offset=0
+  prefix_sha=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  temp_state=absent
 fi
-printf '%s\\n' \"\$offset\""
+printf '%s %s %s\\n' \"\$offset\" \"\$prefix_sha\" \"\$temp_state\""
+}
+
+stage2_source_prefix_sha() {
+    count=$1
+    status_file=$RUN_LOCAL/stage2-prefix-dd.$$
+    rm -f "$status_file"
+    sum_line=$(
+        {
+            set +e
+            dd if="$STAGE2_STORE_SOURCE" bs=1048576 iflag=count_bytes \
+                count="$count" status=none
+            dd_rc=$?
+            printf '%s\n' "$dd_rc" > "$status_file"
+            exit "$dd_rc"
+        } | sha256sum
+    ) || {
+        rm -f "$status_file"
+        return 1
+    }
+    dd_rc=$(cat "$status_file" 2>/dev/null || true)
+    rm -f "$status_file"
+    [ "$dd_rc" = 0 ] || return 1
+    prefix_sha=${sum_line%% *}
+    case "$prefix_sha" in
+        *[!0-9a-f]*|'') return 1 ;;
+    esac
+    [ "${#prefix_sha}" -eq 64 ] || return 1
+    printf '%s\n' "$prefix_sha"
+}
+
+discard_wrong_stage2_prefix() {
+    expected_size=$1
+    expected_sha=$2
+    device_ssh_gadget "set -eu
+$EMMC_RESOLVER
+emmc=\$(resolve_emmc_device)
+p29=\"\$emmc\"p29
+mount_options=\$(awk -v source=\"\$p29\" '\$1 == source && \$2 == \"/mnt/gemian\" && \$3 == \"ext4\" { print \$4; exit }' /proc/mounts)
+case \",\$mount_options,\" in *,rw,*) ;; *) exit 1 ;; esac
+test ! -e '$init_target'
+test ! -L '$init_target'
+test ! -L '$provision_tmp'
+test -f '$provision_tmp'
+test ! -b '$provision_tmp'
+test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
+test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$expected_size'
+test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$expected_sha'
+rm -- '$provision_tmp'
+sync
+test ! -e '$provision_tmp'"
 }
 
 stream_stage2_store() {
     transport=$1
     path_name=$2
-    offset=$(stage2_store_offset) || return 1
-    case "$offset" in
+    probe=$(stage2_store_probe) || return 1
+    case "$probe" in
         closed)
             stage2_store_progress stopped \
                 "path=$path_name reason=p29-not-rw resume=retained"
             return 2
             ;;
-        ''|*[!0-9]*) return 1 ;;
     esac
+    IFS=' ' read -r offset remote_prefix_sha temp_state extra <<EOF
+$probe
+EOF
+    case "$offset" in ''|*[!0-9]*) return 1 ;; esac
+    case "$remote_prefix_sha" in *[!0-9a-f]*|'') return 1 ;; esac
+    [ "${#remote_prefix_sha}" -eq 64 ] || return 1
+    case "$temp_state" in present|absent) ;; *) return 1 ;; esac
+    [ -z "$extra" ] || return 1
     [ "$offset" -le "$STAGE2_STORE_SIZE" ] || return 1
+    if [ "$temp_state" = absent ]; then
+        [ "$offset" -eq 0 ] || return 1
+    fi
+    local_prefix_sha=$(stage2_source_prefix_sha "$offset") || return 1
+    if [ "$remote_prefix_sha" != "$local_prefix_sha" ]; then
+        stage2_store_progress discard \
+            "path=$path_name reason=prefix-sha-mismatch offset=$offset"
+        discard_wrong_stage2_prefix "$offset" "$remote_prefix_sha" || return 1
+        offset=0
+        remote_prefix_sha=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        local_prefix_sha=$remote_prefix_sha
+        temp_state=absent
+    fi
     remaining=$((STAGE2_STORE_SIZE - offset))
     required_kib=$(((remaining + 1023) / 1024))
-    if [ "$offset" -eq 0 ]; then
+    if [ "$temp_state" = absent ]; then
         stream_command="cat > '$provision_tmp'"
     else
         stream_command="cat >> '$provision_tmp'"
@@ -775,7 +852,7 @@ stream_stage2_store() {
 $EMMC_RESOLVER
 test ! -e '$init_target'
 test ! -L '$init_target'
-if test '$offset' -eq 0; then
+if test '$temp_state' = absent; then
   test ! -e '$provision_tmp'
   test ! -L '$provision_tmp'
 else
@@ -784,6 +861,7 @@ else
   test ! -b '$provision_tmp'
   test \"\$(stat -Lc %h '$provision_tmp')\" -eq 1
   test \"\$(stat -Lc %s '$provision_tmp')\" -eq '$offset'
+  test \"\$(sha256sum '$provision_tmp' | cut -d' ' -f1)\" = '$local_prefix_sha'
 fi
 # BusyBox df supports POSIX -P output and -k 1024-byte blocks. Pin both the
 # backing device and mountpoint, and require space only for the unsent suffix.

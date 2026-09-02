@@ -154,6 +154,9 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
         exit 0
     fi
     rm -f "$ROLLBACK_STATE"
+    deadline_remaining=$((deadline - $(date +%s)))
+    printf '[%s] rollback phase=brom-scan attempt=%s scan-timeout=120s deadline-remaining=%ss\n' \
+        "$(date -Is)" "$rollback_attempt" "$deadline_remaining" >> "$ROLLBACK_LOG"
     setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
         "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
         "$starttime_file" \
