@@ -1322,7 +1322,8 @@ test \"\$(awk '/^Uid:/ {print \$2; exit}' \"/proc/\$tty1_pid/status\")\" = 0
 test \"\$(readlink \"/proc/\$tty1_pid/fd/0\")\" = /dev/tty1
 case \"\$(cat \"/proc/\$tty1_pid/comm\")\" in ash|sh) ;; *) exit 1 ;; esac
 test -x /run/current-system/sw/bin/btop
-btop_version=\$(/bin/busybox timeout 5 /run/current-system/sw/bin/btop --version)
+test -x /run/current-system/sw/bin/timeout
+btop_version=\$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)
 test "\$btop_version" = 'btop version: 1.2.13'
 keyboard_event=
 for event in /sys/class/input/event*; do
@@ -1594,7 +1595,8 @@ test "$(awk '/^Uid:/ {print $2; exit}' "/proc/$tty1_pid/status")" = 0
 test "$(readlink "/proc/$tty1_pid/fd/0")" = /dev/tty1
 case "$(cat "/proc/$tty1_pid/comm")" in ash|sh) ;; *) exit 1 ;; esac
 test -x /run/current-system/sw/bin/btop
-btop_version=$(/bin/busybox timeout 5 /run/current-system/sw/bin/btop --version)
+test -x /run/current-system/sw/bin/timeout
+btop_version=$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)
 test "$btop_version" = 'btop version: 1.2.13'
 keyboard_event=
 keyboard_ev=

@@ -14,13 +14,16 @@
   provisionStore ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
+  kernelLeaseSelfAcceptToken ? null,
   leaseSelfAcceptToken ? null,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
+assert kernelLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" kernelLeaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
+assert kernelLeaseSelfAcceptToken == leaseSelfAcceptToken;
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
@@ -576,6 +579,11 @@ let
   bootImg = buildPkgs.runCommand "gemini-mainline-nixos.boot.img" {
     nativeBuildInputs = [buildPkgs.python3];
   } ''
+    ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
+      test "$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' ${kernel}/kernel.config \
+        | tr ' ' '\n' \
+        | grep -Fxc 'gemini.baseline_lease_capability=${leaseSelfAcceptToken}')" -eq 1
+    ''}
     python3 ${ixoo-kernel}/experiments/2026-07-12-boot-contract-recovery/scripts/build-android-boot-v0.py \
       --kernel ${kernel}/Image.gz \
       --ramdisk ${initramfs} \
@@ -589,6 +597,22 @@ let
       --tags-addr 0x44000000 \
       --cmdline "bootopt=64S3,32N2,64N2${leaseSelfAcceptCmdline}" \
       --output "$out"
+    ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
+      python3 - "$out" '${leaseSelfAcceptToken}' <<'PY'
+    import sys
+
+    image_path, token = sys.argv[1:]
+    with open(image_path, "rb") as image:
+        header = image.read(1632)
+    if header[:8] != b"ANDROID!":
+        raise SystemExit("Android boot magic mismatch")
+    cmdline = (header[64:576] + header[608:1632]).split(b"\0", 1)[0].decode("ascii")
+    words = cmdline.split()
+    expected = "gemini.baseline_lease_capability=" + token
+    if words.count(expected) != 1:
+        raise SystemExit("Android header baseline capability mismatch")
+    PY
+    ''}
     test "$(od -An -tx1 -N 8 "$out" | tr -d '[:space:]')" = 414e44524f494421
     test "$(stat -c %s "$out")" -le 16777216
   '';
@@ -646,5 +670,5 @@ let
     } > "$out/MANIFEST"
   '';
 in {
-  inherit initramfs bootImg paddedBootImg bundle;
+  inherit initramfs bootImg paddedBootImg bundle leaseSelfAcceptToken;
 }

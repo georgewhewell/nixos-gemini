@@ -24,6 +24,7 @@ printf '%s\n' "$candidate" | grep -Fqx '      powerObservePreflight = true;'
 printf '%s\n' "$candidate" | grep -Fqx '      unattendedRecovery = true;'
 printf '%s\n' "$candidate" | grep -Fqx '      touchscreenActivationOverlay = true;'
 printf '%s\n' "$candidate" | grep -Fqx '      fgadcActivationOverlay = true;'
+printf '%s\n' "$candidate" | grep -Fqx '      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;'
 if printf '%s\n' "$candidate" | grep -Eq 'deviceActivationOverlay|audioHeadphoneTest|consysIdentityOverlay'; then
   fail 'candidate enabled a retired all-or-nothing or unproven component'
 fi
@@ -31,6 +32,19 @@ fi
 grep -Fqx '      displayActivation = true;' "$ROOT/flake.nix"
 grep -Fqx '      kernel = mainlineP22Baseline.kernel;' "$ROOT/flake.nix"
 grep -Fqx '      serviceabilityDtb = mainlineP22Baseline.serviceabilityDtb;' "$ROOT/flake.nix"
+grep -Fqx '      kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;' "$ROOT/flake.nix"
+grep -Fqx '          _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;' "$ROOT/flake.nix"
+test "$(grep -Fxc '      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;' "$ROOT/flake.nix")" -eq 2
+test "$(grep -Ec '^[[:space:]]+leaseSelfAcceptToken[[:space:]]*=' "$ROOT/flake.nix")" -eq 2
+
+grep -Fq 'builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken' \
+  "$ROOT/nix/mainline.nix"
+grep -Fq 'lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}"' \
+  "$ROOT/nix/mainline.nix"
+grep -Fq 'assert kernelLeaseSelfAcceptToken == leaseSelfAcceptToken;' \
+  "$ROOT/nix/mainline-nixos.nix"
+grep -Fq 'Android header baseline capability mismatch' \
+  "$ROOT/nix/mainline-nixos.nix"
 
 grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' \
   "$ROOT/nix/mainline-touchscreen-activation.fragment"

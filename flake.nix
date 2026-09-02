@@ -740,6 +740,7 @@
       thermalHallObserveOverlay = true;
       touchscreenActivationOverlay = true;
       fgadcActivationOverlay = true;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
     # Manual-only staged ALSA boundary diagnostic over the existing fully
@@ -870,6 +871,7 @@
       # watchdog to recover a stalled installer without human intervention.
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 

@@ -104,8 +104,12 @@ grep -Fq 'baseline_self_accept=accepted capability=' "$HARNESS"
 grep -Fq 'card0-DSI-1/status' "$HARNESS"
 grep -Fq -- '--autologin root' "$HARNESS"
 grep -Fq '/run/current-system/sw/bin/btop' "$HARNESS"
+grep -Fq 'test -x /run/current-system/sw/bin/timeout' "$HARNESS"
 # shellcheck disable=SC2016 # matching literal injected target shell
-grep -Fq 'btop_version=$(/bin/busybox timeout 5 /run/current-system/sw/bin/btop --version)' "$HARNESS"
+grep -Fq 'btop_version=$(/run/current-system/sw/bin/timeout 5 /run/current-system/sw/bin/btop --version)' "$HARNESS"
+if grep -Fq '/bin/busybox timeout 5 /run/current-system/sw/bin/btop' "$HARNESS"; then
+    exit 1
+fi
 # shellcheck disable=SC2016 # matching literal injected target shell
 grep -Fq 'test "$btop_version" = '\''btop version: 1.2.13'\''' "$HARNESS"
 # A producer that emits the expected text and then fails must still fail the
