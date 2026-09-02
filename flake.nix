@@ -872,6 +872,7 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 

@@ -15,6 +15,7 @@
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
   kernelLeaseSelfAcceptToken ? null,
+  stage2BaselineAcceptScript ? null,
   leaseSelfAcceptToken ? null,
 }:
 assert builtins.isInt provisionWaitSeconds;
@@ -24,6 +25,12 @@ assert builtins.isBool displayActivation;
 assert kernelLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" kernelLeaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert kernelLeaseSelfAcceptToken == leaseSelfAcceptToken;
+assert (stage2BaselineAcceptScript == null) == (leaseSelfAcceptToken == null);
+assert leaseSelfAcceptToken == null || builtins.any
+  (line:
+    line == "export GEMINI_BASELINE_ACCEPT_TOKEN=${leaseSelfAcceptToken}"
+    || line == "export GEMINI_BASELINE_ACCEPT_TOKEN='${leaseSelfAcceptToken}'")
+  (buildPkgs.lib.splitString "\n" stage2BaselineAcceptScript);
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
