@@ -57,6 +57,11 @@ introducing a Linux-side charger reset or reprogramming race.
 
 ### Preloader/LK boundary
 
+The supplied source trees contain LK but no Gemini preloader/BootROM source or
+build target. Therefore no preloader current limit, rail sequencing, or
+watchdog behavior can be asserted or changed from this audit; any such claim
+would require a separate source artifact or hardware measurement.
+
 The reviewed LK project enables eMMC, BQ25896, charger interface, and debug UART
 (`lk/project/k97v1_64_bsp.mk:3-14,22-27`). It does not enable the existing
 `MACH_FPGA_NO_DISPLAY` compile-time escape hatch: that line is commented out
