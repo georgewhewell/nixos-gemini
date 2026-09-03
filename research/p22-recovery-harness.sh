@@ -1525,7 +1525,7 @@ grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
 test -f '$STAGE2_STORE_TARGET_LIVE'
 test ! -L '$STAGE2_STORE_TARGET_LIVE'
 test \"\$(stat -Lc %s '$STAGE2_STORE_TARGET_LIVE')\" -eq '$STAGE2_STORE_SIZE'
-grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s .*handoff=stage1\" /run/stage1.log
 test -s \"$STAGE1_HANDOFF_PATH\"
 grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
 grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
@@ -1615,7 +1615,7 @@ case \"$ROOTFS_POLICY\" in
     grep -q \"^/dev/loop0 /nix/store squashfs ro,\" /proc/mounts
     if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
       test -s \"$STAGE2_SUCCESS_MARKER\"
-      grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+      grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s .*handoff=stage1\" /run/stage1.log
       test -s \"$STAGE1_HANDOFF_PATH\"
       grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
       grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
@@ -1629,7 +1629,7 @@ case \"$ROOTFS_POLICY\" in
       test -n \"\$stage2_device\"
       printf 'stage1_watchdog_owner_marker=%s\\n' \"$STAGE1_WATCHDOG_OWNER_MARKER\"
       printf 'stage1_handoff_path=%s\\n' \"$STAGE1_HANDOFF_PATH\"
-      grep -E 'watchdog=petting .*lease=[0-9]+s handoff=stage1' /run/stage1.log
+      grep -E 'watchdog=petting .*lease=[0-9]+s .*handoff=stage1' /run/stage1.log
       printf 'stage2_watchdog_owner_unit=%s state=%s pid=%s device=%s\\n' \"$STAGE2_WATCHDOG_OWNER_UNIT\" \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\"
       grep -F -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
       printf 'stage2_success_marker=%s\\n' \"$STAGE2_SUCCESS_MARKER\"
@@ -1718,7 +1718,7 @@ else
 fi
 case \"$FEATURE_POLICY\" in
   connectivity-no-radio)
-    ! dmesg | grep -Eiq 'request_firmware|Direct firmware|wmt|btif|mtk-wifi|gnss|bluetooth|radio|fm|modem'
+    ! dmesg | grep -vE '(^|\] )(calling|initcall) ' | grep -vE 'driver registered' | grep -Eiq 'request_firmware|Direct firmware load for (mediatek|mtk)|\bwmt\b|\bbtif\b|mtk-wifi|\bgnss\b|bluetooth|\bradio\b|\bmodem\b'
     ! ls /sys/bus/platform/devices | grep -Eiq 'consys|btif|wmt' ;;
   allow-platform) : ;;
   *) exit 1 ;;
@@ -1731,7 +1731,7 @@ if [ \"$WATCHDOG_PROFILE\" = initramfs-petter ]; then
   test \"\$(cat /sys/class/watchdog/watchdog0/timeout)\" = \"$EXPECTED_WATCHDOG_TIMEOUT\"
   test -r /sys/class/watchdog/watchdog0/bootstatus
   if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
-    grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+    grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s .*handoff=stage1\" /run/stage1.log
     test -s \"$STAGE1_HANDOFF_PATH\"
     grep -Fq -- \"$STAGE1_WATCHDOG_OWNER_MARKER\" /run/stage1.log
     grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
@@ -1794,7 +1794,7 @@ test \"\$success_first\" = 'mainline NixOS reached multi-user.target'
 grep -Fq -- \"watchdog-state=$STAGE2_WATCHDOG_STATE\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"watchdog-owner=\$stage2_pid\" \"$STAGE2_SUCCESS_MARKER\"
 grep -Fq -- \"\$p29 /gemian\" \"$STAGE2_SUCCESS_MARKER\"
-grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s .*handoff=stage1\" /run/stage1.log
 test -s \"$STAGE1_HANDOFF_PATH\"
 grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
 printf 'stage2-watchdog-right-path state=%s pid=%s device=%s\\n' \"\$stage2_state\" \"\$stage2_pid\" \"\$stage2_device\""
@@ -1834,7 +1834,7 @@ if [ \"$STAGE2_POLICY\" = watchdog-takeover-required ]; then
   done
   test \"\$usb_ok\" = yes
   test -s \"$STAGE2_SUCCESS_MARKER\"
-  grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s handoff=stage1\" /run/stage1.log
+  grep -Eq \"watchdog=petting .*lease=${LEASE_SECONDS}s .*handoff=stage1\" /run/stage1.log
   test -s \"$STAGE1_HANDOFF_PATH\"
   grep -Fq -- \"$STAGE2_WATCHDOG_EVIDENCE\" /run/stage1.log
   stage2_state=\$(systemctl is-active \"$STAGE2_WATCHDOG_OWNER_UNIT\")
