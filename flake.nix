@@ -743,6 +743,45 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # Panfrost bring-up on the accepted baseline's substrate.
+    #
+    # This deliberately does NOT set touchscreenActivationOverlay or
+    # fgadcActivationOverlay.  Those two flags are what mark the accepted
+    # full-NixOS baseline, and that baseline carries an explicit negative
+    # contract -- it asserts that the composed default DT leaves MicroSD, the
+    # GPU and the radios disabled, so a bring-up experiment can never be
+    # dragged into it by accident.  A GPU profile is exactly such an
+    # experiment, so it lives beside the baseline rather than inside it, and
+    # the pinned p22BaselinePlatformRevision stays untouched.
+    #
+    # It does keep the self-accept capability, so the board still recovers
+    # itself unattended: a GPU that wedges the boot simply never accepts, and
+    # the Trex supervisor restores Stage A without anyone pressing a button.
+    mainlineP22BaselineGpu = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      gpuFixedOppOverlay = true;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     # Manual-only staged ALSA boundary diagnostic over the existing fully
     # observable recovery profile. It adds a static helper to the initramfs
     # but never invokes it: default execution only observes the named card;
@@ -872,6 +911,28 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and
+    # its composed DTB differ -- so this candidate reuses the p29 payload that
+    # the accepted baseline already installed instead of provisioning again.
+    mainlineNixosGpu = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22BaselineGpu.kernel;
+      serviceabilityDtb = mainlineP22BaselineGpu.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22BaselineGpu.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
@@ -1234,8 +1295,11 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineNixosGpuBundle = mainlineNixosGpu.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
+      mainlineP22BaselineGpuKernel = mainlineP22BaselineGpu.kernel;
+      mainlineP22BaselineGpuDtb = mainlineP22BaselineGpu.serviceabilityDtb;
       mainlineConsysIdentityKernel = mainlineConsysIdentity.kernel;
       mainlineConsysIdentityDtb = mainlineConsysIdentity.serviceabilityDtb;
       mainlineConsysIdentityBundle = mainlineConsysIdentity.bundle;
