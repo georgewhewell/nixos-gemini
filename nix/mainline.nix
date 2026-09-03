@@ -236,12 +236,18 @@ let
   # linux-gemini-next adds the VCN33 and GPU-devinfo nodes. Keep exact hashes
   # for both pinned DT layouts instead of applying the newer hash to the
   # accepted baseline source.
+  # The reworked-CONSYS lineage folded the observation overlays into its board
+  # DT and enables CONSYS there, so its base.dtb is a different artifact again.
   baseDtbSha256 =
-    if extendedPlatformDtb
+    if !legacyConsysPlatform
+    then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
+    else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
     else "5ffcdd71d34a75aacfb15632f5410ed3ec036a70cccb62718ba43184881c8b35";
   serviceabilityBaseDtbSha256 =
-    if extendedPlatformDtb
+    if !legacyConsysPlatform
+    then "0000000000000000000000000000000000000000000000000000000000000000"
+    else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
     else "966a9e03731a255413f10e6a11cec01c1b35cb831cde9e7622e637004b79cfb6";
   usbPlatformDtbSha256 =
@@ -870,6 +876,20 @@ let
       nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
     } ''
       mkdir -p "$out"
+      ${
+        if !legacyConsysPlatform
+        then ''
+          # The legacy DA921x provider-DTB step rewrites /dvfsp-handoff@11015000,
+          # which the reworked lineage does not have -- it dropped every DVFSP_*
+          # symbol and the node with them, and carries DA9214 inside the upstream
+          # da9211 driver instead.  Running it there dies with
+          #   Error at '/dvfsp-handoff@11015000': FDT_ERR_NOTFOUND
+          # so take the kernel's base DT unmodified and record that choice.
+          cp ${kernel}/base.dtb "$out/gemini-base.dtb"
+          chmod 0644 "$out/gemini-base.dtb"
+          echo 'provider-dtb=skipped-no-dvfsp-handoff-on-reworked-consys' > "$out/VALIDATION"
+        ''
+        else ''
       cp -R ${ixoo-candidate} candidate
       chmod -R u+w candidate
       providerBuilder=candidate/experiments/2026-08-17-mainline-da921x-readonly-provider-baseline/scripts/build-provider-dtb.sh
@@ -892,6 +912,8 @@ let
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
         ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
+        ''
+      }
       ${
         if usbHostOverlay
         then ''

@@ -779,6 +779,31 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # A next4-native profile.
+    #
+    # The reworked lineage already folded usb11-host, display, audio,
+    # power-observe, keyboard and the input/touch observers into its board DT,
+    # so asking for those overlays fails: it does not ship the .dtso files.
+    # Its overlays are for genuinely optional hardware instead -- camera, gnss,
+    # md1, auxadc, battery-presence, haptics, imu, power-telemetry.  So this
+    # profile is deliberately much smaller than the baseline's flag set.
+    mainlineP22Next4 = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      unattendedRecovery = true;
+      legacyConsysPlatform = false;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     # Wi-Fi bring-up on the accepted baseline's substrate.
     #
     # Like the GPU profile, this deliberately omits touchscreen/FGADC
@@ -1106,6 +1131,25 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22BaselineMicrosd.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosNext4 = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22Next4.kernel;
+      serviceabilityDtb = mainlineP22Next4.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22Next4.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
@@ -1526,6 +1570,7 @@
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineNixosMicrosdBundle = mainlineNixosMicrosd.bundle;
+      mainlineNixosNext4Bundle = mainlineNixosNext4.bundle;
       mainlineNixosWifiBundle = mainlineNixosWifi.bundle;
       mainlineNixosGpuBundle = mainlineNixosGpu.bundle;
       mainlineNixosGpuDeferredBundle = mainlineNixosGpuDeferred.bundle;
