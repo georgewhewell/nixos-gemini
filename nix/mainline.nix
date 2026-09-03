@@ -589,9 +589,18 @@ let
         grep -Fqx 'CONFIG_BATTERY_MT6351_FGADC=y' .config
         ! grep -q '^CONFIG_BATTERY_MT6351_FGADC_KUNIT_TEST=' .config
       ''}
-      grep -A20 -F 'consys: consys@18070000 {' \
-        arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
-        | grep -Fq 'status = "disabled";'
+      ${lib.optionalString legacyConsysPlatform ''
+        # The legacy platform keeps CONSYS off in the board DT and releases it
+        # only through an overlay.  The reworked-CONSYS lineage enables it in
+        # the board DT instead, so this assertion describes the old platform,
+        # not a requirement of the image.  Leaving it unconditional made that
+        # lineage fail its build silently: grep -Fq prints nothing and set -e
+        # aborts configurePhase, so the builder exited 1 with no diagnostic and
+        # make never ran.
+        grep -A20 -F 'consys: consys@18070000 {' \
+          arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
+          | grep -Fq 'status = "disabled";'
+      ''}
       grep -A12 -F 'btif: serial@1100c000 {' \
         arch/arm64/boot/dts/mediatek/mt6797.dtsi \
         | grep -Fq 'compatible = "mediatek,mt6797-btif",'
