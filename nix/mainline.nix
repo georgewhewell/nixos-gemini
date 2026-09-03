@@ -58,7 +58,7 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  p22BaselinePlatformRevision = "6d039d89030cf0dafb03bfe8f0db361b478b6144";
+  p22BaselinePlatformRevision = "8feda1d12b03bb8a487e99c8b091e095a114522a";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";

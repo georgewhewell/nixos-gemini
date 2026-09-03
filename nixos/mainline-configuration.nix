@@ -375,6 +375,12 @@
     pkgs.iproute2
     pkgs.usbutils
     pkgs.ethtool
+    # The MT6797/MT6351 ASoC card already registers with a full AFE -- three
+    # playback, four capture and two hostless PCMs, all bound -- but the image
+    # had no ALSA userspace at all, so none of it could be exercised.  aplay,
+    # arecord, amixer and speaker-test are what turn "the card enumerates" into
+    # "audio works".
+    pkgs.alsa-utils
   ];
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
