@@ -21,6 +21,7 @@
   gpuDeferredBind ? false,
   pdIgnoreUnused ? false,
   legacyConsysPlatform ? true,
+  microsdOverlay ? false,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -47,7 +48,12 @@ let
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
-  p22BaselinePlatformRevision = "28c47150235be70cf5b19ea8d9ce7a5473ec23f2";
+  # 28c47150 plus one commit that only edits
+  # mt6797-gemini-pda-microsd-bringup.dtso, an overlay no default profile
+  # composes.  The reviewed touchscreen/FGADC activation paths this pin guards
+  # are untouched, which the build verifies: the accepted baseline still
+  # produces c096e1ee48b0413a2de4f391b846a061928497ba390d471d4507f0c6a0900949.
+  p22BaselinePlatformRevision = "99bf16d8b35a02effc5b86ae5541ebc71e83bba7";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -209,6 +215,7 @@ let
     + lib.optionalString gpuDeferredBind "-deferred-bind"
     + lib.optionalString pdIgnoreUnused "-pd-ignore-unused"
     + lib.optionalString (!legacyConsysPlatform) "-reworked-consys"
+    + lib.optionalString microsdOverlay "-microsd"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -244,6 +251,7 @@ let
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
     assert !gpuDeferredBind || gpuFixedOppOverlay;
     assert !pdIgnoreUnused || gpuFixedOppOverlay;
+    assert !microsdOverlay || (fgadcActivationOverlay && !deviceActivationOverlay);
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !consysG2cPatchOverlay || unattendedRecovery;
     assert !consysG2dPostpatchOverlay || unattendedRecovery;
@@ -352,6 +360,7 @@ let
     + lib.optionalString gpuDeferredBind "-deferred-bind"
     + lib.optionalString pdIgnoreUnused "-pd-ignore-unused"
     + lib.optionalString (!legacyConsysPlatform) "-reworked-consys"
+    + lib.optionalString microsdOverlay "-microsd"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
@@ -717,6 +726,11 @@ let
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-fixed-opp.dtbo \
           "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
         test -s "$out/mt6797-gemini-pda-gpu-fixed-opp.dtbo"
+      ''}
+      ${lib.optionalString microsdOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-microsd-bringup.dtbo \
+          "$out/mt6797-gemini-pda-microsd-bringup.dtbo"
+        test -s "$out/mt6797-gemini-pda-microsd-bringup.dtbo"
       ''}
       ${lib.optionalString usbHostOverlay ''
         # This overlay is built and reviewed with the locked kernel source.
@@ -1237,6 +1251,27 @@ let
         else ""
       }
       ${
+        if microsdOverlay
+        then ''
+          # msdc1 at 3 V only: 4-bit, 25 MHz, no-1-8-v, card detect on GPIO67,
+          # rails from the MT6351 the PMIC already owns.  This is the overlay
+          # the retired all-or-nothing device-activation profile proved live;
+          # composing it on its own keeps one auditable ownership transition.
+          fdtoverlay \
+            -i "$out/gemini.dtb" \
+            -o "$out/gemini-microsd.dtb" \
+            ${kernel}/mt6797-gemini-pda-microsd-bringup.dtbo
+          test "$(fdtget "$out/gemini-microsd.dtb" /mmc@11240000 status)" = okay
+          test "$(fdtget -t i "$out/gemini-microsd.dtb" /mmc@11240000 bus-width)" = 4
+          test "$(fdtget -t i "$out/gemini-microsd.dtb" /mmc@11240000 max-frequency)" = 25000000
+          fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'no-1-8-v'
+          fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'cd-gpios'
+          cp "$out/gemini-microsd.dtb" "$out/gemini.dtb"
+          echo 'microsd-activation=mmc1-4bit-25mhz-3v-no-uhs-composed' >> "$out/VALIDATION"
+        ''
+        else ""
+      }
+      ${
         if deviceActivationOverlay
         then ''
           # These three activation overlays were proved independently against
@@ -1287,7 +1322,9 @@ let
       ${lib.optionalString (touchscreenActivationOverlay || fgadcActivationOverlay) ''
         # Explicit negative contracts: this full-NixOS baseline does not pull
         # in the later MicroSD, GPU, or radio bring-up experiments.
-        test "$(fdtget "$out/gemini.dtb" /mmc@11240000 status)" = disabled
+        test "$(fdtget "$out/gemini.dtb" /mmc@11240000 status)" = ${
+          if microsdOverlay then "okay" else "disabled"
+        }
         test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled

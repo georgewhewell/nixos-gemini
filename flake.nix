@@ -743,6 +743,42 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # The accepted baseline plus MicroSD, and nothing else.
+    #
+    # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
+    # lineage change: mt6797-gemini-pda-microsd-bringup.dtso already exists on
+    # the pinned baseline revision and is already wired into the DT Makefile,
+    # and MMC/MMC_BLOCK/MMC_MTK are already =y because eMMC is the rootfs path.
+    # So this keeps the full accepted baseline -- touchscreen and FGADC
+    # included, since the kernel revision still matches
+    # p22BaselinePlatformRevision -- and composes exactly one extra overlay.
+    mainlineP22BaselineMicrosd = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      touchscreenActivationOverlay = true;
+      fgadcActivationOverlay = true;
+      microsdOverlay = true;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     # Wi-Fi bring-up on the accepted baseline's substrate.
     #
     # Like the GPU profile, this deliberately omits touchscreen/FGADC
@@ -1051,6 +1087,25 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22BaselineGpu.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosMicrosd = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22BaselineMicrosd.kernel;
+      serviceabilityDtb = mainlineP22BaselineMicrosd.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22BaselineMicrosd.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
@@ -1470,6 +1525,7 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineNixosMicrosdBundle = mainlineNixosMicrosd.bundle;
       mainlineNixosWifiBundle = mainlineNixosWifi.bundle;
       mainlineNixosGpuBundle = mainlineNixosGpu.bundle;
       mainlineNixosGpuDeferredBundle = mainlineNixosGpuDeferred.bundle;
