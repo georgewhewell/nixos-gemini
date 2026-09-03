@@ -48,12 +48,17 @@ let
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
-  # 28c47150 plus one commit that only edits
-  # mt6797-gemini-pda-microsd-bringup.dtso, an overlay no default profile
-  # composes.  The reviewed touchscreen/FGADC activation paths this pin guards
-  # are untouched, which the build verifies: the accepted baseline still
-  # produces c096e1ee48b0413a2de4f391b846a061928497ba390d471d4507f0c6a0900949.
-  p22BaselinePlatformRevision = "9d9886c61a2674afc1a4484d60f96864700ab92e";
+  # 28c47150 plus the commits that poll for MicroSD presence instead of
+  # trusting GPIO67, and then move the MicroSD hardware description
+  # (pinmux, mmc0/mmc1 aliases, &mmc1 bus-width/max-frequency/no-1-8-v/
+  # broken-cd/supplies) out of mt6797-gemini-pda-microsd-bringup.dtso and
+  # into the base mt6797-gemini-pda.dts, leaving that overlay as activation
+  # only (&mmc1 { status = "okay"; }).  This moves gemini-base.dtb itself, so
+  # the reviewed touchscreen/FGADC activation paths this pin guards are
+  # re-verified against the new base DT, not left untouched: the accepted
+  # baseline now produces
+  # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
+  p22BaselinePlatformRevision = "6d039d89030cf0dafb03bfe8f0db361b478b6144";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -234,11 +239,11 @@ let
   baseDtbSha256 =
     if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "6a9c3affeb2226a6c6ce588ed3ae7c3520a6c33e2d1ff992b6cfe3325c54edc9";
+    else "5ffcdd71d34a75aacfb15632f5410ed3ec036a70cccb62718ba43184881c8b35";
   serviceabilityBaseDtbSha256 =
     if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "91d466b49659899ca4e3116e9d082ecae6acfa7b8844b298e4a71d4fab404ae5";
+    else "966a9e03731a255413f10e6a11cec01c1b35cb831cde9e7622e637004b79cfb6";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
