@@ -63,10 +63,42 @@ recover it, because a board that never presents a preloader offers nothing to
 catch, and it required a manual reset. This is consistent with this board's
 history of GPU power-off faults.
 
+## Boot 3 — the driver is not the culprit
+
+A third image kept the GPU node enabled and the repaired clock but blacklisted
+panfrost's initcall (`initcall_blacklist=panfrost_driver_init`, which `init/main.c`
+accumulates per occurrence, so it coexists with the existing A72 entry).  The
+intent was to reach a healthy SSH session and bind by hand against a console
+streamed off-box.
+
+The board went dark anyway.  Panfrost never binds in that image, so the fault is
+**not** in the driver's probe path:
+
+| boot | GPU node | CLK_MFG_BG3D registers | panfrost binds | result |
+|------|----------|------------------------|----------------|--------|
+| 1    | enabled  | no (the ID-1 bug)      | no             | healthy; rail at 975000 uV, self-accepted |
+| 2    | enabled  | yes                    | yes            | board dark |
+| 3    | enabled  | yes                    | no             | board dark |
+
+Boots 1 and 3 differ only in whether the clock resolves.  So whatever kills the
+board becomes reachable once `CLK_MFG_BG3D` exists, independently of panfrost —
+and the rail is exonerated, since boot 1 held it at 975000 uV all session.
+
+Ruled out so far: `mtk-scpsys.c` has no `.sync_state` callback, so the
+"sync_state() pending due to 13040000.gpu" line in boot 1 is fw_devlink
+bookkeeping and not a power action.  `clk_ignore_unused` is already on the
+cmdline in every one of these images.  Still open: `genpd_power_off_unused()`
+at `late_initcall_sync` sweeping the unused MFG_CORE0..3 domains (testable with
+`pd_ignore_unused`), and anything that touches the BG3D gate once it is
+registered.
+
 ## Next step
 
-Do not simply retry. The failing boot's `console-ramoops` survives a rollback,
-so read `/sys/fs/pstore/console-ramoops-0` first and find how far the bind got:
+Do not simply retry, and above all do not power-cycle the board before pulling
+evidence.  A rollback catcher must write **once** and then disarm; a keeper that
+re-arms until the gadget returns will re-intercept every power-on, so the board
+can never boot, and the repeated cycles wipe `console-ramoops` — that is how
+boot 2's evidence was lost.  Read `/sys/fs/pstore/console-ramoops-0` first:
 whether panfrost reset the GPU, which power domain was last touched, and
 whether the die was during `pm_runtime` resume. Note the ramoops buffer is
 64 KiB and **does wrap** (look for the `<<<RAM_RW>>>` marker), so a late message

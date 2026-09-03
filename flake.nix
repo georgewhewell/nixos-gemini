@@ -782,6 +782,43 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # Same as mainlineP22BaselineGpu, but panfrost's initcall is deferred so the
+    # driver does not bind during boot.
+    #
+    # Boot 2 of the GPU lane died with the board no longer enumerating USB at
+    # all, and because that took DRAM down with it, console-ramoops held nothing
+    # -- the failure destroyed its own evidence.  Enabling the node without
+    # binding reproduces the state boot 1 already proved safe (rail up at
+    # 975000 uV, one OPP, no devfreq) while adding the now-working MFG clock, so
+    # the board reaches a healthy SSH session.  The bind can then be triggered
+    # by hand against a live console being streamed off-box, which is the only
+    # way to see the last message before a power collapse.
+    mainlineP22BaselineGpuDeferred = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      gpuFixedOppOverlay = true;
+      gpuDeferredBind = true;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     # Manual-only staged ALSA boundary diagnostic over the existing fully
     # observable recovery profile. It adds a static helper to the initramfs
     # but never invokes it: default execution only observes the named card;
@@ -933,6 +970,25 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22BaselineGpu.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosGpuDeferred = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22BaselineGpuDeferred.kernel;
+      serviceabilityDtb = mainlineP22BaselineGpuDeferred.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22BaselineGpuDeferred.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
@@ -1296,6 +1352,7 @@
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineNixosGpuBundle = mainlineNixosGpu.bundle;
+      mainlineNixosGpuDeferredBundle = mainlineNixosGpuDeferred.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineP22BaselineGpuKernel = mainlineP22BaselineGpu.kernel;

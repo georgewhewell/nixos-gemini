@@ -18,6 +18,7 @@
   consysFirmware ? false,
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
+  gpuDeferredBind ? false,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -186,6 +187,7 @@ let
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
     + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
+    + lib.optionalString gpuDeferredBind " initcall_blacklist=panfrost_driver_init"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1"
     + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
   variantSuffix =
@@ -200,6 +202,7 @@ let
     + lib.optionalString consysFirmware "-consys-firmware"
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
+    + lib.optionalString gpuDeferredBind "-deferred-bind"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -233,6 +236,7 @@ let
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
+    assert !gpuDeferredBind || gpuFixedOppOverlay;
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !consysG2cPatchOverlay || unattendedRecovery;
     assert !consysG2dPostpatchOverlay || unattendedRecovery;
@@ -338,6 +342,7 @@ let
       + lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
+    + lib.optionalString gpuDeferredBind "-deferred-bind"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
