@@ -53,7 +53,7 @@ let
   # composes.  The reviewed touchscreen/FGADC activation paths this pin guards
   # are untouched, which the build verifies: the accepted baseline still
   # produces c096e1ee48b0413a2de4f391b846a061928497ba390d471d4507f0c6a0900949.
-  p22BaselinePlatformRevision = "99bf16d8b35a02effc5b86ae5541ebc71e83bba7";
+  p22BaselinePlatformRevision = "9d9886c61a2674afc1a4484d60f96864700ab92e";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1265,7 +1265,11 @@ let
           test "$(fdtget -t i "$out/gemini-microsd.dtb" /mmc@11240000 bus-width)" = 4
           test "$(fdtget -t i "$out/gemini-microsd.dtb" /mmc@11240000 max-frequency)" = 25000000
           fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'no-1-8-v'
-          fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'cd-gpios'
+          # Presence is polled: GPIO67 carries no card-detect signal on this
+          # board and the vendor handles insertion via a separate device, so
+          # assert the absence of a cd line as much as the presence of polling.
+          fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'broken-cd'
+          ! fdtget -p "$out/gemini-microsd.dtb" /mmc@11240000 | grep -Fqx 'cd-gpios'
           cp "$out/gemini-microsd.dtb" "$out/gemini.dtb"
           echo 'microsd-activation=mmc1-4bit-25mhz-3v-no-uhs-composed' >> "$out/VALIDATION"
         ''
