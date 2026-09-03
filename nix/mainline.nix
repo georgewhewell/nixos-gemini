@@ -19,6 +19,8 @@
   gpuStagedOverlay ? false,
   gpuFixedOppOverlay ? false,
   gpuDeferredBind ? false,
+  pdIgnoreUnused ? false,
+  legacyConsysPlatform ? true,
   platformEnablement ? false,
   displayOverlay ? false,
   audioOverlay ? false,
@@ -71,6 +73,7 @@ let
     ++ lib.optionals consysG2dPostpatchOverlay [./mainline-consys-g2d-postpatch.fragment]
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
+    ++ lib.optionals (!legacyConsysPlatform) [./mainline-reworked-consys.fragment]
     ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
@@ -188,6 +191,7 @@ let
     + lib.optionalString consysG2dPostpatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2d_postpatch_owner.enable_experimental_g2d_postpatch_owner=1"
     + lib.optionalString gpuStagedOverlay " mt6797_gpu_staged.enable_experimental_stages=1 mt6797_gpu_staged.stage=2 mt6797_gpu_staged.max_stage_ms=3000"
     + lib.optionalString gpuDeferredBind " initcall_blacklist=panfrost_driver_init"
+    + lib.optionalString pdIgnoreUnused " pd_ignore_unused"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1"
     + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
   variantSuffix =
@@ -203,6 +207,8 @@ let
     + lib.optionalString gpuStagedOverlay "-gpu-staged"
     + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
     + lib.optionalString gpuDeferredBind "-deferred-bind"
+    + lib.optionalString pdIgnoreUnused "-pd-ignore-unused"
+    + lib.optionalString (!legacyConsysPlatform) "-reworked-consys"
     + lib.optionalString platformEnablement "-platform"
     + lib.optionalString displayOverlay "-display"
     + lib.optionalString audioOverlay "-audio"
@@ -237,6 +243,7 @@ let
     assert !consysFirmware || consysG2bOverlay;
     assert !(gpuStagedOverlay && gpuFixedOppOverlay);
     assert !gpuDeferredBind || gpuFixedOppOverlay;
+    assert !pdIgnoreUnused || gpuFixedOppOverlay;
     assert !((gpuStagedOverlay || gpuFixedOppOverlay) && (consysIdentityOverlay || consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !consysG2cPatchOverlay || unattendedRecovery;
     assert !consysG2dPostpatchOverlay || unattendedRecovery;
@@ -343,6 +350,8 @@ let
       + lib.optionalString gpuStagedOverlay "-gpu-staged"
       + lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"
     + lib.optionalString gpuDeferredBind "-deferred-bind"
+    + lib.optionalString pdIgnoreUnused "-pd-ignore-unused"
+    + lib.optionalString (!legacyConsysPlatform) "-reworked-consys"
       + lib.optionalString platformEnablement "-platform"
       + lib.optionalString displayOverlay "-display"
       + lib.optionalString audioOverlay "-audio"
@@ -413,15 +422,21 @@ let
       grep -Fqx 'CONFIG_LOCALVERSION="-gemini-da921x-lkro"' .config
       grep -Fqx '# CONFIG_LOCALVERSION_AUTO is not set' .config
       grep -Fqx 'CONFIG_NVMEM_MTK_ATAG_DEVINFO=y' .config
-      grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
-      grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
+      ${lib.optionalString legacyConsysPlatform ''
+        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
+        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
+      ''}${lib.optionalString (!legacyConsysPlatform) ''
+        grep -Fqx 'CONFIG_REGULATOR_DA9211=y' .config
+      ''}
       grep -Fqx 'CONFIG_MTK_STP=y' .config
       ! grep -q '^CONFIG_MTK_STP_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_WMT=y' .config
       ! grep -q '^CONFIG_MTK_WMT_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL_KUNIT_TEST=' .config
-      grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
+      ${lib.optionalString legacyConsysPlatform ''
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
+      ''}
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_STP_SESSION=y' .config
@@ -494,7 +509,9 @@ let
         grep -Fqx 'CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND=y' .config
         ! grep -q '^CONFIG_MTK_MT6797_GPU_STAGED_DIAGNOSTIC=' .config
       ''}
-      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
+      ${lib.optionalString legacyConsysPlatform ''
+        grep -Fqx 'CONFIG_MTK_MT6797_BTIF_INVENTORY=y' .config
+      ''}
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=y' .config
@@ -502,7 +519,9 @@ let
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_GNSS=y' .config
-      grep -Fqx 'CONFIG_GNSS_MTK_CONSYS=y' .config
+      ${lib.optionalString legacyConsysPlatform ''
+        grep -Fqx 'CONFIG_GNSS_MTK_CONSYS=y' .config
+      ''}
       ! grep -q '^CONFIG_GNSS_MTK_CONSYS_KUNIT_TEST=' .config
       ${lib.optionalString platformEnablement ''
         grep -Fqx 'CONFIG_DRM=y' .config
@@ -577,7 +596,9 @@ let
         grep -Fqx 'CONFIG_PANIC_TIMEOUT=5' .config
       ''}
       grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
-      grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
+      ${lib.optionalString legacyConsysPlatform ''
+        grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
+      ''}
       grep -Eq '^CONFIG_CMDLINE=".*maxcpus=8( |")' .config
       grep -Fqx '# CONFIG_SCSI is not set' .config
       grep -Fqx '# CONFIG_ATA is not set' .config
@@ -632,8 +653,10 @@ let
       ${
         if debugOverlay
         then ''
-          grep -Fqx '# CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER is not set' .config
-          grep -Fqx 'CONFIG_PSTORE_GEMINI_POST_RAMOOPS_CHECKPOINT=y' .config
+          ${lib.optionalString legacyConsysPlatform ''
+            grep -Fqx '# CONFIG_PSTORE_GEMINI_ARM64_ENTRY_LEDGER is not set' .config
+            grep -Fqx 'CONFIG_PSTORE_GEMINI_POST_RAMOOPS_CHECKPOINT=y' .config
+          ''}
           grep -Fqx 'CONFIG_CMDLINE="${kernelCmdline}"' .config
         ''
         else ''

@@ -743,6 +743,47 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    # Wi-Fi bring-up on the accepted baseline's substrate.
+    #
+    # Like the GPU profile, this deliberately omits touchscreen/FGADC
+    # activation: those flags mark the accepted full-NixOS baseline, whose
+    # negative contract requires the composed default DT to leave the radios
+    # disabled.  A radio bring-up therefore sits beside the baseline, and the
+    # pinned p22BaselinePlatformRevision stays untouched.
+    #
+    # This profile is only meaningful when linux-gemini is overridden to the
+    # Wi-Fi lineage (codex/mt6797-wifi-wpa3-production-20260902), which carries
+    # the MT6797 Gen3 WLAN driver and describes wifi@180f0000 with
+    # status = "okay" in the board DT rather than in an overlay.
+    mainlineP22BaselineWifi = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      # The Wi-Fi lineage replaced the CONSYS stack wholesale, so it does not
+      # define the legacy BTIF inventory or DVFSP resource-owner symbols the
+      # baseline platform asserts.  Those two checks describe the old platform,
+      # not a requirement of this image.
+      legacyConsysPlatform = false;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     # Panfrost bring-up on the accepted baseline's substrate.
     #
     # This deliberately does NOT set touchscreenActivationOverlay or
@@ -816,6 +857,46 @@
       thermalHallObserveOverlay = true;
       gpuFixedOppOverlay = true;
       gpuDeferredBind = true;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    # The decisive experiment for the boot-2/boot-3 fault.
+    #
+    # Boots 1 and 3 differ only in whether CLK_MFG_BG3D resolves, and panfrost is
+    # already exonerated (boot 3 died with its initcall blacklisted).  The
+    # leading remaining candidate is genpd_power_off_unused(), which runs at
+    # late_initcall_sync and sweeps PM domains with no devices in use -- which,
+    # with panfrost unbound, is exactly MFG_CORE0..3.
+    #
+    # So keep the bind deferred and add pd_ignore_unused.  If the board survives,
+    # the sweep is the cause and panfrost can then be bound by hand on a live
+    # system; if it still dies, the sweep is exonerated.  Either way one boot
+    # answers it -- which matters, because recovering this board from a hard hang
+    # needs a physical silver+power hold, not a button tap.
+    mainlineP22BaselineGpuPdIgnore = import ./nix/mainline.nix {
+      inherit
+        buildPkgs
+        oldPkgs
+        crossPkgs
+        ixoo-kernel
+        linux-gemini
+        ixoo-candidate
+        ;
+      debugOverlay = true;
+      storageOverlay = true;
+      sshAccess = true;
+      usbHostOverlay = true;
+      platformEnablement = true;
+      displayOverlay = true;
+      audioOverlay = true;
+      powerObserveOverlay = true;
+      powerObservePreflight = true;
+      unattendedRecovery = true;
+      inputObserveOverlay = true;
+      thermalHallObserveOverlay = true;
+      gpuFixedOppOverlay = true;
+      gpuDeferredBind = true;
+      pdIgnoreUnused = true;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
@@ -974,6 +1055,25 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
 
+    mainlineNixosWifi = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22BaselineWifi.kernel;
+      serviceabilityDtb = mainlineP22BaselineWifi.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22BaselineWifi.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
     mainlineNixosGpuDeferred = import ./nix/mainline-nixos.nix {
       inherit buildPkgs crossPkgs ixoo-kernel;
       kernel = mainlineP22BaselineGpuDeferred.kernel;
@@ -989,6 +1089,25 @@
       provisionWaitSeconds = 600;
       watchdogLeaseSeconds = 720;
       kernelLeaseSelfAcceptToken = mainlineP22BaselineGpuDeferred.leaseSelfAcceptToken;
+      stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+      leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+    };
+
+    mainlineNixosGpuPdIgnore = import ./nix/mainline-nixos.nix {
+      inherit buildPkgs crossPkgs ixoo-kernel;
+      kernel = mainlineP22BaselineGpuPdIgnore.kernel;
+      serviceabilityDtb = mainlineP22BaselineGpuPdIgnore.serviceabilityDtb;
+      squashfs = mainlineNixosSquashfs;
+      nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
+      authorizedKeys = ./nixos/authorized_keys;
+      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      unattendedRecovery = true;
+      inputDiagnostics = true;
+      displayActivation = true;
+      provisionStore = true;
+      provisionWaitSeconds = 600;
+      watchdogLeaseSeconds = 720;
+      kernelLeaseSelfAcceptToken = mainlineP22BaselineGpuPdIgnore.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     };
@@ -1351,8 +1470,10 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       mainlineNixosBundle = mainlineNixos.bundle;
+      mainlineNixosWifiBundle = mainlineNixosWifi.bundle;
       mainlineNixosGpuBundle = mainlineNixosGpu.bundle;
       mainlineNixosGpuDeferredBundle = mainlineNixosGpuDeferred.bundle;
+      mainlineNixosGpuPdIgnoreBundle = mainlineNixosGpuPdIgnore.bundle;
       mainlineP22BaselineKernel = mainlineP22Baseline.kernel;
       mainlineP22BaselineDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineP22BaselineGpuKernel = mainlineP22BaselineGpu.kernel;

@@ -1,0 +1,6 @@
+# Platform deltas for the reworked-CONSYS lineage (integration/post-firstboot-next4
+# and descendants).  That lineage replaced the legacy MT6797 CONSYS stack and
+# dropped the Gemini-specific DA9213 provider symbols, carrying the DA9214
+# legacy register model inside the upstream da9211 driver instead.  Select it
+# explicitly: the A72 admission gate needs the VPROC rails it owns.
+CONFIG_REGULATOR_DA9211=y
