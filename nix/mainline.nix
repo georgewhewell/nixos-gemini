@@ -37,6 +37,7 @@
   cellularOverlay ? false,
   a72Overlay ? false,
   gpuOwnerOverlay ? false,
+  connectivityModules ? false,
   leaseSelfAcceptToken ? null,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
@@ -65,7 +66,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "8a216a8a54c2c1d1a83c0052a2325e0bda2b03fb";
+  p22BaselinePlatformRevision = "ba07482f87828eafe57d40bfa43368bc679ccd19";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -102,7 +103,8 @@ let
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
     ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment]
     ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment]
-    ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment];
+    ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
+    ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -207,7 +209,8 @@ let
   kernelCmdline =
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
-    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M13 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
+    + lib.optionalString connectivityModules " mt6797_consys_emi_mpu.enable_experimental_ownership=1"
+    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M14 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -505,7 +508,7 @@ let
       ! grep -q '^CONFIG_MTK_WMT_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL_KUNIT_TEST=' .config
-      ${lib.optionalString legacyConsysPlatform ''
+      ${lib.optionalString (legacyConsysPlatform && !connectivityModules) ''
         # 28c47150 built MTK_MT6797_CONSYS_INVENTORY as a resource-only
         # inventory driver.  gemini-mainline-integration 6948ed143475a ("soc:
         # mediatek: tighten MT6797 CONSYS resource ownership") and
@@ -602,7 +605,9 @@ let
       # depend on the repurposed MTK_MT6797_CONSYS_INVENTORY owner above, so
       # it is unavailable to the no-radio baseline.  28c47150 built it as a
       # dormant adapter matched by no Gemini DT node.
-      ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=' .config
+      ${lib.optionalString (!connectivityModules) ''
+        ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=' .config
+      ''}
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP_KUNIT_TEST=' .config
@@ -791,6 +796,13 @@ let
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
       )
+      ${lib.optionalString connectivityModules ''
+        for symbol in MTK_MT6797_CONSYS_INVENTORY MTK_MT6797_BTIF_PIO_PLATFORM MTK_MT6797_WIFI; do
+          grep -Fqx "CONFIG_$symbol=m" .config || { echo "Expected module CONFIG_$symbol=m"; grep -E "^(CONFIG_$symbol=|# CONFIG_$symbol )" .config || true; exit 1; }
+        done
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_EMI_MPU=y' .config
+        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FW_HANDOFF=y' .config
+      ''}
       ${lib.optionalString gpuOwnerOverlay ''
         export HOSTCC=${buildPkgs.stdenv.cc}/bin/cc
         python3 tools/gemini/test-regulator-exclusive-state.py
@@ -825,6 +837,9 @@ let
         # Out-of-tree build links are not runtime module dependencies.
         rm -f "$out/lib/modules/7.1.3-gemini-da921x-lkro/build" "$out/lib/modules/7.1.3-gemini-da921x-lkro/source"
         ${buildPkgs.kmod}/bin/depmod -b "$out" 7.1.3-gemini-da921x-lkro
+      ''}
+      ${lib.optionalString connectivityModules ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-wifi.dtbo "$out/"
       ''}
       cp arch/arm64/boot/Image "$out/Image"
       cp arch/arm64/boot/Image.gz "$out/Image.gz"
@@ -1516,6 +1531,10 @@ let
         python3 ${./gpu-integration-dt.py} "$out/gpu-carrier.dtb" ${kernel}/mt6797-gemini-pda-gpu-preflight.dtbo "$out/gpu-owner.dtb" >> "$out/VALIDATION"
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 ${linux-gemini}/drivers/pmdomain/mediatek/test-gpuldo-dt.py "$out/gpu-carrier.dtb" "$out/gpu-owner.dtb" >> "$out/VALIDATION"
         cp "$out/gpu-owner.dtb" "$out/gemini.dtb"
+      ''}
+      ${lib.optionalString connectivityModules ''
+        python3 ${./wifi-integration-dt.py} "$out/gemini.dtb" ${kernel}/mt6797-gemini-pda-wifi.dtbo "$out/wifi-owner.dtb" >> "$out/VALIDATION"
+        cp "$out/wifi-owner.dtb" "$out/gemini.dtb"
       ''}
       ${lib.optionalString a72Overlay ''
         dtc -q -@ -I dts -O dtb -o a72-cpu9.dtbo ${./mt6797-gemini-a72-cpu9-on.dtso}

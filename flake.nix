@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m13&rev=8a216a8a54c2c1d1a83c0052a2325e0bda2b03fb";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m14&rev=ba07482f87828eafe57d40bfa43368bc679ccd19";
       flake = false;
     };
     linux-gemini-next = {
@@ -749,6 +749,7 @@
       cellularOverlay = true;
       a72Overlay = true;
       gpuOwnerOverlay = true;
+      connectivityModules = true;
       microsdOverlay = true;
     };
 
@@ -1044,10 +1045,13 @@
         ./nixos/mainline-configuration.nix
         ./nixos/cellular.nix
         ./nixos/gpu.nix
+        ./nixos/connectivity.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
           _module.args.geminiGpuKernel = mainlineP22Baseline.kernel;
+          _module.args.geminiConnectivityKernel = mainlineP22Baseline.kernel;
+          _module.args.geminiConnectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
           _module.args.geminiGpuSmoke = gpuUserspace.smoke;
         }
         {
