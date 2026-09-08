@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-a72-m11&rev=b288df9651f2d0932e8be4b30988889e8c84183c";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m12&rev=0c81836cf6bdf3a202e809b07bdc2eddcdbadfa5";
       flake = false;
     };
     linux-gemini-next = {
@@ -743,6 +743,7 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
       cellularOverlay = true;
       a72Overlay = true;
+      microsdOverlay = true;
     };
 
     # The accepted baseline plus MicroSD, and nothing else.
