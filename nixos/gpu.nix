@@ -12,7 +12,7 @@ let
   qualify = pkgs.writeShellScript "gemini-gpu-qualify" ''
     set -eu
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.kmod pkgs.systemd pkgs.util-linux pkgs.gawk]}:$PATH
-    grep -wFq GEMINI_A72_CI9_M17 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M18 /proc/cmdline
     test "$(cat /sys/devices/system/cpu/online)" = 0-9
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
