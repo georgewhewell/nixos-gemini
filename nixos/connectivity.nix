@@ -1,4 +1,4 @@
-# Stage-2 firmware/HIF qualification; usable Wi-Fi still needs a radio frontend.
+# Stage-2 firmware/HIF and passive-scan qualification. Connection tests are explicit.
 { pkgs, geminiConnectivityKernel, geminiConnectivityFirmware, ... }:
 let
   firmwareBundle = pkgs.symlinkJoin {
@@ -8,7 +8,7 @@ let
   qualify = pkgs.writeShellScript "gemini-connectivity-qualify" ''
     set -eu
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.kmod pkgs.systemd pkgs.util-linux pkgs.iproute2 pkgs.iw]}:$PATH
-    grep -wFq GEMINI_A72_CI9_M15 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M16 /proc/cmdline
     test "$(cat /sys/devices/system/cpu/online)" = 0-9
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active

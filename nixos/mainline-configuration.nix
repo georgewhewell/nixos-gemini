@@ -384,6 +384,8 @@
     pkgs.iproute2
     pkgs.usbutils
     pkgs.ethtool
+    pkgs.iw
+    pkgs.wpa_supplicant
     # The MT6797/MT6351 ASoC card already registers with a full AFE -- three
     # playback, four capture and two hostless PCMs, all bound -- but the image
     # had no ALSA userspace at all, so none of it could be exercised.  aplay,
