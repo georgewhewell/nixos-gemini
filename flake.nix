@@ -1006,12 +1006,33 @@
         ];
     };
 
+    cellularFsRegister = crossPkgs.pkgsStatic.stdenv.mkDerivation {
+      pname = "gemini-cellular-fs-register";
+      version = "ci1";
+      src = linux-gemini;
+      dontConfigure = true;
+      nativeBuildInputs = [buildPkgs.python3 buildPkgs.coreutils buildPkgs.bash];
+      buildPhase = ''
+        mkdir stage2-tests
+        cp ${./nix/test-cellular-stage2.py} stage2-tests/test-cellular-stage2.py
+        cp ${./nix/cellular-stage2.sh} stage2-tests/cellular-stage2.sh
+        python3 stage2-tests/test-cellular-stage2.py
+        $CC -O2 -Wall -Wextra -Werror -o mt6797-fs-register tools/gemini/mt6797-fs-register.c
+      '';
+      installPhase = ''
+        mkdir -p "$out/bin"
+        cp mt6797-fs-register "$out/bin/"
+      '';
+    };
+
     mainlineNixosSystemCross = nixpkgs-old.lib.nixosSystem {
       system = buildSystem;
       modules = [
         ./nixos/mainline-configuration.nix
+        ./nixos/cellular.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+          _module.args.geminiCellularHelper = cellularFsRegister;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
