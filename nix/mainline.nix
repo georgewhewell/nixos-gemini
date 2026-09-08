@@ -822,6 +822,8 @@ let
       ${lib.optionalString gpuOwnerOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-preflight.dtbo "$out/"
         make ARCH=arm64 CROSS_COMPILE=aarch64-unknown-linux-gnu- INSTALL_MOD_PATH="$out" DEPMOD=true modules_install
+        # Out-of-tree build links are not runtime module dependencies.
+        rm -f "$out/lib/modules/7.1.3-gemini-da921x-lkro/build" "$out/lib/modules/7.1.3-gemini-da921x-lkro/source"
         ${buildPkgs.kmod}/bin/depmod -b "$out" 7.1.3-gemini-da921x-lkro
       ''}
       cp arch/arm64/boot/Image "$out/Image"
