@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-a72-m10&rev=27faa77fb9930091526d893cd5e3edaecc6047f0";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-a72-m11&rev=b288df9651f2d0932e8be4b30988889e8c84183c";
       flake = false;
     };
     linux-gemini-next = {
