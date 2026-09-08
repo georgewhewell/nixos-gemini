@@ -629,13 +629,26 @@ let
         # lineage fail its build silently: grep -Fq prints nothing and set -e
         # aborts configurePhase, so the builder exited 1 with no diagnostic and
         # make never ran.
-        grep -A20 -F 'consys: consys@18070000 {' \
+        #
+        # gemini-mainline-integration 969a7aa097a50 ("arm64: dts: mediatek:
+        # complete Gemini CONSYS resources") and d8ea00f5395dc added rail,
+        # emi-mpu, infracfg, spm and btif phandles to the node, pushing its
+        # own status line to 28 lines below the opening brace; the node is
+        # still status = "disabled" (and the composed DTB is checked with
+        # fdtget below), so only the window widens.
+        grep -A32 -F 'consys: consys@18070000 {' \
           arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts \
           | grep -Fq 'status = "disabled";'
       ''}
+      # 28c47150 described BTIF as a disabled 8250 UART
+      # ("mediatek,mt6797-btif", "mediatek,mtk-btif").  gemini-mainline-
+      # integration d8ea00f5395dc ("arm64: dts: mediatek: describe MT6797 BTIF
+      # PIO supplier") renamed it to "mediatek,mt6797-btif-pio", matched only
+      # by mt6797-btif-pio-platform.c (MTK_MT6797_BTIF_PIO_PLATFORM, asserted
+      # absent above).  The node stays disabled.
       grep -A12 -F 'btif: serial@1100c000 {' \
         arch/arm64/boot/dts/mediatek/mt6797.dtsi \
-        | grep -Fq 'compatible = "mediatek,mt6797-btif",'
+        | grep -Fq 'compatible = "mediatek,mt6797-btif-pio";'
       grep -A12 -F 'btif: serial@1100c000 {' \
         arch/arm64/boot/dts/mediatek/mt6797.dtsi \
         | grep -Fq 'status = "disabled";'
