@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m12&rev=0c81836cf6bdf3a202e809b07bdc2eddcdbadfa5";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m13&rev=8a216a8a54c2c1d1a83c0052a2325e0bda2b03fb";
       flake = false;
     };
     linux-gemini-next = {
@@ -86,6 +86,11 @@
 
     # Cross pkgs for aarch64
     crossPkgs = buildPkgs.pkgsCross.aarch64-multiplatform;
+
+    gpuUserspace = import ./nix/gpu-oneboot-userspace.nix {
+      inherit buildPkgs;
+      armPkgs = crossPkgs;
+    };
 
     ubootStage0 = import ./nix/uboot-stage0.nix {
       inherit buildPkgs crossPkgs u-boot-src;
@@ -743,6 +748,7 @@
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
       cellularOverlay = true;
       a72Overlay = true;
+      gpuOwnerOverlay = true;
       microsdOverlay = true;
     };
 
@@ -1037,9 +1043,12 @@
       modules = [
         ./nixos/mainline-configuration.nix
         ./nixos/cellular.nix
+        ./nixos/gpu.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
+          _module.args.geminiGpuKernel = mainlineP22Baseline.kernel;
+          _module.args.geminiGpuSmoke = gpuUserspace.smoke;
         }
         {
           nixpkgs.hostPlatform = targetSystem;

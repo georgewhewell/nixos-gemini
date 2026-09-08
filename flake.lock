@@ -37,17 +37,17 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788882052,
-        "narHash": "sha256-Y2CHlIQDYNlhUbkSNQVO4/D7ORhpxJYni2Odogn+bb4=",
-        "ref": "gemini-integration-m12",
-        "rev": "0c81836cf6bdf3a202e809b07bdc2eddcdbadfa5",
-        "revCount": 567,
+        "lastModified": 1788883452,
+        "narHash": "sha256-EDLu8S5IEIXZbJc2whDprOkcfJ7jXALkQh39pEkh+kI=",
+        "ref": "gemini-integration-m13",
+        "rev": "8a216a8a54c2c1d1a83c0052a2325e0bda2b03fb",
+        "revCount": 568,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
       },
       "original": {
-        "ref": "gemini-integration-m12",
-        "rev": "0c81836cf6bdf3a202e809b07bdc2eddcdbadfa5",
+        "ref": "gemini-integration-m13",
+        "rev": "8a216a8a54c2c1d1a83c0052a2325e0bda2b03fb",
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
       }
