@@ -23,8 +23,11 @@
         systemdSupport = false;
         translateManpages = false;
       };
+      # Use the same minimal libsystemd as PID 1. This supplies D-Bus socket
+      # activation and readiness notification without adding full systemd.
       dbus = prev.dbus.override {
-        enableSystemd = false;
+        enableSystemd = true;
+        systemdMinimal = config.systemd.package;
       };
       # NixOS 23.05's swraid module references these paths even though this
       # system has no software RAID and the initramfs is supplied separately.
@@ -114,13 +117,6 @@
     withKerberos = false;
   };
 
-  # This is an SSH-only recovery system. Stage2 reaches multi-user.target,
-  # but logind cannot currently address PID 1's org.freedesktop.systemd1 D-Bus
-  # name to create its optional user/session scopes. Keep PAM authentication
-  # and pam_unix session handling, but do not ask SSH to register a logind
-  # session until that separate manager-bus fault is diagnosed on hardware.
-  security.pam.services.sshd.startSession = lib.mkForce false;
-
   users.mutableUsers = false;
   users.users.root = {
     hashedPassword = "!";
@@ -130,7 +126,7 @@
   services.getty.autologinUser = "root";
 
   # NixOS 23.05's generated unit set expects logind and its PAM helper.  Keep
-  # those small pieces plus a standalone D-Bus daemon, while omitting the rest
+  # those small pieces plus a socket-activated D-Bus daemon, while omitting the rest
   # of the full systemd feature set.
   systemd.package = pkgs.systemdMinimal.override {
     bashInteractive = pkgs.bash;
@@ -144,21 +140,31 @@
   systemd.shutdownRamfs.enable = false;
   systemd.services.prepare-kexec.enable = false;
   services.dbus.enable = true;
-  systemd.services.dbus = {
-    description = "D-Bus System Message Bus";
+  # PID 1 checks both dbus.socket and dbus.service before connecting its
+  # manager API. Keep the package's socket-activated, notify-ready units.
+  systemd.services.gemini-manager-bus-check = {
+    description = "Verify PID 1 owns the system D-Bus manager API";
     wantedBy = ["multi-user.target"];
-    before = ["systemd-logind.service"];
-    serviceConfig = {
-      Type = lib.mkForce "simple";
-      ExecStart = lib.mkForce "${pkgs.dbus}/bin/dbus-daemon --system --nofork --nopidfile";
-      RuntimeDirectory = "dbus";
-      RuntimeDirectoryMode = "0755";
-      Restart = "on-failure";
-    };
-  };
-  systemd.services."systemd-logind" = {
     after = ["dbus.service"];
     requires = ["dbus.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      TimeoutStartSec = "35s";
+    };
+    script = ''
+      for attempt in $(${pkgs.busybox}/bin/busybox seq 1 10); do
+        if ${config.systemd.package}/bin/busctl --system --timeout=2 call \
+          org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+          GetConnectionUnixProcessID s org.freedesktop.systemd1 \
+          | ${pkgs.busybox}/bin/busybox grep -Fxq 'u 1'; then
+          echo 'manager-system-bus=pid1' > /run/gemini-manager-bus
+          exit 0
+        fi
+        ${pkgs.busybox}/bin/busybox sleep 1
+      done
+      exit 1
+    '';
   };
   systemd.services.sshd = {
     # Order after both recovery paths have had a chance to configure, but do
@@ -310,9 +316,11 @@
   # fail-closed acceptance.
   systemd.services.gemini-baseline-self-accept = lib.mkIf (geminiLeaseSelfAcceptToken != null) {
     description = "Self-accept the reviewed Gemini full-NixOS watchdog lease";
+    requires = ["gemini-manager-bus-check.service"];
     wantedBy = ["multi-user.target"];
     after = [
       "gemini-mainline-success.service"
+      "gemini-manager-bus-check.service"
       "gemini-watchdog-takeover.service"
       "gemini-mainline-usb.service"
       "gemini-input-observe.service"
@@ -341,7 +349,8 @@
   services.timesyncd.enable = false;
   services.journald.extraConfig = "Storage=volatile";
   services.resolved.enable = false;
-  systemd.packages = lib.mkForce [];
+  systemd.packages = lib.mkForce [pkgs.dbus];
+  systemd.sockets.dbus.wantedBy = ["sockets.target"];
   boot.enableContainers = false;
   programs.command-not-found.enable = false;
   programs.less.enable = lib.mkForce false;
