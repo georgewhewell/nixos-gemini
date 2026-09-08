@@ -1,11 +1,23 @@
 # Experimental volatile cellular service for the CI1 full NixOS image.
 { pkgs, lib, geminiCellularHelper, ... }:
 let
-  runner = pkgs.writeShellScript "gemini-cellular-stage2" ''
-    export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd]}:$PATH
+  runtimePath = lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd];
+  rawRunner = pkgs.writeShellScript "gemini-cellular-stage2" ''
+    export PATH=${runtimePath}:$PATH
     export GEMINI_CELLULAR_HELPER=${geminiCellularHelper}/bin/mt6797-fs-register
     export GEMINI_CELLULAR_BUSYBOX=${pkgs.busybox}/bin/busybox
     exec ${pkgs.busybox}/bin/busybox sh ${../nix/cellular-stage2.sh} "$@"
+  '';
+  runner = pkgs.runCommand "gemini-cellular-stage2-checked" {} ''
+    for command in cat grep systemctl tr readlink wc sed sha256sum mkdir timeout mount cp sleep dmesg cmp mv; do
+      found=no
+      for directory in ${lib.replaceStrings [":"] [" "] runtimePath}; do
+        if test -x "$directory/$command"; then found=yes; break; fi
+      done
+      test "$found" = yes || { echo "missing cellular runtime command: $command"; exit 1; }
+    done
+    cp ${rawRunner} "$out"
+    chmod 0555 "$out"
   '';
 in {
   systemd.services.gemini-cellular = {
