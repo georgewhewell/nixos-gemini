@@ -1305,7 +1305,29 @@ tty1_pid=\$(systemctl show -p MainPID --value autovt@tty1.service)
 case \"\$tty1_pid\" in ''|*[!0-9]*) exit 1 ;; esac
 test \"\$(awk '/^Uid:/ {print \$2; exit}' \"/proc/\$tty1_pid/status\")\" = 0
 test \"\$(readlink \"/proc/\$tty1_pid/fd/0\")\" = /dev/tty1
-case \"\$(cat \"/proc/\$tty1_pid/comm\")\" in ash|sh) ;; *) exit 1 ;; esac
+# shadow login can supervise a child shell rather than exec it.
+case \"\$(cat \"/proc/\$tty1_pid/comm\")\" in
+  ash|sh) ;;
+  login)
+    login_pid=\$tty1_pid
+    shell_pid=
+    for status_file in /proc/[0-9]*/status; do
+      test \"\$(awk '/^PPid:/ {print \$2; exit}' \"\$status_file\" 2>/dev/null)\" = \"\$login_pid\" || continue
+      child_pid=\${status_file#/proc/}; child_pid=\${child_pid%/status}
+      case \"\$(cat \"/proc/\$child_pid/comm\" 2>/dev/null)\" in ash|sh) ;; *) continue ;; esac
+      test -z \"\$shell_pid\" || exit 1
+      shell_pid=\$child_pid
+    done
+    test -n \"\$shell_pid\"
+    tty1_pid=\$shell_pid
+    ;;
+  *) exit 1 ;;
+esac
+test \"\$(awk '/^Uid:/ {print \$2; exit}' \"/proc/\$tty1_pid/status\")\" = 0
+test \"\$(readlink \"/proc/\$tty1_pid/fd/0\")\" = /dev/tty1
+root_shell=\$(awk -F: '\$1 == \"root\" {print \$7}' /etc/passwd)
+test -n \"\$root_shell\"
+test \"\$(readlink -f \"/proc/\$tty1_pid/exe\")\" = \"\$(readlink -f \"\$root_shell\")\"
 keyboard_event=
 for event in /sys/class/input/event*; do
   test \"\$(cat \"\$event/device/name\" 2>/dev/null || true)\" = keyboard-matrix || continue
@@ -1569,7 +1591,29 @@ case "$tty1_pid" in ''|*[!0-9]*) exit 1 ;; esac
 test "$tty1_pid" -gt 1
 test "$(awk '/^Uid:/ {print $2; exit}' "/proc/$tty1_pid/status")" = 0
 test "$(readlink "/proc/$tty1_pid/fd/0")" = /dev/tty1
-case "$(cat "/proc/$tty1_pid/comm")" in ash|sh) ;; *) exit 1 ;; esac
+# shadow login can supervise a child shell rather than exec it.
+case "$(cat "/proc/$tty1_pid/comm")" in
+  ash|sh) ;;
+  login)
+    login_pid=$tty1_pid
+    shell_pid=
+    for status_file in /proc/[0-9]*/status; do
+      test "$(awk '/^PPid:/ {print $2; exit}' "$status_file" 2>/dev/null)" = "$login_pid" || continue
+      child_pid=${status_file#/proc/}; child_pid=${child_pid%/status}
+      case "$(cat "/proc/$child_pid/comm" 2>/dev/null)" in ash|sh) ;; *) continue ;; esac
+      test -z "$shell_pid" || exit 1
+      shell_pid=$child_pid
+    done
+    test -n "$shell_pid"
+    tty1_pid=$shell_pid
+    ;;
+  *) exit 1 ;;
+esac
+test "$(awk '/^Uid:/ {print $2; exit}' "/proc/$tty1_pid/status")" = 0
+test "$(readlink "/proc/$tty1_pid/fd/0")" = /dev/tty1
+root_shell=$(awk -F: '$1 == "root" {print $7}' /etc/passwd)
+test -n "$root_shell"
+test "$(readlink -f "/proc/$tty1_pid/exe")" = "$(readlink -f "$root_shell")"
 keyboard_event=
 keyboard_ev=
 for event in /sys/class/input/event*; do
