@@ -1,6 +1,14 @@
 # Load Panfrost only after the watchdog, A72 and modem startup have completed.
 { pkgs, geminiGpuKernel, geminiGpuSmoke, ... }:
 let
+  logCheck = pkgs.runCommand "gemini-gpu-log-check" {
+    nativeBuildInputs = [pkgs.buildPackages.python3 pkgs.buildPackages.bash pkgs.buildPackages.gnugrep];
+  } ''
+    cp ${../nix/gpu-kernel-log-check.sh} gpu-kernel-log-check.sh
+    cp ${../nix/test-gpu-kernel-log-check.py} test-gpu-kernel-log-check.py
+    python3 test-gpu-kernel-log-check.py
+    cp gpu-kernel-log-check.sh "$out"
+  '';
   qualify = pkgs.writeShellScript "gemini-gpu-qualify" ''
     set -eu
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.kmod pkgs.systemd pkgs.util-linux pkgs.gawk]}:$PATH
@@ -52,9 +60,7 @@ let
       echo "autosuspend=$pass pass=yes domains=all-six-off"
     done
     dmesg > /run/gemini-gpu/kernel.txt
-    grep -Ev 'panfrost 13040000\.gpu: \[drm:panfrost_devfreq_init \[panfrost\]\] Failed to register cooling device$' /run/gemini-gpu/kernel.txt > /run/gemini-gpu/kernel-scoped.txt || test "$?" -eq 1
-    if grep -Ei '(panfrost|13040000\.gpu|mfg|rt5735|vgpu).*(fault|error|timeout|timed out|failed|stuck)|(^|[[:space:]])(BUG:|Oops:|Call trace:)' /run/gemini-gpu/kernel-scoped.txt; then exit 1; fi
-    if grep -E 'GPULDO_FIRST_FAILURE|GPU_RENDER_FAIL|rcu.*detected stalls|Kernel panic|BUG:|Unable to handle kernel' /run/gemini-gpu/kernel.txt; then exit 1; fi
+    ${pkgs.runtimeShell} ${logCheck} /run/gemini-gpu/kernel.txt /run/gemini-gpu/kernel-scoped.txt
     echo 'gpu=render-and-autosuspend-pass' > /run/gemini-gpu/result
   '';
 in {
