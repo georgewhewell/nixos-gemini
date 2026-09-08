@@ -659,10 +659,10 @@ let
       echo "display-activation=${if displayActivation then "stage1 watchdog-gated 14000000.syscon/activate_drm; DSI IRQ before host registration" else "none"}"
       echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
-      echo "microsd-activation=inactive (not composed)"
+      echo "microsd-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /mmc@11240000 status)"
       echo "audio-playback-exercise=inactive (no helper in image)"
       echo "consys-radios=inactive (DT disabled)"
-      echo "gpu=inactive (DT disabled)"
+      echo "gpu-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /gpu@13040000 status)"
       echo "unattended-recovery=${
         if unattendedRecovery
         then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
