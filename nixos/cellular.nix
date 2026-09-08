@@ -1,4 +1,4 @@
-# Experimental volatile cellular service for the CI1 full NixOS image.
+# Experimental volatile cellular service for the CI2 full NixOS image.
 { pkgs, lib, geminiCellularHelper, ... }:
 let
   runtimePath = lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd];
