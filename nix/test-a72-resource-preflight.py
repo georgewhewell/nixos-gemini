@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory() as directory:
         'dt/cpus/cpu@200/status': 'okay\0',
         'dt/cpus/cpu@201/status': 'okay\0',
         'cmdline': 'maxcpus=8 regulator_ignore_unused\n',
-        'regulators': 'DA921x-BUCKA 0 0 0 0 1000mV\nDA921x-BUCKB 0 0 0 0 1000mV\nmt6797-bigidvfs-sram 0 0 0 0 1100mV\n',
+        'regulators': 'vproc-little 0 0 0 0 1000mV\nvproc-big 0 0 0 0 1000mV\nvsram-big 0 0 0 0 1100mV\n',
         'clocks': 'mt6797_mp2 0 0 0 26000000\nmt6797_mp2_armpll 0 0 0 0\n',
         'log': ('DA9214 direct-address regulators registered\n'
                 'voltage read/set ready; enable, status, and disable unsupported\n'
@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory() as directory:
     }
     nodes = ['i2c@1100e000/regulator@68/regulators/BUCKA',
              'i2c@1100e000/regulator@68/regulators/BUCKB', 'regulator-sram-big']
-    names = ['DA921x-BUCKA', 'DA921x-BUCKB', 'mt6797-bigidvfs-sram']
+    names = ['vproc-little', 'vproc-big', 'vsram-big']
     for i, (node, name) in enumerate(zip(nodes, names)):
         files[f'dt/{node}/phandle'] = '\0\0\0' + chr(i+1)
         files[f'regulator-class/regulator.{i}/name'] = name + '\n'
@@ -41,19 +41,19 @@ with tempfile.TemporaryDirectory() as directory:
                KERNEL_LOG=str(root/'log'), EXPECTED_CPU8_STATUS='okay', EXPECTED_CPU9_STATUS='okay')
     cases = [('pass', None, None), ('online-a72', 'cpu/online', '0-8\n'),
              ('wrong-cpu9', 'dt/cpus/cpu@201/status', 'disabled\0'),
-             ('rail-mismatch', 'regulators', files['regulators'].replace('DA921x-BUCKB 0 0 0 0 1000mV','DA921x-BUCKB 0 0 0 0 900mV')),
+             ('rail-mismatch', 'regulators', files['regulators'].replace('vproc-big 0 0 0 0 1000mV','vproc-big 0 0 0 0 900mV')),
              ('missing-gate', 'log', files['log'].split('cpu-on-gate-v3:')[0]),
              ('kernel-error', 'log', files['log']+'mt6797-a72: transaction error\n'),
              ('missing-clock', 'clocks', ''),
              ('wrong-supply', 'dt/a72-power/vproc-big-supply', '\0\0\0\1'),
              ('short-supply', 'dt/a72-power/sram-big-supply', '\0\3'),
-             ('wrong-descriptor', 'regulator-class/regulator.1/name', 'DA921x-BUCKA\n'),
+             ('wrong-published-name', 'regulator-class/regulator.1/name', 'vproc-little\n'),
              ('missing-contract', 'log', files['log'].replace('mp2-clock-contract=cold-clk26m-v1 ', '')),
              ('duplicate-contract', 'log', files['log'].replace('mp2-clock-contract=cold-clk26m-v1', 'mp2-clock-contract=cold-clk26m-v1 mp2-clock-contract=cold-clk26m-v1')),
              ('wrong-contract', 'log', files['log'].replace('cold-clk26m-v1', 'running')),
              ('wrong-rate', 'log', files['log'].replace('mp2=26000000Hz', 'mp2=25000000Hz')),
              ('programmed-pll', 'clocks', files['clocks'].replace('mt6797_mp2_armpll 0 0 0 0', 'mt6797_mp2_armpll 0 0 0 750000000')),
-             ('duplicate-summary', 'regulators', files['regulators']+'DA921x-BUCKB 0 0 0 0 1000mV\n')]
+             ('duplicate-summary', 'regulators', files['regulators']+'vproc-big 0 0 0 0 1000mV\n')]
     for name, changed, value in cases:
         if changed: (root/changed).write_text(value)
         before = {path: path.read_bytes() for path in root.rglob('*') if path.is_file()}
@@ -64,7 +64,7 @@ with tempfile.TemporaryDirectory() as directory:
         if changed: (root/changed).write_text(files[changed])
         print('PASS actual A72 preflight:', name)
 
-    # An exact descriptor name under the wrong DT node is not the right rail.
+    # An exact published-name name under the wrong DT node is not the right rail.
     link = root/'regulator-class/regulator.1/of_node'
     link.unlink(); link.symlink_to(root/'dt'/nodes[0])
     result = subprocess.run(['sh', str(helper)], env=env, capture_output=True, text=True)
