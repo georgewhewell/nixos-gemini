@@ -26,7 +26,7 @@ let
     version = "1";
     src = ./gpu-render-smoke.c;
     dontUnpack = true;
-    nativeBuildInputs = [armPkgs.pkg-config armPkgs.makeWrapper];
+    nativeBuildInputs = [buildPkgs.pkg-config buildPkgs.makeWrapper];
     buildInputs = [armPkgs.libglvnd armPkgs.libgbm armPkgs.libdrm];
     buildPhase = ''
       $CC -std=gnu11 -O2 -Wall -Wextra -Werror "$src" \
