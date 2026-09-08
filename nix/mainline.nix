@@ -60,11 +60,11 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  # M8 integrates cold SRAM initialization and retained-fault A72 startup.
+  # M9 adds upstream late-CPU capability preparation to the M8 power path.
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "e77481d00d4116b2a0d8a557b8490847a9384586";
+  p22BaselinePlatformRevision = "f84d529db4c6bdac7fe582988d552af422a69f91";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -204,7 +204,7 @@ let
     else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
-    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M8 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
+    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M9 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -434,6 +434,9 @@ let
 
     configurePhase = ''
       runHook preConfigure
+      ${lib.optionalString a72Overlay ''
+        python3 ${./a72-profile-build.py} inputs --fragments $fragmentInputs
+      ''}
       export SOURCE_DATE_EPOCH=1783123200
       unset NIX_LDFLAGS
       ${lib.optionalString a72Overlay ''
@@ -769,6 +772,9 @@ let
           grep -Fqx 'CONFIG_CMDLINE="${kernelCmdline}"' .config
         ''
       }
+      ${lib.optionalString a72Overlay ''
+        python3 ${./a72-profile-build.py} bind --config .config
+      ''}
       runHook postConfigure
     '';
 
@@ -793,6 +799,7 @@ let
       runHook preInstall
       mkdir -p "$out"
       ${lib.optionalString a72Overlay ''
+        cp a72-build-provenance.json "$out/"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-resource-preflight.dtbo "$out/a72-resource.dtbo"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-cpu-on-gate.dtbo "$out/a72-cpu8.dtbo"
       ''}
@@ -1481,6 +1488,7 @@ let
         dtc -q -@ -I dts -O dtb -o a72-cpu9.dtbo ${./mt6797-gemini-a72-cpu9-on.dtso}
         python3 ${./test-a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo ${./a72-integration-dt.py} >> "$out/VALIDATION"
         python3 ${./a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo >> "$out/VALIDATION"
+        python3 ${./a72-profile-package.py} ${kernel} "$out/gemini.dtb" ${./generate-late-cpu-provenance.py} >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
