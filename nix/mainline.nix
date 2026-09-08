@@ -34,6 +34,7 @@
   touchscreenActivationOverlay ? false,
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
+  cellularOverlay ? false,
   leaseSelfAcceptToken ? null,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
@@ -58,7 +59,7 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  p22BaselinePlatformRevision = "edd8271d94460c4f711ac78a3e0a438467ce6c32";
+  p22BaselinePlatformRevision = "c5ef56513182b1b5c3b2a527220625d302d2e006";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -92,7 +93,8 @@ let
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
     ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
-    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment];
+    ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
+    ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -196,6 +198,7 @@ let
     else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
+    + lib.optionalString cellularOverlay " GEMINI_CELLULAR_NIXOS_CI1 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -438,6 +441,11 @@ let
           "${kernelCmdline}"
       ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
+      ${lib.optionalString cellularOverlay ''
+        for symbol in WWAN MTK_MT6797_CCCI MTK_MT6797_MD1_COLD_OWNER MTK_MT6797_MD1_FS_PROVIDER TMPFS; do
+          grep -Fqx "CONFIG_$symbol=y" .config
+        done
+      ''}
 
       test -z "''${NIX_HARDENING_ENABLE:-}"
       grep -Fqx 'CONFIG_LOCALVERSION="-gemini-da921x-lkro"' .config
@@ -759,6 +767,9 @@ let
       mkdir -p "$out"
       cp arch/arm64/boot/Image "$out/Image"
       cp arch/arm64/boot/Image.gz "$out/Image.gz"
+      ${lib.optionalString cellularOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-cellular.dtbo "$out/"
+      ''}
       cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb "$out/base.dtb"
       ${lib.optionalString consysIdentityOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-consys-identity.dtbo \
@@ -920,7 +931,7 @@ let
   # disabled.  Its own fixed hashes make any source or output drift fatal.
   serviceabilityDtb = assert profileCombinationValid;
     buildPkgs.runCommand "gemini-ixoo-serviceability-dtb${lib.optionalString usbHostOverlay "-usb11-host"}${lib.optionalString consysIdentityOverlay "-consys-identity"}${lib.optionalString consysG2bOverlay "-consys-g2b"}${lib.optionalString consysG2cPatchOverlay "-consys-g2c-patch"}${lib.optionalString consysG2dPostpatchOverlay "-consys-g2d-postpatch"}${lib.optionalString gpuStagedOverlay "-gpu-staged"}${lib.optionalString gpuFixedOppOverlay "-gpu-fixed-opp"}${lib.optionalString platformEnablement "-platform"}${lib.optionalString displayOverlay "-display"}${lib.optionalString audioOverlay "-audio"}${lib.optionalString powerObserveOverlay "-power-observe"}${lib.optionalString powerObservePreflight "-power-preflight"}${lib.optionalString unattendedRecovery "-unattended-recovery"}${lib.optionalString inputObserveOverlay "-input-observe"}${lib.optionalString thermalHallObserveOverlay "-thermal-hall-observe"}${lib.optionalString touchscreenActivationOverlay "-touchscreen-active"}${lib.optionalString fgadcActivationOverlay "-fgadc-active"}${lib.optionalString deviceActivationOverlay "-device-activation"}" {
-      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc];
+      nativeBuildInputs = [buildPkgs.bash buildPkgs.dtc buildPkgs.python3];
     } ''
       mkdir -p "$out"
       ${
@@ -1428,6 +1439,12 @@ let
         test "$(fdtget "$out/gemini.dtb" /gpu@13040000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /consys@18070000 status)" = disabled
         test "$(fdtget "$out/gemini.dtb" /serial@1100c000 status)" = disabled
+      ''}
+      ${lib.optionalString cellularOverlay ''
+        python3 ${./test-cellular-integration-dt.py} "$out/gemini.dtb" \
+          ${kernel}/mt6797-gemini-pda-cellular.dtbo ${./cellular-integration-dt.py} >> "$out/VALIDATION"
+        python3 ${./cellular-integration-dt.py} "$out/gemini.dtb" \
+          ${kernel}/mt6797-gemini-pda-cellular.dtbo >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${

@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788838282,
-        "narHash": "sha256-IEqJFbwfkg+3eW4rufa0zIJI3Rm7Uf+vAZ6whPRZ7WU=",
-        "ref": "gemini-drm-self-bind",
-        "rev": "edd8271d94460c4f711ac78a3e0a438467ce6c32",
-        "revCount": 514,
+        "lastModified": 1788844711,
+        "narHash": "sha256-sRbqy1HitHv9DarW2tvXvLZLNteeBlkr+2fLezyh7TU=",
+        "ref": "gemini-cellular-integration",
+        "rev": "c5ef56513182b1b5c3b2a527220625d302d2e006",
+        "revCount": 525,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-drm-self-bind"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-integration"
       },
       "original": {
-        "ref": "gemini-drm-self-bind",
-        "rev": "edd8271d94460c4f711ac78a3e0a438467ce6c32",
+        "ref": "gemini-cellular-integration",
+        "rev": "c5ef56513182b1b5c3b2a527220625d302d2e006",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-drm-self-bind"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-integration"
       }
     },
     "linux-gemini-next": {
