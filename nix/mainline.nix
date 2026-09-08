@@ -249,11 +249,11 @@ let
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "966a9e03731a255413f10e6a11cec01c1b35cb831cde9e7622e637004b79cfb6";
+    else "c053a36e20b35e07a8e36bcb4ee931441694aa452a0838d904c1292de4fe6432";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
-    else "9aa05bcd7abea8b774ce17a33bc8625f13b72d5ffe2711c4ad76e488c456b815";
+    else "c17e7606ac6cbae3f606cd5c4f2188c8e10304a8de9d60fcc62362c60b6aed50";
   profileCombinationValid =
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
@@ -823,8 +823,13 @@ let
       ${lib.optionalString thermalHallObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-thermal-hall-observe.dtbo \
           "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo"
+        # gemini-mainline-integration aff9464721c12 ("arm64: dts: keep
+        # standalone ADC closed in Gemini thermal overlays") flips the
+        # overlay's &auxadc from okay to disabled: the thermal driver maps
+        # AUXADC itself, so the standalone IIO device no longer binds.  The
+        # composed DT is checked below; only this fingerprint moves.
         test "$(sha256sum "$out/mt6797-gemini-pda-thermal-hall-observe.dtbo" | cut -d' ' -f1)" = \
-          2fd591269a217634cc9bd6b1aa3afa7702f08c2bbef0dad2f673e278f2cda28d
+          f85fe5360c40159968d05945b586d223ebed0bf0686ba5aaa1a9d7234a635abd
       ''}
       ${lib.optionalString deviceActivationOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-touchscreen-activation.dtbo \
@@ -943,6 +948,17 @@ let
         --replace-fail \
           $'\tfdtput -d "$temporary" "$AW9523" "$property"' \
           $'\tif fdtget "$temporary" "$AW9523" "$property" >/dev/null 2>&1; then\n\t\tfdtput -d "$temporary" "$AW9523" "$property"\n\tfi'
+      # ixoo's builder validated a childless, implicitly enabled DA921x node
+      # that its read-only provider bound.  gemini-mainline-integration
+      # 60c0a7b48d314 turned that driver into a transactional buck owner and
+      # its board DTS at 74726a17 describes BUCKA/BUCKB
+      # children under a status = "disabled" node, so nothing binds it.  Keep
+      # the child check for an enabled node, tolerate children only while the
+      # node is disabled, and assert that state explicitly afterwards.
+      substituteInPlace "$providerBuilder" \
+        --replace-fail \
+          $'\t[[ -z "$(fdtget -l "$dtb" "$DA921X")" ]] ||' \
+          $'\t[[ -z "$(fdtget -l "$dtb" "$DA921X")" || "$(fdtget -ts "$dtb" "$DA921X" status)" == disabled ]] ||'
       bash "$providerBuilder" \
         --base-dtb ${kernel}/base.dtb \
         --output "$out/gemini-base.dtb" \
@@ -951,6 +967,8 @@ let
       test "$(sha256sum "$out/gemini-base.dtb" | cut -d' ' -f1)" = \
         ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
+      test "$(fdtget "$out/gemini-base.dtb" /i2c@1100e000/regulator@68 status)" = disabled
+      echo 'da921x-node=disabled-transactional-driver-unbound' >> "$out/VALIDATION"
         ''
       }
       ${
