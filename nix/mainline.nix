@@ -59,7 +59,10 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  p22BaselinePlatformRevision = "f8029c005f259ac50f6a7d614d66d8183aa5ac47";
+  # CI9 adds cellular FS/restore support. Board DT, input and power drivers
+  # match the CI8 source exactly; keep the activation guard pinned to this
+  # candidate revision, with image DT checks still required during the build.
+  p22BaselinePlatformRevision = "1d70135b5d8fbfdcd4a352684a4e210568b26778";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
