@@ -37,17 +37,17 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788855639,
-        "narHash": "sha256-vuNRTjUPxIp120i97R/IHYjl9umfU9n8RxQE/Ws4pRc=",
+        "lastModified": 1788857567,
+        "narHash": "sha256-wAAmtGYhJRC9aoXOjy96T+OC6s8Evu7m5O7214QczSg=",
         "ref": "gemini-cellular-roots",
-        "rev": "3a9e204ed1e4fa5804ebd71d09b1558baf48658b",
-        "revCount": 533,
+        "rev": "f8029c005f259ac50f6a7d614d66d8183aa5ac47",
+        "revCount": 534,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
       },
       "original": {
         "ref": "gemini-cellular-roots",
-        "rev": "3a9e204ed1e4fa5804ebd71d09b1558baf48658b",
+        "rev": "f8029c005f259ac50f6a7d614d66d8183aa5ac47",
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
       }
