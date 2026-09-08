@@ -66,7 +66,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "7328fdde798ae38e87a6c351308ff903092984f4";
+  p22BaselinePlatformRevision = "483b159cc4aec7803373e2b07412663fe9231bf8";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -804,6 +804,7 @@ let
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FW_HANDOFF=y' .config
         grep -Fqx 'CONFIG_CFG80211=m' .config
         grep -Fqx 'CONFIG_MTK_MT6797_WIFI_RADIO=y' .config
+        CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-wifi-radio-admission-host.py
       ''}
       ${lib.optionalString gpuOwnerOverlay ''
         export HOSTCC=${buildPkgs.stdenv.cc}/bin/cc
