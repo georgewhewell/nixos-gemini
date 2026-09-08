@@ -26,7 +26,7 @@ let
   a72Preflight = pkgs.writeShellScript "gemini-a72-preflight" ''
     set -eu
     export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.findutils pkgs.gawk pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd]}:$PATH
-    grep -wFq GEMINI_A72_CI9_M7 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M8 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
@@ -34,11 +34,22 @@ let
     mkdir /run/gemini-a72-preflight
     exec > /run/gemini-a72-preflight/result 2>&1
     export EXPECTED_CPU8_STATUS=okay EXPECTED_CPU9_STATUS=okay
-    exec ${pkgs.busybox}/bin/busybox sh ${geminiCellularHelper}/share/gemini/mt6797-a72-resource-preflight.sh
+    ${pkgs.busybox}/bin/busybox sh ${geminiCellularHelper}/share/gemini/mt6797-a72-resource-preflight.sh
+    echo "cpu8_start=requested"
+    echo 1 > /sys/devices/system/cpu/cpu8/online
+    test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
+    dmesg | grep -F 'CPU8 PSCI CPU_ON committed'
+    echo "cpu9_start=requested"
+    echo 1 > /sys/devices/system/cpu/cpu9/online
+    test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
+    dmesg | grep -F 'CPU9 PSCI CPU_ON committed'
+    awk '$1 == "mt6797_mp2" { seen++; if ($5 <= 26000000) exit 1 } END { if (seen != 1) exit 1 }' /sys/kernel/debug/clk/clk_summary
+    cat /sys/devices/system/cpu/online
+    echo "a72_startup=pass"
   '';
 in {
   systemd.services.gemini-a72-preflight = {
-    description = "Read-only Gemini A72 resource and admission preflight";
+    description = "Gemini A72 first-start under boot recovery";
     after = ["gemini-watchdog-takeover.service"];
     requires = ["gemini-watchdog-takeover.service"];
     before = ["gemini-cellular.service"];

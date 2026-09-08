@@ -14,11 +14,11 @@ with tempfile.TemporaryDirectory() as directory:
         'dt/cpus/cpu@200/status': 'okay\0',
         'dt/cpus/cpu@201/status': 'okay\0',
         'cmdline': 'maxcpus=8 regulator_ignore_unused\n',
-        'regulators': 'vproc-little 0 0 0 0 1000mV\nvproc-big 0 0 0 0 1000mV\nvsram-big 0 0 0 0 1100mV\n',
+        'regulators': 'vproc-little 0 0 0 0 1000mV\nvproc-big 0 0 0 0 1000mV\nvsram-big 0 0 0 0 1050mV\n',
         'clocks': 'mt6797_mp2 0 0 0 26000000\nmt6797_mp2_armpll 0 0 0 0\n',
         'log': ('DA9214 direct-address regulators registered\n'
                 'voltage read/set ready; enable, status, and disable unsupported\n'
-                'CPU8/9 resource-preflight-v2: offline=1 mode=cpu8-admission vproc=1000000uV vproc-enabled=0 sram=1100000uV sram-contract=voltage-only sram-selector=10 mp2-clock-contract=cold-clk26m-v1 mp2=26000000Hz pwrap-reset=0 spm-mp2=0x00000000 spm-buck-iso=0x00000003 transaction=ready\n'
+                'CPU8/9 resource-preflight-v2: offline=1 mode=cpu8-admission vproc=1000000uV vproc-enabled=0 sram=1050000uV sram-contract=one-shot-first-cpu8-v1 sram-selector=0 sram-control=0x00000000 sram-calibration=0x00000000 mp2-clock-contract=cold-clk26m-v1 mp2=26000000Hz pwrap-reset=0 spm-mp2=0x00000000 spm-buck-iso=0x00000003 transaction=ready\n'
                 'cpu-on-gate-v3: CPU8-admission=ready CPU9=after-CPU8\n'),
     }
     nodes = ['i2c@1100e000/regulator@68/regulators/BUCKA',
