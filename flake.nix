@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots?ref=gemini-cellular-roots&rev=f8029c005f259ac50f6a7d614d66d8183aa5ac47";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots?ref=gemini-cellular-roots&rev=1d70135b5d8fbfdcd4a352684a4e210568b26778";
       flake = false;
     };
     linux-gemini-next = {
@@ -1017,11 +1017,14 @@
         cp ${./nix/test-cellular-stage2.py} stage2-tests/test-cellular-stage2.py
         cp ${./nix/cellular-stage2.sh} stage2-tests/cellular-stage2.sh
         python3 stage2-tests/test-cellular-stage2.py
+        python3 tools/gemini/test-fs-restore-register.py
         $CC -O2 -Wall -Wextra -Werror -o mt6797-fs-register tools/gemini/mt6797-fs-register.c
       '';
       installPhase = ''
         mkdir -p "$out/bin"
         cp mt6797-fs-register "$out/bin/"
+        mkdir -p "$out/share/gemini"
+        cp tools/gemini/{mt6797_fs_restore_register,nvram_restore_archive,nvram_backup_format}.py "$out/share/gemini/"
       '';
     };
 

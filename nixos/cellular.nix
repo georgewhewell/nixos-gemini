@@ -1,9 +1,13 @@
-# Experimental volatile cellular service for the CI4 full NixOS image.
+# Experimental volatile cellular service for the CI9 full NixOS image.
 { pkgs, lib, geminiCellularHelper, ... }:
 let
   runtimePath = lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd];
+  restore = pkgs.writeShellScript "gemini-cellular-restore" ''
+    exec ${pkgs.python3}/bin/python3 ${geminiCellularHelper}/share/gemini/mt6797_fs_restore_register.py "$@"
+  '';
   rawRunner = pkgs.writeShellScript "gemini-cellular-stage2" ''
     export PATH=${runtimePath}:$PATH
+    export GEMINI_CELLULAR_RESTORE=${restore}
     export GEMINI_CELLULAR_HELPER=${geminiCellularHelper}/bin/mt6797-fs-register
     export GEMINI_CELLULAR_BUSYBOX=${pkgs.busybox}/bin/busybox
     exec ${pkgs.busybox}/bin/busybox sh ${../nix/cellular-stage2.sh} "$@"

@@ -3,7 +3,7 @@
 set -eu
 umask 077
 out=/run/gemini-cellular
-: "${GEMINI_CELLULAR_HELPER:?}" "${GEMINI_CELLULAR_BUSYBOX:?}"
+: "${GEMINI_CELLULAR_RESTORE:?}" "${GEMINI_CELLULAR_HELPER:?}" "${GEMINI_CELLULAR_BUSYBOX:?}"
 
 lease_ok() {
     record=/run/unattended-recovery.lease-deadline
@@ -47,7 +47,7 @@ watchdog_ok() {
     test "$owns" = yes
 }
 identity_ok() {
-    grep -wFq GEMINI_CELLULAR_NIXOS_CI8 /proc/cmdline
+    grep -wFq GEMINI_CELLULAR_NIXOS_CI9 /proc/cmdline
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable)" = Y
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable_volatile)" = Y
     watchdog_ok
@@ -66,7 +66,12 @@ source_for() {
         *) return 1 ;;
     esac
 }
+check_backup() {
+    sha256sum /dev/mmcblk0p19 > "$out/nvram-$1.sha256"
+    cmp "$out/nvram-before.sha256" "$out/nvram-$1.sha256"
+}
 check_sources() {
+    check_backup "$1"
     for drive in Z X Y; do
         source_for "$drive"
         sha256sum "$source_device" > "$out/$source_name-$1.sha256"
@@ -97,6 +102,7 @@ lease_ok 320 # Keep setup inside the original Stage1 deadline; never extend it.
 dmesg > "$out/dmesg-before"
 if grep -Eq 'MD1 accepted CCCI HS1|MD1 completed CCCI HS2|MT6797_CCCI_TERMINAL_FAILURE|FIRST_FATAL' "$out/dmesg-before"; then exit 1; fi
 timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-roots-device
+sha256sum /dev/mmcblk0p19 > "$out/nvram-before.sha256"
 for drive in Z X Y; do
     source_for "$drive"
     sha256sum "$source_device" > "$out/$source_name-before.sha256"
@@ -110,6 +116,9 @@ for drive in Z X Y; do
     watchdog_ok
 done
 check_sources seeded
+watchdog_ok
+timeout -k 1 30 "$GEMINI_CELLULAR_RESTORE" --profile gemini-stock-ecci-md3-v1 --sha256 1b7fb822e90492b4d14eee735c4b16bf0d34638b14407c1ee108ba8e459240c9
+check_backup prepared
 watchdog_ok
 timeout -k 1 60 "$GEMINI_CELLULAR_HELPER" --ram-roots "$out/nvdata" "$out/ram" "$out/protect1" "$out/ramX" "$out/protect2" "$out/ramY"
 attempt=0
