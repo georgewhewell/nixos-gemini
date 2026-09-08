@@ -36,11 +36,14 @@ assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
 let
   # A p22 rollback is useful only while its exact userspace payload still
-  # exists.  Derive the p29 filename from the immutable Nix store path so a
-  # new bundle can only be staged next to an older payload, never over it.
-  # The basename already ends in .squashfs.
-  storeFileName =
-    "mainline-nixos-${builtins.baseNameOf (toString squashfs)}";
+  # exists. Name p29 payloads by their bytes: an input-addressed Nix output
+  # can be rebuilt with different squashfs bytes at the same store path.
+  # Compute this in both builders so the initramfs and bundle agree without
+  # evaluating the squashfs during Nix evaluation.
+  storeIdentity = ''
+    store_sha=$(sha256sum ${squashfs} | cut -d' ' -f1)
+    store_file="mainline-nixos-$store_sha.squashfs"
+  '';
   leaseSelfAcceptCmdline =
     if leaseSelfAcceptToken == null
     then ""
@@ -512,9 +515,10 @@ let
     exec switch_root /mnt/nixos "$nixos_init"
     INIT
 
+    ${storeIdentity}
     substituteInPlace root/init \
-      --replace-fail @STORE_FILE@ ${storeFileName} \
-      --replace-fail @STORE_SHA256@ "$(sha256sum ${squashfs} | cut -d' ' -f1)" \
+      --replace-fail @STORE_FILE@ "$store_file" \
+      --replace-fail @STORE_SHA256@ "$store_sha" \
       --replace-fail @STORE_SIZE@ "$(stat -c %s ${squashfs})" \
       --replace-fail @PROVISION_WAIT_SECONDS@ ${toString provisionWaitSeconds} \
       --replace-fail @WATCHDOG_LEASE_SECONDS@ ${toString watchdogLeaseSeconds} \
@@ -634,13 +638,14 @@ let
     mkdir -p "$out"
     ln -s ${kernel} "$out/kernel"
     ln -s ${serviceabilityDtb}/gemini.dtb "$out/gemini-usb11-host.dtb"
-    ln -s ${squashfs} "$out/${storeFileName}"
+    ${storeIdentity}
+    ln -s ${squashfs} "$out/$store_file"
     ln -s ${initramfs} "$out/initramfs.cpio.gz"
     ln -s ${bootImg} "$out/boot-raw.img"
     ln -s ${paddedBootImg} "$out/boot-padded-p22.img"
     {
-      echo "target=Gemini default p22 plus unique p29 /nixos/${storeFileName}"
-      echo "store-file=${storeFileName}"
+      echo "target=Gemini default p22 plus unique p29 /nixos/$store_file"
+      echo "store-file=$store_file"
       echo "store-sha256=$(sha256sum ${squashfs} | cut -d' ' -f1)"
       echo "store-size=$(stat -c %s ${squashfs})"
       echo "kernel=$(basename ${kernel})"

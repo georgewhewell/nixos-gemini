@@ -58,7 +58,7 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  p22BaselinePlatformRevision = "74726a178b9f9ab93ddc4c5e577ae67acb5e1c27";
+  p22BaselinePlatformRevision = "edd8271d94460c4f711ac78a3e0a438467ce6c32";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -416,6 +416,7 @@ let
         openssl
         perl
         pkg-config
+        python3
         rsync
       ])
       ++ [gcc12Cross];
@@ -744,6 +745,8 @@ let
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
       )
+      python3 tools/gemini/test-media-clock-bounds.py
+      python3 tools/gemini/test-drm-synchronous-bind.py
       make -j"$NIX_BUILD_CORES" "''${kernelMakeFlags[@]}" \
         Image Image.gz dtbs
       test "$(make "''${kernelMakeFlags[@]}" -s kernelrelease)" = \
@@ -1278,14 +1281,14 @@ let
       ${
         if thermalHallObserveOverlay
         then ''
-          # This source-locked overlay enables only the existing AUXADC,
-          # thermal controller, and GPIO66 Hall key. It declares no external
-          # sensor, power rail, wake source, or SCP path.
+          # Thermal owns indirect AUXADC sampling and its clock. Keep the
+          # standalone ADC disabled, as required by integration aff9464721c12;
+          # enable the thermal controller and GPIO66 Hall key only.
           fdtoverlay \
             -i "$out/gemini.dtb" \
             -o "$out/gemini-thermal-hall-observe.dtb" \
             ${kernel}/mt6797-gemini-pda-thermal-hall-observe.dtbo
-          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /adc@11001000 status)" = okay
+          test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /adc@11001000 status)" = disabled
           test "$(fdtget "$out/gemini-thermal-hall-observe.dtb" /thermal@1100b000 status)" = okay
           test "$(fdtget -t u "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal polling-delay)" = 1000
           test "$(fdtget -t u "$out/gemini-thermal-hall-observe.dtb" /thermal-zones/soc-thermal polling-delay-passive)" = 1000

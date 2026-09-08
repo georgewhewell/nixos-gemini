@@ -16,7 +16,9 @@ fail() { echo "test-unattended-recovery-baseline-self-accept: $*" >&2; exit 1; }
 make_fixture() {
   d=$1
   mkdir -p "$d/run" "$d/proc/440/fd" "$d/sys/class/watchdog/watchdog0" \
-    "$d/bin"
+    "$d/bin" "$d/sys/class/drm/card0-DSI-1"
+  printf '%s\n' connected > "$d/sys/class/drm/card0-DSI-1/status"
+  printf '%s\n' enabled > "$d/sys/class/drm/card0-DSI-1/enabled"
   cat > "$d/bin/fake-busybox" <<'BUSYBOX'
 #!/bin/sh
 exec "$@"
@@ -85,6 +87,18 @@ make_fixture "$missing_display"
 rm "$missing_display/run/gemini-display-activation"
 if run_fixture "$missing_display"; then fail 'accepted without display activation'; fi
 test ! -e "$missing_display/run/unattended-recovery.accepted"
+
+for state in missing disconnected disabled; do
+  bad_display=$WORK/display-$state
+  make_fixture "$bad_display"
+  case "$state" in
+    missing) rm -r "$bad_display/sys/class/drm/card0-DSI-1" ;;
+    disconnected) printf '%s\n' disconnected > "$bad_display/sys/class/drm/card0-DSI-1/status" ;;
+    disabled) printf '%s\n' disabled > "$bad_display/sys/class/drm/card0-DSI-1/enabled" ;;
+  esac
+  if run_fixture "$bad_display"; then fail "accepted display $state"; fi
+  test ! -e "$bad_display/run/unattended-recovery.accepted"
+done
 
 bad_token=$WORK/bad-token
 make_fixture "$bad_token"

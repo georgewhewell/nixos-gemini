@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-integration?ref=gemini-mainline-integration&rev=74726a178b9f9ab93ddc4c5e577ae67acb5e1c27";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-drm-self-bind?ref=gemini-drm-self-bind&rev=edd8271d94460c4f711ac78a3e0a438467ce6c32";
       flake = false;
     };
     linux-gemini-next = {

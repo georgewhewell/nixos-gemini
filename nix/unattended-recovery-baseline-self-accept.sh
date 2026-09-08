@@ -171,6 +171,12 @@ has_address '192.168.23.70/' || fail right-nic-address-missing
 "$busybox" grep -Fqx \
   'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
   "$display_activation_file" || fail display-activation-missing
+# An activation request can succeed while DRM still waits for components.
+# Match the host acceptance contract before releasing the recovery lease.
+[ "$("$busybox" cat "$sys_root/class/drm/card0-DSI-1/status" 2>/dev/null || true)" = connected ] || \
+  fail display-connector-not-connected
+[ "$("$busybox" cat "$sys_root/class/drm/card0-DSI-1/enabled" 2>/dev/null || true)" = enabled ] || \
+  fail display-connector-not-enabled
 
 owner=$("$busybox" cat "$run_root/unattended-recovery.watchdog-owner" 2>/dev/null || true)
 watchdog_owned "$owner" || fail watchdog-owner-invalid
