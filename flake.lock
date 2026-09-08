@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788867770,
-        "narHash": "sha256-IsPrUwYscbjLiWw6abDbZEcsAZl9oA3DfH6HTTeNMBQ=",
-        "ref": "gemini-cellular-roots",
-        "rev": "1d70135b5d8fbfdcd4a352684a4e210568b26778",
-        "revCount": 552,
+        "lastModified": 1788868854,
+        "narHash": "sha256-bwEZVWWHechw/RTv78zVvW3qT24ab2CoO0B6FwCPoTA=",
+        "ref": "gemini-a72-ci9",
+        "rev": "f0d1aa7b3b0fb44574757d8466b0f9b3512c443c",
+        "revCount": 554,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
       },
       "original": {
-        "ref": "gemini-cellular-roots",
-        "rev": "1d70135b5d8fbfdcd4a352684a4e210568b26778",
+        "ref": "gemini-a72-ci9",
+        "rev": "f0d1aa7b3b0fb44574757d8466b0f9b3512c443c",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
       }
     },
     "linux-gemini-next": {

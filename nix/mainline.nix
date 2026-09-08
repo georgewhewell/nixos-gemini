@@ -35,6 +35,7 @@
   fgadcActivationOverlay ? false,
   deviceActivationOverlay ? false,
   cellularOverlay ? false,
+  a72Overlay ? false,
   leaseSelfAcceptToken ? null,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
@@ -59,10 +60,10 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  # CI9 adds cellular FS/restore support. Board DT, input and power drivers
-  # match the CI8 source exactly; keep the activation guard pinned to this
-  # candidate revision, with image DT checks still required during the build.
-  p22BaselinePlatformRevision = "1d70135b5d8fbfdcd4a352684a4e210568b26778";
+  # M5 adds the reviewed A72 hotplug/admission commits to CI9. Base board DT,
+  # input and PMIC drivers remain unchanged; the separate A72 overlay path
+  # verifies its complete property delta before publishing the candidate DT.
+  p22BaselinePlatformRevision = "f0d1aa7b3b0fb44574757d8466b0f9b3512c443c";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -97,7 +98,8 @@ let
     ++ lib.optionals touchscreenActivationOverlay [./mainline-touchscreen-activation.fragment]
     ++ lib.optionals fgadcActivationOverlay [./mainline-fgadc-activation.fragment]
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
-    ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment];
+    ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment]
+    ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -197,11 +199,11 @@ let
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused initcall_blacklist=mt6797_a72_power_driver_init fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
-    + lib.optionalString cellularOverlay " GEMINI_CELLULAR_NIXOS_CI9 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
+    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M5 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -261,6 +263,7 @@ let
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
     else "c17e7606ac6cbae3f606cd5c4f2188c8e10304a8de9d60fcc62362c60b6aed50";
   profileCombinationValid =
+    assert !a72Overlay || (cellularOverlay && unattendedRecovery && !gpuFixedOppOverlay);
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
@@ -450,6 +453,14 @@ let
         done
       ''}
 
+      ${lib.optionalString a72Overlay ''
+        for symbol in COMMON_CLK_MT6797_CPU REGULATOR_DA9213_LEGACY REGULATOR_MT6797_BIGIDVFS_SRAM MTK_MT6797_A72_POWER; do
+          grep -Fqx "CONFIG_$symbol=y" .config
+        done
+        for symbol in CPU_FREQ ARM64_MT6797_A72_CAPABILITY_PROFILE ARM64_MT6797_A72_P32_ROLLBACK; do
+          grep -Fqx "# CONFIG_$symbol is not set" .config
+        done
+      ''}
       test -z "''${NIX_HARDENING_ENABLE:-}"
       grep -Fqx 'CONFIG_LOCALVERSION="-gemini-da921x-lkro"' .config
       grep -Fqx '# CONFIG_LOCALVERSION_AUTO is not set' .config
@@ -768,6 +779,10 @@ let
     installPhase = ''
       runHook preInstall
       mkdir -p "$out"
+      ${lib.optionalString a72Overlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-resource-preflight.dtbo "$out/a72-resource.dtbo"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-cpu-on-gate.dtbo "$out/a72-cpu8.dtbo"
+      ''}
       cp arch/arm64/boot/Image "$out/Image"
       cp arch/arm64/boot/Image.gz "$out/Image.gz"
       ${lib.optionalString cellularOverlay ''
@@ -1448,6 +1463,11 @@ let
           ${kernel}/mt6797-gemini-pda-cellular.dtbo ${./cellular-integration-dt.py} >> "$out/VALIDATION"
         python3 ${./cellular-integration-dt.py} "$out/gemini.dtb" \
           ${kernel}/mt6797-gemini-pda-cellular.dtbo >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString a72Overlay ''
+        dtc -q -@ -I dts -O dtb -o a72-cpu9.dtbo ${./mt6797-gemini-a72-cpu9-on.dtso}
+        python3 ${./test-a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo ${./a72-integration-dt.py} >> "$out/VALIDATION"
+        python3 ${./a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${

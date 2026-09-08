@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+/*
+ * Planet Computers Gemini PDA Cortex-A72 CPU9 admission.
+ *
+ * Apply after mt6797-gemini-a72-resource-preflight.dtso and
+ * mt6797-gemini-a72-cpu-on-gate.dtso.  It only marks cpu@201 available so a
+ * cpu9 device (and its sysfs online attribute) exists.  The a72-power owner
+ * admits CPU9 solely behind an online CPU8; it starts no rail transaction of
+ * its own.  maxcpus=8 still keeps both A72s offline through SMP boot.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "planet,gemini-pda", "mediatek,mt6797";
+};
+
+&cpu9 {
+	enable-method = "mediatek,mt6797-psci";
+	status = "okay";
+};
