@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788117142,
-        "narHash": "sha256-GuhrEVzqJHXb+rKhUr8rplYnwM/Maqv0KelwLP4k/tw=",
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
-        "revCount": 158,
+        "lastModified": 1788594031,
+        "narHash": "sha256-rStZjwJYH2z6tR44E3MJFrtwwp84I+6JuOOOrJ6188M=",
+        "ref": "gemini-mainline-integration",
+        "rev": "74726a178b9f9ab93ddc4c5e577ae67acb5e1c27",
+        "revCount": 511,
         "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration"
       },
       "original": {
-        "ref": "gemini-platform",
-        "rev": "28c47150235be70cf5b19ea8d9ce7a5473ec23f2",
+        "ref": "gemini-mainline-integration",
+        "rev": "74726a178b9f9ab93ddc4c5e577ae67acb5e1c27",
         "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration"
       }
     },
     "linux-gemini-next": {

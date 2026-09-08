@@ -58,7 +58,7 @@ let
   # re-verified against the new base DT, not left untouched: the accepted
   # baseline now produces
   # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  p22BaselinePlatformRevision = "8feda1d12b03bb8a487e99c8b091e095a114522a";
+  p22BaselinePlatformRevision = "74726a178b9f9ab93ddc4c5e577ae67acb5e1c27";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -243,7 +243,7 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "5ffcdd71d34a75aacfb15632f5410ed3ec036a70cccb62718ba43184881c8b35";
+    else "6cbb838842e9da7b3e0b48ff13ab3d49a78ad1467f268de5e7b0c202e077f072";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
@@ -443,8 +443,17 @@ let
       grep -Fqx '# CONFIG_LOCALVERSION_AUTO is not set' .config
       grep -Fqx 'CONFIG_NVMEM_MTK_ATAG_DEVINFO=y' .config
       ${lib.optionalString legacyConsysPlatform ''
-        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=y' .config
-        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=y' .config
+        # gemini-mainline-integration 60c0a7b48d314 ("regulator: da9213-legacy:
+        # provide transactional buck ownership") deleted the read-only
+        # REGULATOR_DA9213_LEGACY_PROVIDER/_OBSERVER symbols that the accepted
+        # 28c47150 baseline asserted; the DA921x contract now lives in
+        # REGULATOR_DA9213_LEGACY itself.  The board DT keeps the
+        # dlg,da9214-legacy node status = "disabled", so this image never
+        # probes it.  Assert the surviving symbol and that the deleted ones do
+        # not silently return with different semantics.
+        grep -Fqx 'CONFIG_REGULATOR_DA9213_LEGACY=y' .config
+        ! grep -q '^CONFIG_REGULATOR_DA9213_LEGACY_PROVIDER=' .config
+        ! grep -q '^CONFIG_REGULATOR_DA9213_LEGACY_OBSERVER=' .config
       ''}${lib.optionalString (!legacyConsysPlatform) ''
         grep -Fqx 'CONFIG_REGULATOR_DA9211=y' .config
       ''}
@@ -455,7 +464,19 @@ let
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_WMT_INITIAL_KUNIT_TEST=' .config
       ${lib.optionalString legacyConsysPlatform ''
-        grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_INVENTORY=y' .config
+        # 28c47150 built MTK_MT6797_CONSYS_INVENTORY as a resource-only
+        # inventory driver.  gemini-mainline-integration 6948ed143475a ("soc:
+        # mediatek: tighten MT6797 CONSYS resource ownership") and
+        # b0bfeff274adc ("soc: mediatek: activate the MT6797 CONSYS aggregate")
+        # repurposed the same symbol into the CONSYS lifecycle owner: it now
+        # depends on MTK_MT6797_CONSYS_FW_HANDOFF and selects POSTID, EMI_MPU
+        # and WMT_PATCH_DOWNLOAD.  The baseline never enables FW_HANDOFF, so
+        # Kconfig drops the fragment's =y; assert that explicitly instead of
+        # letting the lifecycle owner into a no-radio image.
+        # Kconfig omits a symbol whose dependency is unmet, so accept absent or
+        # "is not set", never =y/=m.
+        ! grep -q '^CONFIG_MTK_MT6797_CONSYS_INVENTORY=' .config
+        grep -Fqx '# CONFIG_MTK_MT6797_CONSYS_FW_HANDOFF is not set' .config
       ''}
       grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_CORE=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_CONSYS_CORE_KUNIT_TEST=' .config
@@ -534,7 +555,12 @@ let
       ''}
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_KUNIT_TEST=' .config
-      grep -Fqx 'CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=y' .config
+      # gemini-mainline-integration bbf50831f52fd ("soc: mediatek: attach
+      # MT6797 BTIF transport component") made MTK_MT6797_BTIF_PIO_PLATFORM
+      # depend on the repurposed MTK_MT6797_CONSYS_INVENTORY owner above, so
+      # it is unavailable to the no-radio baseline.  28c47150 built it as a
+      # dormant adapter matched by no Gemini DT node.
+      ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM=' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_PIO_PLATFORM_KUNIT_TEST=' .config
       grep -Fqx 'CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP=y' .config
       ! grep -q '^CONFIG_MTK_MT6797_BTIF_STP_BOOTSTRAP_KUNIT_TEST=' .config
