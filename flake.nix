@@ -1020,7 +1020,6 @@
         python3 stage2-tests/test-cellular-stage2.py
         python3 tools/gemini/test-fs-restore-register.py
         python3 ${./nix/test-a72-resource-preflight.py} tools/gemini/mt6797-a72-resource-preflight.sh
-        CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-a72-hotplug-attribute.py
         $CC -O2 -Wall -Wextra -Werror -o mt6797-fs-register tools/gemini/mt6797-fs-register.c
       '';
       installPhase = ''

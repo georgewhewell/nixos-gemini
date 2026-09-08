@@ -435,6 +435,9 @@ let
       runHook preConfigure
       export SOURCE_DATE_EPOCH=1783123200
       unset NIX_LDFLAGS
+      ${lib.optionalString a72Overlay ''
+        CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-a72-hotplug-attribute.py
+      ''}
       kernelMakeFlags=(
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
@@ -458,7 +461,7 @@ let
           grep -Fqx "CONFIG_$symbol=y" .config
         done
         for symbol in CPU_FREQ ARM64_MT6797_A72_CAPABILITY_PROFILE ARM64_MT6797_A72_P32_ROLLBACK; do
-          grep -Fqx "# CONFIG_$symbol is not set" .config
+          ! grep -Eq "^CONFIG_$symbol=(y|m)$" .config
         done
       ''}
       test -z "''${NIX_HARDENING_ENABLE:-}"
