@@ -1606,6 +1606,7 @@
       mainlineNixosSquashfs = mainlineNixosSquashfs;
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
+      connectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineNixosMicrosdBundle = mainlineNixosMicrosd.bundle;
       mainlineNixosNext4Bundle = mainlineNixosNext4.bundle;
