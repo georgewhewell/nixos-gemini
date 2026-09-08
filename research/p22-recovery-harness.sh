@@ -945,12 +945,11 @@ test \"\$(sha256sum '$STAGE1_STORE_TARGET' | cut -d' ' -f1)\" = '$STAGE1_STORE_S
         2) return 2 ;;
         *) return 1 ;;
     esac
+    # Publication transfers filesystem ownership to Stage1. The streaming
+    # command already checked both images before publishing; reopening p29
+    # here races Stage1's unmount and can hold it busy beyond its bound.
     device_ssh_gadget "set -eu
-test \"\$(cat /run/store-provision.ready)\" = '$ready_line'
-test \"\$(stat -Lc %s '$init_target')\" -eq '$STAGE2_STORE_SIZE'
-test \"\$(sha256sum '$init_target' | cut -d' ' -f1)\" = '$STAGE2_STORE_SHA'
-test \"\$(stat -Lc %s '$init_stage1_target')\" -eq '$STAGE1_STORE_SIZE'
-test \"\$(sha256sum '$init_stage1_target' | cut -d' ' -f1)\" = '$STAGE1_STORE_SHA'" || return 1
+test \"\$(cat /run/store-provision.ready)\" = '$ready_line'" || return 1
     STAGE2_STORE_TEMP=
     STAGE2_STORE_PROVISIONED=yes
 }
