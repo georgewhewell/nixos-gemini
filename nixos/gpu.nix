@@ -54,7 +54,7 @@ let
     dmesg > /run/gemini-gpu/kernel.txt
     grep -Ev 'panfrost 13040000\.gpu: \[drm:panfrost_devfreq_init \[panfrost\]\] Failed to register cooling device$' /run/gemini-gpu/kernel.txt > /run/gemini-gpu/kernel-scoped.txt || test "$?" -eq 1
     if grep -Ei '(panfrost|13040000\.gpu|mfg|rt5735|vgpu).*(fault|error|timeout|timed out|failed|stuck)|(^|[[:space:]])(BUG:|Oops:|Call trace:)' /run/gemini-gpu/kernel-scoped.txt; then exit 1; fi
-    if grep -Ei 'GPULDO_FIRST_FAILURE|GPU_RENDER_FAIL|rcu.*detected stalls|Kernel panic|BUG:|Unable to handle kernel' /run/gemini-gpu/kernel.txt; then exit 1; fi
+    if grep -E 'GPULDO_FIRST_FAILURE|GPU_RENDER_FAIL|rcu.*detected stalls|Kernel panic|BUG:|Unable to handle kernel' /run/gemini-gpu/kernel.txt; then exit 1; fi
     echo 'gpu=render-and-autosuspend-pass' > /run/gemini-gpu/result
   '';
 in {
