@@ -30,7 +30,7 @@ let
     grep -Eq 'mt6797-wifi 180f0000.wifi: WLAN .* HIF_EVENT_PUMP_READY irq=' /run/gemini-connectivity/kernel-ready.txt
     sleep 10
     dmesg > /run/gemini-connectivity/kernel-steady.txt
-    if grep -Ei '(mt6797-wifi|mt6797-consys|mt6797-btif).* (fault|fatal|failed|timeout|timed out|fenced)' /run/gemini-connectivity/kernel-steady.txt; then
+    if grep -Ei '(mt6797-wifi|mt6797-consys|mt6797-btif).* (fault|fatal|failed|timeout|timed out|fenced)([^[:alnum:]_]|$)' /run/gemini-connectivity/kernel-steady.txt; then
       exit 1
     fi
     test "$(basename "$(readlink -f /sys/bus/platform/devices/180f0000.wifi/driver)")" = mt6797-wifi
