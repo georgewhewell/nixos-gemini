@@ -689,7 +689,9 @@ let
         grep -Fqx 'CONFIG_PANIC_ON_OOPS=y' .config
         grep -Fqx 'CONFIG_PANIC_TIMEOUT=5' .config
       ''}
-      grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
+      ${lib.optionalString (!a72Overlay) ''
+        grep -Fqx '# CONFIG_MTK_MT6797_A72_POWER is not set' .config
+      ''}
       ${lib.optionalString legacyConsysPlatform ''
         grep -Fqx '# CONFIG_MTK_MT6797_DVFSP_RESOURCE_OWNER is not set' .config
       ''}
