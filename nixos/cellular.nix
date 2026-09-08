@@ -1,4 +1,4 @@
-# Experimental volatile cellular service for the CI2 full NixOS image.
+# Experimental volatile cellular service for the CI3 full NixOS image.
 { pkgs, lib, geminiCellularHelper, ... }:
 let
   runtimePath = lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd];
@@ -30,7 +30,7 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       Restart = "no";
-      TimeoutStartSec = "190s";
+      TimeoutStartSec = "310s";
       ExecStart = runner;
       UMask = "0077";
     };

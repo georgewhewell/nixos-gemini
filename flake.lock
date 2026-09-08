@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788847649,
-        "narHash": "sha256-z1YRt8jmwb3e+j8NMBij2b0N7xhO7eR0pnVvWrbNM5M=",
-        "ref": "gemini-cellular-drives",
-        "rev": "f35866eb1990f7f1aeff5015b50a06df98442057",
-        "revCount": 526,
+        "lastModified": 1788849988,
+        "narHash": "sha256-JFz8xcNJNiFiHd2Jup6/r3p17DCtSLgNhnUoviHqxSk=",
+        "ref": "gemini-cellular-roots",
+        "rev": "53bbaaa678259bc175e5742cb3f9578d91206c01",
+        "revCount": 528,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-drives"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
       },
       "original": {
-        "ref": "gemini-cellular-drives",
-        "rev": "f35866eb1990f7f1aeff5015b50a06df98442057",
+        "ref": "gemini-cellular-roots",
+        "rev": "53bbaaa678259bc175e5742cb3f9578d91206c01",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-drives"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots"
       }
     },
     "linux-gemini-next": {

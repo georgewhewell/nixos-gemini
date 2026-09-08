@@ -47,7 +47,7 @@ watchdog_ok() {
     test "$owns" = yes
 }
 identity_ok() {
-    grep -wFq GEMINI_CELLULAR_NIXOS_CI2 /proc/cmdline
+    grep -wFq GEMINI_CELLULAR_NIXOS_CI3 /proc/cmdline
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable)" = Y
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable_volatile)" = Y
     watchdog_ok
@@ -58,15 +58,29 @@ protocol_ok() {
     if grep -Eq 'Kernel panic|Internal error:|BUG:|SError Interrupt|MT6797_CCCI_TERMINAL_FAILURE|FIRST_FATAL' "$1"; then return 1; fi
     tr -d '\r' < "$out/at-response" | grep -Fxq OK
 }
+source_for() {
+    case "$1" in
+        Z) source_name=nvdata; source_device=/dev/mmcblk0p6; ram_name=ram ;;
+        X) source_name=protect1; source_device=/dev/mmcblk0p8; ram_name=ramX ;;
+        Y) source_name=protect2; source_device=/dev/mmcblk0p9; ram_name=ramY ;;
+        *) return 1 ;;
+    esac
+}
+check_sources() {
+    for drive in Z X Y; do
+        source_for "$drive"
+        sha256sum "$source_device" > "$out/$source_name-$1.sha256"
+        cmp "$out/$source_name-before.sha256" "$out/$source_name-$1.sha256"
+    done
+}
 verify() {
     identity_ok
     test "$(cat "$out/boot-id")" = "$(cat /proc/sys/kernel/random/boot_id)"
-    grep -Fxq 'CELLULAR_STAGE2_PASS hs2=ready at=OK backing=volatile attach=untested data=untested' "$out/success"
+    grep -Fxq 'CELLULAR_STAGE2_PASS hs2=ready at=OK backing=volatile roots=ZXY attach=untested data=untested' "$out/success"
     protocol_ok "$out/dmesg-final"
     dmesg > "$out/dmesg-live"
     protocol_ok "$out/dmesg-live"
-    sha256sum /dev/mmcblk0p6 > "$out/nvdata-live.sha256"
-    cmp "$out/nvdata-before.sha256" "$out/nvdata-live.sha256"
+    check_sources live
 }
 if [ "${1:-}" = --verify ]; then verify; exit 0; fi
 [ "$#" = 0 ]
@@ -79,20 +93,25 @@ capture() {
 trap capture EXIT
 cat /proc/sys/kernel/random/boot_id > "$out/boot-id"
 identity_ok
-lease_ok 200 # Keep setup inside the original Stage1 deadline; never extend it.
+lease_ok 320 # Keep setup inside the original Stage1 deadline; never extend it.
 dmesg > "$out/dmesg-before"
 if grep -Eq 'MD1 accepted CCCI HS1|MD1 completed CCCI HS2|MT6797_CCCI_TERMINAL_FAILURE|FIRST_FATAL' "$out/dmesg-before"; then exit 1; fi
-timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-device
-sha256sum /dev/mmcblk0p6 > "$out/nvdata-before.sha256"
-mkdir "$out/nvdata" "$out/ram"
-timeout -k 1 10 mount -t ext4 -o ro,noload,nosuid,nodev,noexec /dev/mmcblk0p6 "$out/nvdata"
-timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-mount "$out/nvdata"
-timeout -k 1 10 mount -t tmpfs -o size=64m,nr_inodes=4096,mode=0700,nosuid,nodev,noexec tmpfs "$out/ram"
-if ! timeout -k 1 30 cp -a "$out/nvdata/md" "$out/ram/" >/dev/null 2>&1; then
-    echo CELLULAR_RAM_SEED_FAILED; exit 1
-fi
+timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-roots-device
+for drive in Z X Y; do
+    source_for "$drive"
+    sha256sum "$source_device" > "$out/$source_name-before.sha256"
+    mkdir "$out/$source_name" "$out/$ram_name"
+    timeout -k 1 10 mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$source_device" "$out/$source_name"
+    timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-root-mount "$drive" "$out/$source_name"
+    timeout -k 1 10 mount -t tmpfs -o size=64m,nr_inodes=4096,mode=0700,nosuid,nodev,noexec tmpfs "$out/$ram_name"
+    if ! timeout -k 1 30 cp -a "$out/$source_name/md" "$out/$ram_name/" >/dev/null 2>&1; then
+        echo CELLULAR_RAM_SEED_FAILED; exit 1
+    fi
+    watchdog_ok
+done
+check_sources seeded
 watchdog_ok
-timeout -k 1 60 "$GEMINI_CELLULAR_HELPER" --ram "$out/nvdata" "$out/ram"
+timeout -k 1 60 "$GEMINI_CELLULAR_HELPER" --ram-roots "$out/nvdata" "$out/ram" "$out/protect1" "$out/ramX" "$out/protect2" "$out/ramY"
 attempt=0
 while :; do
     dmesg > "$out/dmesg-wait"
@@ -114,7 +133,6 @@ capture
 protocol_ok "$out/dmesg-final"
 watchdog_ok
 test "$(cat "$out/boot-id")" = "$(cat /proc/sys/kernel/random/boot_id)"
-sha256sum /dev/mmcblk0p6 > "$out/nvdata-after.sha256"
-cmp "$out/nvdata-before.sha256" "$out/nvdata-after.sha256"
-echo 'CELLULAR_STAGE2_PASS hs2=ready at=OK backing=volatile attach=untested data=untested' > "$out/success.tmp"
+check_sources after
+echo 'CELLULAR_STAGE2_PASS hs2=ready at=OK backing=volatile roots=ZXY attach=untested data=untested' > "$out/success.tmp"
 mv "$out/success.tmp" "$out/success"
