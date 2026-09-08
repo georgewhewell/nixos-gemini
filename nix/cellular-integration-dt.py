@@ -67,7 +67,12 @@ def apply():
             else:
                 assert not extra, (node, extra)
         assert set(after) - set(before) == set(nodes) | {
-            '/modem@10014000/sim-eint-1', '/modem@10014000/sim-eint-2'}
+            '/modem@10014000/sim-eint-1', '/modem@10014000/sim-eint-2',
+            '/modem@10014000/rf-clock'}
+        rf = '/modem@10014000/rf-clock'
+        assert set(after[rf]) == {'mediatek,configuration', 'mediatek,driving'}
+        assert get(result, rf, 'mediatek,configuration', 'u') == '2 0 1 1'
+        assert get(result, rf, 'mediatek,driving', 'u') == '1 1 1 1'
         for index, selector in ((1, 1), (2, 0)):
             node = f'/modem@10014000/sim-eint-{index}'
             for prop, value in {'eint-number':index-1, 'debounce-us':100000, 'active-high':1,
@@ -75,6 +80,6 @@ def apply():
                                 'source-selector':selector}.items():
                 assert int(get(result, node, 'mediatek,' + prop, 'u')) == value
         source.write_bytes(result.read_bytes())
-    print('PASS integration cellular DT: resolved providers, six active nodes, SIM metadata; existing platform properties preserved')
+    print('PASS integration cellular DT: resolved providers, six active nodes, SIM and RF clock metadata; existing platform properties preserved')
 
 apply()
