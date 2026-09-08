@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots?ref=gemini-cellular-roots&rev=d586821b0cfa791c376d1c46ced1be96a50f6c8b";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-cellular-roots?ref=gemini-cellular-roots&rev=3a9e204ed1e4fa5804ebd71d09b1558baf48658b";
       flake = false;
     };
     linux-gemini-next = {
