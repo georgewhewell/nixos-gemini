@@ -458,9 +458,8 @@ static int configure_playback(int pcm_fd, unsigned int *period_frames,
 	sw.avail_min = *period_frames;
 	sw.start_threshold = *buffer_frames;
 	sw.stop_threshold = *buffer_frames;
-	/* ALSA requires a boundary greater than the hardware buffer.  Keeping it
-	 * close also prevents this one-shot writer from accumulating a huge frame
-	 * counter if a buggy driver reports a very large default boundary. */
+	/* The kernel replaces this field with its own frame-counter boundary.
+	 * Transfer bounds come from the fixed waveform and monotonic deadline. */
 	sw.boundary = *buffer_frames * 4U;
 	if (alsa_ioctl(pcm_fd, SNDRV_PCM_IOCTL_SW_PARAMS, &sw) < 0) {
 		print_errno("SNDRV_PCM_IOCTL_SW_PARAMS");

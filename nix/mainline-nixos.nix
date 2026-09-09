@@ -660,7 +660,7 @@ let
       echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
       echo "microsd-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /mmc@11240000 status)"
-      echo "audio-playback-exercise=inactive (no helper in image)"
+      echo "audio=PCM playback/capture qualification plus ALSA default and UCM routes; acoustic validation pending"
       echo "consys-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /consys@18070000 status)"
       echo "wifi-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /consys@18070000/wifi@180f0000 status)"
       echo "gpu-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /gpu@13040000 status)"

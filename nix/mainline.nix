@@ -66,7 +66,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "9db37781bf97565373737183a8f5f4a47729235b";
+  p22BaselinePlatformRevision = "577c7a63139ee46ba96089650ce23d696e298de6";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -210,7 +210,7 @@ let
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
     + lib.optionalString connectivityModules " mt6797_consys_emi_mpu.enable_experimental_ownership=1"
-    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M25 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
+    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M26 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -1305,7 +1305,7 @@ let
             ${kernel}/mt6797-gemini-pda-audio.dtbo
           test "$(fdtget "$out/gemini-audio.dtb" /audio-controller@11220000 status)" = okay
           test "$(fdtget "$out/gemini-audio.dtb" /sound compatible)" = \
-            mediatek,mt6797-mt6351-sound
+            planet,gemini-mt6797-mt6351
           echo 'audio-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
