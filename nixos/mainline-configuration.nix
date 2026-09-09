@@ -133,6 +133,7 @@
     withLogind = true;
     withPam = true;
     withKexectools = false;
+    withTimesyncd = true;
   };
   systemd.enableUnifiedCgroupHierarchy = false;
   systemd.coredump.enable = false;
@@ -346,7 +347,7 @@
   services.logrotate.enable = false;
   services.udisks2.enable = false;
   services.lvm.enable = false;
-  services.timesyncd.enable = false;
+  services.timesyncd.enable = true;
   services.journald.extraConfig = "Storage=volatile";
   services.resolved.enable = false;
   systemd.packages = lib.mkForce [pkgs.dbus];

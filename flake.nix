@@ -1046,6 +1046,7 @@
         ./nixos/cellular.nix
         ./nixos/gpu.nix
         ./nixos/connectivity.nix
+        ./nixos/wifi-autoconnect.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
