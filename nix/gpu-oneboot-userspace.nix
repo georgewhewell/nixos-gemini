@@ -68,4 +68,4 @@ let
     test -s ${mesa}/share/glvnd/egl_vendor.d/50_mesa.json
     tar -c -f - --files-from ${closure}/store-paths | gzip -1 > "$out"
   '';
-in { inherit smoke closure archive; }
+in { inherit smoke closure archive mesa; }

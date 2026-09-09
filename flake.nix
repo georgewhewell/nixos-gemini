@@ -92,6 +92,34 @@
       armPkgs = crossPkgs;
     };
 
+    desktopUserspace = import ./nix/desktop-userspace.nix {
+      inherit buildPkgs;
+      armPkgs = crossPkgs;
+      mesa = gpuUserspace.mesa;
+    };
+
+    desktopHostUserspace = import ./nix/desktop-userspace.nix {
+      inherit buildPkgs;
+      armPkgs = buildPkgs;
+      mesa = null;
+    };
+
+    desktopProtocolCheck = buildPkgs.runCommand "gemini-desktop-protocol-check" {
+      nativeBuildInputs = [buildPkgs.python3 buildPkgs.binutils];
+    } ''
+      python3 ${./nix/test-desktop-presentation.py} \
+        ${desktopHostUserspace.weston}/bin/weston \
+        ${desktopHostUserspace.presentationCheck}/bin/gemini-desktop-presentation-check > "$out"
+      nm --defined-only ${gpuUserspace.mesa}/lib/libgallium-${gpuUserspace.mesa.version}.so > symbols
+      grep -Eq ' [tT] kmsro_drm_screen_create$' symbols
+      grep -Eq ' [tT] panfrost_drm_screen_create_renderonly$' symbols
+      if grep -Eq ' [tT] (llvmpipe|softpipe)_create_screen$' symbols; then
+        echo 'unexpected software renderer in desktop Mesa' >&2
+        exit 1
+      fi
+      echo 'Panfrost renderonly and KMS bridge: present; software renderers: absent' >> "$out"
+    '';
+
     ubootStage0 = import ./nix/uboot-stage0.nix {
       inherit buildPkgs crossPkgs u-boot-src;
     };
@@ -1048,6 +1076,7 @@
         ./nixos/connectivity.nix
         ./nixos/wifi-autoconnect.nix
         ./nixos/audio.nix
+        ./nixos/desktop.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
@@ -1055,6 +1084,7 @@
           _module.args.geminiConnectivityKernel = mainlineP22Baseline.kernel;
           _module.args.geminiConnectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
           _module.args.geminiGpuSmoke = gpuUserspace.smoke;
+          _module.args.geminiDesktop = desktopUserspace // { protocolCheck = desktopProtocolCheck; };
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1576,6 +1606,11 @@
   in {
     # Packages built on x86_64
     packages.${buildSystem} = {
+      geminiDesktopWeston = desktopUserspace.weston;
+      geminiDesktopPresentationCheck = desktopUserspace.presentationCheck;
+      geminiDesktopHostWeston = desktopHostUserspace.weston;
+      geminiDesktopHostPresentationCheck = desktopHostUserspace.presentationCheck;
+      geminiDesktopProtocolCheck = desktopProtocolCheck;
       kernel = vendorKernel;
       kernelBaselineGcc8 = vendorKernelBaselineGcc8;
       kernelBaselineGcc8Hardened = vendorKernelBaselineGcc8Hardened;
