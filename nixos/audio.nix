@@ -54,7 +54,7 @@ let
     set -euo pipefail
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep config.systemd.package pkgs.util-linux pkgs.alsa-utils]}:$PATH
     export ALSA_CONFIG_UCM2=${config.environment.variables.ALSA_CONFIG_UCM2}
-    grep -wFq GEMINI_A72_CI9_M37 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M38 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
