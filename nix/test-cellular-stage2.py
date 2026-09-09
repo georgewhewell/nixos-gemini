@@ -72,7 +72,7 @@ else:raise AssertionError(name)
 def fixture(directory, case):
  root=Path(directory)
  for path,value in {
-  'proc/sys/kernel/random/boot_id':'fixture-boot\n', 'proc/cmdline':'GEMINI_A72_CI9_M26\n',
+  'proc/sys/kernel/random/boot_id':'fixture-boot\n', 'proc/cmdline':'GEMINI_A72_CI9_M27\n',
   'run/unattended-recovery.lease-deadline':'format=gemini-unattended-recovery-lease-v1\nclock=monotonic-uptime-seconds\nstarted=10\ndeadline=730\nlease_seconds=720\n',
   'proc/uptime':'100.0 10\n', 'proc/self/mountinfo':'fixture\n',
   'sys/module/mt6797_md1_fs_provider/parameters/enable':'Y\n',
