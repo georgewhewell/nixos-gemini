@@ -34,6 +34,16 @@ let
     { name = "PGA R Mux"; value = "AIN0"; idle = "None"; }
     { name = "PGA Volume"; value = [1 1]; idle = [0 0]; }
   ];
+  # The headset is AIN1 on the left PGA. The right PGA's second input is
+  # AIN3, so capturing it would mix in a different physical input.
+  headsetMicrophone = captureInterconnects ++ [
+    { name = "AIF Out Mux"; value = "Normal Path"; idle = "Normal Path"; }
+    { name = "ADC L Mux"; value = "Left Preamplifier"; idle = "Idle"; }
+    { name = "ADC R Mux"; value = "Idle"; idle = "Idle"; }
+    { name = "PGA L Mux"; value = "AIN1"; idle = "None"; }
+    { name = "PGA R Mux"; value = "None"; idle = "None"; }
+    { name = "PGA Volume"; value = [1 1]; idle = [0 0]; }
+  ];
   alsaValue = value:
     if builtins.isList value then "[ ${lib.concatMapStringsSep " " toString value} ]"
     else if builtins.isString value then builtins.toJSON value
@@ -45,7 +55,7 @@ let
   sequence = controls: field: lib.concatMapStringsSep "\n" (control:
     "cset ${builtins.toJSON "name='${control.name}' ${csetValue control.${field}}"}"
   ) controls;
-  hookedPcm = name: device: controls: ''
+  controlHooks = name: device: controls: ''
     pcm.${name}_routes {
       type hooks
       slave.pcm "hw:CARD=mt6797mt6351,DEV=${toString device}"
@@ -64,6 +74,9 @@ let
         ]
       }
     }
+  '';
+  hookedPcm = name: device: controls: ''
+    ${controlHooks name device controls}
     pcm.${name} {
       type plug
       slave {
@@ -71,6 +84,28 @@ let
         format S16_LE
         rate 48000
         channels 2
+      }
+    }
+  '';
+  # Keep the qualified stereo hardware transport and select only its left
+  # channel. The outer plug converts that mono stream for ordinary clients.
+  # UCM owns its controls; the standalone PCM uses preserving control hooks.
+  headsetMonoPcm = name: slave: ''
+    pcm.${name} {
+      type plug
+      slave {
+        pcm {
+          type route
+          slave {
+            pcm ${builtins.toJSON slave}
+            format S16_LE
+            channels 2
+          }
+          ttable.0.0 1
+        }
+        format S16_LE
+        rate 48000
+        channels 1
       }
     }
   '';
@@ -93,7 +128,7 @@ let
     Syntax 4
     SectionUseCase."HiFi" {
       File "/MediaTek/Gemini/HiFi.conf"
-      Comment "Gemini speakers, headphones and internal microphone"
+      Comment "Gemini speakers, headphones, internal and headset microphones"
     }
     UCM
     cat > "$out/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf" <<'UCM'
@@ -138,6 +173,7 @@ let
     }
     SectionDevice."Mic" {
       Comment "Internal microphone"
+      ConflictingDevice [ "Headset" ]
       Value {
         CapturePriority 200
         CapturePCM "hw:''${CardId},3"
@@ -152,6 +188,24 @@ let
         ${sequence (lib.reverseList microphone) "idle"}
       ]
     }
+    SectionDevice."Headset" {
+      Comment "Headset microphone"
+      ConflictingDevice [ "Mic" ]
+      Value {
+        CapturePriority 300
+        JackControl "Headset Mic Jack"
+        CapturePCM "gemini_headset_mic_ucm"
+        CaptureChannels 1
+        CaptureMixerElem "PGA"
+        CaptureVolume "name='PGA Volume'"
+      }
+      EnableSequence [
+        ${sequence headsetMicrophone "value"}
+      ]
+      DisableSequence [
+        ${sequence (lib.reverseList headsetMicrophone) "idle"}
+      ]
+    }
     UCM
   '';
 in {
@@ -162,6 +216,9 @@ in {
     ${hookedPcm "gemini_speakers" 0 speakers}
     ${hookedPcm "gemini_headphones" 0 headphones}
     ${hookedPcm "gemini_mic" 3 microphone}
+    ${controlHooks "gemini_headset_mic" 3 headsetMicrophone}
+    ${headsetMonoPcm "gemini_headset_mic" "gemini_headset_mic_routes"}
+    ${headsetMonoPcm "gemini_headset_mic_ucm" "hw:CARD=mt6797mt6351,DEV=3"}
     pcm.!default {
       type asym
       playback.pcm "gemini_speakers"

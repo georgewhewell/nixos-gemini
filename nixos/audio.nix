@@ -5,6 +5,11 @@ let
     ${pkgs.alsa-utils}/bin/amixer -c mt6797mt6351 contents |
       ${pkgs.gawk}/bin/awk -f ${../nix/audio-controls.awk}
   '';
+  headsetQualification = pkgs.writeShellScript "gemini-audio-headset-qualify" ''
+    export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.alsa-utils]}:$PATH
+    export GEMINI_AUDIO_CONTROLS=${controlSnapshot}/bin/gemini-audio-controls
+    ${builtins.readFile ../nix/audio-headset-check.sh}
+  '';
   playback = pkgs.pkgsStatic.stdenv.mkDerivation {
     pname = "gemini-audio-playback";
     version = "1";
@@ -49,7 +54,7 @@ let
     set -euo pipefail
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep config.systemd.package pkgs.util-linux pkgs.alsa-utils]}:$PATH
     export ALSA_CONFIG_UCM2=${config.environment.variables.ALSA_CONFIG_UCM2}
-    grep -wFq GEMINI_A72_CI9_M33 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M34 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
@@ -155,6 +160,10 @@ let
     echo 'gemini-audio: default capture before' > /dev/kmsg
     timeout --signal=TERM --kill-after=5 10 arecord -q -D default -t raw -f S16_LE -r 48000 -c 2 -d 1 /dev/null
     echo 'gemini-audio: default capture passed' > /dev/kmsg
+    echo 'gemini-audio: mono headset capture before' > /dev/kmsg
+    timeout --signal=TERM --kill-after=5 15 ${headsetQualification}
+    grep -Fxq 'headset-capture=mono-left-route-and-restoration-passed' /run/gemini-audio/headset/result
+    echo 'gemini-audio: mono headset capture, bias handoff and restoration passed' > /dev/kmsg
     ${controlSnapshot}/bin/gemini-audio-controls > /run/gemini-audio/controls-after.txt
     cmp /run/gemini-audio/controls-before.txt /run/gemini-audio/controls-after.txt
     alsaucm -c hw:mt6797mt6351 list _verbs > /run/gemini-audio/ucm-verbs.txt
@@ -162,10 +171,12 @@ let
     grep -Fq 'Headphones' /run/gemini-audio/ucm-devices.txt
     grep -Fq 'Speaker' /run/gemini-audio/ucm-devices.txt
     grep -Fq 'Mic' /run/gemini-audio/ucm-devices.txt
+    grep -Fq 'Headset' /run/gemini-audio/ucm-devices.txt
     alsaucm -c hw:mt6797mt6351 set _verb HiFi \
       set _enadev Speaker set _disdev Speaker \
       set _enadev Headphones set _disdev Headphones \
-      set _enadev Mic set _disdev Mic
+      set _enadev Mic set _disdev Mic \
+      set _enadev Headset set _disdev Headset
     ${controlSnapshot}/bin/gemini-audio-controls > /run/gemini-audio/controls-after-ucm.txt
     cmp /run/gemini-audio/controls-before.txt /run/gemini-audio/controls-after-ucm.txt
     # Disabling UCM devices must preserve the digital backend defaults for
