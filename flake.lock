@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788939022,
-        "narHash": "sha256-9cZdV4ZDrOIQk9WwrVX5WA9CnTruAzaULA8ClJhREC0=",
-        "ref": "gemini-integration-m36",
-        "rev": "fd7a602f2b93019df96b0df8624cc0fd4102d3d2",
-        "revCount": 607,
+        "lastModified": 1788944044,
+        "narHash": "sha256-ag7IqJMZxUSZDp0gMHuBBMph/ZIgQTLPYd6IAj3OZUc=",
+        "ref": "gemini-wifi-tx-queue-m38",
+        "rev": "68081b7c250db805ce4968350be94f78ad7d7315",
+        "revCount": 608,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration-m36"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38"
       },
       "original": {
-        "ref": "gemini-integration-m36",
-        "rev": "fd7a602f2b93019df96b0df8624cc0fd4102d3d2",
+        "ref": "gemini-wifi-tx-queue-m38",
+        "rev": "68081b7c250db805ce4968350be94f78ad7d7315",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration-m36"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38"
       }
     },
     "linux-gemini-next": {
