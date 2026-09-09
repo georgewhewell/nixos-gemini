@@ -105,6 +105,16 @@ let
     alsaucm -c hw:mt6797mt6351 set _verb HiFi list _devices > /run/gemini-audio/ucm-devices.txt
     grep -Fq 'Headphones' /run/gemini-audio/ucm-devices.txt
     grep -Fq 'Mic' /run/gemini-audio/ucm-devices.txt
+    alsaucm -c hw:mt6797mt6351 set _verb HiFi \
+      set _enadev Headphones set _disdev Headphones \
+      set _enadev Mic set _disdev Mic
+    amixer -c mt6797mt6351 contents > /run/gemini-audio/controls-after-ucm.txt
+    cmp /run/gemini-audio/controls-before.txt /run/gemini-audio/controls-after-ucm.txt
+    # Disabling UCM devices must preserve the digital backend defaults for
+    # the next ordinary ALSA open. Empty input tests this without a new tone.
+    timeout --signal=TERM --kill-after=5 10 aplay -q -D default \
+      -t raw -f S16_LE -r 48000 -c 2 /dev/null
+    echo 'gemini-audio: UCM enable-disable and subsequent default open passed' > /dev/kmsg
     dmesg > /run/gemini-audio/kernel-after.txt
     echo 'audio=playback-capture-and-route-restoration-passed' > /run/gemini-audio/result
   '';
