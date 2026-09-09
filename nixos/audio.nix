@@ -44,7 +44,7 @@ let
     set -euo pipefail
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep config.systemd.package pkgs.util-linux pkgs.alsa-utils]}:$PATH
     export ALSA_CONFIG_UCM2=${config.environment.variables.ALSA_CONFIG_UCM2}
-    grep -wFq GEMINI_A72_CI9_M29 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M30 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
@@ -53,6 +53,37 @@ let
     cat /proc/sys/kernel/random/boot_id > /run/gemini-audio/boot-id
     cat /proc/asound/cards /proc/asound/pcm > /run/gemini-audio/topology
     dmesg > /run/gemini-audio/kernel-before.txt
+    # Capture teardown must not remove the right USB Ethernet adapter or
+    # release the regulator claims held by the two USB consumers.
+    right_net=
+    for net in /sys/class/net/*; do
+      if test "$(readlink -f "$net/device/driver")" = /sys/bus/usb/drivers/r8152; then
+        test -z "$right_net"
+        right_net=$net
+      fi
+    done
+    test -n "$right_net"
+    right_device=$(readlink -f "$right_net/device")
+    right_ifindex=$(cat "$right_net/ifindex")
+    shared_rail=
+    for rail in /sys/class/regulator/*; do
+      if test "$(cat "$rail/name")" = vusb33; then
+        test -z "$shared_rail"
+        shared_rail=$rail
+      fi
+    done
+    test -n "$shared_rail"
+    usb_users=$(cat "$shared_rail/num_users")
+    test "$usb_users" -ge 2
+    check_usb() {
+      test "$(readlink -f "$right_net/device")" = "$right_device"
+      test "$(cat "$right_net/ifindex")" = "$right_ifindex"
+      test "$(cat "$right_net/carrier")" = 1
+      test "$(cat "$shared_rail/state")" = enabled
+      test "$(cat "$shared_rail/num_users")" = "$usb_users"
+    }
+    check_usb
+    cat /sys/kernel/debug/regulator/regulator_summary > /run/gemini-audio/regulators-before.txt
     # Write boundaries synchronously to the kernel log before the ioctl. A
     # pipe reader might not run before a global stall. Remove only the kmsg
     # rate limit for this bounded diagnostic and restore it on every return.
@@ -85,6 +116,7 @@ let
       echo 'gemini-audio: capture qualification failed' > /dev/kmsg
       exit 1
     fi
+    check_usb
     # DPCM must see a backend at open, earlier than ctl_elems hooks run.
     # Keep these four digital interconnects as the normal application
     # baseline; stream close still powers down the analog paths.
@@ -115,6 +147,9 @@ let
     timeout --signal=TERM --kill-after=5 10 aplay -q -D default \
       -t raw -f S16_LE -r 48000 -c 2 /dev/null
     echo 'gemini-audio: UCM enable-disable and subsequent default open passed' > /dev/kmsg
+    check_usb
+    cat /sys/kernel/debug/regulator/regulator_summary > /run/gemini-audio/regulators-after.txt
+    echo 'gemini-audio: USB device, carrier and shared regulator claims preserved' > /dev/kmsg
     dmesg > /run/gemini-audio/kernel-after.txt
     echo 'audio=playback-capture-and-route-restoration-passed' > /run/gemini-audio/result
   '';

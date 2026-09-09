@@ -14,7 +14,7 @@ match = re.search(r'^export PATH=(.*):\$PATH$', script, re.M)
 assert match, 'missing explicit qualification PATH'
 paths = [Path(p) for p in match[1].split(':')]
 commands = ['grep', 'systemctl', 'cat', 'mkdir', 'dmesg', 'timeout',
-            'amixer', 'aplay', 'arecord', 'cmp', 'alsaucm']
+            'amixer', 'aplay', 'arecord', 'cmp', 'alsaucm', 'readlink']
 missing = []
 for command in commands:
     found = next((p / command for p in paths
