@@ -543,7 +543,8 @@ static int timeout_until_deadline(const struct timespec *deadline,
 	return 0;
 }
 
-static int wait_for_playback(int pcm_fd, const struct timespec *deadline)
+static int wait_for_playback(int pcm_fd, const struct timespec *deadline,
+                             bool draining)
 {
 	struct pollfd pfd = {
 		.fd = pcm_fd,
@@ -573,38 +574,69 @@ static int wait_for_playback(int pcm_fd, const struct timespec *deadline)
 			fprintf(stderr, "gemini-audio-playback: PCM deadline expired\n");
 			return -1;
 		}
-		if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+		if ((pfd.revents & (POLLHUP | POLLNVAL)) ||
+            (!draining && (pfd.revents & POLLERR))) {
 			errno = EIO;
 			print_errno("poll(PCM playback state)");
 			return -1;
 		}
-		if (pfd.revents & POLLOUT)
+		if ((pfd.revents & POLLOUT) || (draining && (pfd.revents & POLLERR)))
 			return 0;
 	}
 }
 
+static int read_pcm_status(int pcm_fd, struct snd_pcm_status *status)
+{
+    memset(status, 0, sizeof(*status));
+    if (alsa_ioctl(pcm_fd, SNDRV_PCM_IOCTL_STATUS, status) < 0) {
+        print_errno("SNDRV_PCM_IOCTL_STATUS");
+        return -1;
+    }
+    fprintf(stderr, "gemini-audio-playback: state=%d delay=%ld appl=%lu hw=%lu\n",
+            status->state, (long)status->delay,
+            (unsigned long)status->appl_ptr, (unsigned long)status->hw_ptr);
+    return 0;
+}
+
 static int drain_playback(int pcm_fd, const struct timespec *deadline)
 {
-	for (;;) {
-		if (timeout_until_deadline(deadline, &(int){ 0 }) < 0) {
-			if (errno == ETIMEDOUT)
-				fprintf(stderr, "gemini-audio-playback: PCM deadline expired\n");
-			else
-				print_errno("PCM deadline");
-			return -1;
-		}
-		if (alsa_ioctl(pcm_fd, SNDRV_PCM_IOCTL_DRAIN, NULL) == 0)
-			return 0;
-		if (errno == EINTR)
-			continue;
-		if (errno == EAGAIN) {
-			if (wait_for_playback(pcm_fd, deadline) < 0)
-				return -1;
-			continue;
-		}
-		print_errno("SNDRV_PCM_IOCTL_DRAIN");
-		return -1;
-	}
+    struct snd_pcm_status status;
+    int ret;
+
+    /* DRAIN can turn an existing XRUN into SETUP. Reject an already broken
+     * stream before asking the kernel to drain it. */
+    if (read_pcm_status(pcm_fd, &status) < 0)
+        return -1;
+    if (status.state != SNDRV_PCM_STATE_RUNNING &&
+        status.state != SNDRV_PCM_STATE_PREPARED) {
+        errno = EIO;
+        print_errno("unexpected PCM state before drain");
+        return -1;
+    }
+    ret = alsa_ioctl(pcm_fd, SNDRV_PCM_IOCTL_DRAIN, NULL);
+    if (ret < 0 && errno != EAGAIN) {
+        print_errno("SNDRV_PCM_IOCTL_DRAIN");
+        return -1;
+    }
+    for (;;) {
+        if (timeout_until_deadline(deadline, &(int){ 0 }) < 0) {
+            print_errno("PCM drain deadline");
+            return -1;
+        }
+        if (read_pcm_status(pcm_fd, &status) < 0)
+            return -1;
+        if (status.state == SNDRV_PCM_STATE_SETUP && status.delay == 0)
+            return 0;
+        if (status.state != SNDRV_PCM_STATE_DRAINING) {
+            errno = EIO;
+            print_errno("unexpected PCM state during drain");
+            return -1;
+        }
+        /* A drained playback stream wakes poll with POLLOUT|POLLERR.
+         * Accept that wakeup only here, then prove SETUP via STATUS. */
+        if (wait_for_playback(pcm_fd, deadline, true) < 0)
+            return -1;
+    }
 }
 
 static int play_tone(int pcm_fd)
@@ -638,7 +670,7 @@ static int play_tone(int pcm_fd)
 				if (errno == EINTR)
 					continue;
 				if (errno == EAGAIN) {
-					if (wait_for_playback(pcm_fd, &deadline) < 0)
+					if (wait_for_playback(pcm_fd, &deadline, false) < 0)
 						return -1;
 					continue;
 				}

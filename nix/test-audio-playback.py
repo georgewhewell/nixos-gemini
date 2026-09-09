@@ -44,7 +44,7 @@ program += r'''
 #undef clock_gettime
 static unsigned int calls, failure, opened, mode, samples, control_writes, drained;
 static unsigned long milliseconds;
-static bool ctl_open, pcm_open, prepared, waited;
+static bool ctl_open, pcm_open, prepared, waited, drain_called, drain_finished;
 static long values[4], original[4];
 static int fake_open(const char *path, int flags, ...) {
  opened++;
@@ -121,7 +121,7 @@ static int fake_ioctl(int fd, unsigned long raw, void *arg) {
  case (unsigned int)SNDRV_PCM_IOCTL_PREPARE:prepared=true;break;
  case (unsigned int)SNDRV_PCM_IOCTL_WRITEI_FRAMES: {
   struct snd_xferi *v=arg;assert(prepared && v->frames && v->frames<=960);
-  if(mode==1 && !waited){errno=EAGAIN;return -1;}
+  if((mode==1 || mode==22) && !waited){errno=EAGAIN;return -1;}
   if(mode==2){errno=EAGAIN;return -1;}
   if(mode==3){v->result=0;break;}
   if(mode==4){v->result=-EPIPE;break;}
@@ -135,10 +135,23 @@ static int fake_ioctl(int fd, unsigned long raw, void *arg) {
   }
   v->result=count;break;
  }
+ case (unsigned int)SNDRV_PCM_IOCTL_STATUS: {
+  struct snd_pcm_status *v=arg;
+  if(!drain_called)v->state=mode==18?SNDRV_PCM_STATE_XRUN:SNDRV_PCM_STATE_RUNNING;
+  else if(!drain_finished)v->state=SNDRV_PCM_STATE_DRAINING;
+  else if(mode==13)v->state=SNDRV_PCM_STATE_XRUN;
+  else if(mode==14)v->state=SNDRV_PCM_STATE_SUSPENDED;
+  else if(mode==15)v->state=SNDRV_PCM_STATE_DISCONNECTED;
+  else v->state=SNDRV_PCM_STATE_SETUP;
+  v->delay=v->state==SNDRV_PCM_STATE_SETUP?(mode==20?1:0):960;
+  v->appl_ptr=samples;v->hw_ptr=samples-v->delay;
+  break;
+ }
  case (unsigned int)SNDRV_PCM_IOCTL_DRAIN:
-  assert(samples==TONE_FRAMES);
-  if(mode==7){errno=EAGAIN;return -1;}
-  drained++;break;
+  assert(samples==TONE_FRAMES && !drain_called);
+  drain_called=true;drained++;
+  /* pcm_native.c snd_pcm_drain: O_NONBLOCK always returns EAGAIN. */
+  errno=EAGAIN;return -1;
  default:assert(!"unexpected ioctl");
  }
  return 0;
@@ -147,7 +160,14 @@ static int fake_poll(struct pollfd *pfd, nfds_t n, int timeout) {
  assert(n==1 && pfd->fd==11 && timeout>0);
  waited=true;
  milliseconds+=(mode==2 || mode==7)?1000:1;
- pfd->revents=POLLOUT;return 1;
+ if(drain_called) {
+  drain_finished=mode!=7;
+  /* snd_pcm_poll: playback DRAINING is not ready; SETUP wakes with ERR. */
+  pfd->revents=POLLOUT|POLLERR;
+  if(mode==16)pfd->revents=POLLHUP;
+  if(mode==17)pfd->revents=POLLNVAL;
+ } else pfd->revents=mode==22?(POLLOUT|POLLERR):POLLOUT;
+ return 1;
 }
 static int fake_clock_gettime(clockid_t clock, struct timespec *t) {
  assert(clock==CLOCK_MONOTONIC);milliseconds++;
@@ -155,7 +175,7 @@ static int fake_clock_gettime(clockid_t clock, struct timespec *t) {
 }
 static int run(unsigned inject, unsigned behavior) {
  calls=opened=samples=control_writes=drained=0;failure=inject;mode=behavior;
- ctl_open=pcm_open=prepared=waited=false;milliseconds=0;
+ ctl_open=pcm_open=prepared=waited=drain_called=drain_finished=false;milliseconds=0;
  for(unsigned i=0;i<4;i++)values[i]=original[i]=(i%2);
  char *args[]={"audio","--activate"};
  int result=audio_main(2,args);
@@ -169,10 +189,11 @@ int main(void) {
  for(unsigned i=1;i<=total;i++)assert(run(i,0)==EXIT_FAILURE);
  assert(run(0,1)==EXIT_SUCCESS && waited);
  assert(run(0,6)==EXIT_SUCCESS && samples==TONE_FRAMES);
- for(unsigned i=2;i<=12;i++)if(i!=6)assert(run(0,i)==EXIT_FAILURE);
+ for(unsigned i=2;i<=18;i++)if(i!=6)assert(run(0,i)==EXIT_FAILURE);
+ assert(run(0,20)==EXIT_FAILURE);assert(run(0,22)==EXIT_FAILURE);
  opened=0;
  char *args[]={"audio"};assert(audio_main(1,args)==EXIT_FAILURE && !opened);
- puts("PASS: real helper handles all ioctl failures, ambiguous writes, partial writes, EAGAIN/deadlines, wrong identity and close failures; restores controls and bounds waveform");
+ puts("PASS: real helper recognizes nonblocking drain EAGAIN then SETUP/POLLERR; rejects XRUN, suspended/disconnected, bad delay and write-side POLLERR; all syscall failures restore controls and waveform remains bounded");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='gemini-audio-playback-') as temporary:

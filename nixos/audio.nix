@@ -15,7 +15,7 @@ let
   qualify = pkgs.writeShellScript "gemini-audio-qualify" ''
     set -euo pipefail
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep config.systemd.package pkgs.util-linux]}:$PATH
-    grep -wFq GEMINI_A72_CI9_M24 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M25 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
