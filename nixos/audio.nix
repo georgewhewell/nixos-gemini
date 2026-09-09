@@ -199,7 +199,6 @@ let
 in {
   imports = [./audio-routes.nix];
   system.build.geminiAudioControls = controlSnapshot;
-  environment.systemPackages = [controlSnapshot];
   systemd.services.gemini-audio = {
     description = "Qualify Gemini playback, capture and application audio routes";
     wantedBy = ["multi-user.target"];

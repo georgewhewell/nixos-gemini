@@ -393,6 +393,7 @@
     # arecord, amixer and speaker-test are what turn "the card enumerates" into
     # "audio works".
     pkgs.alsa-utils
+    config.system.build.geminiAudioControls
   ];
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
