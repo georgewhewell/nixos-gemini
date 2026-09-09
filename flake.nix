@@ -777,6 +777,7 @@
       cellularOverlay = true;
       a72Overlay = true;
       gpuOwnerOverlay = true;
+      desktopScanout = true;
       connectivityModules = true;
       microsdOverlay = true;
     };
@@ -1608,8 +1609,10 @@
     packages.${buildSystem} = {
       geminiDesktopWeston = desktopUserspace.weston;
       geminiDesktopPresentationCheck = desktopUserspace.presentationCheck;
+      geminiDesktopBufferCheck = desktopUserspace.bufferCheck;
       geminiDesktopHostWeston = desktopHostUserspace.weston;
       geminiDesktopHostPresentationCheck = desktopHostUserspace.presentationCheck;
+      geminiDesktopHostBufferCheck = desktopHostUserspace.bufferCheck;
       geminiDesktopProtocolCheck = desktopProtocolCheck;
       kernel = vendorKernel;
       kernelBaselineGcc8 = vendorKernelBaselineGcc8;

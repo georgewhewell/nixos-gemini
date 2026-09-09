@@ -69,6 +69,7 @@ let
     unset MESA_LOADER_DRIVER_OVERRIDE
     export PATH=${lib.makeBinPath [pkgs.coreutils]}:$PATH
     mkdir -p "$HOME/.cache/fontconfig"
+    rm -f /run/gemini-desktop/{weston.log,presentation.txt,buffers.txt}
     card=
     for candidate in /sys/class/drm/card[0-9]*; do
       test -e "$candidate/device/driver" || continue
@@ -77,6 +78,11 @@ let
       card=$(basename "$candidate")
     done
     test -n "$card"
+    set -- /sys/bus/platform/devices/13040000.gpu/drm/renderD*
+    test "$#" -eq 1
+    render=/dev/dri/$(basename "$1")
+    ${geminiDesktop.bufferCheck}/bin/gemini-desktop-buffer-check "/dev/dri/$card" "$render" \
+      > /run/gemini-desktop/buffers.txt 2>&1
     exec ${weston}/bin/weston --backend=drm --renderer=gl --drm-device="$card" \
       --current-mode --socket=wayland-0 --config=${westonConfig} \
       --modules=systemd-notify.so --log=/run/gemini-desktop/weston.log
@@ -137,6 +143,7 @@ in {
       NotifyAccess = "main";
       RuntimeDirectory = "gemini-desktop";
       RuntimeDirectoryMode = "0700";
+      RuntimeDirectoryPreserve = "yes";
       ExecStartPre = "+${pkgs.busybox}/bin/busybox chvt 7";
       ExecStart = start;
       ExecStopPost = "+${pkgs.busybox}/bin/busybox chvt 1";

@@ -1,0 +1,3 @@
+# The retained fbcon buffer plus three aligned 1080x2160x32 scanout
+# buffers already exceed 32 MiB. Reserve room for those and other DMA users.
+CONFIG_CMA_SIZE_MBYTES=64

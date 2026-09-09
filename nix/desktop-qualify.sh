@@ -11,6 +11,7 @@ finish() {
     if test "$passed" != yes; then
         cp /run/gemini-desktop/weston.log /run/gemini-desktop-check/weston-failed.log 2>/dev/null || :
         cp /run/gemini-desktop/presentation.txt /run/gemini-desktop-check/presentation-failed.txt 2>/dev/null || :
+        cp /run/gemini-desktop/buffers.txt /run/gemini-desktop-check/buffers-failed.txt 2>/dev/null || :
         systemctl stop gemini-desktop.service gemini-seatd.service || :
     fi
 }
@@ -35,7 +36,9 @@ for pass in 1 2; do
     test "$(cat /sys/class/tty/tty0/active)" = tty7
     systemctl start gemini-desktop-presentation.service
     cp /run/gemini-desktop/presentation.txt /run/gemini-desktop-check/presentation-$pass.txt
+    cp /run/gemini-desktop/buffers.txt /run/gemini-desktop-check/buffers-$pass.txt
     cp /run/gemini-desktop/weston.log /run/gemini-desktop-check/weston-$pass.log
+    grep -Eq '^desktop-buffers=passed concurrent=3 bytes=[0-9]+ handles=released$' /run/gemini-desktop-check/buffers-$pass.txt
     grep -Fxq 'desktop-presentation=passed mode=device frames=3' /run/gemini-desktop-check/presentation-$pass.txt
     grep -Eq 'GL renderer: Mali-T880.*[Pp]anfrost' /run/gemini-desktop-check/weston-$pass.log
     jobs_after=$(irq_count)

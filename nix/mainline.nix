@@ -37,11 +37,13 @@
   cellularOverlay ? false,
   a72Overlay ? false,
   gpuOwnerOverlay ? false,
+  desktopScanout ? false,
   connectivityModules ? false,
   leaseSelfAcceptToken ? null,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || unattendedRecovery;
+assert !desktopScanout || (gpuOwnerOverlay && displayOverlay);
 let
   lib = buildPkgs.lib;
 
@@ -104,6 +106,7 @@ let
     ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment]
     ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment]
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
+    ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
     ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment];
   overlayLabel =
     if debugOverlay
@@ -469,6 +472,10 @@ let
           "${kernelCmdline}"
       ''}
       make "''${kernelMakeFlags[@]}" olddefconfig
+      ${lib.optionalString desktopScanout ''
+        grep -Fqx 'CONFIG_CMA_SIZE_MBYTES=64' .config
+        grep -Fqx 'CONFIG_CMA_SIZE_SEL_MBYTES=y' .config
+      ''}
       ${lib.optionalString cellularOverlay ''
         for symbol in WWAN MTK_MT6797_CCCI MTK_MT6797_MD1_COLD_OWNER MTK_MT6797_MD1_FS_PROVIDER TMPFS; do
           grep -Fqx "CONFIG_$symbol=y" .config

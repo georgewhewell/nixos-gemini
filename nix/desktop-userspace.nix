@@ -22,6 +22,22 @@ let
       "-Dtests=false"
     ];
   });
+  bufferCheck = armPkgs.stdenv.mkDerivation {
+    pname = "gemini-desktop-buffer-check";
+    version = "1";
+    src = ./desktop-buffer-check.c;
+    dontUnpack = true;
+    nativeBuildInputs = [buildPkgs.pkg-config];
+    buildInputs = [armPkgs.libdrm];
+    buildPhase = ''
+      $CC -std=gnu11 -O2 -Wall -Wextra -Werror "$src" \
+        $(pkg-config --cflags --libs libdrm) -o gemini-desktop-buffer-check
+    '';
+    installPhase = ''
+      mkdir -p "$out/bin"
+      cp gemini-desktop-buffer-check "$out/bin/"
+    '';
+  };
   presentationCheck = armPkgs.stdenv.mkDerivation {
     pname = "gemini-desktop-presentation-check";
     version = "1";
@@ -44,7 +60,7 @@ let
     '';
   };
 in {
-  inherit weston mesa presentationCheck;
+  inherit weston mesa presentationCheck bufferCheck;
   inherit (armPkgs) seatd dejavu_fonts;
   # Cursor files are architecture-independent; their generator runs on the
   # build host. The upstream cross package invokes a target xcursorgen.
