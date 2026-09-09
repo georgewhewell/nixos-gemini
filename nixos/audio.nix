@@ -44,7 +44,7 @@ let
     set -euo pipefail
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep config.systemd.package pkgs.util-linux pkgs.alsa-utils]}:$PATH
     export ALSA_CONFIG_UCM2=${config.environment.variables.ALSA_CONFIG_UCM2}
-    grep -wFq GEMINI_A72_CI9_M27 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M28 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1
@@ -85,6 +85,11 @@ let
       echo 'gemini-audio: capture qualification failed' > /dev/kmsg
       exit 1
     fi
+    # DPCM must see a backend at open, earlier than ctl_elems hooks run.
+    # Keep these four digital interconnects as the normal application
+    # baseline; stream close still powers down the analog paths.
+    ${config.system.build.geminiAudioDigitalRoutes}
+    echo 'gemini-audio: digital routes ready' > /dev/kmsg
     # Exercise the public ALSA default, including its control-preservation
     # hooks and plug conversion. Captured sound is discarded, never saved.
     amixer -c mt6797mt6351 contents > /run/gemini-audio/controls-before.txt

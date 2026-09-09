@@ -1,18 +1,26 @@
 { lib, pkgs, ... }:
 let
+  # DPCM requires a connected backend at PCM open, before ctl_elems hooks
+  # run at hw_params. These digital interconnects stay selected; DAPM still
+  # powers the analog paths only for an active stream.
+  playbackInterconnects = [
+    { name = "ADDA_DL_CH1 DL1_CH1"; value = 1; idle = 1; }
+    { name = "ADDA_DL_CH2 DL1_CH2"; value = 1; idle = 1; }
+  ];
+  captureInterconnects = [
+    { name = "UL1_CH1 ADDA_UL_CH1"; value = 1; idle = 1; }
+    { name = "UL1_CH2 ADDA_UL_CH2"; value = 1; idle = 1; }
+  ];
   # The fixed machine card exposes Playback_1 at 0 and Capture_1 at 3.
   # UCM users open those hardware PCMs; plain ALSA applications use the
   # default hooks below, which restore their route controls on close.
   headphones = [
     { name = "DAC In Mux"; value = "Normal Path"; idle = "Normal Path"; }
-    { name = "ADDA_DL_CH1 DL1_CH1"; value = 1; idle = 0; }
-    { name = "ADDA_DL_CH2 DL1_CH2"; value = 1; idle = 0; }
+  ] ++ playbackInterconnects ++ [
     { name = "HPL Mux"; value = "Audio Playback"; idle = "Open"; }
     { name = "HPR Mux"; value = "Audio Playback"; idle = "Open"; }
   ];
-  microphone = [
-    { name = "UL1_CH1 ADDA_UL_CH1"; value = 1; idle = 0; }
-    { name = "UL1_CH2 ADDA_UL_CH2"; value = 1; idle = 0; }
+  microphone = captureInterconnects ++ [
     { name = "AIF Out Mux"; value = "Normal Path"; idle = "Normal Path"; }
     { name = "ADC L Mux"; value = "Left Preamplifier"; idle = "Idle"; }
     { name = "ADC R Mux"; value = "Right Preamplifier"; idle = "Idle"; }
@@ -59,6 +67,14 @@ let
         channels 2
       }
     }
+  '';
+  digitalRoutes = pkgs.writeShellScript "gemini-audio-digital-routes" ''
+    set -euo pipefail
+    ${lib.concatMapStringsSep "\n" (control: ''
+      ${pkgs.alsa-utils}/bin/amixer -q -c mt6797mt6351 cset ${lib.escapeShellArg "name='${control.name}'"} 1
+      ${pkgs.alsa-utils}/bin/amixer -c mt6797mt6351 cget ${lib.escapeShellArg "name='${control.name}'"} |
+        ${pkgs.gnugrep}/bin/grep -Fq ': values=on'
+    '') (playbackInterconnects ++ captureInterconnects)}
   '';
   ucm = pkgs.runCommand "gemini-alsa-ucm" {} ''
     mkdir -p "$out/share/alsa"
@@ -113,6 +129,7 @@ let
     UCM
   '';
 in {
+  system.build.geminiAudioDigitalRoutes = digitalRoutes;
   environment.variables.ALSA_CONFIG_UCM2 = "${ucm}/share/alsa/ucm2";
   environment.etc."asound.conf".text = ''
     # ASoC power follows the selected stream. No GPIO is written by userspace.
