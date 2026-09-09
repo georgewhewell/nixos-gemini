@@ -14,11 +14,17 @@ let
   # The fixed machine card exposes Playback_1 at 0 and Capture_1 at 3.
   # UCM users open those hardware PCMs; plain ALSA applications use the
   # default hooks below, which restore their route controls on close.
-  headphones = [
+  headphonePath = [
     { name = "DAC In Mux"; value = "Normal Path"; idle = "Normal Path"; }
   ] ++ playbackInterconnects ++ [
     { name = "HPL Mux"; value = "Audio Playback"; idle = "Open"; }
     { name = "HPR Mux"; value = "Audio Playback"; idle = "Open"; }
+  ];
+  headphones = headphonePath ++ [
+    { name = "Speaker Switch"; value = 0; idle = 0; }
+  ];
+  speakers = headphonePath ++ [
+    { name = "Speaker Switch"; value = 1; idle = 0; }
   ];
   microphone = captureInterconnects ++ [
     { name = "AIF Out Mux"; value = "Normal Path"; idle = "Normal Path"; }
@@ -87,17 +93,35 @@ let
     Syntax 4
     SectionUseCase."HiFi" {
       File "/MediaTek/Gemini/HiFi.conf"
-      Comment "Gemini headphones and internal microphone"
+      Comment "Gemini speakers, headphones and internal microphone"
     }
     UCM
     cat > "$out/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf" <<'UCM'
     SectionVerb {
       Value { TQ "HiFi" }
     }
-    SectionDevice."Headphones" {
-      Comment "Headphones"
+    SectionDevice."Speaker" {
+      Comment "Internal speakers"
+      ConflictingDevice [ "Headphones" ]
       Value {
         PlaybackPriority 200
+        PlaybackPCM "hw:''${CardId},0"
+        PlaybackChannels 2
+        PlaybackMixerElem "Headphone"
+        PlaybackVolume "name='Headphone Volume'"
+      }
+      EnableSequence [
+        ${sequence speakers "value"}
+      ]
+      DisableSequence [
+        ${sequence (lib.reverseList speakers) "idle"}
+      ]
+    }
+    SectionDevice."Headphones" {
+      Comment "Headphones"
+      ConflictingDevice [ "Speaker" ]
+      Value {
+        PlaybackPriority 100
         PlaybackPCM "hw:''${CardId},0"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"
@@ -133,13 +157,14 @@ in {
   environment.variables.ALSA_CONFIG_UCM2 = "${ucm}/share/alsa/ucm2";
   environment.etc."asound.conf".text = ''
     # ASoC power follows the selected stream. No GPIO is written by userspace.
+    ${hookedPcm "gemini_speakers" 0 speakers}
     ${hookedPcm "gemini_headphones" 0 headphones}
     ${hookedPcm "gemini_mic" 3 microphone}
     pcm.!default {
       type asym
-      playback.pcm "gemini_headphones"
+      playback.pcm "gemini_speakers"
       capture.pcm "gemini_mic"
-      hint.description "Gemini headphones and internal microphone"
+      hint.description "Gemini speakers, headphones and internal microphone"
     }
     ctl.!default {
       type hw

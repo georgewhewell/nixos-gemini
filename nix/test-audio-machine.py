@@ -44,13 +44,14 @@ prefix = r'''
 #define COUNT_ARGS_(_1,_2,_3,N,...) N
 #define COUNT_ARGS(...) COUNT_ARGS_(__VA_ARGS__,3,2,1)
 #define GPIOD_OUT_LOW 0
+#define GEMINI_SPEAKER_AMPS 2
 #define IS_ERR(p) ((uintptr_t)(p) > (uintptr_t)-4096)
 #define PTR_ERR(p) ((int)(intptr_t)(p))
 #define EPROBE_DEFER 517
 struct device_node { int id; } root, platform_node, codec_node;
 struct device { struct device_node *of_node; };
 struct platform_device { struct device dev; };
-struct gpio_desc { int value; } gpio;
+struct gpio_desc { int value; } gpio, speaker_gpios[2];
 struct snd_soc_dai_link_component { const char *name; struct device_node *of_node; const char *dai_name; };
 struct snd_soc_dai_link {
  const char *name, *stream_name;
@@ -61,12 +62,14 @@ struct snd_soc_dai_link {
 struct snd_soc_card {
  const char *name; void *owner; struct snd_soc_dai_link *dai_link; int num_links;
  struct device *dev; const void *dapm_widgets, *dapm_routes; unsigned num_dapm_widgets, num_dapm_routes;
- void *drvdata;
+ void *drvdata; const void *controls; unsigned num_controls; int (*late_probe)(struct snd_soc_card *);
 };
-struct mt6797_mt6351_priv { struct gpio_desc *mic_enable; };
-static const int gemini_widgets[1], gemini_routes[2];
+struct mt6797_mt6351_priv { struct gpio_desc *mic_enable; struct gpio_desc *speaker_enable[2]; };
+static const int gemini_widgets[2], gemini_routes[4], gemini_controls[1];
+static int gemini_late_probe(struct snd_soc_card *card) { (void)card; return 0; }
 static int allocation_count, fail_allocation, compatible, missing_platform, missing_codec;
 static int gpio_error, action_error, register_error, registered_count, node_refs;
+static int speaker_count = 2, speaker_error_pin = -1, speaker_sleep, speaker_low, action_count, fail_action;
 static void *allocations[256]; static unsigned allocated;
 static struct snd_soc_card *registered[4];
 static void *devm_kmemdup(struct device *dev, const void *src, size_t size, int flags) {
@@ -87,9 +90,25 @@ static struct gpio_desc *devm_gpiod_get(struct device *dev, const char *name, in
  (void)dev; assert(!strcmp(name, "microphone-enable")); assert(flags == GPIOD_OUT_LOW);
  gpio.value = 0; return gpio_error ? (void *)(intptr_t)gpio_error : &gpio;
 }
+static int gpiod_count(struct device *dev, const char *name) {
+ (void)dev; assert(!strcmp(name, "speaker-enable")); return speaker_count;
+}
+static struct gpio_desc *devm_gpiod_get_index(struct device *dev, const char *name, int i, int flags) {
+ (void)dev; assert(!strcmp(name, "speaker-enable") && i >= 0 && i < 2 && flags == GPIOD_OUT_LOW);
+ speaker_gpios[i].value = 0;
+ return i == speaker_error_pin ? (void *)(intptr_t)-EPROBE_DEFER : &speaker_gpios[i];
+}
+static int gpiod_cansleep(struct gpio_desc *gpio) { (void)gpio; return speaker_sleep; }
+static int gpiod_is_active_low(struct gpio_desc *gpio) { (void)gpio; return speaker_low; }
+static void gemini_speaker_disable(void *data) {
+ struct mt6797_mt6351_priv *p = data; p->speaker_enable[0]->value = p->speaker_enable[1]->value = 0;
+}
 static void gemini_mic_disable(void *data) { ((struct mt6797_mt6351_priv *)data)->mic_enable->value = 0; }
 static int devm_add_action_or_reset(struct device *dev, void (*fn)(void *), void *data) {
- (void)dev; if (action_error) fn(data); return action_error;
+ (void)dev; ++action_count;
+ int error = action_error || action_count == fail_action ? -ENOMEM : 0;
+ if (error) fn(data);
+ return error;
 }
 #define snd_soc_card_set_drvdata(card, data) ((card)->drvdata = (data))
 #define dev_err_probe(dev, error, ...) (error)
@@ -114,7 +133,7 @@ static int devm_snd_soc_register_card(struct device *dev, struct snd_soc_card *c
   /* Empty frontend codecs reach ASoC untouched; the core installs its dummy. */
   assert(link->num_codecs == (unsigned)(i == 9));
  }
- if (compatible) assert(card->drvdata && card->num_dapm_widgets == 1 && card->num_dapm_routes == 2);
+ if (compatible) assert(card->drvdata && card->num_dapm_widgets == 2 && card->num_dapm_routes == 4 && card->num_controls == 1 && card->late_probe == gemini_late_probe);
  else assert(!card->drvdata && !card->num_dapm_widgets && !card->num_dapm_routes);
  if (register_error) return register_error;
  assert(registered_count < 4); registered[registered_count++] = card; return 0;
@@ -127,6 +146,7 @@ static void cleanup(void) {
  allocated = 0; registered_count = 0; allocation_count = 0;
  fail_allocation = 0; gpio_error = 0; action_error = 0; register_error = 0;
  missing_platform = 0; missing_codec = 0;
+ speaker_count = 2; speaker_error_pin = -1; speaker_sleep = speaker_low = action_count = fail_action = 0;
 }
 static void globals_unchanged(void) {
  assert(mt6797_mt6351_card.dev == NULL && mt6797_mt6351_card.drvdata == NULL);
@@ -158,6 +178,16 @@ int main(void) {
  compatible = 1;
  gpio_error = -EPROBE_DEFER; assert(mt6797_mt6351_dev_probe(&pdev) == -EPROBE_DEFER); cleanup();
  action_error = -ENOMEM; assert(mt6797_mt6351_dev_probe(&pdev) == -ENOMEM); cleanup();
+ for (int i = 0; i < 2; ++i) {
+  speaker_error_pin = i; assert(mt6797_mt6351_dev_probe(&pdev) == -EPROBE_DEFER); cleanup();
+ }
+ for (int i = -1; i < 4; ++i) {
+  if (i == 2) continue;
+  speaker_count = i; assert(mt6797_mt6351_dev_probe(&pdev) == (i < 0 ? i : -EINVAL)); cleanup();
+ }
+ speaker_sleep = 1; assert(mt6797_mt6351_dev_probe(&pdev) == -EINVAL); cleanup();
+ speaker_low = 1; assert(mt6797_mt6351_dev_probe(&pdev) == -EINVAL); cleanup();
+ fail_action = 2; assert(mt6797_mt6351_dev_probe(&pdev) == -ENOMEM); cleanup();
  /* Also exercise an absent platform array and explicit named components. */
  struct snd_soc_dai_link *link = &mt6797_mt6351_dai_links[0];
  struct snd_soc_dai_link_component *platform = link->platforms;
