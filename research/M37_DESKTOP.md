@@ -97,3 +97,21 @@ Audio stream/routing qualification does not prove audibility. User home and
 font caches remain volatile. Wi-Fi measurements must report the running desktop
 as an additional workload relative to M35. Suspend, complete power policy,
 eSIM service and UEFI remain separate unfinished work.
+
+## Wi-Fi measurement after acceptance
+
+All six workload intervals and 12 diagnostic boundary snapshots completed.
+Three uploads delivered 17.177–17.491 Mbit/s with 78.678–79.687 ms mean loaded
+RTT to the workstation. Mean driver queue residence was 26.889–27.268 ms;
+mean send duration was 0.634–0.645 ms. Credit waits are included in send
+duration, so those intervals must not be added together. No send failures,
+purges or credit timeouts occurred. Download delivered 18.979 Mbit/s with
+9.076 ms mean loaded RTT.
+
+These measurements localize substantial waiting to the driver's queue but do
+not account for firmware occupancy, airtime or every part of end-to-end RTT.
+Median upload loaded RTT remained close to M35; RF, AP/server load and the new
+desktop workload prevent attributing small changes to one implementation
+change. Final exact device health passed at 511.99 s; no iperf/ping clients
+remained at 553.32 s. The device was released back to root. Raw evidence and
+the complete report are in `handoff/m37-wifi-tx-measurement/`.

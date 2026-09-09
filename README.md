@@ -17,8 +17,8 @@ the image. Bring-up is still in progress.
 - Both USB network paths reachable by SSH: left gadget 10.15.19.82 and the
   right RTL8156 adapter. The test network assigned 192.168.23.70 to the adapter.
 - WLAN association and IPv4 using WPA2-PSK/CCMP, a default fq_codel queue, and
-  read-only transmit timing diagnostics. M37 performance measurements are
-  separate from boot acceptance.
+  read-only transmit timing diagnostics. A bounded M37 measurement completed
+  with 17.2–17.5 Mbit/s uploads and 19.0 Mbit/s download; final health passed.
 - Cellular kernel/services restoration and audio playback/capture, ALSA/UCM
   routing, speaker/headphone isolation and shared-USB-rail restoration checks.
   Physical cellular service/eSIM and acoustic validation remain open.
