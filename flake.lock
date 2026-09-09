@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1788933113,
-        "narHash": "sha256-ck9i0iDG46s/nSlh6CMnxwPWRMVIG4EH71KMHrojK88=",
-        "ref": "gemini-integration-m33",
-        "rev": "7e86f2948d5c6f066cf42efda8f463a065a7df41",
-        "revCount": 606,
+        "lastModified": 1788939022,
+        "narHash": "sha256-9cZdV4ZDrOIQk9WwrVX5WA9CnTruAzaULA8ClJhREC0=",
+        "ref": "gemini-integration-m36",
+        "rev": "fd7a602f2b93019df96b0df8624cc0fd4102d3d2",
+        "revCount": 607,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration-m36"
       },
       "original": {
-        "ref": "gemini-integration-m33",
-        "rev": "7e86f2948d5c6f066cf42efda8f463a065a7df41",
+        "ref": "gemini-integration-m36",
+        "rev": "fd7a602f2b93019df96b0df8624cc0fd4102d3d2",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-integration-m36"
       }
     },
     "linux-gemini-next": {
