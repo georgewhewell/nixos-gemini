@@ -121,7 +121,9 @@ let
       Comment "Headphones"
       ConflictingDevice [ "Speaker" ]
       Value {
-        PlaybackPriority 100
+        PlaybackPriority 300
+        JackControl "Headphone Jack"
+        JackHWMute "Speaker"
         PlaybackPCM "hw:''${CardId},0"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"

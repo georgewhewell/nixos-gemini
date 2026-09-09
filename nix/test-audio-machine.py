@@ -62,11 +62,14 @@ struct snd_soc_dai_link {
 struct snd_soc_card {
  const char *name; void *owner; struct snd_soc_dai_link *dai_link; int num_links;
  struct device *dev; const void *dapm_widgets, *dapm_routes; unsigned num_dapm_widgets, num_dapm_routes;
- void *drvdata; const void *controls; unsigned num_controls; int (*late_probe)(struct snd_soc_card *);
+ void *drvdata; const void *controls; unsigned num_controls; int (*late_probe)(struct snd_soc_card *); int (*remove)(struct snd_soc_card *);
 };
-struct mt6797_mt6351_priv { struct gpio_desc *mic_enable; struct gpio_desc *speaker_enable[2]; };
+struct mutex { int initialized; };
+static void mutex_init(struct mutex *m) { m->initialized = 1; }
+struct mt6797_mt6351_priv { struct snd_soc_card *card; struct mutex speaker_lock; struct gpio_desc *mic_enable; struct gpio_desc *speaker_enable[2]; };
 static const int gemini_widgets[2], gemini_routes[4], gemini_controls[1];
 static int gemini_late_probe(struct snd_soc_card *card) { (void)card; return 0; }
+static int gemini_card_remove(struct snd_soc_card *card) { (void)card; return 0; }
 static int allocation_count, fail_allocation, compatible, missing_platform, missing_codec;
 static int gpio_error, action_error, register_error, registered_count, node_refs;
 static int speaker_count = 2, speaker_error_pin = -1, speaker_sleep, speaker_low, action_count, fail_action;
