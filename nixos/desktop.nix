@@ -8,7 +8,7 @@ let
     HOME = "/home/gemini";
     SHELL = "${pkgs.busybox}/bin/ash";
     LIBSEAT_BACKEND = "seatd";
-    SEATD_SOCK = "/run/gemini-seatd/seatd.sock";
+    SEATD_SOCK = "/run/seatd.sock";
     __EGL_VENDOR_LIBRARY_FILENAMES = "${mesa}/share/glvnd/egl_vendor.d/50_mesa.json";
     LIBGL_DRIVERS_PATH = "${mesa}/lib/dri";
     GBM_BACKENDS_PATH = "${mesa}/lib/gbm";
@@ -84,7 +84,7 @@ let
   seatReady = pkgs.writeShellScript "gemini-seatd-ready" ''
     set -eu
     count=0
-    until test -S /run/gemini-seatd/seatd.sock; do
+    until test -S /run/seatd.sock; do
       count=$((count + 1))
       test "$count" -lt 50
       ${pkgs.coreutils}/bin/sleep 0.1
@@ -120,9 +120,7 @@ in {
     after = ["systemd-udevd.service"];
     serviceConfig = {
       Type = "simple";
-      RuntimeDirectory = "gemini-seatd";
-      RuntimeDirectoryMode = "0755";
-      ExecStart = "${seatd.bin}/bin/seatd -s /run/gemini-seatd/seatd.sock -g video";
+      ExecStart = "${seatd.bin}/bin/seatd -g video";
       ExecStartPost = seatReady;
       TimeoutStartSec = "10s";
       Restart = "no";

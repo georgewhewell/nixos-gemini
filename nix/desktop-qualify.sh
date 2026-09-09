@@ -1,5 +1,5 @@
 set -eu
-grep -wFq GEMINI_A72_CI9_M36 /proc/cmdline
+grep -wFq GEMINI_A72_CI9_M37 /proc/cmdline
 systemctl is-active --quiet gemini-watchdog-takeover.service gemini-gpu.service gemini-audio.service gemini-connectivity.service
 test "$(cat /sys/class/watchdog/watchdog0/state)" = active
 test "$(cat /sys/class/tty/tty0/active)" = tty1
