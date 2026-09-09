@@ -45,5 +45,8 @@ let
   };
 in {
   inherit weston mesa presentationCheck;
-  inherit (armPkgs) seatd dejavu_fonts vanilla-dmz;
+  inherit (armPkgs) seatd dejavu_fonts;
+  # Cursor files are architecture-independent; their generator runs on the
+  # build host. The upstream cross package invokes a target xcursorgen.
+  inherit (buildPkgs) vanilla-dmz;
 }

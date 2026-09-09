@@ -17,7 +17,7 @@ let
     MESA_SHADER_CACHE_DISABLE = "true";
     FONTCONFIG_FILE = fontConfig;
     XCURSOR_PATH = "${geminiDesktop.vanilla-dmz}/share/icons";
-    XCURSOR_THEME = "Vanilla-DMZ";
+    XCURSOR_THEME = "DMZ-White";
   };
   fontConfig = pkgs.writeText "gemini-fonts.conf" ''
     <?xml version="1.0"?>
@@ -68,6 +68,7 @@ let
     set -eu
     unset MESA_LOADER_DRIVER_OVERRIDE
     export PATH=${lib.makeBinPath [pkgs.coreutils]}:$PATH
+    mkdir -p "$HOME/.cache/fontconfig"
     card=
     for candidate in /sys/class/drm/card[0-9]*; do
       test -e "$candidate/device/driver" || continue
