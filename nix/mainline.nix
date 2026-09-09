@@ -804,6 +804,10 @@ let
         grep -Fqx 'CONFIG_MTK_MT6797_CONSYS_FW_HANDOFF=y' .config
         grep -Fqx 'CONFIG_CFG80211=m' .config
         grep -Fqx 'CONFIG_MTK_MT6797_WIFI_RADIO=y' .config
+        for symbol in NET_SCHED NET_SCH_FQ_CODEL NET_SCH_DEFAULT DEFAULT_FQ_CODEL; do
+          grep -Fqx "CONFIG_$symbol=y" .config
+        done
+        grep -Fqx 'CONFIG_DEFAULT_NET_SCH="fq_codel"' .config
         CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-wifi-radio-admission-host.py
       ''}
       ${lib.optionalString gpuOwnerOverlay ''
