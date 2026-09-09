@@ -590,6 +590,7 @@ let
   bootImg = buildPkgs.runCommand "gemini-mainline-nixos.boot.img" {
     nativeBuildInputs = [buildPkgs.python3];
   } ''
+    python3 ${./check-service-milestone.py} ${kernel}/kernel.config ${nixosToplevel}
     ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
       test "$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' ${kernel}/kernel.config \
         | tr ' ' '\n' \
