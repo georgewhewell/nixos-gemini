@@ -47,7 +47,7 @@ watchdog_ok() {
     test "$owns" = yes
 }
 identity_ok() {
-    grep -wFq GEMINI_A72_CI9_M23 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M24 /proc/cmdline
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable)" = Y
     test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable_volatile)" = Y
     watchdog_ok

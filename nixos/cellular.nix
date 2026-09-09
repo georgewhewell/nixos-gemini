@@ -26,7 +26,7 @@ let
   a72Preflight = pkgs.writeShellScript "gemini-a72-preflight" ''
     set -eu
     export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.findutils pkgs.gawk pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd]}:$PATH
-    grep -wFq GEMINI_A72_CI9_M23 /proc/cmdline
+    grep -wFq GEMINI_A72_CI9_M24 /proc/cmdline
     systemctl is-active --quiet gemini-watchdog-takeover.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/nowayout)" = 1

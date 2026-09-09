@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m22&rev=8de5566860c6325f68e2d3d95c166cf03db7b826";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-a72-ci9?ref=gemini-integration-m24&rev=9db37781bf97565373737183a8f5f4a47729235b";
       flake = false;
     };
     linux-gemini-next = {
@@ -1047,6 +1047,7 @@
         ./nixos/gpu.nix
         ./nixos/connectivity.nix
         ./nixos/wifi-autoconnect.nix
+        ./nixos/audio.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
