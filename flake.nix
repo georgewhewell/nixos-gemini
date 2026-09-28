@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-wifi-wpa3&rev=1c88a9665cebe3cd845e607e70bb206cdd4998c3";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m40&rev=95ea83acd2990169e9639638a29971bf89617ad8";
       flake = false;
     };
     linux-gemini-next = {

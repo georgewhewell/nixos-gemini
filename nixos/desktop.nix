@@ -114,10 +114,9 @@ in {
   };
   users.groups.render = {};
   environment.etc."gemini/weston.ini".source = westonConfig;
-  # The kernel's touchscreen-swapped-x-y/touchscreen-inverted-x flags make the
-  # NT36xxx report panel-native coordinates, and Weston applies the DSI-1
-  # output transform to touch itself.  A libinput calibration matrix on top
-  # rotated touch twice, so bind the device to DSI-1 and nothing more.
+  # The NT36xxx reports panel-native portrait coordinates (the board DT has no
+  # axis swap or inversion), and Weston applies the DSI-1 output transform to
+  # touch itself, so bind the device to DSI-1 and nothing more.
   services.udev.extraRules = ''
     SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Novatek NT36xxx touchscreen", ENV{WL_OUTPUT}="DSI-1"
   '';
