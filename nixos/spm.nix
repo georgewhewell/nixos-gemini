@@ -25,5 +25,6 @@ let
     echo 'spm=loaded-9-of-9-pcm-images'
   '';
 in {
-  environment.systemPackages = [load];
+  # mainline-configuration.nix forces the system package list; it adds this.
+  system.build.geminiSpmLoad = load;
 }
