@@ -378,7 +378,7 @@
   # bring-up without building another single-purpose image. The selected
   # systemd package is already in the closure for PID 1; adding it here merely
   # exposes systemctl/journalctl through the system profile.
-  environment.systemPackages = lib.mkForce [
+  environment.systemPackages = lib.mkForce ([
     pkgs.busybox
     pkgs.btop
     config.systemd.package
@@ -397,7 +397,9 @@
     # Touch/I2C debugging: i2ctransfer/i2cget need CONFIG_I2C_CHARDEV.
     pkgs.i2c-tools
     pkgs.evtest
-  ];
+  ]
+  # bluetoothctl, btmgmt, btmon and the hci tools when Bluetooth is enabled.
+  ++ lib.optional config.hardware.bluetooth.enable config.hardware.bluetooth.package);
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
 

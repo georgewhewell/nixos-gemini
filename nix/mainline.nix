@@ -69,7 +69,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "95ea83acd2990169e9639638a29971bf89617ad8";
+  p22BaselinePlatformRevision = "f5c3a300d8be01d06c3d7b2269245a60cfdb53e2";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -817,6 +817,11 @@ let
           grep -Fqx "CONFIG_$symbol=y" .config
         done
         grep -Fqx 'CONFIG_DEFAULT_NET_SCH="fq_codel"' .config
+        for symbol in BT BT_HCIUART BT_HCI_MT6797; do
+          grep -Fqx "CONFIG_$symbol=m" .config
+        done
+        grep -Fqx 'CONFIG_BT_HCIUART_H4=y' .config
+        CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-bt-hci-mt6797-host.py
         CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-wifi-radio-admission-host.py
         CC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-wifi-radio-tx-host.py
       ''}
@@ -857,6 +862,7 @@ let
       ''}
       ${lib.optionalString connectivityModules ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-wifi.dtbo "$out/"
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-bluetooth.dtbo "$out/"
       ''}
       cp arch/arm64/boot/Image "$out/Image"
       cp arch/arm64/boot/Image.gz "$out/Image.gz"
@@ -1552,6 +1558,8 @@ let
       ${lib.optionalString connectivityModules ''
         python3 ${./wifi-integration-dt.py} "$out/gemini.dtb" ${kernel}/mt6797-gemini-pda-wifi.dtbo "$out/wifi-owner.dtb" >> "$out/VALIDATION"
         cp "$out/wifi-owner.dtb" "$out/gemini.dtb"
+        python3 ${./bluetooth-integration-dt.py} "$out/gemini.dtb" ${kernel}/mt6797-gemini-pda-bluetooth.dtbo "$out/bluetooth-owner.dtb" >> "$out/VALIDATION"
+        cp "$out/bluetooth-owner.dtb" "$out/gemini.dtb"
       ''}
       ${lib.optionalString a72Overlay ''
         dtc -q -@ -I dts -O dtb -o a72-cpu9.dtbo ${./mt6797-gemini-a72-cpu9-on.dtso}
