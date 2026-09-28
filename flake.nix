@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-backlight?ref=gemini-m41-backlight&rev=f259b9e2254724108c440adad05c53e1ec89004a";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-leds?ref=gemini-m41-leds&rev=e920a9833afa529b7b8d3b5f71050d42bb1602ee";
       flake = false;
     };
     linux-gemini-next = {

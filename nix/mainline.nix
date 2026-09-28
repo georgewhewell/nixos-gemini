@@ -69,7 +69,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "f259b9e2254724108c440adad05c53e1ec89004a";
+  p22BaselinePlatformRevision = "e920a9833afa529b7b8d3b5f71050d42bb1602ee";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -263,13 +263,13 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "48d9d9c6ee3c526f2139edd7c14cfb31cb6a7ed2381f4f436188582851be84c3";
+    else "0fe08262518c27ff69cb651243660d801d3d975243a9456992dc0fce474e83cf";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "64a77eb34247b325b50abdf4562e49172e87c8c07cab13c4c80fbeeb95776c27";
+    else "438ab68b789559993a8d434ff44c6f72fe3f396a54f80dcbd2bae584484729af";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
@@ -631,6 +631,8 @@ let
         grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
         grep -Fqx 'CONFIG_PWM_MTK_DISP=y' .config
         grep -Fqx 'CONFIG_BACKLIGHT_PWM=y' .config
+        grep -Fqx 'CONFIG_LEDS_CLASS_MULTICOLOR=y' .config
+        grep -Fqx 'CONFIG_LEDS_AW9120=y' .config
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
@@ -1077,6 +1079,8 @@ let
         ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       test "$(fdtget "$out/gemini-base.dtb" /i2c@1100e000/regulator@68 status)" = disabled
+      test "$(fdtget "$out/gemini-base.dtb" /i2c@11014000 status)" = okay
+      test "$(fdtget "$out/gemini-base.dtb" /i2c@11014000/led-controller@2c compatible)" = awinic,aw9120
       echo 'da921x-node=disabled-transactional-driver-unbound' >> "$out/VALIDATION"
         ''
       }

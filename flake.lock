@@ -37,19 +37,19 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1790620221,
-        "narHash": "sha256-7UVZ+avibum/hj91oMDvVD9mP9A39TkCu8FIklEci88=",
-        "ref": "gemini-m41-backlight",
-        "rev": "f259b9e2254724108c440adad05c53e1ec89004a",
-        "revCount": 646,
+        "lastModified": 1790623106,
+        "narHash": "sha256-G8tsaLxqOVxA7LuKLoCeAiNHENEpP9KClxsa9TcHEwc=",
+        "ref": "gemini-m41-leds",
+        "rev": "e920a9833afa529b7b8d3b5f71050d42bb1602ee",
+        "revCount": 649,
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-backlight"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-leds"
       },
       "original": {
-        "ref": "gemini-m41-backlight",
-        "rev": "f259b9e2254724108c440adad05c53e1ec89004a",
+        "ref": "gemini-m41-leds",
+        "rev": "e920a9833afa529b7b8d3b5f71050d42bb1602ee",
         "type": "git",
-        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-backlight"
+        "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-m41-leds"
       }
     },
     "linux-gemini-next": {
