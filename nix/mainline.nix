@@ -39,6 +39,7 @@
   gpuOwnerOverlay ? false,
   desktopScanout ? false,
   connectivityModules ? false,
+  rtcPowerKeyOverlay ? false,
   leaseSelfAcceptToken ? null,
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
@@ -68,7 +69,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "68081b7c250db805ce4968350be94f78ad7d7315";
+  p22BaselinePlatformRevision = "b4d735d39d3f6ebd7807c8b30bf34327d50e4d77";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -107,7 +108,8 @@ let
     ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment]
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
     ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
-    ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment];
+    ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment]
+    ++ lib.optionals rtcPowerKeyOverlay [./mainline-rtc-power-key.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -213,7 +215,7 @@ let
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
     + lib.optionalString connectivityModules " mt6797_consys_emi_mpu.enable_experimental_ownership=1"
-    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M38 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
+    + lib.optionalString cellularOverlay " GEMINI_A72_CI9_M39 mt6797_md1_lk_handoff_probe.enable_experimental_md1_lk_handoff_probe=1 mt6797_md1_boot_status_observe.enable_experimental_boot_status=1 mt6797_md1_remap_observe.enable_experimental_md1_remap_observe=1 mt6797_md1_emi_mpu.enable_experimental_md1_emi_mpu=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_cold_owner=1 mt6797_md1_cold_owner_driver.enable_experimental_md1_boot_vector_release=1 mtk_mt6797_ccci.enable=1 mt6797_md1_fs_provider.enable=1 mt6797_md1_fs_provider.enable_volatile=1"
     + lib.optionalString consysIdentityOverlay " mt6797_consys_live.identity_experiment=1"
     + lib.optionalString consysG2bOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_g2b_owner.enable_experimental_g2b_owner=1"
     + lib.optionalString consysG2cPatchOverlay " mt6797_consys_emi_mpu.enable_experimental_ownership=1 mt6797_consys_runtime.enable_experimental_runtime=1 mt6797_btif_pio_platform.enable_experimental_platform_adapter=1 mt6797_btif_stp_bootstrap.enable_experimental_stp_bootstrap=1 mt6797_consys_runtime_controller.enable_experimental_runtime_controller=1 mt6797_consys_wmt_patch.enable_patch_download=1 mt6797_consys_g2c_patch_owner.enable_experimental_g2c_patch_owner=1"
@@ -261,13 +263,13 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "6cbb838842e9da7b3e0b48ff13ab3d49a78ad1467f268de5e7b0c202e077f072";
+    else "aa233fbe219535eab7d023516f745eb5b41d9286b6cb84a90908851c886cc327";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "c053a36e20b35e07a8e36bcb4ee931441694aa452a0838d904c1292de4fe6432";
+    else "d9d74e0311bbf391d2b0c41757eaa4d81f2aa07a09011a81acad3c9e19ac99c5";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"

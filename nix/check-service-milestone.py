@@ -14,7 +14,8 @@ if not tokens:
 assert len(tokens) == 1, 'ambiguous kernel milestone'
 expected = set(tokens)
 units = ('gemini-a72-preflight', 'gemini-cellular', 'gemini-gpu',
-         'gemini-connectivity', 'gemini-audio', 'gemini-desktop-qualify')
+         'gemini-connectivity', 'gemini-audio', 'gemini-desktop-qualify',
+         'gemini-m39')
 for name in units:
     unit = system/'etc/systemd/system'/(name+'.service')
     entry = re.search(r'^ExecStart=(/[^\s]+)', unit.read_text(), re.M)
@@ -39,4 +40,4 @@ for name in units:
         queue.extend(Path(p) for p in re.findall(r'/nix/store/[a-zA-Z0-9/_.+-]+', text))
     assert observed == expected, f'{name}: kernel={expected}, scripts={observed}'
     print(f'{name}: milestone={tokens[0]}')
-print('service-milestone=passed kernel-and-six-built-service-entry-points')
+print('service-milestone=passed kernel-and-seven-built-service-entry-points')

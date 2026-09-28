@@ -1,0 +1,23 @@
+# M39: MT6351 PMIC RTC, the PMIC power key and manual s2idle.
+#
+# The board DT already has the mediatek,mt6351-rtc node; the power-key node
+# is added by the M39 kernel.  hctosys reads rtc0 at boot.  SYSTOHC stays off
+# (as in the vendor aeon6797_6m_n_defconfig), so nothing writes the PMIC RTC
+# unless someone runs hwclock -w; the MT6351 reload semantics are unresolved.
+CONFIG_RTC_CLASS=y
+CONFIG_RTC_HCTOSYS=y
+CONFIG_RTC_HCTOSYS_DEVICE="rtc0"
+# CONFIG_RTC_SYSTOHC is not set
+CONFIG_RTC_INTF_SYSFS=y
+CONFIG_RTC_INTF_PROC=y
+CONFIG_RTC_INTF_DEV=y
+CONFIG_RTC_DRV_MT6397=y
+# Built in so the key binds from DT without module loading.
+CONFIG_KEYBOARD_MTK_PMIC=y
+# Suspend support for manual testing only.  PSCI v0.2 firmware has no
+# SYSTEM_SUSPEND, so the only sleep state is s2idle ("freeze"); nothing in
+# the image requests it (logind key/lid handling is set to ignore).
+CONFIG_SUSPEND=y
+# CONFIG_PM_AUTOSLEEP is not set
+# CONFIG_PM_WAKELOCKS is not set
+# CONFIG_HIBERNATION is not set

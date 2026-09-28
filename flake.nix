@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-wifi-tx-queue-m38&rev=68081b7c250db805ce4968350be94f78ad7d7315";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m39-ixoo&rev=b4d735d39d3f6ebd7807c8b30bf34327d50e4d77";
       flake = false;
     };
     linux-gemini-next = {
@@ -780,6 +780,7 @@
       desktopScanout = true;
       connectivityModules = true;
       microsdOverlay = true;
+      rtcPowerKeyOverlay = true;
     };
 
     # The accepted baseline plus MicroSD, and nothing else.
@@ -1078,6 +1079,7 @@
         ./nixos/wifi-autoconnect.nix
         ./nixos/audio.nix
         ./nixos/desktop.nix
+        ./nixos/m39.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
