@@ -1,0 +1,21 @@
+--- a/src/drivers/driver_nl80211.c
++++ b/src/drivers/driver_nl80211.c
+@@ -525,6 +525,18 @@
+ 	     nla_put_flag(msg, NL80211_ATTR_CONTROL_PORT_NO_PREAUTH)))
+ 		return -1;
+ 
++	/*
++	 * Without control port RX the connect handle is only used for
++	 * external (SAE) authentication. The kernel sends
++	 * NL80211_CMD_EXTERNAL_AUTH only to the connection owner and refuses
++	 * NL80211_ATTR_EXTERNAL_AUTH_SUPPORT without NL80211_ATTR_SOCKET_OWNER
++	 * (hostap 2.11 sets the owner on every CONNECT).
++	 */
++	if (!(drv->capa.flags2 & WPA_DRIVER_FLAGS2_CONTROL_PORT_RX) &&
++	    handle && set_owner &&
++	    nla_put_flag(msg, NL80211_ATTR_SOCKET_OWNER))
++		return -1;
++
+ 	return send_and_recv(drv->global, handle ? handle : drv->global->nl,
+ 			     msg, valid_handler, valid_data,
+ 			     ack_handler_custom, ack_data);

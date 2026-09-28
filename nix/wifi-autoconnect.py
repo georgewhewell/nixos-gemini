@@ -3,6 +3,8 @@
 
 The current driver requires a fresh passive scan and ap_scan=2. Keep retries
 outside boot acceptance; profile contents and supplicant output stay in /run.
+GEMINI_WIFI_SAE=prefer opts into WPA3-SAE (with PMF) for APs that offer SAE
+when the saved profile holds the passphrase; the default keeps WPA2-PSK.
 """
 
 import configparser
@@ -18,6 +20,7 @@ import time
 
 WORK = Path('/run/gemini-wifi')
 STOP = threading.Event()
+SAE = os.environ.get('GEMINI_WIFI_SAE', 'off') == 'prefer'
 
 
 class Unavailable(Exception):
@@ -58,12 +61,13 @@ def read_profile(path):
     secret = keyfile_string(section['Passphrase'])
     if re.fullmatch(r'[0-9a-fA-F]{64}', secret):
         psk = secret.lower()
+        password = None  # A raw PSK cannot drive SAE.
     else:
         password = secret.encode('utf-8')
         if not 8 <= len(password) <= 63 or b'\x00' in password:
             raise ValueError('profile-passphrase')
         psk = hashlib.pbkdf2_hmac('sha1', password, ssid, 4096, 32).hex()
-    return ssid, psk
+    return ssid, psk, password
 
 
 def iw_ssid(value):
@@ -100,21 +104,22 @@ def scan_candidates(scan):
             continue
         if not re.search(rb'(?m)^\t\t *\* Pairwise ciphers:.*(?:^| )CCMP(?: |$)', security):
             continue
-        if not re.search(rb'(?m)^\t\t *\* Authentication suites:.*(?:^| )PSK(?: |$)', security):
-            continue
-        if b'MFP-required' in security:
+        psk = (re.search(rb'(?m)^\t\t *\* Authentication suites:.*(?:^| )PSK(?: |$)', security)
+               and b'MFP-required' not in security)
+        sae = SAE and re.search(rb'(?m)^\t\t *\* Authentication suites:.*(?:^| )SAE(?: |$)', security)
+        if not psk and not sae:
             continue
         try:
             ssid = iw_ssid(name[1])
             signal_dbm = float(strength[1])
         except ValueError:
             continue
-        candidates.append((ssid, address[1].decode('ascii'), signal_dbm))
+        candidates.append((ssid, address[1].decode('ascii'), signal_dbm, bool(psk), bool(sae)))
     return candidates
 
 
 def choose_network(paths, candidates):
-    visible = {ssid for ssid, _, _ in candidates}
+    visible = {entry[0] for entry in candidates}
     eligible = set()
     for path in paths:
         try:
@@ -125,19 +130,36 @@ def choose_network(paths, candidates):
             eligible.add(profile)
     if len(eligible) != 1:
         raise Unavailable('no-unique-visible-saved-network')
-    ssid, psk = eligible.pop()
-    bssid = max((entry for entry in candidates if entry[0] == ssid),
-                key=lambda entry: entry[2])[1]
-    return ssid, psk, bssid
+    ssid, psk, password = eligible.pop()
+    entries = [entry for entry in candidates if entry[0] == ssid]
+    if SAE and password is not None:
+        sae = [entry for entry in entries if entry[4]]
+        if sae:
+            return ssid, password, max(sae, key=lambda entry: entry[2])[1], True
+    entries = [entry for entry in entries if entry[3]]
+    if not entries:
+        raise Unavailable('no-supported-security')
+    return ssid, psk, max(entries, key=lambda entry: entry[2])[1], False
 
 
-def configuration(ssid, psk, bssid, control):
-    if (not 1 <= len(ssid) <= 32 or not re.fullmatch(r'[0-9a-f]{64}', psk)
+def configuration(ssid, secret, bssid, control, sae=False):
+    if (not 1 <= len(ssid) <= 32
             or not re.fullmatch(r'[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}', bssid)
             or not re.fullmatch(r'/[a-zA-Z0-9_/-]+', control)):
         raise ValueError('configuration-input')
+    if sae:
+        if not isinstance(secret, bytes) or not 8 <= len(secret) <= 63:
+            raise ValueError('configuration-input')
+        # WPA3-Personal: SAE (hunting-and-pecking or hash-to-element) with
+        # required PMF; the hex password avoids config-file quoting.
+        return (f'ctrl_interface={control}\nap_scan=2\nsae_pwe=2\nnetwork={{\n'
+                f'\tssid={ssid.hex()}\n\tsae_password={secret.hex()}\n\tbssid={bssid}\n'
+                '\tproto=RSN\n\tkey_mgmt=SAE\n\tpairwise=CCMP\n'
+                '\tgroup=CCMP\n\tgroup_mgmt=AES-128-CMAC\n\tieee80211w=2\n}\n')
+    if not isinstance(secret, str) or not re.fullmatch(r'[0-9a-f]{64}', secret):
+        raise ValueError('configuration-input')
     return (f'ctrl_interface={control}\nap_scan=2\nnetwork={{\n'
-            f'\tssid={ssid.hex()}\n\tpsk={psk}\n\tbssid={bssid}\n'
+            f'\tssid={ssid.hex()}\n\tpsk={secret}\n\tbssid={bssid}\n'
             '\tproto=RSN\n\tkey_mgmt=WPA-PSK\n\tpairwise=CCMP\n'
             '\tgroup=CCMP\n\tieee80211w=0\n}\n')
 
@@ -178,9 +200,10 @@ def connect(interface):
     state('scanning')
     scan = run(['iw', 'dev', interface, 'scan', 'passive'], 70)
     candidates = scan_candidates(scan)
-    profile = choose_network(Path('/gemian/var/lib/connman').glob('wifi_*_managed_psk/settings'), candidates)
-    (WORK / 'wpa.conf').write_text(configuration(*profile, str(WORK / 'ctrl')))
-    state('connecting')
+    ssid, secret, bssid, sae = choose_network(
+        Path('/gemian/var/lib/connman').glob('wifi_*_managed_psk/settings'), candidates)
+    (WORK / 'wpa.conf').write_text(configuration(ssid, secret, bssid, str(WORK / 'ctrl'), sae))
+    state('connecting-sae' if sae else 'connecting')
     with (WORK / 'supplicant.log').open('wb') as log:
         child = subprocess.Popen(['wpa_supplicant', '-D', 'nl80211', '-i', interface,
                                   '-c', str(WORK / 'wpa.conf')],

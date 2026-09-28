@@ -13,12 +13,13 @@ wifi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wifi)
 
 
-def scan(ssid=b'test', bssid=b'02:00:00:00:00:01', signal=b'-45.00', frequency=b'2412'):
+def scan(ssid=b'test', bssid=b'02:00:00:00:00:01', signal=b'-45.00', frequency=b'2412',
+         suites=b'PSK', capabilities=b'16-PTKSA-RC 1-GTKSA-RC (0x000c)'):
     return (b'BSS ' + bssid + b'(on wlan0)\n\tfreq: ' + frequency + b'\n\tsignal: ' + signal
             + b' dBm\n\tSSID: ' + ssid + b'\n\tRSN:\t * Version: 1\n'
             b'\t\t * Group cipher: CCMP\n\t\t * Pairwise ciphers: CCMP\n'
-            b'\t\t * Authentication suites: PSK\n'
-            b'\t\t * Capabilities: 16-PTKSA-RC 1-GTKSA-RC (0x000c)\n\tHT capabilities:\n')
+            b'\t\t * Authentication suites: ' + suites + b'\n'
+            b'\t\t * Capabilities: ' + capabilities + b'\n\tHT capabilities:\n')
 
 
 class Profiles(unittest.TestCase):
@@ -35,12 +36,12 @@ class Profiles(unittest.TestCase):
 
     def test_derived_and_raw_key(self):
         expected = hashlib.pbkdf2_hmac('sha1', b'password', b'test', 4096, 32).hex()
-        self.assertEqual(wifi.read_profile(self.profile()), (b'test', expected))
-        self.assertEqual(wifi.read_profile(self.profile(password='A' * 64)), (b'test', 'a' * 64))
+        self.assertEqual(wifi.read_profile(self.profile()), (b'test', expected, b'password'))
+        self.assertEqual(wifi.read_profile(self.profile(password='A' * 64)), (b'test', 'a' * 64, None))
 
     def test_keyfile_escapes_and_non_ascii_ssid(self):
         path = self.profile(password=r'pass\sword\\x', ssid='00ff5c22')
-        ssid, key = wifi.read_profile(path)
+        ssid, key, _ = wifi.read_profile(path)
         self.assertEqual(ssid, b'\x00\xff\\"')
         self.assertEqual(key, hashlib.pbkdf2_hmac('sha1', b'pass word\\x', ssid, 4096, 32).hex())
         for password in ('short', 'z' * 64, r'password\q', 'password\\'):
@@ -81,7 +82,7 @@ class Profiles(unittest.TestCase):
         self.assertEqual(wifi.scan_candidates(scan(ssid=b'a\\x00\\xff\\x5c'))[0][0], b'a\x00\xff\\')
 
     def test_configuration_no_plaintext_or_injection(self):
-        ssid, psk = wifi.read_profile(self.profile(password='password'))
+        ssid, psk, _ = wifi.read_profile(self.profile(password='password'))
         text = wifi.configuration(ssid, psk, '02:00:00:00:00:01', '/run/gemini-wifi/ctrl')
         self.assertNotIn('password', text)
         self.assertIn('ssid=74657374', text)
@@ -90,6 +91,50 @@ class Profiles(unittest.TestCase):
         for bad in ('02:00:00:00:00:01\nnetwork={', 'xx:00:00:00:00:01'):
             with self.assertRaises(ValueError):
                 wifi.configuration(ssid, psk, bad, '/run/gemini-wifi/ctrl')
+
+
+class Sae(unittest.TestCase):
+    """GEMINI_WIFI_SAE=prefer: WPA3-SAE with PMF when the AP offers SAE."""
+    profile = Profiles.profile
+
+    def setUp(self):
+        Profiles.setUp(self)
+        patcher = mock.patch.object(wifi, 'SAE', True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_default_is_wpa2_only(self):
+        with mock.patch.object(wifi, 'SAE', False):
+            self.assertEqual(wifi.scan_candidates(scan(suites=b'SAE')), [])
+            chosen = wifi.choose_network([self.profile()], wifi.scan_candidates(scan(suites=b'PSK SAE')))
+            self.assertFalse(chosen[3])
+
+    def test_transition_and_wpa3_only(self):
+        for suites, caps in ((b'PSK SAE', b'MFP-capable (0x008c)'), (b'SAE', b'MFP-required MFP-capable (0x00cc)')):
+            candidates = wifi.scan_candidates(scan(suites=suites, capabilities=caps))
+            self.assertEqual(len(candidates), 1)
+            ssid, secret, bssid, sae = wifi.choose_network([self.profile()], candidates)
+            self.assertTrue(sae)
+            self.assertEqual(secret, b'password')
+            text = wifi.configuration(ssid, secret, bssid, '/run/gemini-wifi/ctrl', sae)
+            for line in ('key_mgmt=SAE', 'ieee80211w=2', 'sae_pwe=2', 'group_mgmt=AES-128-CMAC',
+                         'sae_password=' + b'password'.hex(), 'ap_scan=2'):
+                self.assertIn(line, text)
+            self.assertNotIn('password\n', text)
+            self.assertNotIn('psk=', text)
+
+    def test_raw_psk_profile_falls_back_or_fails(self):
+        raw = self.profile(password='A' * 64)
+        self.assertFalse(wifi.choose_network([raw], wifi.scan_candidates(scan(suites=b'PSK SAE')))[3])
+        with self.assertRaises(wifi.Unavailable):
+            wifi.choose_network([raw], wifi.scan_candidates(scan(suites=b'SAE')))
+
+    def test_sae_configuration_rejects_bad_input(self):
+        for secret in (b'short', b'x' * 64, 'a' * 64):
+            with self.assertRaises(ValueError):
+                wifi.configuration(b'test', secret, '02:00:00:00:00:01', '/run/gemini-wifi/ctrl', True)
+        with self.assertRaises(ValueError):
+            wifi.configuration(b'test', b'password', '02:00:00:00:00:01', '/run/gemini-wifi/ctrl')
 
 
 class Lifecycle(unittest.TestCase):
@@ -120,7 +165,7 @@ class Lifecycle(unittest.TestCase):
                 with (mock.patch.object(wifi, 'WORK', Path(temporary)),
                       mock.patch.object(wifi, 'STOP') as stop,
                       mock.patch.object(wifi, 'run', return_value=scan()),
-                      mock.patch.object(wifi, 'choose_network', return_value=(b'test', 'a' * 64, '02:00:00:00:00:01')),
+                      mock.patch.object(wifi, 'choose_network', return_value=(b'test', 'a' * 64, '02:00:00:00:00:01', False)),
                       mock.patch.object(wifi, 'status', return_value='COMPLETED'),
                       mock.patch.object(wifi.subprocess, 'Popen', return_value=child) as popen):
                     stop.wait.side_effect = sequence
