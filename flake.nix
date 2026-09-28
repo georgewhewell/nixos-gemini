@@ -1077,6 +1077,7 @@
         ./nixos/cellular.nix
         ./nixos/gpu.nix
         ./nixos/connectivity.nix
+        ./nixos/bluetooth.nix
         ./nixos/wifi-autoconnect.nix
         ./nixos/audio.nix
         ./nixos/desktop.nix
