@@ -1111,8 +1111,9 @@
         # The known-good Gemian kernel has SquashFS XZ support but no Zstd
         # support. The store is immutable at runtime, so it does not need an
         # OverlayFS upper layer.
+        # -no-hardlinks: see mainlineNixosSquashfs.
         mksquashfs store-contents $out \
-          -comp xz -b 131072 -noappend -all-root -no-progress
+          -comp xz -b 131072 -noappend -all-root -no-hardlinks -no-progress
       '';
 
     nixosSquashfs =
@@ -1131,8 +1132,13 @@
       done
       basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
         > store-contents/.gemini-system
+      # The builder's store may be hard-link optimised (auto-optimise-store),
+      # and `cp -a` carries those links in.  Which files share an inode then
+      # depends on the host's store history, not on the closure, so the image
+      # and its content-addressed p29 name would change between identical
+      # builds.  mksquashfs still deduplicates identical file contents.
       mksquashfs store-contents "$out" \
-        -comp gzip -b 131072 -noappend -all-root -no-progress
+        -comp gzip -b 131072 -noappend -all-root -no-hardlinks -no-progress
       unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
     '';
 
