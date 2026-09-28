@@ -629,6 +629,8 @@ let
         grep -Fqx 'CONFIG_DRM=y' .config
         grep -Fqx 'CONFIG_DRM_MEDIATEK=y' .config
         grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
+        grep -Fqx 'CONFIG_PWM_MTK_DISP=y' .config
+        grep -Fqx 'CONFIG_BACKLIGHT_PWM=y' .config
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
@@ -1295,6 +1297,10 @@ let
           test "$(fdtget "$out/gemini-display.dtb" /i2c@11008000/regulator@3e compatible)" = \
             mediatek,i2c_lcd_bias
           test "$(fdtget "$out/gemini-display.dtb" /smi@14022000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /pwm@1100f000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /backlight compatible)" = pwm-backlight
+          test "$(fdtget "$out/gemini-display.dtb" /dsi@1401c000/panel@0 backlight)" = \
+            "$(fdtget "$out/gemini-display.dtb" /backlight phandle)"
           test "$(fdtget "$out/gemini-display.dtb" /larb@14020000 status)" = okay
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400d000 mediatek,larb)" = \
             "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
