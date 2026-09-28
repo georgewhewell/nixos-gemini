@@ -21,6 +21,12 @@ CONFIG_SUSPEND=y
 # CONFIG_PM_AUTOSLEEP is not set
 # CONFIG_PM_WAKELOCKS is not set
 # CONFIG_HIBERNATION is not set
+# M41: s2idle diagnostics.  PM_SLEEP_DEBUG (implied by PM_DEBUG with
+# PM_SLEEP) adds /sys/power/pm_wakeup_irq, pm_debug_messages and pm_test
+# (freezer/devices), so a first on-device run can stop short of a real
+# sleep and a real sleep reports which IRQ woke it.
+CONFIG_PM_DEBUG=y
+CONFIG_PM_SLEEP_DEBUG=y
 # /dev/i2c-* for touch/I2C debugging with i2c-tools.  Built in: the image
 # has no /lib/modules.
 CONFIG_I2C_CHARDEV=y
