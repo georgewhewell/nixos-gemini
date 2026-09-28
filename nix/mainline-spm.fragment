@@ -1,0 +1,8 @@
+# M42: MT6797 SPM PCM programs and read-only SPM/CPU idle status.
+# A module, blacklisted from autoloading on the kernel command line; it is
+# only loaded by hand with the firmware path set (gemini-spm-load).
+CONFIG_MTK_MT6797_SPM=m
+# MT6797 BL31 has no per-core power-down program behind PSCI CPU_SUSPEND:
+# a power-down idle state would park the core in EL3 until an SPM program
+# powers it off, and none exists for per-core idle.  Keep cpuidle off.
+# CONFIG_CPU_IDLE is not set

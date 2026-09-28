@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m41-dvfs&rev=82767cac98886505b68b720b3cb2cb2020e99877";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m42-spm&rev=3d04655792824013ce24f183099546b92543b9a9";
       flake = false;
     };
     linux-gemini-next = {
@@ -745,6 +745,9 @@
       deviceActivationOverlay = true;
     };
 
+    # MT6797 SPM PCM programs (private vendor images, see nix/spm-firmware.nix).
+    spmFirmware = import ./nix/spm-firmware.nix { inherit buildPkgs; };
+
     # Cycle 18 full-NixOS baseline candidate. Keep the accepted Stage-2/eMMC
     # lineage, both USB paths, BQ observer and watchdog self-accept intact.
     # The DSI gate is released by the corresponding Stage-1 constructor only
@@ -782,6 +785,8 @@
       microsdOverlay = true;
       rtcPowerKeyOverlay = true;
       cpufreqOverlay = true;
+      spmOverlay = true;
+      inherit spmFirmware;
     };
 
     # The accepted baseline plus MicroSD, and nothing else.
@@ -1081,12 +1086,15 @@
         ./nixos/audio.nix
         ./nixos/desktop.nix
         ./nixos/m39.nix
+        ./nixos/spm.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
           _module.args.geminiGpuKernel = mainlineP22Baseline.kernel;
           _module.args.geminiConnectivityKernel = mainlineP22Baseline.kernel;
           _module.args.geminiConnectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
+          _module.args.geminiSpmKernel = mainlineP22Baseline.kernel;
+          _module.args.geminiSpmFirmware = spmFirmware;
           _module.args.geminiGpuSmoke = gpuUserspace.smoke;
           _module.args.geminiDesktop = desktopUserspace // { protocolCheck = desktopProtocolCheck; };
         }
@@ -1660,6 +1668,7 @@
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;
       mainlineNixosInitramfs = mainlineNixos.initramfs;
       connectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
+      inherit spmFirmware;
       mainlineNixosBundle = mainlineNixos.bundle;
       mainlineNixosMicrosdBundle = mainlineNixosMicrosd.bundle;
       mainlineNixosNext4Bundle = mainlineNixosNext4.bundle;
