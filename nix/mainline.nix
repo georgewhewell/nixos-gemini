@@ -36,6 +36,7 @@
   deviceActivationOverlay ? false,
   cellularOverlay ? false,
   a72Overlay ? false,
+  cpufreqOverlay ? false,
   gpuOwnerOverlay ? false,
   desktopScanout ? false,
   connectivityModules ? false,
@@ -69,7 +70,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "95ea83acd2990169e9639638a29971bf89617ad8";
+  p22BaselinePlatformRevision = "82767cac98886505b68b720b3cb2cb2020e99877";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -106,6 +107,7 @@ let
     ++ lib.optionals deviceActivationOverlay [./mainline-device-activation.fragment]
     ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment]
     ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment]
+    ++ lib.optionals cpufreqOverlay [./mainline-cpufreq.fragment]
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
     ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
     ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment]
@@ -209,8 +211,8 @@ let
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${lib.optionalString cpufreqOverlay "modprobe.blacklist=cpufreq_dt "}fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${lib.optionalString cpufreqOverlay "modprobe.blacklist=cpufreq_dt "}fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
@@ -263,13 +265,13 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "48d9d9c6ee3c526f2139edd7c14cfb31cb6a7ed2381f4f436188582851be84c3";
+    else "c0c0fb8bd9ef562178b332da488e64c901da6987bcb4c1c9329d79c755917852";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "64a77eb34247b325b50abdf4562e49172e87c8c07cab13c4c80fbeeb95776c27";
+    else "7f2a9026e288ed61c312780374a9c84b32c9807bdcfea9ff51d3b5791096a2b7";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
@@ -277,6 +279,7 @@ let
   profileCombinationValid =
     assert !gpuOwnerOverlay || (a72Overlay && !gpuFixedOppOverlay && !gpuStagedOverlay && !gpuDeferredBind);
     assert !a72Overlay || (cellularOverlay && unattendedRecovery && !gpuFixedOppOverlay);
+    assert !cpufreqOverlay || (a72Overlay && thermalHallObserveOverlay && gpuOwnerOverlay);
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
@@ -462,6 +465,9 @@ let
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-a72-online-commit.py
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-cpuclk-boot-api.py
       ''}
+      ${lib.optionalString cpufreqOverlay ''
+        HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-cpuclk-fhctl-host.py
+      ''}
       kernelMakeFlags=(
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
@@ -488,8 +494,17 @@ let
         for symbol in COMMON_CLK_MT6797_CPU REGULATOR_DA9213_LEGACY REGULATOR_MT6797_BIGIDVFS_SRAM MTK_MT6797_A72_POWER; do
           grep -Fqx "CONFIG_$symbol=y" .config
         done
-        for symbol in CPU_FREQ ARM64_MT6797_A72_CAPABILITY_PROFILE ARM64_MT6797_A72_P32_ROLLBACK; do
+        for symbol in ${lib.optionalString (!cpufreqOverlay) "CPU_FREQ "}ARM64_MT6797_A72_CAPABILITY_PROFILE ARM64_MT6797_A72_P32_ROLLBACK; do
           ! grep -Eq "^CONFIG_$symbol=(y|m)$" .config
+        done
+      ''}
+      ${lib.optionalString cpufreqOverlay ''
+        for symbol in CPU_FREQ CPU_FREQ_DEFAULT_GOV_PERFORMANCE CPU_FREQ_GOV_USERSPACE CPU_FREQ_GOV_SCHEDUTIL CPUFREQ_DT_PLATDEV CPU_THERMAL; do
+          grep -Fqx "CONFIG_$symbol=y" .config
+        done
+        grep -Fqx 'CONFIG_CPUFREQ_DT=m' .config
+        for symbol in ARM_MEDIATEK_CPUFREQ ARM_MEDIATEK_CPUFREQ_HW CPU_IDLE; do
+          if grep -Eq "^CONFIG_$symbol=(y|m)$" .config; then exit 1; fi
         done
       ''}
       test -z "''${NIX_HARDENING_ENABLE:-}"
@@ -847,6 +862,9 @@ let
         cp a72-build-provenance.json "$out/"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-resource-preflight.dtbo "$out/a72-resource.dtbo"
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-a72-cpu-on-gate.dtbo "$out/a72-cpu8.dtbo"
+      ''}
+      ${lib.optionalString cpufreqOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-cpufreq.dtbo "$out/"
       ''}
       ${lib.optionalString gpuOwnerOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-preflight.dtbo "$out/"
@@ -1558,6 +1576,40 @@ let
         python3 ${./test-a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo ${./a72-integration-dt.py} >> "$out/VALIDATION"
         python3 ${./a72-integration-dt.py} "$out/gemini.dtb" ${kernel}/a72-resource.dtbo ${kernel}/a72-cpu8.dtbo a72-cpu9.dtbo >> "$out/VALIDATION"
         python3 ${./a72-profile-package.py} ${kernel} "$out/gemini.dtb" ${./generate-late-cpu-provenance.py} >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString cpufreqOverlay ''
+        # A53 cpufreq: publish both cluster OPP tables (left disabled by the
+        # A72 resource overlay) and attach both policies to soc-thermal.
+        fdtoverlay -i "$out/gemini.dtb" -o cpufreq.dtb ${kernel}/mt6797-gemini-pda-cpufreq.dtbo
+        for table in /opp-table-cluster0 /opp-table-cluster1; do
+          test "$(fdtget cpufreq.dtb $table status)" = okay
+        done
+        enabled() {
+          for opp in $(fdtget -l cpufreq.dtb "$1"); do
+            if [ "$(fdtget -d okay cpufreq.dtb "$1/$opp" status)" = okay ]; then
+              echo "$opp"
+            fi
+          done | tr '\n' ' '
+        }
+        test "$(enabled /opp-table-cluster0)" = "opp-624000000 opp-715000000 opp-806000000 opp-897000000 "
+        test "$(enabled /opp-table-cluster1)" = "opp-1092000000 opp-1209000000 "
+        bucka=/i2c@1100e000/regulator@68/regulators/BUCKA
+        test "$(fdtget -t u cpufreq.dtb $bucka regulator-min-microvolt)" = 1000000
+        test "$(fdtget -t u cpufreq.dtb $bucka regulator-max-microvolt)" = 1000000
+        for cpu in 0 1 2 3 100 101 102 103; do
+          if fdtget cpufreq.dtb /cpus/cpu@$cpu sram-supply 2> /dev/null; then exit 1; fi
+          fdtget cpufreq.dtb /cpus/cpu@$cpu cpu-supply > /dev/null
+        done
+        for cpu in 200 201; do
+          if fdtget cpufreq.dtb /cpus/cpu@$cpu operating-points-v2 2> /dev/null; then exit 1; fi
+        done
+        test "$(fdtget -l cpufreq.dtb /thermal-zones/soc-thermal/trips | sort | tr '\n' ' ')" = \
+          "cpu-critical cpu-limit cpu-throttle "
+        test "$(fdtget -t u cpufreq.dtb /thermal-zones/soc-thermal/trips/cpu-critical temperature)" = 117000
+        test "$(fdtget -t u cpufreq.dtb /thermal-zones/soc-thermal polling-delay-passive)" = 40
+        test "$(fdtget -t u cpufreq.dtb /thermal-zones/soc-thermal polling-delay)" = 1000
+        cp cpufreq.dtb "$out/gemini.dtb"
+        echo 'a53-cpufreq=ll-624-897-l-1092-1209-vproc-little-held-1v00-soc-thermal-85-95-117' >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
