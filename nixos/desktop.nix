@@ -44,7 +44,7 @@ let
     [output]
     name=DSI-1
     mode=current
-    transform=rotate-270
+    transform=rotate-90
     scale=2
 
     [keyboard]
@@ -114,12 +114,12 @@ in {
   };
   users.groups.render = {};
   environment.etc."gemini/weston.ini".source = westonConfig;
-  # The kernel reports (y, 1-x) after its touchscreen swap/invert flags.
-  # Undo that normalization here: Weston applies the output transform itself.
-  # This mapping is inferred from the driver; physical alignment still needs
-  # an on-device touch observation.
+  # The kernel's touchscreen-swapped-x-y/touchscreen-inverted-x flags make the
+  # NT36xxx report panel-native coordinates, and Weston applies the DSI-1
+  # output transform to touch itself.  A libinput calibration matrix on top
+  # rotated touch twice, so bind the device to DSI-1 and nothing more.
   services.udev.extraRules = ''
-    SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Novatek NT36xxx touchscreen", ENV{WL_OUTPUT}="DSI-1", ENV{LIBINPUT_CALIBRATION_MATRIX}="0 -1 1 1 0 0"
+    SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Novatek NT36xxx touchscreen", ENV{WL_OUTPUT}="DSI-1"
   '';
   systemd.services.gemini-seatd = {
     description = "Seat access for the Gemini local desktop";

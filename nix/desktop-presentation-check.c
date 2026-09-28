@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 	if (!c.compositor || !c.shm || !c.wm || !c.presentation || !c.output ||
 	    c.clock_id == UINT32_MAX) fail("required-protocols");
 	if (c.width != 1080 || c.height != 2160 || c.scale != 2 ||
-	    c.transform != WL_OUTPUT_TRANSFORM_270) fail("output-geometry");
+	    c.transform != WL_OUTPUT_TRANSFORM_90) fail("output-geometry");
 	if (!c.fixture && (strcmp(c.output_name, "DSI-1") ||
 	    (c.input & (WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH)) !=
 	    (WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_TOUCH)))

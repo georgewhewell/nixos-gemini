@@ -1,4 +1,4 @@
-# M39: MT6351 PMIC RTC, the PMIC power key and manual s2idle.
+# M39: MT6351 PMIC RTC, the PMIC power key, manual s2idle and I2C chardev.
 #
 # The board DT already has the mediatek,mt6351-rtc node; the power-key node
 # is added by the M39 kernel.  hctosys reads rtc0 at boot.  SYSTOHC stays off
@@ -21,3 +21,6 @@ CONFIG_SUSPEND=y
 # CONFIG_PM_AUTOSLEEP is not set
 # CONFIG_PM_WAKELOCKS is not set
 # CONFIG_HIBERNATION is not set
+# /dev/i2c-* for touch/I2C debugging with i2c-tools.  Built in: the image
+# has no /lib/modules.
+CONFIG_I2C_CHARDEV=y

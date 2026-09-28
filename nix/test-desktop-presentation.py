@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory(prefix="gemini-desktop-fixture-") as directory:
         with tempfile.TemporaryFile(mode="w+") as log:
             server = subprocess.Popen([
                 weston, "-Bheadless", "--renderer=pixman", f"--width={width}",
-                "--height=1080", "--scale=2", "--transform=rotate-270",
+                "--height=1080", "--scale=2", "--transform=rotate-90",
                 "--idle-time=0", "--socket=wayland-test", "--no-config",
             ], env=env, stdout=log, stderr=subprocess.STDOUT)
             try:

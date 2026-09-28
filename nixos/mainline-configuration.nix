@@ -394,6 +394,9 @@
     # "audio works".
     pkgs.alsa-utils
     config.system.build.geminiAudioControls
+    # Touch/I2C debugging: i2ctransfer/i2cget need CONFIG_I2C_CHARDEV.
+    pkgs.i2c-tools
+    pkgs.evtest
   ];
   environment.binsh = "${pkgs.bash}/bin/sh";
   environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
