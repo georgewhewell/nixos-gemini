@@ -781,6 +781,7 @@
       connectivityModules = true;
       microsdOverlay = true;
       rtcPowerKeyOverlay = true;
+      cpufreqOverlay = true;
     };
 
     # The accepted baseline plus MicroSD, and nothing else.
