@@ -1,0 +1,6 @@
+# I2C1 sensors described by the base Gemini DT (gemini-m41-sensors):
+# Bosch BMI160 IMU at 0x69 and Sensortek STK3x1x light/proximity at 0x48.
+# Built in because the image carries no modules.
+CONFIG_IIO=y
+CONFIG_BMI160_I2C=y
+CONFIG_STK3310=y

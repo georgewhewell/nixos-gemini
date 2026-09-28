@@ -69,7 +69,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "95ea83acd2990169e9639638a29971bf89617ad8";
+  p22BaselinePlatformRevision = "75f4372cd070b119420e553cfb7a6ebdd4fdb0ad";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -96,7 +96,10 @@ let
     ++ lib.optionals gpuStagedOverlay [./mainline-gpu-staged.fragment]
     ++ lib.optionals gpuFixedOppOverlay [./mainline-gpu-fixed-opp.fragment]
     ++ lib.optionals (!legacyConsysPlatform) [./mainline-reworked-consys.fragment]
-    ++ lib.optionals platformEnablement [./mainline-platform-smoke.fragment]
+    ++ lib.optionals platformEnablement [
+      ./mainline-platform-smoke.fragment
+      ./mainline-sensors.fragment
+    ]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
@@ -263,13 +266,13 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "48d9d9c6ee3c526f2139edd7c14cfb31cb6a7ed2381f4f436188582851be84c3";
+    else "0392969b210a906229cf03905748b79b9f615981766b2ef7c541852a5966393e";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "64a77eb34247b325b50abdf4562e49172e87c8c07cab13c4c80fbeeb95776c27";
+    else "6e8764af4f1dfc2ed7b2636c9283599e308e928d47258a470b36f20784fa88e4";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
@@ -477,6 +480,11 @@ let
       ${lib.optionalString desktopScanout ''
         grep -Fqx 'CONFIG_CMA_SIZE_MBYTES=64' .config
         grep -Fqx 'CONFIG_CMA_SIZE_SEL_MBYTES=y' .config
+      ''}
+      ${lib.optionalString platformEnablement ''
+        for symbol in IIO BMI160_I2C STK3310; do
+          grep -Fqx "CONFIG_$symbol=y" .config
+        done
       ''}
       ${lib.optionalString cellularOverlay ''
         for symbol in WWAN MTK_MT6797_CCCI MTK_MT6797_MD1_COLD_OWNER MTK_MT6797_MD1_FS_PROVIDER TMPFS; do
