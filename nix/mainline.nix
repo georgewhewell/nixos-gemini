@@ -470,6 +470,7 @@ let
       ''}
       ${lib.optionalString cpufreqOverlay ''
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-cpuclk-fhctl-host.py
+        HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-opp-of-sharing-cpus-host.py
       ''}
       kernelMakeFlags=(
         ARCH=arm64
