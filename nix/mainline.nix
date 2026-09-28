@@ -70,7 +70,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "34258d2813abc3f37e28c049ecfc5e896852d32a";
+  p22BaselinePlatformRevision = "b3c3cf4bae91ee72a419ed69a0b29dd3925ffd48";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -470,6 +470,7 @@ let
       ''}
       ${lib.optionalString cpufreqOverlay ''
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-cpuclk-fhctl-host.py
+        HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-opp-of-sharing-cpus-host.py
       ''}
       kernelMakeFlags=(
         ARCH=arm64
