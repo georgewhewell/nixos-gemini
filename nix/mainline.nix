@@ -37,6 +37,8 @@
   cellularOverlay ? false,
   a72Overlay ? false,
   cpufreqOverlay ? false,
+  spmOverlay ? false,
+  spmFirmware ? null,
   gpuOwnerOverlay ? false,
   desktopScanout ? false,
   connectivityModules ? false,
@@ -111,6 +113,7 @@ let
     ++ lib.optionals cellularOverlay [./mainline-cellular-integration.fragment]
     ++ lib.optionals a72Overlay [./mainline-a72-integration.fragment]
     ++ lib.optionals cpufreqOverlay [./mainline-cpufreq.fragment]
+    ++ lib.optionals spmOverlay [./mainline-spm.fragment]
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
     ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
     ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment]
@@ -212,10 +215,17 @@ let
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
+  # Modules that must only ever be loaded by hand.
+  moduleBlacklist =
+    lib.optional cpufreqOverlay "cpufreq_dt"
+    ++ lib.optional spmOverlay "mt6797_spm";
+  moduleBlacklistCmdline =
+    lib.optionalString (moduleBlacklist != [])
+    "modprobe.blacklist=${lib.concatStringsSep "," moduleBlacklist} ";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${lib.optionalString cpufreqOverlay "modprobe.blacklist=cpufreq_dt "}fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${lib.optionalString cpufreqOverlay "modprobe.blacklist=cpufreq_dt "}fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
@@ -283,6 +293,7 @@ let
     assert !gpuOwnerOverlay || (a72Overlay && !gpuFixedOppOverlay && !gpuStagedOverlay && !gpuDeferredBind);
     assert !a72Overlay || (cellularOverlay && unattendedRecovery && !gpuFixedOppOverlay);
     assert !cpufreqOverlay || (a72Overlay && thermalHallObserveOverlay && gpuOwnerOverlay);
+    assert !spmOverlay || spmFirmware != null;
     assert !(consysIdentityOverlay && (consysG2bOverlay || consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2bOverlay && (consysG2cPatchOverlay || consysG2dPostpatchOverlay));
     assert !(consysG2cPatchOverlay && consysG2dPostpatchOverlay);
@@ -472,6 +483,11 @@ let
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-mt6797-cpuclk-fhctl-host.py
         HOSTCC=${buildPkgs.stdenv.cc}/bin/cc python3 tools/gemini/test-opp-of-sharing-cpus-host.py
       ''}
+      ${lib.optionalString spmOverlay ''
+        HOSTCC=${buildPkgs.stdenv.cc}/bin/cc \
+          MT6797_SPM_FIRMWARE_DIR=${spmFirmware}/lib/firmware/mediatek/mt6797 \
+          python3 tools/gemini/test-mt6797-spm-fw-host.py
+      ''}
       kernelMakeFlags=(
         ARCH=arm64
         CROSS_COMPILE=aarch64-unknown-linux-gnu-
@@ -515,6 +531,12 @@ let
         for symbol in ARM_MEDIATEK_CPUFREQ ARM_MEDIATEK_CPUFREQ_HW CPU_IDLE; do
           if grep -Eq "^CONFIG_$symbol=(y|m)$" .config; then exit 1; fi
         done
+      ''}
+      ${lib.optionalString spmOverlay ''
+        grep -Fqx 'CONFIG_MTK_MT6797_SPM=m' .config
+        grep -Fqx 'CONFIG_MFD_SYSCON=y' .config
+        grep -Fqx 'CONFIG_DEBUG_FS=y' .config
+        if grep -Eq '^CONFIG_CPU_IDLE=(y|m)$' .config; then exit 1; fi
       ''}
       test -z "''${NIX_HARDENING_ENABLE:-}"
       grep -Fqx 'CONFIG_LOCALVERSION="-gemini-da921x-lkro"' .config
@@ -883,6 +905,9 @@ let
       ''}
       ${lib.optionalString cpufreqOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-cpufreq.dtbo "$out/"
+      ''}
+      ${lib.optionalString spmOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-spm.dtbo "$out/"
       ''}
       ${lib.optionalString gpuOwnerOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-gpu-preflight.dtbo "$out/"
@@ -1637,6 +1662,19 @@ let
         test "$(fdtget -t u cpufreq.dtb /thermal-zones/soc-thermal polling-delay)" = 1000
         cp cpufreq.dtb "$out/gemini.dtb"
         echo 'a53-cpufreq=ll-624-897-l-1092-1209-vproc-little-held-1v00-soc-thermal-85-95-117' >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString spmOverlay ''
+        # SPM program owner: refers to the SCPSYS syscon, adds no idle state.
+        fdtoverlay -i "$out/gemini.dtb" -o spm.dtb ${kernel}/mt6797-gemini-pda-spm.dtbo
+        test "$(fdtget spm.dtb /spm compatible)" = mediatek,mt6797-spm
+        test "$(fdtget -t x spm.dtb /spm mediatek,spm)" = \
+          "$(fdtget -t x spm.dtb /power-controller@10006000 phandle)"
+        if fdtget spm.dtb /cpus/idle-states compatible 2> /dev/null; then exit 1; fi
+        for cpu in $(fdtget -l spm.dtb /cpus); do
+          if fdtget spm.dtb /cpus/$cpu cpu-idle-states 2> /dev/null; then exit 1; fi
+        done
+        cp spm.dtb "$out/gemini.dtb"
+        echo 'spm=mt6797-spm-scpsys-syscon-no-cpu-idle-states' >> "$out/VALIDATION"
       ''}
       cat ${kernel}/Image.gz "$out/gemini.dtb" > "$out/Image.gz-dtb"
       (cd "$out" && sha256sum gemini-base.dtb gemini.dtb ${
