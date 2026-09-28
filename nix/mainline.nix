@@ -655,6 +655,8 @@ let
         grep -Fqx 'CONFIG_DRM_PANEL_NOVATEK_NT36672E=y' .config
         grep -Fqx 'CONFIG_PWM_MTK_DISP=y' .config
         grep -Fqx 'CONFIG_BACKLIGHT_PWM=y' .config
+        grep -Fqx 'CONFIG_LEDS_CLASS_MULTICOLOR=y' .config
+        grep -Fqx 'CONFIG_LEDS_AW9120=y' .config
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
@@ -1110,6 +1112,8 @@ let
         ${serviceabilityBaseDtbSha256}
       test "$(fdtget "$out/gemini-base.dtb" /consys@18070000 status)" = disabled
       test "$(fdtget "$out/gemini-base.dtb" /i2c@1100e000/regulator@68 status)" = disabled
+      test "$(fdtget "$out/gemini-base.dtb" /i2c@11014000 status)" = okay
+      test "$(fdtget "$out/gemini-base.dtb" /i2c@11014000/led-controller@2c compatible)" = awinic,aw9120
       echo 'da921x-node=disabled-transactional-driver-unbound' >> "$out/VALIDATION"
         ''
       }
