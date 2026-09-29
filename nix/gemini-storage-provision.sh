@@ -144,11 +144,18 @@ if [ "$(geom 32)" = "${P32[*]}" ] && [ -z "$(geom 34)" ]; then
   guid=$(sed -n 's/^Partition unique GUID: \([0-9A-F-]*\)$/\1/p' <<< "$info")
   attrs=$(sed -n 's/^Attribute flags: \([0-9a-f]*\)$/\1/p' <<< "$info")
   if [ -z "$type" ] || [ -z "$guid" ] || [ -z "$attrs" ]; then die "cannot read p32 identity"; fi
+  # A new entry starts with no attribute bits.  Only carry non-zero ones over:
+  # sgdisk 1.0.10 rejects an all-zero 16-digit mask ("Could not convert hex
+  # attribute mask") and then aborts without writing anything.
+  attr_args=()
+  if [ -n "${attrs//0/}" ]; then
+    attr_args=(--attributes="32:=:${attrs#"${attrs%%[!0]*}"}")
+  fi
   sgdisk --set-alignment=2048 \
     --delete=32 \
     --new="32:${P32[1]}:$((P32[1] + P32_NEW_SIZE - 1))" \
     --change-name=32:userdata --typecode="32:$type" \
-    --partition-guid="32:$guid" --attributes="32:=:$attrs" \
+    --partition-guid="32:$guid" "${attr_args[@]}" \
     --new="34:${P34[1]}:$((P34[1] + P34[2] - 1))" \
     --change-name=34:swap --typecode="34:$P34_TYPE" \
     --partition-guid="34:$P34_GUID" \
