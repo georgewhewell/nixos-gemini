@@ -25,16 +25,6 @@
   cfg = config.gemini.powerPolicy;
   hib = cfg.hibernation;
 
-  # Partitions that must never be used as swap: firmware, calibration,
-  # NVRAM, protect*, the boot images and rescue slots, the modem images,
-  # Android system (vendor firmware source) and the p29 store.  Only an
-  # explicitly approved partition may be named.
-  forbiddenPartitions = [
-    "recovery" "para" "expdb" "frp" "nvcfg" "nvdata" "metadata" "protect1"
-    "protect2" "seccfg" "oemkeystore" "proinfo" "md1img" "md1dsp" "md1arm7"
-    "md3img" "scp1" "scp2" "nvram" "lk" "lk2" "boot" "logo" "tee1" "tee2"
-    "keystore" "system" "linux" "boot2" "boot3" "flashinfo"
-  ];
 
   lidAction =
     if hib.enable
@@ -75,18 +65,10 @@ in {
     };
     hibernation = {
       enable = lib.mkEnableOption ''
-        suspend-then-hibernate on the lid, with the swap partition named by
-        partitionLabel, and resume from it in Stage 1.  The partition must
-        already carry a swap signature (mkswap) before this is enabled'';
-      partitionLabel = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        example = "userdata";
-        description = ''
-          GPT partition name (PARTNAME) of the swap partition used for the
-          hibernation image.  Stage 1 resumes from the same partition.
-        '';
-      };
+        suspend-then-hibernate on the lid.  The image goes to the p34 swap
+        partition (nixos/storage.nix), which Stage 1 always checks for an
+        image before the first eMMC mount.  Enable only after the power-off
+        and A72 hotplug checks in handoff/power-policy.md'';
       delay = lib.mkOption {
         type = lib.types.str;
         default = "24h";
@@ -98,16 +80,8 @@ in {
   config = {
     assertions = [
       {
-        assertion = !hib.enable || hib.partitionLabel != null;
-        message = "gemini.powerPolicy.hibernation.enable needs partitionLabel";
-      }
-      {
-        assertion = hib.partitionLabel == null || builtins.match "[A-Za-z0-9_.-]+" hib.partitionLabel != null;
-        message = "gemini.powerPolicy.hibernation.partitionLabel must be a plain GPT partition name";
-      }
-      {
-        assertion = hib.partitionLabel == null || !(builtins.elem hib.partitionLabel forbiddenPartitions);
-        message = "gemini.powerPolicy.hibernation.partitionLabel names a protected Gemini partition";
+        assertion = !hib.enable || config.gemini.storage.enable;
+        message = "gemini.powerPolicy.hibernation needs gemini.storage (the p34 swap partition)";
       }
     ];
 
@@ -151,9 +125,6 @@ in {
       HibernateDelaySec=${hib.delay}
     '';
 
-    swapDevices = lib.optional hib.enable {
-      device = "/dev/disk/by-partlabel/${hib.partitionLabel}";
-    };
 
     systemd.services.gemini-sleep-inhibit = {
       description = "Gemini lid grace, USB-host and recovery-lease sleep inhibitors";

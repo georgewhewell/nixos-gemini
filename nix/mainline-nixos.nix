@@ -17,9 +17,10 @@
   kernelLeaseSelfAcceptToken ? null,
   stage2BaselineAcceptScript ? null,
   leaseSelfAcceptToken ? null,
-  # GPT partition name of the swap partition that may hold a hibernation
-  # image, or null for no resume support (nixos/power-policy.nix).
-  hibernateResumePartName ? null,
+  # Persistent storage (nixos/storage.nix): null, or { dataLabel; } to
+  # resume from p34 "swap" and to mount p32 "userdata" (ext4 dataLabel) for
+  # /home, the /nix/store overlay upper layer and /nix/var.
+  persistentStorage ? null,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
@@ -37,7 +38,7 @@ assert leaseSelfAcceptToken == null || builtins.any
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
-assert hibernateResumePartName == null || builtins.match "[A-Za-z0-9_.-]+" hibernateResumePartName != null;
+assert persistentStorage == null || builtins.match "[A-Za-z0-9_-]+" persistentStorage.dataLabel != null;
 let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists. Name p29 payloads by their bytes: an input-addressed Nix output
@@ -48,43 +49,97 @@ let
     store_sha=$(sha256sum ${squashfs} | cut -d' ' -f1)
     store_file="mainline-nixos-$store_sha.squashfs"
   '';
-  hibernateResume = hibernateResumePartName != null;
+  storage = persistentStorage != null;
   # Stage-1 shell, spliced into the INIT heredoc below.  Nix does not strip
   # indentation from interpolated text, so it is written at its final
-  # column.  Absent entirely when resume support is off.
-  hibernateResumeFunction = buildPkgs.lib.optionalString hibernateResume ''
+  # column.  Absent entirely without persistent storage.
+  storageFunctions = buildPkgs.lib.optionalString storage ''
     hibernate_resume() {
-      # Must run before any filesystem on a disk is mounted.  Writing the
-      # swap partition's device number to /sys/power/resume makes the kernel
-      # look for a hibernation signature.  With a valid image it restores
-      # the saved system and never returns; otherwise the partition is only
-      # read and boot continues.  The watchdog lease is already running; the
-      # restored kernel restarts the watchdog in its restore_noirq phase.
-      part=
-      attempt=0
-      while [ -z "$part" ] && [ "$attempt" -lt 10 ]; do
-        for node in /sys/class/block/*; do
-          [ -e "$node/partition" ] || continue
-          grep -Fqx 'PARTNAME=${hibernateResumePartName}' "$node/uevent" 2>/dev/null || continue
-          if [ -n "$part" ]; then
-            log "hibernate-resume=skipped reason=ambiguous-partname partname=${hibernateResumePartName}"
-            return 0
-          fi
-          part=$node
-        done
-        [ -n "$part" ] || { attempt=$((attempt + 1)); sleep 1; }
-      done
-      if [ -z "$part" ]; then
-        log "hibernate-resume=skipped reason=partition-missing partname=${hibernateResumePartName}"
+      # Runs before any filesystem on the eMMC is mounted.  Writing the
+      # p34 "swap" device number to /sys/power/resume makes the kernel look
+      # for a hibernation signature.  With a valid image it restores the
+      # saved system and never returns; otherwise p34 is only read and boot
+      # continues.  The watchdog lease is already running; the restored
+      # kernel restarts the watchdog in its restore_noirq phase.
+      node=/sys/class/block/''${emmc_device##*/}p34
+      if ! grep -Fqx 'PARTNAME=swap' "$node/uevent" 2>/dev/null; then
+        log "hibernate-resume=skipped reason=no-p34-swap"
         return 0
       fi
-      devno=$(cat "$part/dev")
-      log "hibernate-resume=checking partname=${hibernateResumePartName} device=/dev/''${part##*/} devno=$devno"
+      devno=$(cat "$node/dev")
+      log "hibernate-resume=checking device=''${emmc_device}p34 devno=$devno"
       if printf '%s\n' "$devno" > /sys/power/resume; then
         log "hibernate-resume=no-image"
       else
         log "hibernate-resume=write-failed devno=$devno"
       fi
+    }
+
+    mount_persistent_storage() {
+      # p32 is used only when it is "userdata", labelled ${persistentStorage.dataLabel}
+      # and laid out by gemini-storage-provision.  Any problem leaves the
+      # squashfs-only system exactly as without persistent storage.
+      node=/sys/class/block/''${emmc_device##*/}p32
+      data=''${emmc_device}p32
+      persist=/mnt/nixos/persist
+      if ! grep -Fqx 'PARTNAME=userdata' "$node/uevent" 2>/dev/null; then
+        log "persist=absent reason=no-p32-userdata"
+        return 0
+      fi
+      label=$(dumpe2fs -h "$data" 2>/dev/null | sed -n 's/^Filesystem volume name: *//p')
+      if [ "$label" != ${persistentStorage.dataLabel} ]; then
+        log "persist=absent reason=not-provisioned"
+        return 0
+      fi
+      e2fsck -p "$data" > /run/persist-fsck.log 2>&1
+      rc=$?
+      if [ "$rc" -ge 4 ]; then
+        log "persist=skipped reason=fsck rc=$rc"
+        return 0
+      fi
+      mkdir -p "$persist"
+      if ! mount -t ext4 -o rw,nosuid,nodev,noatime "$data" "$persist"; then
+        log "persist=skipped reason=mount"
+        return 0
+      fi
+      for dir in home nix/upper nix/work nix/var; do
+        if [ ! -d "$persist/$dir" ]; then
+          umount "$persist"
+          log "persist=skipped reason=layout missing=$dir"
+          return 0
+        fi
+      done
+
+      # The image is authoritative for its own closure: drop anything in
+      # the upper layer that would shadow or whiteout one of its paths
+      # (for example after a garbage collection under another image).
+      shadowed=0
+      for path in /mnt/nixos/nix/store/* /mnt/nixos/nix/store/.gemini-*; do
+        [ -e "$path" ] || continue
+        upper=$persist/nix/upper/''${path##*/}
+        if [ -e "$upper" ] || [ -L "$upper" ]; then
+          rm -rf "$upper"
+          shadowed=$((shadowed + 1))
+        fi
+      done
+      mkdir -p /mnt/nixos/nix/.ro-store
+      mount --move /mnt/nixos/nix/store /mnt/nixos/nix/.ro-store || fail "store-move"
+      if mount -t overlay overlay \
+          -o lowerdir=/mnt/nixos/nix/.ro-store,upperdir=$persist/nix/upper,workdir=$persist/nix/work \
+          /mnt/nixos/nix/store &&
+         [ -x "/mnt/nixos$nixos_init" ]; then
+        store=overlay
+      else
+        umount /mnt/nixos/nix/store 2>/dev/null || true
+        mount --move /mnt/nixos/nix/.ro-store /mnt/nixos/nix/store || fail "store-restore"
+        store=squashfs-only
+      fi
+      if [ "$store" = overlay ]; then
+        mount --bind "$persist/nix/var" /mnt/nixos/nix/var || store=overlay-without-db
+      fi
+      mkdir -p /mnt/nixos/home
+      mount --bind "$persist/home" /mnt/nixos/home || log "persist=home-bind-failed"
+      log "persist=mounted device=$data fsck_rc=$rc store=$store shadowed_removed=$shadowed"
     }
 
   '';
@@ -97,6 +152,7 @@ let
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
     busybox = crossPkgs.pkgsStatic.busybox;
     dropbear = crossPkgs.pkgsStatic.dropbear;
+    e2fsprogs = crossPkgs.pkgsStatic.e2fsprogs.bin;
     rtlFirmware = buildPkgs.linux-firmware;
   } ''
     mkdir -p root/bin root/dev root/etc root/mnt/gemian root/mnt/nixos \
@@ -459,7 +515,7 @@ let
       ) &
     }
 
-    ${hibernateResumeFunction}activate_display() {
+    ${storageFunctions}activate_display() {
       # The locked 28c4715 platform requests the DSI IRQ before registering
       # the MIPI host. Release the one-way MMSYS gate only after the watchdog
       # petter and its lease are live, so a synchronous panel probe remains
@@ -500,7 +556,7 @@ let
     done
     [ -n "$emmc_device" ] || fail "p29-missing"
     p29="''${emmc_device}p29"
-    [ -b "$p29" ] || fail "p29-missing"${buildPkgs.lib.optionalString hibernateResume "\nhibernate_resume"}
+    [ -b "$p29" ] || fail "p29-missing"${buildPkgs.lib.optionalString storage "\nhibernate_resume"}
     mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
@@ -538,7 +594,7 @@ let
     nixos_system=/nix/store/$system_basename
     nixos_init=$nixos_system/init
     [ -x "/mnt/nixos$nixos_init" ] || fail "nixos-init-missing"
-    log "store=mounted system=$nixos_system"
+    log "store=mounted system=$nixos_system"${buildPkgs.lib.optionalString storage "\nmount_persistent_storage"}
 
     mount --move /mnt/gemian /mnt/nixos/gemian || fail "move-gemian"
     mount --move /proc /mnt/nixos/proc || fail "move-proc"
@@ -603,16 +659,20 @@ let
     '' else ''
       ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
     ''}
-    ${if hibernateResume then ''
-      grep -Fq "'PARTNAME=${hibernateResumePartName}'" root/init
-      # The resume check runs before the first eMMC mount.
+    ${if storage then ''
+      cp "$e2fsprogs/bin/e2fsck" "$e2fsprogs/bin/dumpe2fs" root/bin/
+      # Resume runs before the first eMMC mount; p32 is mounted after the
+      # image store is verified and before switch_root.
       resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
       mount_line=$(grep -n -F 'mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
-      test -n "$resume_line"
-      test -n "$mount_line"
+      persist_line=$(grep -n -Fx 'mount_persistent_storage' root/init | tail -n 1 | cut -d: -f1)
+      switch_line=$(grep -n -F 'exec switch_root' root/init | tail -n 1 | cut -d: -f1)
+      test -n "$resume_line" && test -n "$mount_line" && test -n "$persist_line"
       test "$resume_line" -lt "$mount_line"
+      test "$persist_line" -lt "$switch_line"
     '' else ''
       ! grep -Fq 'hibernate_resume' root/init
+      ! grep -Fq 'mount_persistent_storage' root/init
     ''}
     ${if provisionStore then ''
       grep -Fq 'store-provision=required' root/init
@@ -731,7 +791,7 @@ let
         else "disabled"
       }"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
-      echo "hibernate-resume=${if hibernateResume then "stage1 before the first eMMC mount; PARTNAME=${hibernateResumePartName}" else "none"}"
+      echo "persistent-storage=${if storage then "p34 swap resume before the first eMMC mount; p32 ${persistentStorage.dataLabel} for /home, /nix/store overlay, /nix/var when provisioned" else "none"}"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \
         ${serviceabilityDtb}/gemini.dtb \

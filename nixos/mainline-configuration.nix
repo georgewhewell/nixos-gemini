@@ -378,7 +378,7 @@
   documentation.enable = false;
   documentation.man.enable = false;
   documentation.nixos.enable = false;
-  nix.enable = false;
+  # Nix itself is enabled by storage.nix (writable store on p32).
   system.disableInstallerTools = true;
   xdg.icons.enable = false;
   xdg.mime.enable = false;

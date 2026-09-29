@@ -1086,6 +1086,7 @@
         ./nixos/wifi-autoconnect.nix
         ./nixos/audio.nix
         ./nixos/power-policy.nix
+        ./nixos/storage.nix
         ./nixos/desktop.nix
         ./nixos/m39.nix
         ./nixos/spm.nix
@@ -1138,13 +1139,18 @@
       nativeBuildInputs = [buildPkgs.squashfsTools];
     } ''
       mkdir -p store-contents
-      for path in $(cat ${buildPkgs.closureInfo {
+      closure=${buildPkgs.closureInfo {
         rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
-      }}/store-paths); do
+      }}
+      for path in $(cat "$closure/store-paths"); do
         cp -a "$path" store-contents/
       done
       basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
         > store-contents/.gemini-system
+      # nix-store --load-db input for the persistent Nix database
+      # (nixos/storage.nix): this image's paths live in the overlay's
+      # read-only lower layer.
+      cp "$closure/registration" store-contents/.gemini-registration
       # The builder's store may be hard-link optimised (auto-optimise-store),
       # and `cp -a` carries those links in.  Which files share an inode then
       # depends on the host's store history, not on the closure, so the image
@@ -1186,11 +1192,11 @@
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
-      hibernateResumePartName = let
-        hibernation = mainlineNixosSystemCross.config.gemini.powerPolicy.hibernation;
+      persistentStorage = let
+        storage = mainlineNixosSystemCross.config.gemini.storage;
       in
-        if hibernation.enable
-        then hibernation.partitionLabel
+        if storage.enable
+        then {inherit (storage) dataLabel;}
         else null;
     };
 
@@ -1756,6 +1762,9 @@
     nixosConfigurations = {
       # Cross-compiled from x86_64 to aarch64.
       gemini = nixosSystemCross;
+      # The mainline image's Stage-2 system, for nixos-rebuild --target-host
+      # or nix copy + switch-to-configuration (handoff/power-policy.md).
+      gemini-mainline = mainlineNixosSystemCross;
     };
 
     # Development shell
