@@ -72,7 +72,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "3a4437ca1ac1a683ba3c9da247a4efd85457e246";
+  p22BaselinePlatformRevision = "07a9f2e5a21d649134441289d45aefa662d05df7";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -765,6 +765,7 @@ let
         grep -Fqx 'CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED=y' .config
         grep -Fqx 'CONFIG_WATCHDOG_OPEN_TIMEOUT=90' .config
         grep -Fqx 'CONFIG_WATCHDOG_SYSFS=y' .config
+        grep -Fqx 'CONFIG_PSTORE_PMSG=y' .config
         grep -Fqx 'CONFIG_MEDIATEK_WATCHDOG=y' .config
         grep -Fqx 'CONFIG_PANIC_ON_OOPS=y' .config
         grep -Fqx 'CONFIG_PANIC_TIMEOUT=5' .config

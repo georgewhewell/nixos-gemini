@@ -340,6 +340,24 @@
     '';
   };
 
+  # Diagnostics only (never gates, always exits 0): records what the gate
+  # above is waiting on in /run/gemini-baseline-self-accept.watch, and one
+  # kmsg/pmsg line per change, so a gate that never runs is explained.
+  systemd.services.gemini-baseline-self-accept-watch = lib.mkIf (geminiLeaseSelfAcceptToken != null) {
+    description = "Record why the Gemini baseline self-accept has not happened";
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "simple";
+      Restart = "no";
+    };
+    script = ''
+      export GEMINI_SELF_ACCEPT_WATCH_BUSYBOX=${pkgs.busybox}/bin/busybox
+      export GEMINI_SELF_ACCEPT_WATCH_SYSTEMCTL=${config.systemd.package}/bin/systemctl
+      export GEMINI_SELF_ACCEPT_WATCH_JOURNALCTL=${config.systemd.package}/bin/journalctl
+      exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-self-accept-watch.sh}
+    '';
+  };
+
   security.audit.enable = false;
   security.polkit.enable = false;
   security.sudo.enable = false;

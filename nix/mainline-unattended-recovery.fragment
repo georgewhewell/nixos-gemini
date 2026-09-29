@@ -12,3 +12,7 @@ CONFIG_WATCHDOG_SYSFS=y
 CONFIG_MEDIATEK_WATCHDOG=y
 CONFIG_PANIC_ON_OOPS=y
 CONFIG_PANIC_TIMEOUT=5
+# /dev/pmsg0: userspace records in ramoops' own pmsg zone (pmsg-size in the
+# board DT), so the self-accept gate's reasons survive the lease reset even
+# when the console zone is flooded.
+CONFIG_PSTORE_PMSG=y

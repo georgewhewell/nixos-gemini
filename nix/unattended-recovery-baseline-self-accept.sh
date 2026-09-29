@@ -18,6 +18,10 @@ system_link=${GEMINI_BASELINE_ACCEPT_SYSTEM_LINK:-$run_root/current-system}
 systemctl=${GEMINI_BASELINE_ACCEPT_SYSTEMCTL:-$system_link/sw/bin/systemctl}
 ip_fixture=${GEMINI_BASELINE_ACCEPT_IP_FILE:-}
 kmsg_file=${GEMINI_BASELINE_ACCEPT_KMSG_FILE:-/dev/kmsg}
+# ramoops' pmsg zone survives the lease reset independently of the console
+# zone, which a noisy driver can overwrite.  Only a character device (or an
+# explicit test file) is written.
+pmsg_file=${GEMINI_BASELINE_ACCEPT_PMSG_FILE:-/dev/pmsg0}
 token=${GEMINI_BASELINE_ACCEPT_TOKEN:-}
 
 accepted_file=$run_root/unattended-recovery.accepted
@@ -29,15 +33,44 @@ handoff_file=$run_root/stage1-handoff
 success_file=$run_root/gemini-mainline-success
 stage1_log=$run_root/stage1.log
 display_activation_file=$run_root/gemini-display-activation
+# The latest outcome, rewritten on every attempt, for the host to read.
+status_file=$run_root/gemini-baseline-self-accept.status
+detail=
+
+uptime_now() {
+  # shellcheck disable=SC2016 # $1 belongs to awk, not this shell.
+  "$busybox" awk '{ print $1; exit }' "$proc_root/uptime" 2>/dev/null || true
+}
 
 log() {
   line="GEMINI_MAINLINE_NIXOS: $*"
   printf '%s\n' "$line" >> "$stage1_log" 2>/dev/null || true
   printf '<6>%s\n' "$line" > "$kmsg_file" 2>/dev/null || true
+  if [ -c "$pmsg_file" ] || [ -n "${GEMINI_BASELINE_ACCEPT_PMSG_FILE:-}" ]; then
+    printf '%s uptime=%s\n' "$line" "$(uptime_now)" >> "$pmsg_file" 2>/dev/null || true
+  fi
+}
+
+record() {
+  {
+    printf 'uptime=%s\n' "$(uptime_now)"
+    printf 'result=%s\n' "$1"
+    printf 'reason=%s\n' "$2"
+    [ -z "$detail" ] || printf 'detail=%s\n' "$detail"
+  } > "$status_file.tmp.$$" 2>/dev/null &&
+    "$busybox" mv -f "$status_file.tmp.$$" "$status_file" 2>/dev/null || true
+}
+
+# Unit names only, comma-joined and bounded; diagnostics, never a gate.
+unit_list() {
+  # shellcheck disable=SC2016 # $1 belongs to awk, not this shell.
+  "$busybox" awk 'NF { if (n++ < 12) out = out (out == "" ? "" : ",") $1 }
+    END { print (out == "" ? "none" : out) }' 2>/dev/null || echo unknown
 }
 
 fail() {
-  log "baseline_self_accept=withheld reason=$1"
+  record withheld "$1"
+  log "baseline_self_accept=withheld reason=$1${detail:+ $detail}"
   exit 1
 }
 
@@ -153,13 +186,21 @@ valid_system_path "$expected_system" || fail expected-system-invalid
   "$handoff_file" || fail handoff-identity-mismatch
 
 system_state=$("$systemctl" is-system-running 2>/dev/null || true)
-[ "$system_state" = running ] || fail system-not-running
+if [ "$system_state" != running ]; then
+  detail="state=${system_state:-unknown} failed=$("$systemctl" --failed --no-legend --plain 2>/dev/null | unit_list)"
+  # shellcheck disable=SC2016 # $2 belongs to awk, not this shell.
+  detail="$detail jobs=$("$systemctl" list-jobs --no-legend --plain 2>/dev/null | "$busybox" awk '{ print $2 }' 2>/dev/null | unit_list)"
+  fail system-not-running
+fi
 unit_active gemini-watchdog-takeover.service || fail watchdog-takeover-inactive
 unit_active gemini-mainline-usb.service || fail gadget-service-inactive
 unit_active gemini-input-observe.service || fail input-observe-inactive
 unit_active sshd.service || fail sshd-inactive
 failed_units=$("$systemctl" --failed --no-legend --plain 2>/dev/null || true)
-[ -z "$failed_units" ] || fail failed-units-present
+if [ -n "$failed_units" ]; then
+  detail="failed=$(printf '%s\n' "$failed_units" | unit_list)"
+  fail failed-units-present
+fi
 
 "$busybox" grep -Eq '^/dev/mmcblk[0-9]+p29 /gemian ext4 ro,' "$mounts_file" || \
   fail p29-not-readonly
@@ -203,4 +244,5 @@ printf '%s\n' unattended_recovery=healthy > "$tmp"
 "$busybox" mv -f "$tmp" "$accepted_file"
 [ "$("$busybox" cat "$accepted_file" 2>/dev/null || true)" = unattended_recovery=healthy ] || \
   fail acceptance-marker-verify-failed
+record accepted health-exact
 log "baseline_self_accept=accepted capability=$token system=$expected_system health=exact"

@@ -81,6 +81,7 @@ run_fixture "$ok"
 grep -Fqx unattended_recovery=healthy "$ok/run/unattended-recovery.accepted"
 test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
+grep -Fqx 'result=accepted' "$ok/run/gemini-baseline-self-accept.status"
 
 missing_display=$WORK/missing-display
 make_fixture "$missing_display"
@@ -157,5 +158,33 @@ SYSTEMCTL
 chmod 0755 "$failed/bin/systemctl"
 if run_fixture "$failed"; then fail 'accepted with failed unit'; fi
 test ! -e "$failed/run/unattended-recovery.accepted"
+grep -Fqx 'reason=failed-units-present' "$failed/run/gemini-baseline-self-accept.status"
+grep -Fqx 'detail=failed=bad.service' "$failed/run/gemini-baseline-self-accept.status"
+grep -Fq 'baseline_self_accept=withheld reason=failed-units-present failed=bad.service' \
+  "$failed/run/stage1.log"
+
+degraded=$WORK/degraded
+make_fixture "$degraded"
+cat > "$degraded/bin/systemctl" <<'SYSTEMCTL'
+#!/bin/sh
+case "$1${2:-}" in
+  is-system-running) echo degraded; exit 1 ;;
+  is-active--quiet) exit 0 ;;
+  --failed--no-legend) echo 'gemini-m39.service loaded failed failed m39' ;;
+  list-jobs--no-legend) echo '12 gemini-desktop-qualify.service start running' ;;
+  *) exit 2 ;;
+esac
+SYSTEMCTL
+chmod 0755 "$degraded/bin/systemctl"
+if GEMINI_BASELINE_ACCEPT_PMSG_FILE="$degraded/pmsg" run_fixture "$degraded"; then
+  fail 'accepted a degraded system'
+fi
+test ! -e "$degraded/run/unattended-recovery.accepted"
+grep -Fqx 'result=withheld' "$degraded/run/gemini-baseline-self-accept.status"
+grep -Fqx 'reason=system-not-running' "$degraded/run/gemini-baseline-self-accept.status"
+grep -Fqx 'detail=state=degraded failed=gemini-m39.service jobs=gemini-desktop-qualify.service' \
+  "$degraded/run/gemini-baseline-self-accept.status"
+grep -Fq 'reason=system-not-running state=degraded failed=gemini-m39.service' "$degraded/pmsg"
+grep -Fq 'uptime=101.00' "$degraded/pmsg"
 
 echo 'test-unattended-recovery-baseline-self-accept: PASS'
