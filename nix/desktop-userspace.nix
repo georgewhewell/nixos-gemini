@@ -13,6 +13,11 @@ let
     webpSupport = false;
     xwaylandSupport = false;
   }).overrideAttrs (old: {
+    # Power the built-in DSI panel off while the lid is closed.
+    patches = (old.patches or []) ++ [
+      ../patches/weston/0001-backend-drm-treat-DSI-connectors-as-internal.patch
+      ../patches/weston/0002-libweston-power-off-internal-outputs-while-the-lid-i.patch
+    ];
     mesonFlags = old.mesonFlags ++ [
       "-Dbackend-x11=false"
       "-Dbackend-wayland=false"

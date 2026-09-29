@@ -1,0 +1,30 @@
+From 6c37d6520b1af5e9f755710e84ae84f3b1464b43 Mon Sep 17 00:00:00 2001
+From: George Whewell <georgerw@gmail.com>
+Date: Mon, 28 Sep 2026 23:15:01 +0200
+Subject: [PATCH 1/2] backend-drm: treat DSI connectors as internal
+
+A MIPI DSI connector drives a panel that is built into the device, just
+like LVDS and eDP.  Mark DSI heads as internal so that policy keyed on
+weston_head::connection_internal applies to phone, tablet and PDA panels
+as well.
+---
+ libweston/backend-drm/drm.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 19b93c5..9dc7932 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -3400,7 +3400,8 @@ drm_head_create(struct drm_device *device, drmModeConnector *conn,
+ 	}
+ 
+ 	if (conn->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+-	    conn->connector_type == DRM_MODE_CONNECTOR_eDP)
++	    conn->connector_type == DRM_MODE_CONNECTOR_eDP ||
++	    conn->connector_type == DRM_MODE_CONNECTOR_DSI)
+ 		weston_head_set_internal(&head->base);
+ 
+ 	if (drm_head_read_current_setup(head, device) < 0) {
+-- 
+2.55.0
+

@@ -1,0 +1,164 @@
+From f3ef57bf1ab559d33281b898ec62e9a465aacc2e Mon Sep 17 00:00:00 2001
+From: George Whewell <georgerw@gmail.com>
+Date: Mon, 28 Sep 2026 23:15:27 +0200
+Subject: [PATCH 2/2] libweston: power off internal outputs while the lid is
+ closed
+
+libinput reports lid switches as LIBINPUT_EVENT_SWITCH_TOGGLE, which the
+libinput backend so far logged as an unknown event.  Handle the lid
+switch: while it is closed, force every output that drives an internal
+panel off with weston_output_power_off(), and power those outputs back
+on when it opens.  Outputs enabled while the lid is closed start forced
+off.
+
+A forced-off output stays off across compositor sleep/wake, so input
+arriving while the lid is closed (for example a covered keyboard) cannot
+light the panel.  External outputs are not affected.
+---
+ include/libweston/libweston.h  |  1 +
+ libweston/compositor.c         | 54 ++++++++++++++++++++++++++++++++++
+ libweston/libinput-device.c    | 21 +++++++++++++
+ libweston/libweston-internal.h |  4 +++
+ 4 files changed, 80 insertions(+)
+
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index 5eab36c..07f3cd6 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1530,6 +1530,7 @@ struct weston_compositor {
+ 	struct wl_event_source *idle_source;
+ 	uint32_t idle_inhibit;
+ 	int idle_time;			/* timeout, s */
++	bool lid_closed;		/* internal outputs are forced off */
+ 	int repaint_timer_fd;
+ 	struct wl_event_source *repaint_timer_source;
+ 
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index cf71345..9e0912a 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -6301,6 +6301,57 @@ weston_compositor_sleep(struct weston_compositor *compositor)
+ 	wl_signal_emit(&compositor->sleep_signal, compositor);
+ }
+ 
++static bool
++weston_output_is_internal(struct weston_output *output)
++{
++	struct weston_head *head;
++
++	wl_list_for_each(head, &output->head_list, output_link) {
++		if (head->connection_internal)
++			return true;
++	}
++
++	return false;
++}
++
++/** Record the state of the lid switch
++ *
++ * \param compositor The compositor instance
++ * \param closed True if the lid is closed
++ *
++ * While the lid is closed, every output driving an internal (built-in)
++ * panel is forced off, as with weston_output_power_off(); opening the lid
++ * powers those outputs back on.  Outputs that are enabled while the lid is
++ * closed are forced off as well.  Other outputs are not affected.
++ *
++ * \ingroup compositor
++ * \internal
++ */
++WL_EXPORT void
++weston_compositor_set_lid_closed(struct weston_compositor *compositor,
++				 bool closed)
++{
++	struct weston_output *output;
++
++	if (compositor->lid_closed == closed)
++		return;
++
++	compositor->lid_closed = closed;
++	weston_log("Lid %s: %s internal outputs\n",
++		   closed ? "closed" : "opened",
++		   closed ? "powering off" : "powering on");
++
++	wl_list_for_each(output, &compositor->output_list, link) {
++		if (!weston_output_is_internal(output))
++			continue;
++
++		if (closed)
++			weston_output_power_off(output);
++		else
++			weston_output_power_on(output);
++	}
++}
++
+ /** Sets compositor to idle mode
+  *
+  * \param data The compositor instance
+@@ -8745,6 +8796,9 @@ weston_output_enable(struct weston_output *output)
+ 	weston_compositor_add_output(output->compositor, output);
+ 	weston_output_damage(output);
+ 
++	if (output->compositor->lid_closed && weston_output_is_internal(output))
++		weston_output_power_off(output);
++
+ 	head_names = weston_output_create_heads_string(output);
+ 	weston_log("Output '%s' enabled with head(s) %s\n",
+ 		   output->name, head_names);
+diff --git a/libweston/libinput-device.c b/libweston/libinput-device.c
+index 42505ce..b0a5f47 100644
+--- a/libweston/libinput-device.c
++++ b/libweston/libinput-device.c
+@@ -796,6 +796,23 @@ handle_tablet_button(struct libinput_device *libinput_device,
+ 	async_notify_tablet_tool_frame(tool, &time);
+ }
+ 
++static void
++handle_switch_toggle(struct libinput_device *libinput_device,
++		     struct libinput_event_switch *switch_event)
++{
++	struct evdev_device *device =
++		libinput_device_get_user_data(libinput_device);
++	enum libinput_switch_state state;
++
++	if (libinput_event_switch_get_switch(switch_event) !=
++	    LIBINPUT_SWITCH_LID)
++		return;
++
++	state = libinput_event_switch_get_switch_state(switch_event);
++	weston_compositor_set_lid_closed(device->seat->compositor,
++					 state == LIBINPUT_SWITCH_STATE_ON);
++}
++
+ int
+ evdev_device_process_event(struct libinput_event *event)
+ {
+@@ -864,6 +881,10 @@ evdev_device_process_event(struct libinput_event *event)
+ 		handle_tablet_button(libinput_device,
+ 				libinput_event_get_tablet_tool_event(event));
+ 		break;
++	case LIBINPUT_EVENT_SWITCH_TOGGLE:
++		handle_switch_toggle(libinput_device,
++				     libinput_event_get_switch_event(event));
++		break;
+ 	default:
+ 		handled = 0;
+ 		weston_log("unknown libinput event %d\n",
+diff --git a/libweston/libweston-internal.h b/libweston/libweston-internal.h
+index 969ff45..e5f6976 100644
+--- a/libweston/libweston-internal.h
++++ b/libweston/libweston-internal.h
+@@ -332,6 +332,10 @@ weston_compositor_dmabuf_can_scanout(struct weston_compositor *compositor,
+ void
+ weston_compositor_offscreen(struct weston_compositor *compositor);
+ 
++void
++weston_compositor_set_lid_closed(struct weston_compositor *compositor,
++				 bool closed);
++
+ void
+ weston_compositor_print_scene_graph(struct weston_compositor *ec, FILE *fp);
+ 
+-- 
+2.55.0
+
