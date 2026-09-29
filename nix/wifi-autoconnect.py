@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Own a saved WPA2 connection after the Gemini boot has been accepted.
 
-The current driver requires a fresh passive scan and ap_scan=2. Keep retries
+WPA2 connects with ap_scan=2 after a fresh passive scan. Keep retries
 outside boot acceptance; profile contents and supplicant output stay in /run.
 GEMINI_WIFI_SAE=prefer opts into WPA3-SAE (with PMF) for APs that offer SAE
 when the saved profile holds the passphrase; the default keeps WPA2-PSK.
+SAE uses ap_scan=1: wpa_supplicant must hold the AP's own scan result (its
+RSN element) before it will connect with PMF required.
 """
 
 import configparser
@@ -152,7 +154,7 @@ def configuration(ssid, secret, bssid, control, sae=False):
             raise ValueError('configuration-input')
         # WPA3-Personal: SAE (hunting-and-pecking or hash-to-element) with
         # required PMF; the hex password avoids config-file quoting.
-        return (f'ctrl_interface={control}\nap_scan=2\nsae_pwe=2\nnetwork={{\n'
+        return (f'ctrl_interface={control}\nap_scan=1\nsae_pwe=2\nnetwork={{\n'
                 f'\tssid={ssid.hex()}\n\tsae_password={secret.hex()}\n\tbssid={bssid}\n'
                 '\tproto=RSN\n\tkey_mgmt=SAE\n\tpairwise=CCMP\n'
                 '\tgroup=CCMP\n\tgroup_mgmt=AES-128-CMAC\n\tieee80211w=2\n}\n')

@@ -118,7 +118,7 @@ class Sae(unittest.TestCase):
             self.assertEqual(secret, b'password')
             text = wifi.configuration(ssid, secret, bssid, '/run/gemini-wifi/ctrl', sae)
             for line in ('key_mgmt=SAE', 'ieee80211w=2', 'sae_pwe=2', 'group_mgmt=AES-128-CMAC',
-                         'sae_password=' + b'password'.hex(), 'ap_scan=2'):
+                         'sae_password=' + b'password'.hex(), 'ap_scan=1'):
                 self.assertIn(line, text)
             self.assertNotIn('password\n', text)
             self.assertNotIn('psk=', text)
