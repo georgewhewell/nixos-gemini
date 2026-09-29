@@ -3,9 +3,12 @@
 # - Lid closed: Weston forces the internal DSI output off at once (patched
 #   libweston, nix/desktop-userspace.nix); the panel, its backlight and the
 #   touch controller that follows it all power down.
-# - Lid closed for lidSuspendDelaySec: logind carries out HandleLidSwitch=.
-#   gemini-sleep-inhibit holds logind's "handle-lid-switch" inhibitor while
-#   the lid is open and for the grace period after it closes.
+# - Lid closed for lidSuspendDelaySec: gemini-sleep-inhibit asks logind to
+#   sleep.  logind itself ignores the lid (HandleLidSwitch=ignore), so if the
+#   daemon is not running nothing sleeps.  An earlier design let logind act
+#   on the lid behind a "handle-lid-switch" inhibitor; on this board the
+#   daemon starts with multi-user.target (~300 s), after logind's 2 min
+#   holdoff, and a closed lid suspended the device mid-qualification.
 # - Sleep is s2idle ("freeze"), the only state PSCI v0.2 offers here.  With
 #   hibernation enabled the lid action is suspend-then-hibernate: an RTC alarm
 #   after HibernateDelaySec wakes the system, which then hibernates.
@@ -14,8 +17,8 @@
 # - No sleep while a USB host is attached to the MTU3 gadget (the recovery
 #   link; the controller vetoes suspend with -EBUSY while connected) or
 #   before the unattended-recovery lease has been accepted.  Both are
-#   "sleep" block inhibitors, which the lid action honours because
-#   LidSwitchIgnoreInhibited=no.
+#   conditions the daemon checks before asking, and "sleep" block
+#   inhibitors it holds so that other sleep requests are refused too.
 {
   config,
   lib,
@@ -26,10 +29,10 @@
   hib = cfg.hibernation;
 
 
-  lidAction =
+  sleepAction =
     if hib.enable
-    then "suspend-then-hibernate"
-    else "suspend";
+    then "SuspendThenHibernate"
+    else "Suspend";
 
   sleepInhibit = pkgs.stdenv.mkDerivation {
     pname = "gemini-sleep-inhibit";
@@ -99,17 +102,12 @@ in {
     ];
 
     services.logind = {
-      lidSwitch = lidAction;
-      lidSwitchExternalPower = lidAction;
+      lidSwitch = "ignore";
+      lidSwitchExternalPower = "ignore";
       # "Docked" means an external display or dock; the Gemini has neither.
       lidSwitchDocked = "ignore";
       extraConfig = ''
-        # Honour "sleep" block inhibitors (USB host attached, recovery lease
-        # pending) for the lid too.
-        LidSwitchIgnoreInhibited=no
-        # Covers boot until gemini-sleep-inhibit holds its inhibitors, and
-        # spaces out retries after a failed sleep.  CLOCK_MONOTONIC keeps
-        # running in s2idle here, so it rarely delays a re-suspend.
+        # gemini-sleep-inhibit owns the lid; see the header comment.
         HoldoffTimeoutSec=2min
       '';
     };
@@ -137,6 +135,8 @@ in {
           "${sleepInhibit}/bin/gemini-sleep-inhibit"
           "--lid-grace"
           (toString cfg.lidSuspendDelaySec)
+          "--sleep-action"
+          sleepAction
           "--udc"
           cfg.usbDeviceController
           "--accepted-file"

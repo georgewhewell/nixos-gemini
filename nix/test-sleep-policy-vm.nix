@@ -65,7 +65,16 @@ in
           machine.succeed(f"echo {state} > /run/fake-lid.ctl")
 
       machine.wait_for_unit("gemini-sleep-inhibit.service")
-      machine.wait_until_succeeds("systemd-inhibit --list --no-legend | grep -q 'lid open'")
+      machine.wait_until_succeeds("systemd-inhibit --list --no-legend | grep -q 'lease not yet accepted'")
+
+      with subtest("a closed lid never sleeps before the recovery lease is accepted"):
+          # Regression: M43-power on hardware suspended mid-qualification when
+          # logind acted on a lid closed at boot.
+          machine.wait_until_succeeds("awk '$1 > 5 { ok=1 } END { exit !ok }' /proc/uptime")
+          lid(1)
+          machine.sleep(15)
+          assert suspends() == 0, "suspended before the lease was accepted"
+          lid(0)
 
       with subtest("recovery lease blocks sleep until accepted"):
           assert "unattended-recovery lease not yet accepted" in inhibitors()
@@ -80,15 +89,12 @@ in
           t0 = time.monotonic()
           machine.sleep(4)
           assert suspends() == 0, "suspended during the lid grace period"
-          assert "handle-lid-switch" in inhibitors()
           machine.wait_until_succeeds("test -s /run/suspend-requests", timeout=30)
           elapsed = time.monotonic() - t0
           assert elapsed >= 7, f"suspend after {elapsed:.1f}s, before the 8s grace"
-          assert "handle-lid-switch" not in inhibitors()
 
-      with subtest("opening the lid restores the inhibitor and stops suspending"):
+      with subtest("opening the lid stops suspending"):
           lid(0)
-          machine.wait_until_succeeds("systemd-inhibit --list --no-legend | grep -q handle-lid-switch")
           n = suspends()
           machine.sleep(10)
           assert suspends() == n, "suspended with the lid open"
@@ -115,7 +121,7 @@ in
       with subtest("daemon started with the lid closed grants the full grace"):
           lid(1)
           machine.succeed("systemctl restart gemini-sleep-inhibit")
-          machine.wait_until_succeeds("systemd-inhibit --list --no-legend | grep -q handle-lid-switch")
+          machine.wait_for_unit("gemini-sleep-inhibit.service")
           n = suspends()
           machine.sleep(4)
           assert suspends() == n
@@ -129,8 +135,8 @@ in
 
       with subtest("logind configuration"):
           conf = machine.succeed("cat /etc/systemd/logind.conf")
-          for line in ["HandleLidSwitch=suspend", "HandleLidSwitchExternalPower=suspend",
-                       "HandleLidSwitchDocked=ignore", "LidSwitchIgnoreInhibited=no"]:
+          for line in ["HandleLidSwitch=ignore", "HandleLidSwitchExternalPower=ignore",
+                       "HandleLidSwitchDocked=ignore"]:
               assert line in conf, line
           sleep = machine.succeed("cat /etc/systemd/sleep.conf")
           for line in ["SuspendState=freeze", "HibernateMode=shutdown",

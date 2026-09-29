@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MIT
 /*
- * gemini-sleep-inhibit - shape the Gemini PDA lid/sleep policy with
- * systemd-logind block inhibitors.
+ * gemini-sleep-inhibit - the Gemini PDA lid sleep policy.
  *
- * logind owns the policy (HandleLidSwitch=, sleep.conf).  This daemon only
- * holds or releases inhibitors, so that "systemd-inhibit --list" always
+ * logind is configured with HandleLidSwitch=ignore; this daemon is the only
+ * thing that puts the device to sleep because of the lid.  It asks logind to
+ * run --sleep-action (Suspend or SuspendThenHibernate) once the lid has been
+ * closed for --lid-grace seconds, the recovery lease is accepted and no USB
+ * host is attached.  If the lid is still closed after a wake-up, it asks
+ * again after --resleep seconds.  If this daemon is not running, nothing
+ * sleeps because of the lid: every failure mode is "stay awake".
+ *
+ * It also holds logind "sleep" block inhibitors, so that other sleep
+ * requests are refused for the same reasons and "systemd-inhibit --list"
  * shows why the device is not sleeping:
  *
- *   handle-lid-switch  while the lid is open, and for --lid-grace seconds
- *                      after it closes.  Once released, logind's lid recheck
- *                      carries out HandleLidSwitch= for the closed lid.
  *   sleep              while the USB device controller (--udc) is attached
  *                      to a host.  The MTU3 gadget refuses system sleep with
  *                      -EBUSY while connected, and it is the recovery link.
- *                      Requires LidSwitchIgnoreInhibited=no for the lid.
  *   sleep              until --accepted-file holds --accepted-content, i.e.
  *                      until the unattended-recovery watchdog lease has been
  *                      accepted.  A sleep before acceptance would make the
@@ -62,15 +65,39 @@ struct inhibitor {
 	int fd;
 };
 
-enum { INH_LID, INH_USB, INH_LEASE, INH_COUNT };
+enum { INH_USB, INH_LEASE, INH_COUNT };
 
 static struct inhibitor inhibitors[INH_COUNT] = {
-	[INH_LID] = { "handle-lid-switch", NULL, false, -1 },
 	[INH_USB] = { "sleep", "USB host attached to the recovery gadget", false, -1 },
 	[INH_LEASE] = { "sleep", "unattended-recovery lease not yet accepted", false, -1 },
 };
 
-static char lid_why[128];
+static const char *sleep_action = "Suspend";
+
+/* Ask logind to sleep.  Our own inhibitors are released at this point, so
+ * any "block" inhibitor still held belongs to someone else and is honoured. */
+static void request_sleep(void)
+{
+	sd_bus_error error = SD_BUS_ERROR_NULL;
+	sd_bus *bus = NULL;
+	int r;
+
+	r = sd_bus_open_system(&bus);
+	if (r < 0) {
+		fprintf(stderr, "<4>cannot connect to the system bus: %s\n", strerror(-r));
+		return;
+	}
+	r = sd_bus_call_method(bus, "org.freedesktop.login1", "/org/freedesktop/login1",
+			       "org.freedesktop.login1.Manager", sleep_action, &error, NULL,
+			       "b", false);
+	if (r < 0)
+		fprintf(stderr, "<4>%s failed: %s\n", sleep_action,
+			error.message ? error.message : strerror(-r));
+	else
+		fprintf(stderr, "<6>lid closed: requested %s\n", sleep_action);
+	sd_bus_error_free(&error);
+	sd_bus_flush_close_unref(bus);
+}
 
 static int take_inhibitor(struct inhibitor *inh)
 {
@@ -202,8 +229,10 @@ struct lid {
 	int fd;
 	int timer;
 	long grace;
+	long resleep;
 	bool closed;
 	bool grace_pending;
+	bool sleep_due;
 };
 
 static void lid_update(struct lid *lid, bool closed)
@@ -218,6 +247,7 @@ static void lid_update(struct lid *lid, bool closed)
 		fprintf(stderr, "<6>lid closed; lid action allowed in %ld s\n", lid->grace);
 	} else {
 		lid->grace_pending = false;
+		lid->sleep_due = false;
 		arm_timer(lid->timer, 0);
 		fprintf(stderr, "<6>lid opened\n");
 	}
@@ -330,7 +360,8 @@ static bool lease_accepted(const char *file, const char *content)
 static void usage(FILE *out)
 {
 	fprintf(out,
-		"usage: " WHO " [--lid-grace SECONDS] [--udc NAME]\n"
+		"usage: " WHO " [--lid-grace SECONDS] [--resleep SECONDS] [--udc NAME]\n"
+		"       [--sleep-action Suspend|SuspendThenHibernate]\n"
 		"       [--accepted-file PATH --accepted-content STRING]\n");
 }
 
@@ -338,6 +369,8 @@ int main(int argc, char **argv)
 {
 	static const struct option options[] = {
 		{ "lid-grace", required_argument, NULL, 'g' },
+		{ "resleep", required_argument, NULL, 'r' },
+		{ "sleep-action", required_argument, NULL, 'a' },
 		{ "udc", required_argument, NULL, 'u' },
 		{ "accepted-file", required_argument, NULL, 'f' },
 		{ "accepted-content", required_argument, NULL, 'c' },
@@ -345,7 +378,7 @@ int main(int argc, char **argv)
 		{}
 	};
 	const char *udc_arg = NULL, *accepted_file = NULL, *accepted_content = NULL;
-	struct lid lid = { .fd = -1, .timer = -1, .grace = 900 };
+	struct lid lid = { .fd = -1, .timer = -1, .grace = 900, .resleep = 60 };
 	char lid_name[PATH_MAX] = "", udc_name[NAME_MAX + 1] = "";
 	int udc_fd = -1, lease_fd = -1, retry_fd;
 	int opt;
@@ -363,6 +396,24 @@ int main(int argc, char **argv)
 			}
 			break;
 		}
+		case 'r': {
+			char *end;
+
+			errno = 0;
+			lid.resleep = strtol(optarg, &end, 10);
+			if (errno || *end || lid.resleep < 10 || lid.resleep > 24 * 3600) {
+				fprintf(stderr, "invalid --resleep: %s\n", optarg);
+				return EXIT_FAILURE;
+			}
+			break;
+		}
+		case 'a':
+			if (strcmp(optarg, "Suspend") && strcmp(optarg, "SuspendThenHibernate")) {
+				fprintf(stderr, "invalid --sleep-action: %s\n", optarg);
+				return EXIT_FAILURE;
+			}
+			sleep_action = optarg;
+			break;
 		case 'u':
 			udc_arg = optarg;
 			break;
@@ -401,9 +452,6 @@ int main(int argc, char **argv)
 			fprintf(stderr, "<3>cannot track the lid: %m\n");
 			return EXIT_FAILURE;
 		}
-		snprintf(lid_why, sizeof(lid_why),
-			 "lid open, or closed for less than %ld s", lid.grace);
-		inhibitors[INH_LID].why = lid_why;
 		lid.closed = false;
 		lid_update(&lid, state);
 		fprintf(stderr, "<6>lid switch: %s (%s)\n", lid_name,
@@ -455,7 +503,15 @@ int main(int argc, char **argv)
 		int npfd = 0;
 		int ilid = -1, itimer = -1, iudc = -1, ilease = -1, iretry;
 
-		inhibitors[INH_LID].wanted = lid.fd >= 0 && (!lid.closed || lid.grace_pending);
+		if (lid.sleep_due && lid.closed && !inhibitors[INH_USB].wanted &&
+		    !inhibitors[INH_LEASE].wanted) {
+			/* Drop our own inhibitors (none are wanted here) before asking. */
+			reconcile();
+			request_sleep();
+			lid.sleep_due = false;
+			lid.grace_pending = true;
+			arm_timer(lid.timer, lid.resleep);
+		}
 		if (!reconcile())
 			arm_timer(retry_fd, 1);
 
@@ -497,8 +553,8 @@ int main(int argc, char **argv)
 
 			if (read(lid.timer, &expirations, sizeof(expirations)) > 0 && lid.closed) {
 				lid.grace_pending = false;
-				fprintf(stderr, "<6>lid closed for %ld s; releasing the lid switch\n",
-					lid.grace);
+				lid.sleep_due = true;
+				fprintf(stderr, "<6>lid closed past its grace period; sleep is due\n");
 			}
 		}
 		if (iudc >= 0 && pfd[iudc].revents) {
