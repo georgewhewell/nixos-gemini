@@ -28,6 +28,10 @@ CONFIG_SUSPEND=y
 CONFIG_HIBERNATION=y
 CONFIG_HIBERNATION_COMP_LZO=y
 CONFIG_PM_STD_PARTITION=""
+# Power off through the MT6351 RTC (BBPU), as the vendor kernel does; the
+# BL31's PSCI SYSTEM_OFF only parks the CPU.  Hibernation's final step and
+# poweroff both depend on it.
+CONFIG_POWER_RESET_MT6323=y
 # M41: s2idle diagnostics.  PM_SLEEP_DEBUG (implied by PM_DEBUG with
 # PM_SLEEP) adds /sys/power/pm_wakeup_irq, pm_debug_messages and pm_test
 # (freezer/devices), so a first on-device run can stop short of a real
