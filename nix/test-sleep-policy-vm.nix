@@ -32,6 +32,13 @@ in
         HoldoffTimeoutSec=3s
       '';
       boot.kernelModules = ["dummy_hcd"];
+      # As nixos/storage.nix before provisioning: the p34 swap is absent.
+      swapDevices = [
+        {
+          device = "/dev/disk/by-partuuid/5e0f3a1c-9b2d-4c8e-a7f6-2d1b0c9e8a71";
+          options = ["nofail" "x-systemd.device-timeout=10s"];
+        }
+      ];
       systemd.services.fake-lid = {
         wantedBy = ["multi-user.target"];
         before = ["gemini-sleep-inhibit.service"];
@@ -114,6 +121,11 @@ in
           assert suspends() == n
           machine.wait_until_succeeds(f"test $(wc -l < /run/suspend-requests) -gt {n}", timeout=30)
           lid(0)
+
+      with subtest("an absent nofail swap partition leaves no failed unit"):
+          machine.wait_until_succeeds("awk '$1 > 20 { ok=1 } END { exit !ok }' /proc/uptime")
+          machine.wait_until_succeeds("systemctl is-system-running --wait | grep -qx running", timeout=60)
+          assert machine.succeed("systemctl --failed --no-legend --plain").strip() == ""
 
       with subtest("logind configuration"):
           conf = machine.succeed("cat /etc/systemd/logind.conf")
