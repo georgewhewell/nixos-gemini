@@ -215,10 +215,11 @@ let
     then "mt6351-exact-0x28-osr8-live-proven-v1"
     else "none";
   panicCmdline = if unattendedRecovery then "panic=5" else "panic=0";
-  # Modules that must only ever be loaded by hand.
+  # Modules that must only ever be loaded by hand.  cpufreq-dt left this
+  # list after the M42c hardware pass (handoff/m42c-test-dvfs.txt); Stage 2
+  # loads it at boot (nixos/core-parking.nix).
   moduleBlacklist =
-    lib.optional cpufreqOverlay "cpufreq_dt"
-    ++ lib.optional spmOverlay "mt6797_spm";
+    lib.optional spmOverlay "mt6797_spm";
   moduleBlacklistCmdline =
     lib.optionalString (moduleBlacklist != [])
     "modprobe.blacklist=${lib.concatStringsSep "," moduleBlacklist} ";

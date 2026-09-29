@@ -1,6 +1,6 @@
 # M41: Cortex-A53 frequency scaling through the generic OPP driver.
-# cpufreq-dt is a module and blacklisted from autoloading on the kernel
-# command line, so the first transitions happen only when loaded by hand.
+# cpufreq-dt is a module; Stage 2 loads it at boot after the A72s are up
+# and selects schedutil (nixos/core-parking.nix).
 CONFIG_CPU_FREQ=y
 CONFIG_CPU_FREQ_STAT=y
 CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
