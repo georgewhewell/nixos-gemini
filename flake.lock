@@ -37,17 +37,17 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1790721193,
-        "narHash": "sha256-Aiq25ZHybJKqTkLQXMKT5PSHQtR9FZ02AB3vt0VtYuc=",
+        "lastModified": 1790722166,
+        "narHash": "sha256-9jr9HBreKaltTvl4h2q1urSWCq3xBWpc6UkXxiKSErw=",
         "ref": "gemini-m44",
-        "rev": "f299bd8105f7ab0252deacdcd9f8640a95d44cfc",
-        "revCount": 701,
+        "rev": "70fd717b8ec201d5b8258dd1aa6623f304103436",
+        "revCount": 702,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38"
       },
       "original": {
         "ref": "gemini-m44",
-        "rev": "f299bd8105f7ab0252deacdcd9f8640a95d44cfc",
+        "rev": "70fd717b8ec201d5b8258dd1aa6623f304103436",
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38"
       }
