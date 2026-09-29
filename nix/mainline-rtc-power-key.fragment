@@ -37,3 +37,13 @@ CONFIG_PM_SLEEP_DEBUG=y
 # /dev/i2c-* for touch/I2C debugging with i2c-tools.  Built in: the image
 # has no /lib/modules.
 CONFIG_I2C_CHARDEV=y
+# Persistent storage (nixos/storage.nix).  Stage 1 overlays the image's
+# squashfs store with a writable layer on p32, and there are no modules in
+# the initramfs, so OverlayFS is built in.  zswap compresses pages on their
+# way to the p34 swap partition: on by default (zswap.enabled=1), LZ4
+# (fast on the A53s), zsmalloc (the only zswap allocator in this kernel).
+CONFIG_OVERLAY_FS=y
+CONFIG_ZSWAP=y
+CONFIG_ZSWAP_DEFAULT_ON=y
+CONFIG_ZSWAP_COMPRESSOR_DEFAULT_LZ4=y
+CONFIG_CRYPTO_LZ4=y
