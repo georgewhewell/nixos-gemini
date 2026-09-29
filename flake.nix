@@ -1186,6 +1186,12 @@
       kernelLeaseSelfAcceptToken = mainlineP22Baseline.leaseSelfAcceptToken;
       stage2BaselineAcceptScript = mainlineNixosSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
       leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
+      hibernateResumePartName = let
+        hibernation = mainlineNixosSystemCross.config.gemini.powerPolicy.hibernation;
+      in
+        if hibernation.enable
+        then hibernation.partitionLabel
+        else null;
     };
 
     # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and

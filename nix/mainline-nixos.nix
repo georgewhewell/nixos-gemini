@@ -17,6 +17,9 @@
   kernelLeaseSelfAcceptToken ? null,
   stage2BaselineAcceptScript ? null,
   leaseSelfAcceptToken ? null,
+  # GPT partition name of the swap partition that may hold a hibernation
+  # image, or null for no resume support (nixos/power-policy.nix).
+  hibernateResumePartName ? null,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
@@ -34,6 +37,7 @@ assert leaseSelfAcceptToken == null || builtins.any
 assert provisionWaitSeconds >= 30;
 assert watchdogLeaseSeconds > provisionWaitSeconds;
 assert !displayActivation || unattendedRecovery;
+assert hibernateResumePartName == null || builtins.match "[A-Za-z0-9_.-]+" hibernateResumePartName != null;
 let
   # A p22 rollback is useful only while its exact userspace payload still
   # exists. Name p29 payloads by their bytes: an input-addressed Nix output
@@ -43,6 +47,46 @@ let
   storeIdentity = ''
     store_sha=$(sha256sum ${squashfs} | cut -d' ' -f1)
     store_file="mainline-nixos-$store_sha.squashfs"
+  '';
+  hibernateResume = hibernateResumePartName != null;
+  # Stage-1 shell, spliced into the INIT heredoc below.  Nix does not strip
+  # indentation from interpolated text, so it is written at its final
+  # column.  Absent entirely when resume support is off.
+  hibernateResumeFunction = buildPkgs.lib.optionalString hibernateResume ''
+    hibernate_resume() {
+      # Must run before any filesystem on a disk is mounted.  Writing the
+      # swap partition's device number to /sys/power/resume makes the kernel
+      # look for a hibernation signature.  With a valid image it restores
+      # the saved system and never returns; otherwise the partition is only
+      # read and boot continues.  The watchdog lease is already running; the
+      # restored kernel restarts the watchdog in its restore_noirq phase.
+      part=
+      attempt=0
+      while [ -z "$part" ] && [ "$attempt" -lt 10 ]; do
+        for node in /sys/class/block/*; do
+          [ -e "$node/partition" ] || continue
+          grep -Fqx 'PARTNAME=${hibernateResumePartName}' "$node/uevent" 2>/dev/null || continue
+          if [ -n "$part" ]; then
+            log "hibernate-resume=skipped reason=ambiguous-partname partname=${hibernateResumePartName}"
+            return 0
+          fi
+          part=$node
+        done
+        [ -n "$part" ] || { attempt=$((attempt + 1)); sleep 1; }
+      done
+      if [ -z "$part" ]; then
+        log "hibernate-resume=skipped reason=partition-missing partname=${hibernateResumePartName}"
+        return 0
+      fi
+      devno=$(cat "$part/dev")
+      log "hibernate-resume=checking partname=${hibernateResumePartName} device=/dev/''${part##*/} devno=$devno"
+      if printf '%s\n' "$devno" > /sys/power/resume; then
+        log "hibernate-resume=no-image"
+      else
+        log "hibernate-resume=write-failed devno=$devno"
+      fi
+    }
+
   '';
   leaseSelfAcceptCmdline =
     if leaseSelfAcceptToken == null
@@ -415,7 +459,7 @@ let
       ) &
     }
 
-    activate_display() {
+    ${hibernateResumeFunction}activate_display() {
       # The locked 28c4715 platform requests the DSI IRQ before registering
       # the MIPI host. Release the one-way MMSYS gate only after the watchdog
       # petter and its lease are live, so a synchronous panel probe remains
@@ -456,7 +500,7 @@ let
     done
     [ -n "$emmc_device" ] || fail "p29-missing"
     p29="''${emmc_device}p29"
-    [ -b "$p29" ] || fail "p29-missing"
+    [ -b "$p29" ] || fail "p29-missing"${buildPkgs.lib.optionalString hibernateResume "\nhibernate_resume"}
     mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
@@ -558,6 +602,17 @@ let
       test "$watchdog_line" -lt "$activation_line"
     '' else ''
       ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
+    ''}
+    ${if hibernateResume then ''
+      grep -Fq "'PARTNAME=${hibernateResumePartName}'" root/init
+      # The resume check runs before the first eMMC mount.
+      resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
+      mount_line=$(grep -n -F 'mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
+      test -n "$resume_line"
+      test -n "$mount_line"
+      test "$resume_line" -lt "$mount_line"
+    '' else ''
+      ! grep -Fq 'hibernate_resume' root/init
     ''}
     ${if provisionStore then ''
       grep -Fq 'store-provision=required' root/init
@@ -676,6 +731,7 @@ let
         else "disabled"
       }"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
+      echo "hibernate-resume=${if hibernateResume then "stage1 before the first eMMC mount; PARTNAME=${hibernateResumePartName}" else "none"}"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \
         ${serviceabilityDtb}/gemini.dtb \
