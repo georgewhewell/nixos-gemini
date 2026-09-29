@@ -72,7 +72,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "70fd717b8ec201d5b8258dd1aa6623f304103436";
+  p22BaselinePlatformRevision = "91697bccdc928c3b8c4ca40ea128f48eb82261a0";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
