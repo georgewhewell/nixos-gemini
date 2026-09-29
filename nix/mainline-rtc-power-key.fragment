@@ -14,13 +14,20 @@ CONFIG_RTC_INTF_DEV=y
 CONFIG_RTC_DRV_MT6397=y
 # Built in so the key binds from DT without module loading.
 CONFIG_KEYBOARD_MTK_PMIC=y
-# Suspend support for manual testing only.  PSCI v0.2 firmware has no
-# SYSTEM_SUSPEND, so the only sleep state is s2idle ("freeze"); nothing in
-# the image requests it (logind key/lid handling is set to ignore).
+# System sleep.  PSCI v0.2 firmware has no SYSTEM_SUSPEND, so the only
+# sleep state is s2idle ("freeze"); logind requests it when the lid has been
+# closed for a while (nixos/power-policy.nix).
 CONFIG_SUSPEND=y
 # CONFIG_PM_AUTOSLEEP is not set
 # CONFIG_PM_WAKELOCKS is not set
-# CONFIG_HIBERNATION is not set
+# Hibernation (suspend-to-disk) for suspend-then-hibernate.  Nothing
+# hibernates until a swap partition is configured; Stage 1 resumes via
+# /sys/power/resume only when built with a resume partition.  The image is
+# LZO-compressed; there is no platform mode on arm64, so the final step is
+# a plain power-off.
+CONFIG_HIBERNATION=y
+CONFIG_HIBERNATION_COMP_LZO=y
+CONFIG_PM_STD_PARTITION=""
 # M41: s2idle diagnostics.  PM_SLEEP_DEBUG (implied by PM_DEBUG with
 # PM_SLEEP) adds /sys/power/pm_wakeup_irq, pm_debug_messages and pm_test
 # (freezer/devices), so a first on-device run can stop short of a real
