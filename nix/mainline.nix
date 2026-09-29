@@ -72,7 +72,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "8ca4ad520bcd98eb8f122251dbab34d6c5be5e8d";
+  p22BaselinePlatformRevision = "89919ea1b4b17c15903f98f0280deb050b430afa";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -278,13 +278,13 @@ let
     then "01b4866c736ce8b452c8489c273478827a9dd2c944954021e347a2147a7ab2a5"
     else if extendedPlatformDtb
     then "64e088457d8232b6db1bd194919558049988abf340802fe576f194656a58dc9c"
-    else "ce75adda5a13a50d01b4cfb5a99a09bd71360c2ae7ee4249f732fc12c7a241e7";
+    else "d7f0f309644f11279c8bb5fbea763d9f39e644ef17df5d7b3afee3d651cb8207";
   serviceabilityBaseDtbSha256 =
     if !legacyConsysPlatform
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "5f0a1cd8e5c2086747c884be57b353afcc4cefc45498ce8728deb97dd2dbad64";
+    else "66af597dde85af836d735030dc5df16be99529eb0cecadcd1e1732fd7b1f549a";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
