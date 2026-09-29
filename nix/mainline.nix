@@ -285,7 +285,7 @@ let
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "66af597dde85af836d735030dc5df16be99529eb0cecadcd1e1732fd7b1f549a";
+    else "f6eb386909df11fb3a7b011894f5ef75e1bfda8504d3cd63e53caae048b4031c";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
