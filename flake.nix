@@ -1090,6 +1090,7 @@
         ./nixos/desktop.nix
         ./nixos/m39.nix
         ./nixos/spm.nix
+        ./nixos/core-parking.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
@@ -1097,6 +1098,7 @@
           _module.args.geminiConnectivityKernel = mainlineP22Baseline.kernel;
           _module.args.geminiConnectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
           _module.args.geminiSpmKernel = mainlineP22Baseline.kernel;
+          _module.args.geminiCpufreqKernel = mainlineP22Baseline.kernel;
           _module.args.geminiSpmFirmware = spmFirmware;
           _module.args.geminiGpuSmoke = gpuUserspace.smoke;
           _module.args.geminiDesktop = desktopUserspace // { protocolCheck = desktopProtocolCheck; };

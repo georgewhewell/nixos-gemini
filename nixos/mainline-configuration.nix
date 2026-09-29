@@ -414,6 +414,8 @@
     config.system.build.geminiAudioControls
     # M42: load the SPM driver with its firmware path (nixos/spm.nix).
     config.system.build.geminiSpmLoad
+    # Core parking daemon, for --dry-run and --help by hand.
+    config.system.build.geminiCoreParking
     # Touch/I2C debugging: i2ctransfer/i2cget need CONFIG_I2C_CHARDEV.
     pkgs.i2c-tools
     pkgs.evtest
