@@ -204,8 +204,14 @@ fi
 
 "$busybox" grep -Eq '^/dev/mmcblk[0-9]+p29 /gemian ext4 ro,' "$mounts_file" || \
   fail p29-not-readonly
-"$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/store squashfs ro,' "$mounts_file" || \
-  fail store-not-readonly
+# The image squashfs is /nix/store itself, or, with persistent storage
+# (nixos/storage.nix), the read-only lower layer of the /nix/store overlay.
+if ! "$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/store squashfs ro,' "$mounts_file"; then
+  "$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/\.ro-store squashfs ro,' "$mounts_file" || \
+    fail store-not-readonly
+  "$busybox" grep -Eq '^overlay /nix/store overlay [^ ]*lowerdir=[^ ,]*/nix/\.ro-store[, ]' "$mounts_file" || \
+    fail store-not-readonly
+fi
 has_address '10.15.19.82/24' || fail gadget-address-missing
 has_address '192.168.23.70/' || fail right-nic-address-missing
 [ -r "$display_activation_file" ] || fail display-activation-missing

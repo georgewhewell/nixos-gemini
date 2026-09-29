@@ -83,6 +83,32 @@ test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
 grep -Fqx 'result=accepted' "$ok/run/gemini-baseline-self-accept.status"
 
+overlay_store=$WORK/overlay-store
+make_fixture "$overlay_store"
+printf '%s\n' \
+  '/dev/mmcblk0p29 /gemian ext4 ro,nosuid,nodev,noexec 0 0' \
+  '/dev/loop0 /nix/.ro-store squashfs ro,nodev 0 0' \
+  '/dev/mmcblk0p32 /persist ext4 rw,nosuid,nodev,noatime 0 0' \
+  'overlay /nix/store overlay rw,relatime,lowerdir=/mnt/nixos/nix/.ro-store,upperdir=/mnt/nixos/persist/nix/upper,workdir=/mnt/nixos/persist/nix/work 0 0' \
+  > "$overlay_store/proc/mounts"
+run_fixture "$overlay_store"
+grep -Fqx unattended_recovery=healthy "$overlay_store/run/unattended-recovery.accepted"
+
+for broken in no-lower foreign-lower; do
+  bad_store=$WORK/store-$broken
+  make_fixture "$bad_store"
+  case "$broken" in
+    no-lower) lower='/dev/loop0 /nix/.ro-store tmpfs rw 0 0' ;;
+    foreign-lower) lower='/dev/loop0 /nix/.ro-store squashfs ro,nodev 0 0' ;;
+  esac
+  overlay='overlay /nix/store overlay rw,lowerdir=/mnt/nixos/persist/nix/other,upperdir=/x,workdir=/y 0 0'
+  [ "$broken" = no-lower ] && overlay='overlay /nix/store overlay rw,lowerdir=/mnt/nixos/nix/.ro-store,upperdir=/x,workdir=/y 0 0'
+  printf '%s\n' '/dev/mmcblk0p29 /gemian ext4 ro,nosuid,nodev,noexec 0 0' "$lower" "$overlay" \
+    > "$bad_store/proc/mounts"
+  if run_fixture "$bad_store"; then fail "accepted store $broken"; fi
+  test ! -e "$bad_store/run/unattended-recovery.accepted"
+done
+
 missing_display=$WORK/missing-display
 make_fixture "$missing_display"
 rm "$missing_display/run/gemini-display-activation"
