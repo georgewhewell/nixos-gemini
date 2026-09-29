@@ -1,0 +1,68 @@
+From 7489d783c0c147ead0df9a5380af5e9b454acf46 Mon Sep 17 00:00:00 2001
+From: George Whewell <georgerw@gmail.com>
+Date: Mon, 28 Sep 2026 23:15:43 +0200
+Subject: [PATCH] sleep-config: do not treat an unreadable or absent battery as
+ low
+
+battery_is_discharging_and_low() returned true when no battery with a
+readable capacity was found and the system was not on AC power.
+suspend-then-hibernate then skipped the suspend phase and hibernated
+immediately, even with HibernateDelaySec= set.
+
+This is a backport of the systemd v254 semantics
+(src/shared/battery-util.c battery_is_discharging_and_low()): a battery
+whose capacity cannot be read makes the result "not low", and so does
+finding no battery at all; only batteries that report a capacity at or
+below the threshold count as low.
+---
+ src/shared/sleep-config.c | 25 ++++++++++++++++++++++---
+ 1 file changed, 22 insertions(+), 3 deletions(-)
+
+diff --git a/src/shared/sleep-config.c b/src/shared/sleep-config.c
+index 1eb0071..fed365b 100644
+--- a/src/shared/sleep-config.c
++++ b/src/shared/sleep-config.c
+@@ -200,6 +200,7 @@ static int read_battery_capacity_percentage(sd_device *dev) {
+ /* If a battery whose percentage capacity is <= 5% exists, and we're not on AC power, return success */
+ int battery_is_discharging_and_low(void) {
+         _cleanup_(sd_device_enumerator_unrefp) sd_device_enumerator *e = NULL;
++        bool unsure = false, found_low = false;
+         sd_device *dev;
+         int r;
+ 
+@@ -217,11 +218,29 @@ int battery_is_discharging_and_low(void) {
+         if (r < 0)
+                 return log_debug_errno(r, "Failed to initialize battery enumerator: %m");
+ 
+-        FOREACH_DEVICE(e, dev)
+-                if (read_battery_capacity_percentage(dev) > BATTERY_LOW_CAPACITY_LEVEL)
++        FOREACH_DEVICE(e, dev) {
++                int level;
++
++                level = read_battery_capacity_percentage(dev);
++                if (level < 0) {
++                        unsure = true;
++                        continue;
++                }
++
++                if (level > BATTERY_LOW_CAPACITY_LEVEL) /* Found a charged battery */
+                         return false;
+ 
+-        return true;
++                found_low = true;
++        }
++
++        /* If we found a battery whose state we couldn't read, don't assume we are in low battery state */
++        if (unsure) {
++                log_debug("Found battery with unreadable state, assuming not in low battery state.");
++                return false;
++        }
++
++        /* If found neither charged nor low batteries, assume that we aren't in low battery state */
++        return found_low;
+ }
+ 
+ /* Store current capacity of each battery before suspension and timestamp */
+-- 
+2.55.0
+

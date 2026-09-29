@@ -1085,6 +1085,7 @@
         ./nixos/bluetooth.nix
         ./nixos/wifi-autoconnect.nix
         ./nixos/audio.nix
+        ./nixos/power-policy.nix
         ./nixos/desktop.nix
         ./nixos/m39.nix
         ./nixos/spm.nix

@@ -78,12 +78,9 @@ in {
     };
   };
 
-  # M39 adds a KEY_POWER input device and CONFIG_SUSPEND.  logind's defaults
-  # would power off on a key press and suspend on the hall (SW_LID) switch,
-  # so keep both inert: suspend is only ever requested by hand.
-  services.logind.lidSwitch = "ignore";
-  services.logind.lidSwitchDocked = "ignore";
-  services.logind.lidSwitchExternalPower = "ignore";
+  # M39 adds a KEY_POWER input device and CONFIG_SUSPEND.  logind's default
+  # would power off on a key press, so keep the keys inert.  The lid (SW_LID)
+  # policy lives in power-policy.nix.
   services.logind.extraConfig = ''
     HandlePowerKey=ignore
     HandlePowerKeyLongPress=ignore
