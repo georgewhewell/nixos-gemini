@@ -1678,6 +1678,8 @@
       connectivityFirmware = import ./nix/connectivity-firmware.nix { inherit buildPkgs; };
       inherit spmFirmware;
       mainlineNixosBundle = mainlineNixos.bundle;
+      # nixos/power-policy.nix against systemd 253 logind in an x86_64 VM.
+      sleepPolicyVmTest = import ./nix/test-sleep-policy-vm.nix {pkgs = oldPkgs;};
       mainlineNixosMicrosdBundle = mainlineNixosMicrosd.bundle;
       mainlineNixosNext4Bundle = mainlineNixosNext4.bundle;
       mainlineNixosWifiBundle = mainlineNixosWifi.bundle;
