@@ -42,7 +42,10 @@ let
       sleep 0.2
     done
     test -e /sys/class/bluetooth/hci0
-    configured() { timeout 10 btmgmt info 2>&1 | grep -q '^hci0:'; }
+    # bluez 5.66's shell quits at once when stdin cannot be polled, which
+    # is the case for systemd's /dev/null; give btmgmt an idle pipe.
+    mgmt() { timeout 10 btmgmt "$@" < <(sleep 10); }
+    configured() { mgmt info 2>&1 | grep -q '^hci0:'; }
     sleep 1
     if ! configured; then
       # The eFUSE address is blank (hci_mt6797 logs it) and the vendor
@@ -58,7 +61,7 @@ let
       rest=$(printf '%s' "''${h#??}" | sed 's/../&:/g; s/:$//')
       addr="$first:$rest"
       echo "$addr" > "$state/public-addr"
-      timeout 10 btmgmt --index 0 public-addr "$addr" | tee "$state/public-addr.log"
+      mgmt --index 0 public-addr "$addr" | tee "$state/public-addr.log"
       for _ in $(seq 1 25); do
         configured && break
         sleep 0.2
