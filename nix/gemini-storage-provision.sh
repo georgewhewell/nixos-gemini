@@ -180,7 +180,9 @@ partx -u "$dev"
 udevadm settle || true
 [ "$(cat "/sys/class/block/${disk}p32/size")" = "$P32_NEW_SIZE" ] || die "kernel still sees old p32"
 [ "$(cat "/sys/class/block/${disk}p34/size")" = "${P34[2]}" ] || die "kernel does not see p34"
-grep -qx 'PARTNAME=swap' "/sys/class/block/${disk}p34/uevent" || die "p34 name not seen"
+# The p34 name is checked in the GPT above ("expect 34").  partx -u updates
+# the kernel's partitions through BLKPG, which carries no names, so
+# PARTNAME only appears in uevent after the next boot's full rescan.
 
 # --- 3. filesystems -----------------------------------------------------------
 if [ "$(blkid -o value -s TYPE "${dev}p32" 2>/dev/null)" = ext4 ] &&
