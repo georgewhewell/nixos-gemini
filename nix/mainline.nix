@@ -31,6 +31,8 @@
   # With powerObserveOverlay: run the BQ25896 as the charger (vendor limits,
   # polled) instead of the read-only observer.
   chargerActive ? false,
+  # Vibration motor (MT6351 VIBR LDO, regulator-haptic).
+  hapticsOverlay ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -75,7 +77,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "6c145b284ca6cb87f7e6b163ce5cd49d4dca0d0e";
+  p22BaselinePlatformRevision = "c6063ec25302f42ba6b52d213a45ef4243e17983";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -107,6 +109,7 @@ let
       ./mainline-sensors.fragment
     ]
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
+    ++ lib.optionals hapticsOverlay [./mainline-haptics.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
@@ -268,6 +271,7 @@ let
     + lib.optionalString audioHeadphoneTest "-audio-headphone-test"
     + lib.optionalString powerObserveOverlay "-power-observe"
     + lib.optionalString chargerActive "-charger"
+    + lib.optionalString hapticsOverlay "-haptics"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
     + lib.optionalString inputObserveOverlay "-input-observe"
@@ -993,6 +997,10 @@ let
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-charger.dtbo \
           "$out/mt6797-gemini-pda-charger.dtbo"
       ''}
+      ${lib.optionalString hapticsOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-haptics.dtbo \
+          "$out/mt6797-gemini-pda-haptics.dtbo"
+      ''}
       ${lib.optionalString inputObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtbo \
           "$out/mt6797-gemini-pda-keyboard.dtbo"
@@ -1446,6 +1454,14 @@ let
           cp "$out/gemini-audio.dtb" "$out/gemini.dtb"
         ''
       }
+      ${lib.optionalString hapticsOverlay ''
+        fdtoverlay -i "$out/gemini.dtb" -o "$out/gemini-haptics.dtb" \
+          ${kernel}/mt6797-gemini-pda-haptics.dtbo
+        test "$(fdtget "$out/gemini-haptics.dtb" /vibrator compatible)" = regulator-haptic
+        test "$(fdtget "$out/gemini-haptics.dtb" /vibrator max-microvolt)" = 2800000
+        mv "$out/gemini-haptics.dtb" "$out/gemini.dtb"
+        echo 'haptics-overlay=passed' >> "$out/VALIDATION"
+      ''}
       ${
         if inputObserveOverlay
         then ''

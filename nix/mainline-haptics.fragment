@@ -1,0 +1,3 @@
+# Vibration motor on the MT6351 VIBR LDO (mt6797-gemini-pda-haptics.dtso).
+CONFIG_INPUT_REGULATOR_HAPTIC=y
+CONFIG_INPUT_FF_MEMLESS=y
