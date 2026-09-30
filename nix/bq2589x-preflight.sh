@@ -1,13 +1,18 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
 #
-# Bounded observer for the Gemini's opt-in BQ2589x recovery overlay.
+# Bounded boot check for the Gemini's BQ2589x charger.
 #
 # This script never opens /dev/i2c-*, runs i2c-tools, writes sysfs, accesses
 # the MT6351 fuel gauge, or opens/pets/closes the platform watchdog.  It only
-# reads the five properties published by the ti,read-only BQ25890 driver and
-# kernel log text already collected by dmesg.  Its /run result is deliberately
-# not the watchdog lease: a remote reviewer must make that decision.
+# reads BQ25890 driver power-supply properties and kernel log text already
+# collected by dmesg.  Its /run result is deliberately not the watchdog lease:
+# a remote reviewer must make that decision.
+#
+# EXPECTED_MODE selects the driver mode it verifies: "observe" (ti,read-only:
+# five status properties, nothing else) or "charger" (the driver runs the
+# charger: its limit properties exist and their values are recorded).  It
+# never fails on live values such as health, online or status.
 
 set -u
 
@@ -18,6 +23,7 @@ SYSFS_ROOT=${GEMINI_PREFLIGHT_SYSFS_ROOT:-/sys}
 RUN_ROOT=${GEMINI_PREFLIGHT_RUN_ROOT:-/run}
 DMESG_FILE=${GEMINI_PREFLIGHT_DMESG_FILE:-}
 PREFIX=GEMINI_BQ2589X_PREFLIGHT
+EXPECTED_MODE=${GEMINI_PREFLIGHT_EXPECTED_MODE:-observe}
 STATUS_FILE="$RUN_ROOT/bq2589x-preflight.status"
 DMESG_CAPTURE="$RUN_ROOT/bq2589x-preflight.dmesg"
 PASS_MARKER="$RUN_ROOT/bq2589x-preflight.pass"
@@ -56,7 +62,11 @@ read_property()
 
 mkdir -p "$RUN_ROOT" 2>/dev/null || exit 1
 rm -f "$PASS_MARKER" "$FAIL_MARKER"
-record "stage=start mode=sysfs-and-dmesg-only watchdog=untouched"
+case "$EXPECTED_MODE" in
+observe|charger) ;;
+*) fail "unknown_expected_mode" ;;
+esac
+record "stage=start mode=sysfs-and-dmesg-only watchdog=untouched expected=$EXPECTED_MODE"
 
 if [ -n "$DMESG_FILE" ]; then
 	[ -r "$DMESG_FILE" ] || fail "dmesg_file_unreadable"
@@ -122,14 +132,25 @@ for property in manufacturer model_name status charge_type online; do
 done
 
 # Do not treat normal live values (online=0, Discharging, Unknown, ...) as a
-# failure: the gate is driver identity/binding and safe observability, not the
-# presence of external power.  Instead reject a node which unexpectedly grew a
-# control/ADC/fault property, as that would show the wrong driver mode.
-for property in health constant_charge_current constant_charge_current_max \
-	constant_charge_voltage constant_charge_voltage_max precharge_current \
-	charge_term_current input_current_limit voltage_now current_now temp; do
-	[ ! -e "$charger/$property" ] || fail "unexpected_property=$property"
-done
+# failure: the gate is driver identity/binding and the expected driver mode,
+# not the presence of external power or battery health.
+limits="constant_charge_current constant_charge_voltage precharge_current charge_term_current"
+if [ "$EXPECTED_MODE" = observe ]; then
+	# A control/ADC/fault property would show the wrong driver mode.
+	for property in health constant_charge_current_max \
+		constant_charge_voltage_max input_current_limit voltage_now \
+		current_now temp $limits; do
+		[ ! -e "$charger/$property" ] || fail "unexpected_property=$property"
+	done
+else
+	# The charging driver publishes its limits; these are register reads,
+	# not ADC conversions.
+	for property in health $limits; do
+		value=$(read_property "$charger/$property") ||
+			fail "property_unreadable=$property"
+		record "property=$property value=$value"
+	done
+fi
 result='result=pass watchdog_lease=unchanged remote_review_required=yes'
 record "$result"
 printf '%s\n' "$result" > "$PASS_MARKER" 2>/dev/null || true

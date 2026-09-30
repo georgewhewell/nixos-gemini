@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m44&rev=6edcccd5a1a4ef965cfaada971afae357ef1cc3c";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m44&rev=a2388cd56802407b1172a83c7a8dfd498874c0f3";
       flake = false;
     };
     linux-gemini-next = {
@@ -771,6 +771,7 @@
       audioOverlay = true;
       powerObserveOverlay = true;
       powerObservePreflight = true;
+      chargerActive = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
@@ -1180,7 +1181,13 @@
       squashfs = mainlineNixosSquashfs;
       nixosToplevel = mainlineNixosSystemCross.config.system.build.toplevel;
       authorizedKeys = ./nixos/authorized_keys;
-      bq2589xPreflight = ./nix/bq2589x-preflight.sh;
+      # The baseline runs the charger (chargerActive): verify that mode.
+      bq2589xPreflight = buildPkgs.runCommand "bq2589x-preflight-charger" {} ''
+        sed 's/^EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-observe}$/EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}/' \
+          ${./nix/bq2589x-preflight.sh} > "$out"
+        grep -Fqx 'EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}' "$out"
+        chmod 0755 "$out"
+      '';
       unattendedRecovery = true;
       inputDiagnostics = true;
       displayActivation = true;

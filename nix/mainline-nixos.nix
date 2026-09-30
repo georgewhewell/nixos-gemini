@@ -790,7 +790,7 @@ let
         then "stage1-journaled-unique-target; wait=${toString provisionWaitSeconds}s"
         else "disabled"
       }"
-      echo "power-observe-preflight=BQ2589x sysfs+dmesg read-only; watchdog lease unchanged"
+      echo "power-observe-preflight=BQ2589x sysfs+dmesg, no charger writes; watchdog lease unchanged"
       echo "persistent-storage=${if storage then "p34 swap resume before the first eMMC mount; p32 ${persistentStorage.dataLabel} for /home, /nix/store overlay, /nix/var when provisioned" else "none"}"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \

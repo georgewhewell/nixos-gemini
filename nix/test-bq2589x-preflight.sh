@@ -94,4 +94,53 @@ fi
 grep -Fqx 'result=fail reason=dmesg_i2c_or_identity_error' \
 	"$i2c0_error_fixture/run/bq2589x-preflight.fail"
 
+# Charger mode: the driver's limit properties must exist; their values and
+# health are recorded, never judged.
+add_limits()
+{
+	for pair in health=Good constant_charge_current=2048000 \
+		constant_charge_voltage=4352000 precharge_current=128000 \
+		charge_term_current=192000; do
+		printf '%s\n' "${pair#*=}" > "$1/sys/class/power_supply/bq25890-charger-0/${pair%%=*}"
+	done
+}
+run_mode()
+{
+	GEMINI_PREFLIGHT_SYSFS_ROOT="$1/sys" \
+		GEMINI_PREFLIGHT_RUN_ROOT="$1/run" \
+		GEMINI_PREFLIGHT_DMESG_FILE="$1/dmesg" \
+		GEMINI_PREFLIGHT_BIN_PATH="$PATH" \
+		GEMINI_PREFLIGHT_EXPECTED_MODE=$2 \
+		"$script"
+}
+charger_fixture="$work/charger"
+make_fixture "$charger_fixture"
+add_limits "$charger_fixture"
+run_mode "$charger_fixture" charger
+grep -Fqx 'result=pass watchdog_lease=unchanged remote_review_required=yes' \
+	"$charger_fixture/run/bq2589x-preflight.pass"
+grep -Fqx 'GEMINI_BQ2589X_PREFLIGHT: property=constant_charge_voltage value=4352000' \
+	"$charger_fixture/run/bq2589x-preflight.status"
+# Overheat is recorded but must not fail boot acceptance.
+printf '%s\n' Overheat > "$charger_fixture/sys/class/power_supply/bq25890-charger-0/health"
+run_mode "$charger_fixture" charger
+# The observer must reject the charging driver ...
+if run_mode "$charger_fixture" observe; then
+	echo 'observe mode accepted a charging driver' >&2
+	exit 1
+fi
+# ... and charger mode must reject the read-only observer.
+readonly_fixture="$work/readonly"
+make_fixture "$readonly_fixture"
+if run_mode "$readonly_fixture" charger; then
+	echo 'charger mode accepted a read-only driver' >&2
+	exit 1
+fi
+grep -Fqx 'result=fail reason=property_unreadable=health' \
+	"$readonly_fixture/run/bq2589x-preflight.fail"
+if run_mode "$readonly_fixture" bogus; then
+	echo 'preflight accepted an unknown mode' >&2
+	exit 1
+fi
+
 echo 'bq2589x preflight tests: PASS'

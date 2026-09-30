@@ -28,6 +28,9 @@
   audioHeadphoneTest ? false,
   powerObserveOverlay ? false,
   powerObservePreflight ? false,
+  # With powerObserveOverlay: run the BQ25896 as the charger (vendor limits,
+  # polled) instead of the read-only observer.
+  chargerActive ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -72,7 +75,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "6edcccd5a1a4ef965cfaada971afae357ef1cc3c";
+  p22BaselinePlatformRevision = "a2388cd56802407b1172a83c7a8dfd498874c0f3";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -185,7 +188,9 @@ let
     then "manual-staged-alsa-boundary-diagnostic-v2"
     else "none";
   powerObserveLabel =
-    if powerObserveOverlay
+    if powerObserveOverlay && chargerActive
+    then "bq25896-i2c0-charger-vendor-limits-polled-v1"
+    else if powerObserveOverlay
     then "bq2589x-i2c0-no-write-no-irq-v1"
     else "none";
   powerObservePreflightLabel =
@@ -262,6 +267,7 @@ let
     + lib.optionalString audioOverlay "-audio"
     + lib.optionalString audioHeadphoneTest "-audio-headphone-test"
     + lib.optionalString powerObserveOverlay "-power-observe"
+    + lib.optionalString chargerActive "-charger"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
     + lib.optionalString inputObserveOverlay "-input-observe"
@@ -983,6 +989,10 @@ let
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-power-observe.dtbo \
           "$out/mt6797-gemini-pda-power-observe.dtbo"
       ''}
+      ${lib.optionalString chargerActive ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-charger.dtbo \
+          "$out/mt6797-gemini-pda-charger.dtbo"
+      ''}
       ${lib.optionalString inputObserveOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-keyboard.dtbo \
           "$out/mt6797-gemini-pda-keyboard.dtbo"
@@ -1397,7 +1407,26 @@ let
         ''
       }
       ${
-        if powerObserveOverlay
+        if powerObserveOverlay && chargerActive
+        then ''
+          fdtoverlay \
+            -i "$out/gemini-audio.dtb" \
+            -o "$out/gemini.dtb" \
+            ${kernel}/mt6797-gemini-pda-charger.dtbo
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000 status)" = okay
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b compatible)" = \
+            'ti,bq25896 ti,bq25890'
+          props=$(fdtget -p "$out/gemini.dtb" /i2c@11007000/charger@6b)
+          ! printf '%s\n' "$props" | grep -Fqx 'ti,read-only'
+          printf '%s\n' "$props" | grep -Fqx 'linux,skip-reset'
+          ! fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b interrupts \
+            >/dev/null 2>&1
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b ti,status-poll-interval-ms)" = 5000
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b ti,battery-regulation-voltage)" = 4352000
+          test "$(fdtget "$out/gemini.dtb" /i2c@11007000/charger@6b ti,charge-current)" = 2048000
+          echo 'charger-overlay=passed' >> "$out/VALIDATION"
+        ''
+        else if powerObserveOverlay
         then ''
           fdtoverlay \
             -i "$out/gemini-audio.dtb" \
