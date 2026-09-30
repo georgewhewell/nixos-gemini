@@ -95,7 +95,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "5bdeb58bb41428e5e2fd92f383a884b0887305e5";
+  p22BaselinePlatformRevision = "a4563c44d891e854237463844bf5d389f11ffea5";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1435,12 +1435,12 @@ let
           test "$(fdtget "$out/gemini-display.dtb" /larb@14021000 status)" = okay
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400d000 mediatek,larb)" = \
             "$(fdtget "$out/gemini-display.dtb" /larb@14021000 phandle)"
-          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400e000 mediatek,larb)" = \
-            "$(fdtget "$out/gemini-display.dtb" /larb@14021000 phandle)"
-          ! fdtget "$out/gemini-display.dtb" /iommu@10205000 status \
-            2>/dev/null | grep -Fqx okay
-          ! fdtget "$out/gemini-display.dtb" /ovl@1400d000 iommus >/dev/null 2>&1
-          ! fdtget "$out/gemini-display.dtb" /ovl@1400e000 iommus >/dev/null 2>&1
+          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400b000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400b000 mediatek,larb)" = \
+            "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
+          test "$(fdtget "$out/gemini-display.dtb" /ovl@1400e000 status)" = disabled
+          # A leading "!" never trips set -e, so compare values instead.
+          test "$(fdtget "$out/gemini-display.dtb" /iommu@10205000 status)" = disabled
           echo 'display-overlay=passed' >> "$out/VALIDATION"
         ''
         else ''
