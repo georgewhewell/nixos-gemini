@@ -85,7 +85,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "e3bb7637c74246d91be7919fdfdd542c6de3e111";
+  p22BaselinePlatformRevision = "c7a4b2169927b6a9a925a323f1d67859c7f2e8b3";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1418,10 +1418,11 @@ let
           test "$(fdtget "$out/gemini-display.dtb" /dsi@1401c000/panel@0 backlight)" = \
             "$(fdtget "$out/gemini-display.dtb" /backlight phandle)"
           test "$(fdtget "$out/gemini-display.dtb" /larb@14020000 status)" = okay
+          test "$(fdtget "$out/gemini-display.dtb" /larb@14021000 status)" = okay
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400d000 mediatek,larb)" = \
-            "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
+            "$(fdtget "$out/gemini-display.dtb" /larb@14021000 phandle)"
           test "$(fdtget "$out/gemini-display.dtb" /ovl@1400e000 mediatek,larb)" = \
-            "$(fdtget "$out/gemini-display.dtb" /larb@14020000 phandle)"
+            "$(fdtget "$out/gemini-display.dtb" /larb@14021000 phandle)"
           ! fdtget "$out/gemini-display.dtb" /iommu@10205000 status \
             2>/dev/null | grep -Fqx okay
           ! fdtget "$out/gemini-display.dtb" /ovl@1400d000 iommus >/dev/null 2>&1
