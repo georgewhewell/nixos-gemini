@@ -36,6 +36,8 @@
   # Camera sensors: power, MCLK and Hi-556 identification (modules, not
   # autoloaded).
   cameraOverlay ? false,
+  # Multimedia M4U (display behind the IOMMU) and the JPEG decoder.
+  mediaOverlay ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -80,7 +82,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "aca7bf8c3bbe869797dfe5194d55f7333cfd1a0a";
+  p22BaselinePlatformRevision = "27712f5b50b4fde946c66968a2cd8fbafc9d82a3";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -114,6 +116,7 @@ let
     ++ lib.optionals powerObserveOverlay [./mainline-power-observe.fragment]
     ++ lib.optionals hapticsOverlay [./mainline-haptics.fragment]
     ++ lib.optionals cameraOverlay [./mainline-camera.fragment]
+    ++ lib.optionals mediaOverlay [./mainline-media.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
@@ -284,6 +287,7 @@ let
     + lib.optionalString chargerActive "-charger"
     + lib.optionalString hapticsOverlay "-haptics"
     + lib.optionalString cameraOverlay "-camera"
+    + lib.optionalString mediaOverlay "-media"
     + lib.optionalString powerObservePreflight "-power-preflight"
     + lib.optionalString unattendedRecovery "-unattended-recovery"
     + lib.optionalString inputObserveOverlay "-input-observe"
@@ -1009,6 +1013,10 @@ let
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-charger.dtbo \
           "$out/mt6797-gemini-pda-charger.dtbo"
       ''}
+      ${lib.optionalString mediaOverlay ''
+        cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-media.dtbo \
+          "$out/mt6797-gemini-pda-media.dtbo"
+      ''}
       ${lib.optionalString cameraOverlay ''
         cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-camera.dtbo \
           "$out/mt6797-gemini-pda-camera.dtbo"
@@ -1487,6 +1495,15 @@ let
         test "$(fdtget "$out/gemini-camera.dtb" /clock-controller@1a040000 compatible)" = mediatek,mt6797-seninf-mclk
         mv "$out/gemini-camera.dtb" "$out/gemini.dtb"
         echo 'camera-overlay=passed' >> "$out/VALIDATION"
+      ''}
+      ${lib.optionalString mediaOverlay ''
+        fdtoverlay -i "$out/gemini.dtb" -o "$out/gemini-media.dtb" \
+          ${kernel}/mt6797-gemini-pda-media.dtbo
+        test "$(fdtget "$out/gemini-media.dtb" /iommu@10205000 status)" = okay
+        test "$(fdtget "$out/gemini-media.dtb" /larb@17001000 status)" = okay
+        test "$(fdtget "$out/gemini-media.dtb" /jpeg-decoder@17004000 compatible)" = mediatek,mt6797-jpgdec
+        mv "$out/gemini-media.dtb" "$out/gemini.dtb"
+        echo 'media-overlay=passed' >> "$out/VALIDATION"
       ''}
       ${
         if inputObserveOverlay
