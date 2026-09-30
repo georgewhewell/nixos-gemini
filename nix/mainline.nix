@@ -82,7 +82,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "27712f5b50b4fde946c66968a2cd8fbafc9d82a3";
+  p22BaselinePlatformRevision = "9163932efc9160a61a49c578360e4dcd87b7c2ab";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1504,8 +1504,9 @@ let
         fdtoverlay -i "$out/gemini.dtb" -o "$out/gemini-media.dtb" \
           ${kernel}/mt6797-gemini-pda-media.dtbo
         test "$(fdtget "$out/gemini-media.dtb" /iommu@10205000 status)" = okay
-        test "$(fdtget "$out/gemini-media.dtb" /larb@17001000 status)" = okay
-        test "$(fdtget "$out/gemini-media.dtb" /jpeg-decoder@17004000 compatible)" = mediatek,mt6797-jpgdec
+        for node in larb@14021000 larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
+          test "$(fdtget "$out/gemini-media.dtb" /$node status)" = okay
+        done
         mv "$out/gemini-media.dtb" "$out/gemini.dtb"
         echo 'media-overlay=passed' >> "$out/VALIDATION"
       ''}
