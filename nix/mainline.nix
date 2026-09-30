@@ -244,7 +244,10 @@ let
       "clk_mt6797_cam"
       "clk_mt6797_seninf_mclk"
       "hi556"
-    ];
+    ]
+    # M61d hung the system when udev loaded the JPEG driver; load by hand
+    # until the VENC/larb3 path is qualified.
+    ++ lib.optional mediaOverlay "mtk_jpeg";
   moduleBlacklistCmdline =
     lib.optionalString (moduleBlacklist != [])
     "modprobe.blacklist=${lib.concatStringsSep "," moduleBlacklist} ";
