@@ -1104,6 +1104,7 @@
           systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
           systemd.services.gemini-cpufreq.wantedBy = lib.mkForce [];
           systemd.services.gemini-desktop.wantedBy = lib.mkForce [];
+          systemd.services.gemini-desktop-qualify.wantedBy = lib.mkForce [];
         })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
