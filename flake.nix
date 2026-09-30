@@ -776,6 +776,7 @@
       cameraOverlay = true;
       mediaOverlay = true;
       mediaDisplayPhysical = true;
+      mediaM4uOnly = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;

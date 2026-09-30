@@ -41,6 +41,8 @@
   # Diagnostic: keep the display physical (no iommus) under mediaOverlay so
   # the M4U can be examined from a running system.
   mediaDisplayPhysical ? false,
+  # Diagnostic: M4U only; VENC domain users (vencsys, larb3, JPEG) disabled.
+  mediaM4uOnly ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -1514,6 +1516,13 @@ let
         for node in larb@14021000 larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
           test "$(fdtget "$out/gemini-media.dtb" /$node status)" = okay
         done
+        ${lib.optionalString mediaM4uOnly ''
+          fdtput -d "$out/gemini-media.dtb" /syscon@17000000 power-domains
+          for node in larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
+            fdtput -t s "$out/gemini-media.dtb" /$node status disabled
+          done
+          echo 'media-venc=disabled-diagnostic' >> "$out/VALIDATION"
+        ''}
         ${lib.optionalString mediaDisplayPhysical ''
           for node in ovl@1400d000 ovl@1400e000 rdma@1400f000; do
             fdtput -d "$out/gemini-media.dtb" /$node iommus
