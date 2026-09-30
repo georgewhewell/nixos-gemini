@@ -38,6 +38,9 @@
   cameraOverlay ? false,
   # Multimedia M4U (display behind the IOMMU) and the JPEG decoder.
   mediaOverlay ? false,
+  # Diagnostic: keep the display physical (no iommus) under mediaOverlay so
+  # the M4U can be examined from a running system.
+  mediaDisplayPhysical ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -1507,6 +1510,12 @@ let
         for node in larb@14021000 larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
           test "$(fdtget "$out/gemini-media.dtb" /$node status)" = okay
         done
+        ${lib.optionalString mediaDisplayPhysical ''
+          for node in ovl@1400d000 ovl@1400e000 rdma@1400f000; do
+            fdtput -d "$out/gemini-media.dtb" /$node iommus
+          done
+          echo 'media-display=physical-diagnostic' >> "$out/VALIDATION"
+        ''}
         mv "$out/gemini-media.dtb" "$out/gemini.dtb"
         echo 'media-overlay=passed' >> "$out/VALIDATION"
       ''}
