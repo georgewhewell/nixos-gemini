@@ -775,8 +775,6 @@
       hapticsOverlay = true;
       cameraOverlay = true;
       mediaOverlay = false;
-      diagVencClk = true;
-      diagPseudoNmi = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
@@ -1097,14 +1095,6 @@
         ./nixos/m39.nix
         ./nixos/spm.nix
         ./nixos/core-parking.nix
-        # Bisect (M61p): no A72 first start, so the VENC-clock image can be
-        # inspected; parking pins CPU8/9, so it stays off too.
-        ({lib, pkgs, ...}: {
-          systemd.services.gemini-a72-preflight.serviceConfig.ExecStart = lib.mkForce (pkgs.writeShellScript "gemini-a72-preflight-bisect-noop" ''
-            grep -wFq GEMINI_A72_CI9_M39 /proc/cmdline
-          '');
-          systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
-        })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
