@@ -1,0 +1,13 @@
+# M43 camera: media core, Hi-556 sensor and MT6797 CAMSYS/SENINF clocks.
+# All camera drivers are modules and blacklisted from autoload (mainline.nix)
+# until the identification test has run on hardware.
+CONFIG_MEDIA_SUPPORT=y
+CONFIG_MEDIA_SUPPORT_FILTER=y
+CONFIG_MEDIA_CAMERA_SUPPORT=y
+CONFIG_MEDIA_CONTROLLER=y
+CONFIG_VIDEO_DEV=y
+CONFIG_VIDEO_V4L2_SUBDEV_API=y
+CONFIG_VIDEO_CAMERA_SENSOR=y
+CONFIG_VIDEO_HI556=m
+CONFIG_COMMON_CLK_MT6797_CAMSYS=m
+CONFIG_COMMON_CLK_MT6797_SENINF_MCLK=m
