@@ -777,6 +777,7 @@
       mediaOverlay = true;
       mediaDisplayPhysical = true;
       mediaM4uOnly = true;
+      diagNoA72 = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
