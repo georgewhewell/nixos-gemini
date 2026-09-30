@@ -775,6 +775,7 @@
       hapticsOverlay = true;
       cameraOverlay = true;
       mediaOverlay = false;
+      diagVencClk = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;

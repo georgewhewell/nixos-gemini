@@ -47,6 +47,8 @@
   diagNoA72 ? false,
   # Diagnostic: mtk_iommu as a module, not loaded at boot.
   diagIommuModule ? false,
+  # Bisect: VENC clock controller only (no media overlay).
+  diagVencClk ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -127,6 +129,7 @@ let
     ++ lib.optionals cameraOverlay [./mainline-camera.fragment]
     ++ lib.optionals mediaOverlay [./mainline-media.fragment]
     ++ lib.optionals diagIommuModule [./mainline-iommu-module.fragment]
+    ++ lib.optionals diagVencClk [./mainline-venc-clk.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]

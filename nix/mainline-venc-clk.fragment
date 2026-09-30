@@ -1,0 +1,2 @@
+# Bisect: VENC clock controller only.
+CONFIG_COMMON_CLK_MT6797_VENCSYS=y
