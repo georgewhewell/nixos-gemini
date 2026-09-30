@@ -776,6 +776,7 @@
       cameraOverlay = true;
       mediaOverlay = false;
       diagVencClk = true;
+      diagPseudoNmi = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;

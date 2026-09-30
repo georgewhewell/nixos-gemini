@@ -1,0 +1,2 @@
+# Diagnostic: backtraces of CPUs stuck with interrupts masked.
+CONFIG_ARM64_PSEUDO_NMI=y
