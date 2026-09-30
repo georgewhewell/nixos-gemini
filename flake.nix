@@ -1099,9 +1099,8 @@
         # Bisect (M61p): no A72 first start, so the VENC-clock image can be
         # inspected; parking pins CPU8/9, so it stays off too.
         ({lib, ...}: {
-          systemd.services.gemini-a72-preflight.wantedBy = lib.mkForce [];
+          systemd.services.gemini-a72-preflight.serviceConfig.ExecStart = lib.mkForce "/run/current-system/sw/bin/true";
           systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
-          systemd.services.gemini-cellular.wantedBy = lib.mkForce [];
         })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
