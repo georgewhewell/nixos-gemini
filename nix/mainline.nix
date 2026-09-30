@@ -709,7 +709,7 @@ let
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
-        grep -Fqx '# CONFIG_MTK_IOMMU is not set' .config
+        grep -Fqx '${if mediaOverlay then "CONFIG_MTK_IOMMU=y" else "# CONFIG_MTK_IOMMU is not set"}' .config
         grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
         grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
         grep -Fqx 'CONFIG_SND=y' .config
@@ -719,6 +719,10 @@ let
         grep -Fqx 'CONFIG_SND_SOC_MT6351=y' .config
         grep -Fqx 'CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX=y' .config
         ! grep -q '^CONFIG_TOUCHSCREEN_NOVATEK_NT36XXX_KUNIT_TEST=' .config
+      ''}
+      ${lib.optionalString mediaOverlay ''
+        grep -Fqx 'CONFIG_COMMON_CLK_MT6797_VENCSYS=y' .config
+        grep -Fqx 'CONFIG_VIDEO_MEDIATEK_JPEG=m' .config
       ''}
       ${lib.optionalString powerObserveOverlay ''
         grep -Fqx 'CONFIG_POWER_SUPPLY=y' .config
