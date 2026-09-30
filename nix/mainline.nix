@@ -311,11 +311,11 @@ let
     then "0000000000000000000000000000000000000000000000000000000000000000"
     else if extendedPlatformDtb
     then "f87b1100ef770abd07efe3d5424fb7de1c9aee65ec09cddd740525f192d082f8"
-    else "f6eb386909df11fb3a7b011894f5ef75e1bfda8504d3cd63e53caae048b4031c";
+    else "85b25dc44fc9ed8091bcae523a2576a5a39ea845f0fc35e7fa562aa1b2d17b90";
   usbPlatformDtbSha256 =
     if extendedPlatformDtb
     then "b775cf001abf978c8e82a62e764d2bd53c744b90fd382ab7ee78b21d4a648610"
-    else "c17e7606ac6cbae3f606cd5c4f2188c8e10304a8de9d60fcc62362c60b6aed50";
+    else "0dd5e7d663e3e89043ef71404b6fe006e3e3ad49456f2605963dbc2355d3f78b";
   profileCombinationValid =
     assert !gpuOwnerOverlay || (a72Overlay && !gpuFixedOppOverlay && !gpuStagedOverlay && !gpuDeferredBind);
     assert !a72Overlay || (cellularOverlay && unattendedRecovery && !gpuFixedOppOverlay);
