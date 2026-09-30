@@ -1101,6 +1101,7 @@
         ({lib, ...}: {
           systemd.services.gemini-a72-preflight.wantedBy = lib.mkForce [];
           systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
+          systemd.services.gemini-cellular.wantedBy = lib.mkForce [];
         })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
