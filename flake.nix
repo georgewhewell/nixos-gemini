@@ -777,7 +777,7 @@
       mediaOverlay = true;
       mediaDisplayPhysical = true;
       mediaM4uOnly = true;
-      diagNoA72 = true;
+      diagIommuModule = true;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
@@ -1098,14 +1098,6 @@
         ./nixos/m39.nix
         ./nixos/spm.nix
         ./nixos/core-parking.nix
-        # Diagnostic (M61k/l): no boot-time hotplug, DVFS or desktop, so the M4U
-        # image stays up for manual tests.
-        ({lib, ...}: {
-          systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
-          systemd.services.gemini-cpufreq.wantedBy = lib.mkForce [];
-          systemd.services.gemini-desktop.wantedBy = lib.mkForce [];
-          systemd.services.gemini-desktop-qualify.wantedBy = lib.mkForce [];
-        })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;

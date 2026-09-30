@@ -45,6 +45,8 @@
   mediaM4uOnly ? false,
   # Diagnostic: keep the A72 cluster offline (no A72 power driver).
   diagNoA72 ? false,
+  # Diagnostic: mtk_iommu as a module, not loaded at boot.
+  diagIommuModule ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -124,6 +126,7 @@ let
     ++ lib.optionals hapticsOverlay [./mainline-haptics.fragment]
     ++ lib.optionals cameraOverlay [./mainline-camera.fragment]
     ++ lib.optionals mediaOverlay [./mainline-media.fragment]
+    ++ lib.optionals diagIommuModule [./mainline-iommu-module.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
@@ -251,7 +254,8 @@ let
     ]
     # M61d hung the system when udev loaded the JPEG driver; load by hand
     # until the VENC/larb3 path is qualified.
-    ++ lib.optional mediaOverlay "mtk_jpeg";
+    ++ lib.optional mediaOverlay "mtk_jpeg"
+    ++ lib.optional diagIommuModule "mtk_iommu";
   moduleBlacklistCmdline =
     lib.optionalString (moduleBlacklist != [])
     "modprobe.blacklist=${lib.concatStringsSep "," moduleBlacklist} ";
@@ -719,7 +723,7 @@ let
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
-        grep -Fqx '${if mediaOverlay then "CONFIG_MTK_IOMMU=y" else "# CONFIG_MTK_IOMMU is not set"}' .config
+        grep -Fqx '${if diagIommuModule then "CONFIG_MTK_IOMMU=m" else if mediaOverlay then "CONFIG_MTK_IOMMU=y" else "# CONFIG_MTK_IOMMU is not set"}' .config
         grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
         grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
         grep -Fqx 'CONFIG_SND=y' .config
