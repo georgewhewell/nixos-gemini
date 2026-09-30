@@ -774,10 +774,7 @@
       chargerActive = true;
       hapticsOverlay = true;
       cameraOverlay = true;
-      mediaOverlay = true;
-      mediaDisplayPhysical = true;
-      mediaM4uOnly = true;
-      diagIommuModule = true;
+      mediaOverlay = false;
       unattendedRecovery = true;
       inputObserveOverlay = true;
       thermalHallObserveOverlay = true;
