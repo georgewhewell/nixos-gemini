@@ -1098,6 +1098,12 @@
         ./nixos/m39.nix
         ./nixos/spm.nix
         ./nixos/core-parking.nix
+        # Diagnostic (M61k): no boot-time hotplug or DVFS, so the M4U
+        # image stays up for manual tests.
+        ({lib, ...}: {
+          systemd.services.gemini-core-parking.wantedBy = lib.mkForce [];
+          systemd.services.gemini-cpufreq.wantedBy = lib.mkForce [];
+        })
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
