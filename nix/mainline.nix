@@ -95,7 +95,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "eb12421b8b5510c31ce9a1fe331fd9d645113c61";
+  p22BaselinePlatformRevision = "93fe2e8b5008342c6d24536b6f9b25ac3a140e7b";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1642,6 +1642,8 @@ let
           test "$(fdtget -t i "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active mediatek,fgadc-osr)" = 8
           fdtget -p "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active \
             | grep -Fqx 'mediatek,initialize-fgadc'
+          test "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/fuel-gauge-active vdda-supply)" = \
+            "$(fdtget "$out/gemini-fgadc-active.dtb" /pwrap@1000d000/pmic/regulators/ldo-va18 phandle)"
           cp "$out/gemini-fgadc-active.dtb" "$out/gemini.dtb"
           echo 'fgadc-activation=mt6351-exact-0x28-osr8-live-proven-passed' >> "$out/VALIDATION"
         ''
