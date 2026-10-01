@@ -95,7 +95,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "ba98a82f8b244d9f72e1b0ad54a63af04b1036b9";
+  p22BaselinePlatformRevision = "4b0701f830014f01086d2ff2055048f9f0b74c47";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -258,9 +258,6 @@ let
       "clk_mt6797_seninf_mclk"
       "hi556"
     ]
-    # M61d hung the system when udev loaded the JPEG driver; load by hand
-    # until the VENC/larb3 path is qualified.
-    ++ lib.optional mediaOverlay "mtk_jpeg"
     ++ lib.optional diagIommuModule "mtk_iommu";
   moduleBlacklistCmdline =
     lib.optionalString (moduleBlacklist != [])
