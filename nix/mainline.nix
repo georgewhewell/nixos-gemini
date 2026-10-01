@@ -38,9 +38,6 @@
   cameraOverlay ? false,
   # Multimedia M4U (display behind the IOMMU) and the JPEG decoder.
   mediaOverlay ? false,
-  # Diagnostic: keep the display physical (no iommus) under mediaOverlay so
-  # the M4U can be examined from a running system.
-  mediaDisplayPhysical ? false,
   # Diagnostic: M4U only; VENC domain users (vencsys, larb3, JPEG) disabled.
   mediaM4uOnly ? false,
   # Diagnostic: keep the A72 cluster offline (no A72 power driver).
@@ -95,7 +92,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "a53fd9281e8ee5b67dbfb3db655c99252f01873d";
+  p22BaselinePlatformRevision = "f82e6ebff373f622cad242b867c12affbec57e08";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -1531,12 +1528,6 @@ let
             fdtput -t s "$out/gemini-media.dtb" /$node status disabled
           done
           echo 'media-venc=disabled-diagnostic' >> "$out/VALIDATION"
-        ''}
-        ${lib.optionalString mediaDisplayPhysical ''
-          for node in ovl@1400b000 ovl@1400d000 rdma@1400f000; do
-            fdtput -d "$out/gemini-media.dtb" /$node iommus
-          done
-          echo 'media-display=physical-diagnostic' >> "$out/VALIDATION"
         ''}
         mv "$out/gemini-media.dtb" "$out/gemini.dtb"
         echo 'media-overlay=passed' >> "$out/VALIDATION"
