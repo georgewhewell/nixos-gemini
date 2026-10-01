@@ -24,7 +24,7 @@
       # Integrated Linux 7.1.3 platform tree: ixoo's proven Gemini baseline
       # plus the reviewed, opt-in bring-up slices. Pin the exact fork commit;
       # experiments never consume a moving branch tip.
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m44&rev=4b0701f830014f01086d2ff2055048f9f0b74c47";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux-gemini-wifi-tx-queue-m38?ref=gemini-m44&rev=f3db2b0b01c4177bb79075d8aa13f04cfd9c3374";
       flake = false;
     };
     linux-gemini-next = {
@@ -1095,6 +1095,7 @@
         ./nixos/m39.nix
         ./nixos/spm.nix
         ./nixos/core-parking.nix
+        ./nixos/media.nix
         {
           _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
           _module.args.geminiCellularHelper = cellularFsRegister;
