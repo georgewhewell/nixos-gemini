@@ -97,6 +97,12 @@ def check_host_idle():
 
 def trial(args, directory, before, ssh):
     # A fresh working directory prevents accidental reuse of cached DA state.
+    # The DA client runs as root and inherits umask 077. Create its readback
+    # files as the invoking user so verification can read them afterwards.
+    # Exclusive creation also prevents following a pre-existing symlink.
+    for name in ('gpt-primary.bin', 'boot-readback.img'):
+        with (directory / name).open('xb'):
+            pass
     # timeout bounds the privileged child even if this observer is interrupted.
     command = ['sudo', '-n', 'env', 'PYTHONUNBUFFERED=1', 'timeout',
                '--kill-after=5s', '180s', str(args.mtk), 'multi', COMMANDS]
@@ -141,7 +147,10 @@ def trial(args, directory, before, ssh):
             after = observed
             break
         except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
-            (directory / 'last-observation-error.txt').write_text(str(error) + '\n')
+            detail = str(error)
+            if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+                detail += '\n' + error.stderr.strip()
+            (directory / 'last-observation-error.txt').write_text(detail + '\n')
         time.sleep(3)
     if after is None:
         raise RuntimeError('Fresh healthy M69 was not observed; physical recovery may be needed')

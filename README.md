@@ -68,11 +68,12 @@ The [U-Boot profiles](research/BOOT_HANDOFF.md) are host-built qualification
 artifacts; none of the new carriers has been accepted on hardware.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
-flake. Its old logs show successful GPT reads, but return to Linux was not
-proven. Local patches expose an acknowledged `reset --bootmode reboot` and
-propagate partition-write failures. Host tests pass; read/reboot and boot-only
-write/readback still need supervised hardware qualification. SP Flash Tool
-remains the known rescue fallback until that succeeds.
+flake. Local patches expose an acknowledged `reset --bootmode reboot` and
+propagate partition-write failures. The October 4 hardware trial read GPT and
+the full M69 boot image with matching hashes, but the acknowledged reboot
+left the device at the preloader with no Linux return. Read/reboot and boot-only
+write/readback remain unqualified. SP Flash Tool remains the known rescue
+fallback until that succeeds.
 
 Device trials need a fresh device/boot identity, the shared host locks, and
 verification of the resulting boot and health. Preserve the factory GPT while

@@ -89,6 +89,28 @@ class QualificationTests(unittest.TestCase):
                 q.trial(SimpleNamespace(mtk='/fake/mtk'), Path(tmp), self.before(), ['ssh'])
             reboot.assert_not_called()
 
+    def test_readbacks_exist_before_privileged_client_and_cannot_be_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            child = Mock()
+            child.poll.return_value = 1
+            def start(*args, **kwargs):
+                for name in ('gpt-primary.bin', 'boot-readback.img'):
+                    path = directory / name
+                    self.assertEqual(path.stat().st_uid, q.os.getuid())
+                    self.assertEqual(path.read_bytes(), b'')
+                    # The real DA writer truncates the existing file.
+                    path.write_bytes(b'da output')
+                return child
+            with patch.object(q.subprocess, 'Popen', side_effect=start) as spawn:
+                with self.assertRaises(RuntimeError):
+                    q.trial(SimpleNamespace(mtk='/fake/mtk'), directory, self.before(), ['ssh'])
+                for name in ('gpt-primary.bin', 'boot-readback.img'):
+                    self.assertEqual((directory / name).read_bytes(), b'da output')
+                with self.assertRaises(FileExistsError):
+                    q.trial(SimpleNamespace(mtk='/fake/mtk'), directory, self.before(), ['ssh'])
+                spawn.assert_called_once()
+
     def test_failed_mtk_still_observes_linux_and_cannot_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             child = Mock()

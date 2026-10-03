@@ -48,5 +48,11 @@ M69 flashing transaction still uses SP Flash Tool. The owner now prioritises
 making mtkclient work.
 
 The patched mtkclient package and supervised read/reboot runner are described
-in [MTKCLIENT.md](MTKCLIENT.md). Host tests and read-only M69 preflight pass;
-the explicit DA reboot and boot-only writes still need hardware qualification.
+in [MTKCLIENT.md](MTKCLIENT.md). The October 4 hardware trial read the primary
+GPT and full M69 boot partition with matching hashes. The DA acknowledged
+reboot, but Linux did not return within three minutes; USB remained at the
+preloader and the owner reported a black screen. The read/reboot trial failed,
+and boot-only writes remain unqualified. No eMMC writes were issued.
+After the owner's force restart, the vendor Linux USB gadget returned
+(`0fce:7169`), consistent with Gemian. The OS was not authenticated over SSH;
+this is not a new healthy M69 observation.

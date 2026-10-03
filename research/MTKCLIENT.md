@@ -1,8 +1,41 @@
 # Gemini mtkclient qualification
 
-Status, 2026-10-04: patched host package and regression tests pass; read-only
-SSH preflight passes on accepted M69. The patched DA reboot has **not** been
-tested on hardware. Boot-only writes are not yet qualified.
+Status, 2026-10-04: the supervised hardware trial read the primary GPT and
+complete boot partition correctly. The DA acknowledged the patched reboot
+request and mtkclient exited zero, but healthy Linux did **not** return within
+three minutes. USB remained at the MediaTek preloader and the owner reported
+a black screen. Read/reboot qualification failed; boot-only writes remain
+unqualified.
+
+## October 4 read/reboot trial
+
+Evidence: workspace `handoff/mtkclient-read-reboot-20261004-01`.
+The owner was available for physical recovery. Starting from healthy M69,
+the runner performed one normal Linux reboot and one DA session, with no
+eMMC write commands:
+
+- The 32,768-byte primary GPT read matched preflight SHA-256
+  `6addff62cc67f5b5fac9bd87194b6643f4029262251c51c1e43e1b5b64cb887d`.
+- The 16,777,216-byte boot read matched accepted M69 SHA-256
+  `913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3`.
+- `reset --bootmode reboot` was acknowledged; the client exited zero.
+- At approximately 120 seconds after client exit, USB was still
+  `0e8d:2000`, `MT65xx Preloader`, on port `3-2`; SSH did not return during
+  the full 180-second observation window. This does not establish why the
+  DA reboot failed to reach Linux.
+
+The runner also exposed a host-side permissions bug: the privileged client
+created readback files owned by root with mode 0600. Ownership of the two
+completed readbacks was corrected locally so their hashes could be checked.
+The runner now creates these files exclusively as the invoking user before
+launching the client. No second DA attempt or fallback flash was started.
+Manual recovery observations are recorded separately from the failed trial.
+The owner subsequently confirmed a force restart. USB on the same port
+changed to `0fce:7169` (`GNU/Linux Device`), the known vendor-kernel gadget
+identity. This is consistent with the owner's expectation of Gemian; the OS
+was not authenticated over SSH, and healthy M69 was not observed. See
+`manual-recovery-usb.json` in the evidence directory. Manual recovery does
+not convert the automatic read/reboot trial into a pass.
 
 ## What failed previously
 
@@ -56,7 +89,8 @@ session, mode-to-packet mapping, acknowledgement/failure handling, legacy ACKs)
 partition-write tests (real XFlash command/packet/final-status failures reaching
 CLI exit status, bounds, and stopping multi-command dispatch), and
 qualification-runner tests (fresh boot, image integrity, preflight isolation,
-and failed DA sessions). These are host tests, not hardware evidence.
+failed DA sessions, and readback file ownership). These are host tests, not
+hardware evidence.
 
 ## Supervised read/reboot trial
 
