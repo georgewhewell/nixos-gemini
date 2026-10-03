@@ -54,5 +54,7 @@ reboot, but Linux did not return within three minutes; USB remained at the
 preloader and the owner reported a black screen. The read/reboot trial failed,
 and boot-only writes remain unqualified. No eMMC writes were issued.
 After the owner's force restart, the vendor Linux USB gadget returned
-(`0fce:7169`), consistent with Gemian. The OS was not authenticated over SSH;
-this is not a new healthy M69 observation.
+(`0fce:7169`). SSH via `gemini@gemini` confirmed Gemian / Debian 9, kernel
+`3.18.41+`, fresh boot ID `1508c791-df3f-4384-b4fd-5704338ef3ca`, and unchanged
+p22/GPT hashes and partition geometry. Manual recovery succeeded; this is
+not a new healthy M69 observation.

@@ -32,10 +32,14 @@ launching the client. No second DA attempt or fallback flash was started.
 Manual recovery observations are recorded separately from the failed trial.
 The owner subsequently confirmed a force restart. USB on the same port
 changed to `0fce:7169` (`GNU/Linux Device`), the known vendor-kernel gadget
-identity. This is consistent with the owner's expectation of Gemian; the OS
-was not authenticated over SSH, and healthy M69 was not observed. See
-`manual-recovery-usb.json` in the evidence directory. Manual recovery does
-not convert the automatic read/reboot trial into a pass.
+identity. The owner supplied the working recovery SSH target, `gemini@gemini`.
+That connection confirmed Gemian / Debian 9 (stretch), kernel `3.18.41+`,
+fresh boot ID `1508c791-df3f-4384-b4fd-5704338ef3ca`, and boot reason
+`power_key`. Read-only checks from Gemian verified that p22 and the primary
+GPT still matched both preflight hashes, with the original partition geometry
+and no p34. See `after-manual-recovery.json` and `manual-recovery-ssh.txt`.
+Manual recovery to Gemian succeeded; it does not convert the automatic
+read/reboot trial into a pass or establish a fresh healthy M69 boot.
 
 ## What failed previously
 
