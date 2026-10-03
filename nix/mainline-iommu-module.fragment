@@ -1,2 +1,0 @@
-# Diagnostic: mtk_iommu loaded by hand.
-CONFIG_MTK_IOMMU=m

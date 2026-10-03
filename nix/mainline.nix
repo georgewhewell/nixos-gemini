@@ -38,16 +38,6 @@
   cameraOverlay ? false,
   # Multimedia M4U (display behind the IOMMU) and the JPEG decoder.
   mediaOverlay ? false,
-  # Diagnostic: M4U only; VENC domain users (vencsys, larb3, JPEG) disabled.
-  mediaM4uOnly ? false,
-  # Diagnostic: keep the A72 cluster offline (no A72 power driver).
-  diagNoA72 ? false,
-  # Diagnostic: mtk_iommu as a module, not loaded at boot.
-  diagIommuModule ? false,
-  # Bisect: VENC clock controller only (no media overlay).
-  diagVencClk ? false,
-  # Diagnostic: GICv3 pseudo-NMI so stall reports can backtrace stuck CPUs.
-  diagPseudoNmi ? false,
   unattendedRecovery ? false,
   inputObserveOverlay ? false,
   thermalHallObserveOverlay ? false,
@@ -92,7 +82,7 @@ let
   # Base board DT,
   # input and PMIC drivers remain unchanged; the separate A72 overlay path
   # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "f82e6ebff373f622cad242b867c12affbec57e08";
+  p22BaselinePlatformRevision = "c0dbf01b2bdaa9cc741582ae0c88df3daac74285";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -127,9 +117,6 @@ let
     ++ lib.optionals hapticsOverlay [./mainline-haptics.fragment]
     ++ lib.optionals cameraOverlay [./mainline-camera.fragment]
     ++ lib.optionals mediaOverlay [./mainline-media.fragment]
-    ++ lib.optionals diagIommuModule [./mainline-iommu-module.fragment]
-    ++ lib.optionals diagVencClk [./mainline-venc-clk.fragment]
-    ++ lib.optionals diagPseudoNmi [./mainline-pseudo-nmi.fragment]
     ++ lib.optionals unattendedRecovery [./mainline-unattended-recovery.fragment]
     ++ lib.optionals inputObserveOverlay [./mainline-input-observe.fragment]
     ++ lib.optionals thermalHallObserveOverlay [./mainline-thermal-hall-observe.fragment]
@@ -254,15 +241,14 @@ let
       "clk_mt6797_cam"
       "clk_mt6797_seninf_mclk"
       "hi556"
-    ]
-    ++ lib.optional diagIommuModule "mtk_iommu";
+    ];
   moduleBlacklistCmdline =
     lib.optionalString (moduleBlacklist != [])
     "modprobe.blacklist=${lib.concatStringsSep "," moduleBlacklist} ";
   baseCmdline =
     if debugOverlay
-    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay || diagNoA72) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}${lib.optionalString diagPseudoNmi "irqchip.gicv3_pseudo_nmi=1 "}fw_devlink=rpm"
-    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay || diagNoA72) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}${lib.optionalString diagPseudoNmi "irqchip.gicv3_pseudo_nmi=1 "}fw_devlink=rpm";
+    then "console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}fw_devlink=rpm"
+    else "console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr ignore_loglevel loglevel=8 log_buf_len=1M initcall_debug rdinit=/init ${panicCmdline} g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused ${lib.optionalString (!a72Overlay) "initcall_blacklist=mt6797_a72_power_driver_init "}${moduleBlacklistCmdline}fw_devlink=rpm";
   kernelCmdline =
     baseCmdline
     + lib.optionalString gpuOwnerOverlay " mtk_scpsys.mt6797_gpuldo_owner=1"
@@ -723,7 +709,7 @@ let
         grep -Fqx 'CONFIG_COMMON_CLK_MT6797_MMSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SCPSYS=y' .config
         grep -Fqx 'CONFIG_MTK_SMI=y' .config
-        grep -Fqx '${if diagIommuModule then "CONFIG_MTK_IOMMU=m" else if mediaOverlay then "CONFIG_MTK_IOMMU=y" else "# CONFIG_MTK_IOMMU is not set"}' .config
+        grep -Fqx '${if mediaOverlay then "CONFIG_MTK_IOMMU=y" else "# CONFIG_MTK_IOMMU is not set"}' .config
         grep -Fqx 'CONFIG_PHY_MTK_MIPI_DSI=y' .config
         grep -Fqx 'CONFIG_REGULATOR_LP3101=y' .config
         grep -Fqx 'CONFIG_SND=y' .config
@@ -1522,13 +1508,6 @@ let
         for node in larb@14021000 larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
           test "$(fdtget "$out/gemini-media.dtb" /$node status)" = okay
         done
-        ${lib.optionalString mediaM4uOnly ''
-          fdtput -d "$out/gemini-media.dtb" /syscon@17000000 power-domains
-          for node in larb@17001000 jpeg-encoder@17003000 jpeg-decoder@17004000; do
-            fdtput -t s "$out/gemini-media.dtb" /$node status disabled
-          done
-          echo 'media-venc=disabled-diagnostic' >> "$out/VALIDATION"
-        ''}
         mv "$out/gemini-media.dtb" "$out/gemini.dtb"
         echo 'media-overlay=passed' >> "$out/VALIDATION"
       ''}
