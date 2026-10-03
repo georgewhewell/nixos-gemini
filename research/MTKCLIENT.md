@@ -24,6 +24,15 @@ nonzero. The shared legacy backend now returns its acknowledgement correctly
 and compares ACK bytes correctly, so stricter failure reporting also works
 there. The Gemini's historical session used XFlash.
 
+The upstream partition-write command had the same exit-status problem: a DA
+write failure printed an error but allowed `multi` to continue and exit zero.
+The second local patch returns failure from partition writes and exits nonzero,
+stopping later commands in that session. It rejects missing/empty inputs and
+oversized partition images before submitting that write, and closes image files
+on XFlash transfer failure. This matters when qualifying an identical M69
+rewrite: matching readback alone cannot distinguish a successful write from
+a failed write that left the old bytes intact.
+
 ## Build and preflight
 
 From this flake:
@@ -44,7 +53,9 @@ p22 SHA-256 `913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3`.
 
 The package build runs source-level reset tests (CLI including a multi-command
 session, mode-to-packet mapping, acknowledgement/failure handling, legacy ACKs)
-and qualification-runner tests (fresh boot, image integrity, preflight isolation,
+partition-write tests (real XFlash command/packet/final-status failures reaching
+CLI exit status, bounds, and stopping multi-command dispatch), and
+qualification-runner tests (fresh boot, image integrity, preflight isolation,
 and failed DA sessions). These are host tests, not hardware evidence.
 
 ## Supervised read/reboot trial
@@ -71,5 +82,8 @@ an incomplete session can require physical recovery.
 
 After repeatable read/reboot passes, qualify a write of the already accepted
 M69 image to `boot` only, with full readback and a fresh healthy Linux boot.
+Require an acknowledged write as well as matching readback. A failed write
+stops `multi` before its reset command, so that failure may require physical
+recovery; it must never be reported as a passing write/reboot trial.
 Keep the existing SP Flash Tool rescue available until this sequence works.
 U-Boot carrier trials and repartitioning follow that qualification.

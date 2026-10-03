@@ -1,0 +1,108 @@
+diff --git a/mtkclient/Library/DA/mtk_da_handler.py b/mtkclient/Library/DA/mtk_da_handler.py
+index 88adc45..796da00 100644
+--- a/mtkclient/Library/DA/mtk_da_handler.py
++++ b/mtkclient/Library/DA/mtk_da_handler.py
+@@ -523,24 +523,32 @@ class DaHandler(metaclass=LogBase):
+         self.error("Error: Couldn't detect footer partition.")
+ 
+     def da_write(self, parttype: str, filenames: list, partitions: list):
+-        if len(partitions) != len(filenames):
+-            self.error("You need to gives as many filenames as given partitions.")
+-            self.close()
+-            exit(0)
++        if not partitions or len(partitions) != len(filenames):
++            self.error("You need to give as many filenames as partitions.")
++            return False
++        for filename in filenames:
++            if not os.path.isfile(filename) or os.stat(filename).st_size == 0:
++                self.error(f"Missing or empty input file: {filename}")
++                return False
+         if parttype == "user" or parttype is None:
+             i = 0
+             for partition in partitions:
+                 partfilename = filenames[i]
+                 i += 1
+                 if partition == "gpt":
+-                    self.mtk.daloader.writeflash(addr=0,
+-                                                 length=os.stat(partfilename).st_size,
+-                                                 filename=partfilename,
+-                                                 parttype=parttype)
++                    if not self.mtk.daloader.writeflash(addr=0,
++                                                       length=os.stat(partfilename).st_size,
++                                                       filename=partfilename,
++                                                       parttype=parttype):
++                        self.error(f"Failed to write GPT from {partfilename}")
++                        return False
+                     continue
+                 res = self.mtk.daloader.detect_partition(partition, parttype)
+                 if res[0]:
+                     rpartition = res[1]
++                    if os.stat(partfilename).st_size > rpartition.sectors * self.config.pagesize:
++                        self.error(f"Input file {partfilename} exceeds partition {partition}")
++                        return False
+                     if self.mtk.daloader.writeflash(addr=rpartition.sector * self.config.pagesize,
+                                                     length=rpartition.sectors * self.config.pagesize,
+                                                     filename=partfilename,
+@@ -552,10 +560,12 @@ class DaHandler(metaclass=LogBase):
+                         print(
+                             f"Failed to write {partfilename} to sector {str(rpartition.sector)} with " +
+                             f"sector count {str(rpartition.sectors)}.")
++                        return False
+                 else:
+                     self.error(f"Error: Couldn't detect partition: {partition}\nAvailable partitions:")
+                     for rpartition in res[1]:
+                         self.info(rpartition.name)
++                    return False
+         else:
+             pos = 0
+             for partfilename in filenames:
+@@ -567,10 +577,12 @@ class DaHandler(metaclass=LogBase):
+                 else:
+                     print(f"Failed to write {partfilename} to sector {str(pos // 0x200)} with " +
+                           f"sector count {str(size)}.")
++                    return False
+                 psize = size // 0x200 * 0x200
+                 if size % 0x200 != 0:
+                     psize += 0x200
+                 pos += psize
++        return True
+ 
+     def da_wl(self, parttype: str, directory: str):
+         filenames = []
+@@ -1322,7 +1334,8 @@ class DaHandler(metaclass=LogBase):
+             parttype = args.parttype
+             filenames = filename.split(",")
+             partitions = partitionname.split(",")
+-            self.da_write(parttype=parttype, filenames=filenames, partitions=partitions)
++            if not self.da_write(parttype=parttype, filenames=filenames, partitions=partitions):
++                sys.exit(1)
+         elif cmd == "wl":
+             directory = args.directory
+             parttype = args.parttype
+@@ -1605,4 +1618,3 @@ class DaHandler(metaclass=LogBase):
+             elif subcmd == "vbmeta":
+                 vbmode = int(args.vbmode)
+                 self.da_vbmeta(vbmode=vbmode)
+-
+diff --git a/mtkclient/Library/DA/xflash/xflash_lib.py b/mtkclient/Library/DA/xflash/xflash_lib.py
+index 745d19e..d80e49a 100644
+--- a/mtkclient/Library/DA/xflash/xflash_lib.py
++++ b/mtkclient/Library/DA/xflash/xflash_lib.py
+@@ -848,6 +848,8 @@ class DAXFlash(metaclass=LogBase):
+             length += fill
+         partinfo = self.daconfig.storage.get_storage(parttype, length)
+         if not partinfo:
++            if fh:
++                fh.close()
+             return False
+         storage, parttype, plength = partinfo
+         length = min(length, plength)
+@@ -876,6 +878,8 @@ class DAXFlash(metaclass=LogBase):
+                     checksum = sum(data) & 0xFFFF
+                     if not self.send_param([pack("<I", 0x0), pack("<I", checksum), data]):
+                         self.error("Error on writing pos 0x%08X" % pos)
++                        if fh:
++                            fh.close()
+                         return False
+                     bytestowrite -= dsize
+                     pos += dsize
