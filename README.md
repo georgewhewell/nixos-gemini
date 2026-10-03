@@ -1,39 +1,36 @@
 # NixOS on the Planet Computers Gemini PDA
 
-M37 boots Linux 7.1.3 and NixOS on the MT6797X Gemini with a GPU-accelerated
-Weston desktop and terminal. The September 9, 2026 hardware trial passed two
-desktop starts and full device health; the supervised p22 transaction accepted
-the image. Bring-up is still in progress.
+The accepted device baseline is **M69**, running Linux 7.1.3 and NixOS on the
+MT6797X Gemini. Hardware enablement is still in progress. The maintained kernel
+revision is `c0dbf01b2bdaa9cc741582ae0c88df3daac74285`; the accepted padded p22
+image has SHA-256
+`913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3`.
 
-## Verified M37 state
+## Current state
 
-- All ten CPUs online, with an active hardware watchdog and verified stage 1
-  to NixOS watchdog handoff.
-- Panfrost rendering on the Mali-T880, mediatek-drm scanout, and three
-  progressing VSync presentations on each desktop start.
-- A terminal running as the normal user `gemini`; the root console remains
-  ready on tty1. Stopping the desktop restores tty1/fbcon and switches off all
-  six GPU power domains before the next start.
-- Both USB network paths reachable by SSH: left gadget 10.15.19.82 and the
-  right RTL8156 adapter. The test network assigned 192.168.23.70 to the adapter.
-- WLAN association and IPv4 using WPA2-PSK/CCMP, a default fq_codel queue, and
-  read-only transmit timing diagnostics. A bounded M37 measurement completed
-  with 17.2–17.5 Mbit/s uploads and 19.0 Mbit/s download; final health passed.
-- Cellular kernel/services restoration and audio playback/capture, ALSA/UCM
-  routing, speaker/headphone isolation and shared-USB-rail restoration checks.
-  Physical cellular service/eSIM and acoustic validation remain open.
-- Exact eMMC identity and all seven guarded partition hashes preserved across
-  acceptance.
+The October 4 read-only checks found healthy M69, no failed units, all ten CPUs
+present, and active desktop, GPU, JPEG, Wi-Fi and audio services. CPU parking
+can offline cores at idle. These checks establish the current running state;
+they do not replace physical peripheral, audio or power qualification.
 
-The desktop requests landscape 1080×540 logical pixels from the native
-1080×2160 output, scale 2 and rotate 270. Physical visibility, orientation,
-keyboard interaction and touch alignment still need observation. Its home and
-caches are volatile in the current read-only NixOS system model.
+The desktop uses Weston with Panfrost rendering and a terminal for `gemini`.
+Display scanout currently bypasses IOMMU translation because translated
+scanout stalled intermittently. JPEG encode/decode has prior hardware evidence;
+hardware video codecs remain unfinished. WPA3/PMF support is present, but
+on-air qualification is still needed. Cellular registration/eSIM and weak
+reception remain open.
 
-See [M37 desktop implementation and evidence](research/M37_DESKTOP.md) for the
-source pins, allocation fix, acceptance checks and hardware results.
+The device has the factory 33-partition GPT. There is no p34 swap, and current
+boot logs skip persistent storage because its directory layout is incomplete.
+Home and the Nix store therefore still use the volatile/read-only baseline.
+Hibernation, deep idle and the complete lid power policy are not qualified.
+Camera and vibrator are excluded from the owner's completion scope.
 
-## Build the accepted profile
+See [the completion inventory](research/HARDWARE_STATUS.md) for current evidence
+and outstanding requirements. The [M37 desktop report](research/M37_DESKTOP.md)
+records earlier implementation and hardware results; it is historical.
+
+## Build the accepted Linux profile
 
 The build host is x86_64-linux; the target is aarch64-linux.
 
@@ -42,12 +39,10 @@ nix build .#mainlineNixosBundle --out-link artifacts/mainline-nixos-bundle
 cat artifacts/mainline-nixos-bundle/MANIFEST
 ```
 
-The bundle contains a padded 16 MiB p22 boot image, the kernel and composed DTB,
-initramfs, and a uniquely named compressed Nix store image. The current
-`linux-gemini` input pins a local Git checkout and exact commit; reproducing
-this workspace requires that source checkout at the path declared in
-`flake.nix`. The accepted source revision and artifact hashes are recorded in
-the M37 report. Builds do not flash the device.
+The bundle contains the padded 16 MiB p22 image, kernel, composed DTB,
+initramfs, and a uniquely named compressed Nix store image for p29. Builds do
+not flash the device. The `linux-gemini` input pins an exact local Git commit;
+reproducing this workspace requires the checkout paths declared in `flake.nix`.
 
 Useful component builds:
 
@@ -57,44 +52,39 @@ nix build .#geminiDesktopWeston
 nix build .#geminiDesktopBufferCheck
 nix build .#geminiDesktopPresentationCheck
 nix build .#geminiDesktopProtocolCheck
+nix build .#mtkclient --out-link artifacts/mtkclient
 ```
 
-The protocol check runs the real presentation client against native Weston
-fixtures and rejects invalid geometry and unsuitable evidence. The physical
-boot separately requires the real DSI output, input capabilities and VSync
-progress.
+The desktop protocol check uses native Weston fixtures. Hardware acceptance
+also needs the real DSI output, input devices, presentation progress and
+console/GPU restoration.
 
-## Boot and recovery
+## Boot, recovery and mtkclient
 
 The accepted path uses the existing boot firmware, an Android-format Linux
-boot image, a watchdog-managed initramfs, and NixOS stage 2. It mounts the
-unique Nix store image from p29 read-only. UEFI, GOP and systemd-boot are still
-unfinished.
+image, a watchdog-managed initramfs and NixOS stage 2. The Nix store squashfs
+on p29 is mounted read-only. U-Boot/UEFI, GOP and a boot manager are unfinished.
+The [U-Boot profiles](research/BOOT_HANDOFF.md) are host-built qualification
+artifacts; none of the new carriers has been accepted on hardware.
 
-Hardware trials use an exact-current-boot health guard and the supervised
-p22-only recovery harness in the workspace handoff directory. The supervisor
-must prove its rescue scanner is live before reboot, and host acceptance must
-verify both USB paths and the candidate's full health. M37 additionally
-requires the active desktop on tty7 plus recorded console/GPU restoration;
-tty1 must retain its root shell. A build result alone is insufficient for
-hardware acceptance.
+The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
+flake. Its old logs show successful GPT reads, but return to Linux was not
+proven. Local patches expose an acknowledged `reset --bootmode reboot` and
+propagate partition-write failures. Host tests pass; read/reboot and boot-only
+write/readback still need supervised hardware qualification. SP Flash Tool
+remains the known rescue fallback until that succeeds.
 
-The accepted M37 procedure and results are under
-`handoff/m37-oneboot-r2/` in the bring-up workspace. Current device identity and
-its exact health guard are in `handoff/current-device.md` and
-`handoff/current-device-health.sh`. These runtime artifacts are separate from
-the Git source tree. Flashing instructions from archived experiments are tied
-to their historical profiles and partition policies.
+Device trials need a fresh device/boot identity, the shared host locks, and
+verification of the resulting boot and health. Preserve the factory GPT while
+SP Flash Tool is the recovery fallback. Modem NV partitions can legitimately
+change during modem operation and must not be treated as immutable hashes.
 
-## Remaining work
+Current workspace observations are in `handoff/current-device.md`, alongside
+transaction-specific evidence. Historical flashing scripts, scatter files and
+health guards apply to their recorded image/layout and cannot establish the
+current device state. Physical recovery must be available for the pending
+boot/download-agent trials.
 
-Physical display/input and acoustic verification, normal desktop/power policy,
-suspend/wake and remaining peripherals, eSIM service, persistent user state,
-and the UEFI boot chain remain open. WPA3/SAE/PMF remains disabled in the
-current radio implementation. Boot acceptance does not establish these
-features or overall bring-up completion.
-
-The [archived vendor-era overview](research/VENDOR_README_LEGACY.md) retains
-historical Linux 3.18 build and deployment details. The legacy `deploy` output
-still belongs to that path; `mainlineNixosBundle` selects the accepted M37
-mainline profile.
+The [vendor-era overview](research/VENDOR_README_LEGACY.md) retains historical
+Linux 3.18 build and deployment details. The legacy `deploy` output still
+belongs to that path; `mainlineNixosBundle` selects the mainline Linux profile.
