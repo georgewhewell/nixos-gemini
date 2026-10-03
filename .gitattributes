@@ -1,1 +1,2 @@
 patches/u-boot/*.patch -whitespace
+patches/mtkclient/*.patch -whitespace

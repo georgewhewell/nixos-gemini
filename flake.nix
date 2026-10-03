@@ -1697,6 +1697,7 @@
       baselineProbeBootImgGcc6 = baselineProbeBootImgGcc6;
       usbNcmProbeBootImg = usbNcmProbeBootImg;
       probeInitramfs = probeInitramfs;
+      mtkclient = import ./nix/mtkclient.nix {inherit buildPkgs;};
       ubootHandoff = ubootProfiles.handoff.uboot;
       ubootHandoffBundle = ubootProfiles.handoff.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;

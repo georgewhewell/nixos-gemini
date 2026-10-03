@@ -1,0 +1,93 @@
+diff --git a/mtk.py b/mtk.py
+index ce7a510..29deb6f 100755
+--- a/mtk.py
++++ b/mtk.py
+@@ -203,7 +203,10 @@ def main():
+     cmd_fs.add_argument("mountpoint")
+     cmd_fs.add_argument("--rw", action="store_true")
+ 
+-    subparsers.add_parser("reset", help="Send reset command", parents=[base])
++    cmd_reset = subparsers.add_parser("reset", help="Exit the download agent", parents=[base])
++    cmd_reset.add_argument("--bootmode", choices=("shutdown", "reboot", "fastboot"),
++                           default="shutdown",
++                           help="DA boot mode: shutdown (default, unchanged), normal boot, or fastboot")
+     subparsers.add_parser("meta", help="Enter meta mode", parents=[base]) \
+         .add_argument("metamode", nargs="?", default=None, help=f"[{metamodes}]")
+     subparsers.add_parser("meta2", help="Enter meta mode (wdt)", parents=[base])
+diff --git a/mtkclient/Library/DA/legacy/dalegacy_lib.py b/mtkclient/Library/DA/legacy/dalegacy_lib.py
+index 3253e8f..f4889e6 100644
+--- a/mtkclient/Library/DA/legacy/dalegacy_lib.py
++++ b/mtkclient/Library/DA/legacy/dalegacy_lib.py
+@@ -901,8 +901,9 @@ class DALegacy(metaclass=LogBase):
+         FASTBOOT = 2
+ 
+     def shutdown(self, async_mode: int = 0, dl_bit: int = 0, bootmode: ShutDownModes = ShutDownModes.NORMAL):
+-        self.finish(bootmode)  # DISCONNECT_USB_AND_RELEASE_POWERKEY
+-        self.mtk.port.close(reset=True)
++        acknowledged = self.finish(bootmode)  # DISCONNECT_USB_AND_RELEASE_POWERKEY
++        self.mtk.port.close(reset=not acknowledged)
++        return acknowledged
+ 
+     def brom_send(self, dasetup, dadata, stage, packetsize=0x1000):
+         # offset = dasetup.da_loader.region[stage].m_buf
+@@ -970,14 +971,13 @@ class DALegacy(metaclass=LogBase):
+         return False
+ 
+     def finish(self, value):
+-        self.usbwrite(self.Cmd.FINISH_CMD)  # D9
+-        ack = self.usbread(1)[0]
+-        if ack is self.Rsp.ACK:
+-            self.usbwrite(pack(">I", value))
+-            ack = self.usbread(1)[0]
+-            if ack is self.Rsp.ACK:
+-                return True
+-        return False
++        if not self.usbwrite(self.Cmd.FINISH_CMD):  # D9
++            return False
++        if self.usbread(1) != self.Rsp.ACK:
++            return False
++        if not self.usbwrite(pack(">I", value)):
++            return False
++        return self.usbread(1) == self.Rsp.ACK
+ 
+     def sdmmc_write_data(self, addr: int, length: int, filename: str, offset=0, parttype=None, wdata=None,
+                          display=True):
+diff --git a/mtkclient/Library/DA/mtk_da_handler.py b/mtkclient/Library/DA/mtk_da_handler.py
+index d88ca60..88adc45 100644
+--- a/mtkclient/Library/DA/mtk_da_handler.py
++++ b/mtkclient/Library/DA/mtk_da_handler.py
+@@ -1377,10 +1377,15 @@ class DaHandler(metaclass=LogBase):
+                 self.close()
+             self.da_ess(sector=sector, parttype=parttype, sectors=sectors)
+         elif cmd == "reset":
+-            if os.path.exists(os.path.join(self.mtk.config.hwparam_path, ".state")):
+-                os.remove(os.path.join(self.mtk.config.hwparam_path, ".state"))
+-            mtk.daloader.shutdown(bootmode=0)
+-            print("Reset command was sent. Disconnect usb cable to power off.")
++            mode = getattr(args, "bootmode", "shutdown")
++            bootmode = {"shutdown": 0, "reboot": 1, "fastboot": 2}[mode]
++            if not mtk.daloader.shutdown(bootmode=bootmode):
++                self.error(f"Download agent did not acknowledge {mode}; device state is unverified.")
++                sys.exit(1)
++            statefile = os.path.join(self.mtk.config.hwparam_path, ".state")
++            if os.path.exists(statefile):
++                os.remove(statefile)
++            print(f"Download agent acknowledged {mode} request; verify the device's next boot state.")
+         elif cmd == "da":
+             subcmd = args.subcmd
+             if subcmd is None:
+diff --git a/mtkclient/Library/DA/xflash/xflash_lib.py b/mtkclient/Library/DA/xflash/xflash_lib.py
+index 3ccfc42..745d19e 100644
+--- a/mtkclient/Library/DA/xflash/xflash_lib.py
++++ b/mtkclient/Library/DA/xflash/xflash_lib.py
+@@ -822,7 +822,9 @@ class DAXFlash(metaclass=LogBase):
+                                    dont_resetrtc, leaveusb, 0)):
+                     status = self.status()
+                     if status == 0:
+-                        self.mtk.port.close(reset=True)
++                        # The DA is already disconnecting/rebooting. A host USB
++                        # reset races that transition and can report ENOENT.
++                        self.mtk.port.close(reset=False)
+                         return True
+             else:
+                 self.error(f"Error on sending shutdown: {self.eh.status(status)}")

@@ -46,3 +46,7 @@ return to Linux was not demonstrated. Claims that the whole DA/read sequence
 failed at USB speed switching are not supported by these logs. The successful
 M69 flashing transaction still uses SP Flash Tool. The owner now prioritises
 making mtkclient work.
+
+The patched mtkclient package and supervised read/reboot runner are described
+in [MTKCLIENT.md](MTKCLIENT.md). Host tests and read-only M69 preflight pass;
+the explicit DA reboot and boot-only writes still need hardware qualification.
