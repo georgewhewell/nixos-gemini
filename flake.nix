@@ -40,6 +40,11 @@
       url = "github:ixoo/gemini-pda-mainline/a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
       flake = false;
     };
+    u-boot-gemini-src = {
+      # Shared LK handoff and independently testable recovery/EFI profiles.
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=77c8387ae485f3c76e508bce83e82ec892ee9ec0&shallow=1";
+      flake = false;
+    };
     u-boot-src = {
       # Exact upstream base for the reviewable MT6797 stage-0 patch.
       url = "github:u-boot/u-boot/cc8c034e78eba6b2a3845783889b80753bb1af1e";
@@ -57,6 +62,7 @@
     linux-gemini-next,
     ixoo-candidate,
     u-boot-src,
+    u-boot-gemini-src,
   }: let
     # Build system (your machine)
     buildSystem = "x86_64-linux";
@@ -119,6 +125,24 @@
       fi
       echo 'Panfrost renderonly and KMS bridge: present; software renderers: absent' >> "$out"
     '';
+
+    ubootProfiles = let
+      mkProfile = options: rec {
+        uboot = import ./nix/uboot-handoff.nix ({
+          inherit buildPkgs crossPkgs;
+          source = u-boot-gemini-src;
+        } // options);
+        bundle = import ./nix/uboot-carrier.nix ({
+          inherit buildPkgs uboot;
+          linuxBundle = mainlineNixos.bundle;
+        } // options);
+      };
+    in {
+      handoff = mkProfile {};
+      efiSmoke = mkProfile {efiSmoke = true;};
+      reset = mkProfile {recoveryTest = 1;};
+      watchdog = mkProfile {recoveryTest = 2;};
+    };
 
     ubootStage0 = import ./nix/uboot-stage0.nix {
       inherit buildPkgs crossPkgs u-boot-src;
@@ -1673,6 +1697,12 @@
       baselineProbeBootImgGcc6 = baselineProbeBootImgGcc6;
       usbNcmProbeBootImg = usbNcmProbeBootImg;
       probeInitramfs = probeInitramfs;
+      ubootHandoff = ubootProfiles.handoff.uboot;
+      ubootHandoffBundle = ubootProfiles.handoff.bundle;
+      ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
+      ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
+      ubootResetBundle = ubootProfiles.reset.bundle;
+      ubootWatchdogBundle = ubootProfiles.watchdog.bundle;
       ubootStage0 = ubootStage0.uboot;
       ubootStage0Initramfs = ubootStage0.inertInitramfs;
       ubootStage0Bundle = ubootStage0.bundle;
