@@ -152,7 +152,9 @@ def trial(directory, profile, before, ssh):
          directory / 'supervisor-rollback.state', directory / 'supervisor-rollback.log',
          supervisor_state, '720', '', '', '300', '300', config])
     wait_state(supervisor_state, 'supervisor_waiting_candidate ', 15)
-    unit(candidate_unit, 260, [shutil.which('setsid'), sh, wrapper, candidate_state,
+    # systemd gives the launcher a process group. setsid can therefore fork;
+    # --wait keeps the service's main process alive until its session exits.
+    unit(candidate_unit, 260, [shutil.which('setsid'), '--wait', sh, wrapper, candidate_state,
          directory / 'candidate.log', xml, directory / 'candidate.pid', directory / 'candidate.pgid',
          LOCKS / '.p22-flash-writer.lock', directory / 'transaction-owner', directory / 'candidate.sid',
          directory / 'candidate.starttime', config])
