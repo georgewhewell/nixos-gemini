@@ -270,7 +270,7 @@ this does not establish whether a U-Boot phase survives a direct rescue path.
 The candidate/rescue backend now records that same fixed register before
 each write. `handoff/uboot-watchdog-mtkclient-03` captured a fresh U-Boot
 `board_init` marker during rescue; see `BOOT_HANDOFF.md` for the failure
-interval. The backend/phase/Linux-handoff evidence suite now has 25 passing
+interval. The backend/phase/Linux-handoff evidence suite now has 26 passing
 host tests, including rejection of stale, missing and unknown execution
 markers, inconsistent reset timing, wrong candidate images and lost LK data.
 

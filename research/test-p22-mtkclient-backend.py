@@ -209,7 +209,24 @@ class HandoffEvidenceTests(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         qualification.candidate_snapshot([], before, 'handoff')
                 else:
-                    self.assertEqual(qualification.candidate_snapshot([], before, 'handoff'), after)
+                    self.assertEqual(qualification.candidate_snapshot([], before, 'handoff'),
+                                     dict(after, p30_sha256=qualification.P30_SHA,
+                                          p31_sha256=qualification.P31_SHA))
+
+    def test_rescue_reboot_requires_the_identified_candidate(self):
+        before = dict(boot_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                      system=qualification.qualify.ACCEPTED_SYSTEM, gpt_sha256='b'*64)
+        rows = ['cccccccc-cccc-cccc-cccc-cccccccccccc', before['system'],
+                qualification.PROFILES['handoff'][1] + '  /dev/mmcblk0p22', 'b'*64 + '  -']
+        with patch.object(qualification.qualify, 'run', return_value='\n'.join(rows)):
+            self.assertTrue(qualification.candidate_needs_rescue_reboot([], before, 'handoff'))
+        for index, value in ((0, before['boot_id']), (0, 'malformed'), (1, '/other/system'),
+                             (2, qualification.qualify.ACCEPTED_BOOT + ' p22'), (2, ''),
+                             (3, 'c'*64 + ' -')):
+            altered = rows.copy()
+            altered[index] = value
+            with patch.object(qualification.qualify, 'run', return_value='\n'.join(altered)):
+                self.assertFalse(qualification.candidate_needs_rescue_reboot([], before, 'handoff'))
 
 
 class EvidenceTests(unittest.TestCase):

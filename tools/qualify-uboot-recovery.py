@@ -139,6 +139,7 @@ def candidate_snapshot(ssh, before, profile):
     hashes = qualify.run(ssh + ['sha256sum /dev/mmcblk0p30 /dev/mmcblk0p31']).splitlines()
     if [row.split()[0] for row in hashes] != [P30_SHA, P31_SHA]:
         raise RuntimeError('Candidate changed an alternate boot partition')
+    result.update(p30_sha256=P30_SHA, p31_sha256=P31_SHA)
     return result
 
 
@@ -339,9 +340,13 @@ def trial(directory, profile, before, ssh):
         (directory / 'candidate-error.txt').write_text(str(error) + '\n')
         print('Candidate did not verify; waiting for the existing rescue supervisor', flush=True)
     candidate_qualified = False
+    recovery_before = before
     if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
         try:
-            candidate_return(ssh, before, directory, profile)
+            middle = candidate_return(ssh, before, directory, profile)
+            # Require rescue to be a different boot from the observed candidate
+            # as well as restoring the accepted direct-Linux image.
+            recovery_before = dict(middle, boot_sha256=qualify.ACCEPTED_BOOT)
             candidate_qualified = True
             print('Candidate Linux health, FIT marker, RAM and LK reservations verified', flush=True)
         except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
@@ -351,7 +356,6 @@ def trial(directory, profile, before, ssh):
             wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
             print('Rebooting the identified candidate into the waiting rescue writer', flush=True)
             reboot(ssh, directory, 'rescue-reboot-request.json')
-        recovery_before = before
     elif profile == 'baseline' and read_state(candidate_state).startswith('flash_rc=0 '):
         middle = healthy_return(ssh, before, directory, 'baseline-middle')
         wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
