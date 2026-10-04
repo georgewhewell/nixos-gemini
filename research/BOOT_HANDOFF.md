@@ -5,8 +5,10 @@ after removing an unmapped framebuffer probe. Both automatically recovered
 fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles and
 one corrected EFI-application/FIT handoff cycle also passed. The corrected
 EFI Linux profile passed full service health, ExitBootServices, the full
-4 GiB EFI memory map and automatic M69 rescue in trials 04 and 05. GOP, keyboard,
-storage and a boot manager remain unfinished.
+4 GiB EFI memory map and automatic M69 rescue in trials 04 and 05. The new
+EFI console profile additionally passed GOP pixel/stride checks and visible
+text confirmed by the owner. Keyboard, storage and a boot manager remain
+unfinished.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -38,9 +40,8 @@ All profiles use TOPRGU for generic reset. LK handoff validation is independent
 of EFI. The FIT source window now accepts up to 16 MiB at 0x45000000, within the
 existing 96 MiB mapping; the independent 16 MiB p22 packaging limit still applies.
 M69's payload exceeds the old 8 MiB FIT limit. Retired unreachable USB/trace
-code and assembly probes were removed. Live early framebuffer probes and the
-historical SError-mask diagnostic remain and need review before consolidation
-into a production bootloader.
+code and assembly probes were removed. The console revision also removes the remaining early framebuffer probes
+and diagnostic delays, and restores normal SError delivery.
 
 ## Validation and hardware sequence
 
@@ -55,7 +56,8 @@ transaction and a person at the device. Then boot M69 through the plain
 handoff, verify both new boot identity and the Linux-visible marker, LK RAM and
 modem reservations, and full M69 health. Repeat boots before adding the EFI
 smoke test. EFI Linux/ExitBootServices now has a separate qualification below;
-GOP, keyboard, storage and a boot manager remain.
+Keyboard, storage and a boot manager remain; GOP and visible EFI text now
+have a separate qualification below.
 
 The mtkclient candidate/rescue supervisor now has a hardware-qualified M69
 baseline (`handoff/mtkclient-supervisor-baseline-02`); both writes, readbacks,
@@ -396,3 +398,42 @@ automatic rescue restored healthy M69 boot
 fresh exit-event phase, GPT and all boot-partition checks passed again.
 Neither successful trial needed physical recovery. `repeat-comparison.json`
 records the independent boot identities and matching evidence.
+
+
+## EFI display and diagnostic cleanup
+
+The cleanup carrier at `handoff/uboot-no-debug`, SHA-256
+`1d463996c9506cff718f83ff3e702e68240dbcfb90aea1f6425d747bdc2f2c7e`,
+removes the C framebuffer probes and diagnostic holds and restores normal
+SError delivery (U-Boot `bf3ec50be3cb9bde934c173c32f51802d64c8f0f`).
+Trial `handoff/uboot-efi-no-debug-01` passed full EFI Linux health as boot
+`6fff14ba-8d81-457e-a86b-813accd80030`, then automatically recovered healthy
+M69 boot `e9756611-8515-466c-8db2-121df0e320de`. This revision still had one
+assembly framebuffer probe, which the following console revision removes.
+
+U-Boot `e3ed105e8cac9e75d0ae3eb6125ba5be93b52199` adds the opt-in
+`ubootEfiConsoleBundle` / `efi-console` profile. It validates LK's native
+videolfb tag against its reserved framebuffer before enabling simplefb in
+the U-Boot control tree. The Linux/LK tree is preserved. The EFI GOP now
+uses the actual 4352-byte stride (1088 stored pixels, 1080 visible) for both
+its published mode and all blit operations. The rotated text console uses
+the inherited display; no panel reset or new display engine is introduced.
+
+An embedded EFI application checks mode geometry, padded-stride blits,
+readback and the corresponding raw framebuffer pixels, then shows
+“Gemini UEFI console” for 12 seconds before booting Linux. The runner requires
+`/chosen/gemini,uefi-console-result = "passed"` as well as ordinary EFI and
+Linux health. Host tests exercise the actual GOP operations with padded
+32/16-bit rows and validate good and malformed LK framebuffer descriptions;
+the GOP regression also rejects the preceding implementation.
+
+The exact console carrier at `handoff/uboot-efi-console` has SHA-256
+`0b104d094c012a8c5c00e4284368c153a831b94a7e39fc4e55f50ce0fe762f3a`.
+Trial `handoff/uboot-efi-console-01` passed as EFI Linux boot
+`a05efe4d-6dfc-4069-99aa-e77b64022354`. The owner confirmed seeing the EFI
+console: “yes i saw it! works”. Automatic rescue restored healthy M69 boot
+`75f4fd80-c07f-4575-8949-55ec2a2a0a5d`. Both complete image readbacks,
+fresh ExitBootServices phase, full RAM/LK reservations and all protected
+partition checks passed. No physical recovery was needed. This proves the
+inherited display/GOP/text path, not native display initialization, keyboard
+input or a distro picker. M69 remains the persistent boot image.

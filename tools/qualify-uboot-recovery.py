@@ -26,8 +26,10 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
-    'efi-linux': (WORKSPACE / 'handoff/uboot-efi-provenance-fix/boot-padded-p22.img',
-                  'c00f0a9dcc0f776184e4c34678e9de54a1619bbe5ede12db71a6ff9c1891c0bc'),
+    'efi-console': (WORKSPACE / 'handoff/uboot-efi-console/boot-padded-p22.img',
+                    '0b104d094c012a8c5c00e4284368c153a831b94a7e39fc4e55f50ce0fe762f3a'),
+    'efi-linux': (WORKSPACE / 'handoff/uboot-no-debug/boot-padded-p22.img',
+                  '1d463996c9506cff718f83ff3e702e68240dbcfb90aea1f6425d747bdc2f2c7e'),
     'baseline': (ACCEPTED, '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'),
     'reset': (WORKSPACE / 'handoff/uboot-m69-efi-order-2/boot-padded-p22.img',
               'e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950'),
@@ -38,7 +40,8 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-LINUX_PROFILES = ('handoff', 'efi-smoke', 'efi-linux')
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console')
+LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
 P31_SHA = '1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
@@ -52,7 +55,8 @@ PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
           '0x474d10f6': 'efi_map_failure', '0x474d10ec': 'reset_test', '0x474d10ed': 'watchdog_expiry_test',
           '0x474d10f1': 'watchdog_setup_failure', '0x474d10f2': 'fit_failure',
           '0x474d10f3': 'efi_fdt_failure', '0x474d10f4': 'lk_fdt_failure',
-          '0x474d10f5': 'handoff_failure', '0x474d1e01': 'efi_command_failure'}
+          '0x474d10f5': 'handoff_failure', '0x474d10f7': 'console_framebuffer_failure',
+          '0x474d1e01': 'efi_command_failure'}
 HANDOFF_TREE = r'''set -eu
 dt=/sys/firmware/devicetree/base
 dump_property() {
@@ -67,13 +71,14 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
-for marker in gemini,uboot-handoff gemini,uefi-hello-result; do
+for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
 awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
 '''
 HANDOFF_MARKER = 'chosen/gemini,uboot-handoff'
 EFI_MARKER = 'chosen/gemini,uefi-hello-result'
+CONSOLE_MARKER = 'chosen/gemini,uefi-console-result'
 
 
 def handoff_tree(ssh):
@@ -92,7 +97,7 @@ def handoff_tree(ssh):
 
 
 def verify_handoff_tree(before, after, profile):
-    if HANDOFF_MARKER in before or EFI_MARKER in before:
+    if any(key in before for key in (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER)):
         raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
     for key, value in before.items():
         if key == 'reserved-memory/reserve-memory-dram_r0_dummy_read/alloc-ranges':
@@ -105,12 +110,15 @@ def verify_handoff_tree(before, after, profile):
             continue
         if key != 'memtotal_kib' and after.get(key) != value:
             raise RuntimeError(f'Linux handoff changed LK property {key}')
-    marker = b'efi\0' if profile == 'efi-linux' else b'fit\0'
+    marker = b'efi\0' if profile in EFI_LINUX_PROFILES else b'fit\0'
     if after.get(HANDOFF_MARKER) != marker.hex():
         raise RuntimeError('Linux lacks the U-Boot FIT handoff marker')
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
+    expected_console = b'passed\0'.hex() if profile == 'efi-console' else None
+    if after.get(CONSOLE_MARKER) != expected_console:
+        raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
 
 
 def module(name, path):
@@ -126,7 +134,7 @@ efi_linux = module('efi_linux', ROOT / 'tools/qualify-efi-linux.py')
 
 
 def candidate_system(before, profile):
-    return efi_linux.SYSTEM if profile == 'efi-linux' else before['system']
+    return efi_linux.SYSTEM if profile in EFI_LINUX_PROFILES else before['system']
 
 
 def rescue_identity(before, candidate):
@@ -173,7 +181,7 @@ def candidate_return(ssh, before, directory, profile):
         tree = handoff_tree(ssh)
         qualify.save(directory, 'candidate-tree.json', tree)
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
-        if profile == 'efi-linux':
+        if profile in EFI_LINUX_PROFILES:
             efi_linux.evidence(ssh, directory, qualify, tree)
         return after
     raise RuntimeError('Healthy candidate Linux did not return within 360s')
@@ -360,7 +368,7 @@ def trial(directory, profile, before, ssh):
     recovery_before = before
     if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
         try:
-            if profile == 'efi-linux':
+            if profile in EFI_LINUX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
             middle = candidate_return(ssh, before, directory, profile)
@@ -439,11 +447,11 @@ def main():
         qualify.check_host_idle()
         before = snapshot(ssh)
         tree = handoff_tree(ssh) if args.profile in LINUX_PROFILES else None
-        if tree is not None and (HANDOFF_MARKER in tree or EFI_MARKER in tree):
+        if tree is not None and any(key in tree for key in (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER)):
             raise RuntimeError('Baseline contains a stale U-Boot/EFI marker')
         candidate, sha = PROFILES[args.profile]
         backend.checked_image(candidate.resolve(strict=True), sha)
-        if args.profile == 'efi-linux':
+        if args.profile in EFI_LINUX_PROFILES:
             efi_linux.payload()
         qualify.accepted_boot_bytes(ACCEPTED)
         usb = backend.usb_snapshot('3-2')

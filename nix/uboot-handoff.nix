@@ -1,9 +1,10 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
+assert !efiConsole || efiLinux;
 let
-  profile = if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
+  profile = if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
   defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
 in
 crossPkgs.buildUBoot {
@@ -13,16 +14,30 @@ crossPkgs.buildUBoot {
   inherit defconfig;
   preConfigure = ''
     echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${defconfig}
+    ${buildPkgs.lib.optionalString efiConsole ''
+    echo 'CONFIG_GEMINI_EFI_CONSOLE=y' >> configs/${defconfig}
+    echo 'CONFIG_DEFAULT_DEVICE_TREE="mt6797-gemini-pda-console"' >> configs/${defconfig}
+    ''}
   '';
   SOURCE_DATE_EPOCH = 1788493603;
   filesToInstall = [
     "u-boot" "u-boot.bin" "u-boot.dtb" "u-boot.map" ".config"
-  ] ++ buildPkgs.lib.optional efiSmoke "lib/efi_loader/helloworld.efi";
+  ] ++ buildPkgs.lib.optional efiSmoke "lib/efi_loader/helloworld.efi"
+    ++ buildPkgs.lib.optional efiConsole "lib/efi_loader/gemini_console.efi";
   postBuild = ''
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-smoke-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-reset-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-watchdog-readback-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-boot-flow-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-gop-stride-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-console-fdt-host.py
+    ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
+    grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
+    ${crossPkgs.stdenv.cc.targetPrefix}nm u-boot > linked-symbols.txt
+    if grep -Eq 'gemini_(stage0_probe|hold_secs|band)' linked-symbols.txt; then
+      echo 'retired early framebuffer/timing diagnostics remain linked' >&2
+      exit 1
+    fi
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/mach-mediatek/mt6797/init.o \
       | sed -n '/<reset_cpu>:/,/^$/p' > reset-cpu-disassembly.txt
     grep -Fq gemini_reset reset-cpu-disassembly.txt
@@ -69,7 +84,7 @@ crossPkgs.buildUBoot {
         exit 1
       fi
     done
-    test "$(fdtget u-boot.dtb /framebuffer@7dfb0000 status)" = disabled
+    test "$(fdtget u-boot.dtb /framebuffer@7dfb0000 status)" = ${if efiConsole then "okay" else "disabled"}
     ${buildPkgs.lib.optionalString efiSmoke ''
     ${buildPkgs.python3}/bin/python3 - <<'PY_EFI'
     import struct

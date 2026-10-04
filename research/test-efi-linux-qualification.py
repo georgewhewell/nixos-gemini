@@ -10,6 +10,14 @@ r = importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
 e = r.efi_linux
 
 class EfiProof(unittest.TestCase):
+    def test_console_requires_its_own_successful_efi_application(self):
+        after={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex()}
+        r.verify_handoff_tree({},after,'efi-console')
+        for tree in ({r.HANDOFF_MARKER:b'efi\0'.hex()},
+                     dict(after,**{r.CONSOLE_MARKER:b'failed\0'.hex()})):
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-console')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},after,'efi-linux')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree(after,after,'efi-console')
     def setUp(self):
         self.entries = [(0x40000000,0x40001000,'Reserved'),
                         (0x40001000,0x43fff000,'Conventional'),
