@@ -31,8 +31,10 @@ daemon-unit fixes; normal NixOS generation updates remain unfinished. See
 [storage evidence](research/PERSISTENCE.md).
 A complete offline backup of the persistent filesystem now passes journal
 recovery in a separate host copy, filesystem checks and retained-file proofs.
-Paging under pressure remains to be checked; swap activation alone does not
-prove hibernation.
+Paging under a memory-cgroup limit now passes with zswap writeback temporarily
+enabled. M69's default disables that mechanism and failed the pressure test;
+the corrected kernel candidate builds but still needs boot qualification.
+Hibernation remains unqualified.
 The hibernation-watchdog kernel correction has now passed a separate normal
 boot/recovery trial, including an ordinary Nix build and data retention.
 Hibernation, deep idle and the complete lid power policy are not qualified.

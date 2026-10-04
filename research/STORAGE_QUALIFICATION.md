@@ -3,7 +3,9 @@
 Persistent home and the Nix store/database work on p32. The fixed 5 GiB p34
 swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
-`handoff/fixed-swap-01`. Paging under pressure and hibernation remain unqualified.
+`handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
+temporarily enabled; the default-policy correction and hibernation remain
+unqualified. The latest active-swap boot is recorded in `handoff/swap-io-03`.
 
 ## Filesystem and partition geometry
 
@@ -282,5 +284,77 @@ satisfy the check. The probe does not write directly to the block device.
 The host self-test, strict compiler checks and static ELF inspection pass.
 The artifact is `handoff/fixed-swap-io-probe`, binary SHA-256
 `e2d910dc9ccacf3521f091089890cac47e12ee06a1f6df2b98d8ffe859862867`.
-It has not been executed on the device. Active swap and reboot persistence
-do not establish paging under pressure or hibernation save/restore.
+Active swap and reboot persistence do not establish paging under pressure or
+hibernation save/restore. Device pressure trials are recorded below.
+
+## Pressure trials and zswap writeback
+
+`tools/qualify-swap-io.py` runs the 128 MiB probe in a target service limited
+to 64 MiB of memory, 256 MiB of swap and 90 seconds. It verifies the actual
+service limits and process exit, the complete probe result, unchanged M69
+identity, watchdog ownership, active swap and retained home/Nix/EFI proofs.
+An independent host service waits for authoritative worker termination. On
+failure it stops and clears only the named probe service, then preserves the
+swap layout if full health and retention pass. Otherwise it uses the qualified
+factory GPT/header restoration. Ten host tests cover evidence rejection,
+runtime-policy cleanup and both recovery branches.
+
+```sh
+python3 tools/test-qualify-swap-io.py
+python3 tools/qualify-swap-io.py --out NEW_DIRECTORY
+```
+
+Default is read-only preflight; `--execute` starts the bounded device trial.
+Executed sources, probe bytes, target service properties and diagnostics are
+retained privately in the requested directory.
+
+The first trial, `handoff/swap-io-01`, failed with a memory-cgroup OOM before
+producing a valid probe result. Its independent rescue restored the exact
+factory layout and healthy M69 boot `216413ef-1fc6-42f0-a37c-d8161fe8939d`,
+retaining all ten ordinary Nix outputs and original persistence/EFI proofs.
+The final audit found no writer and matched all fifteen executed sources.
+
+M69 has zswap enabled with LZ4, but `shrinker_enabled=N`. Its Linux 7.1
+`zswap_compress()` stores incompressible pages uncompressed in the pool;
+`zswap_shrinker_count()` and `zswap_shrinker_scan()` refuse pressure-driven
+writeback while that switch is off. The live policy otherwise allowed swap:
+`vm.swappiness=60`, parent `memory.swap.max=max`, and
+`memory.zswap.writeback=1`. The later controlled runtime correction passes
+the same allocation and memory limit, supporting this diagnosis.
+
+The corrected trial temporarily enables the shrinker using `ExecStartPre`
+and restores its original disabled value using `ExecStopPost`. Its result
+distinguishes that runtime correction from the unmodified default policy.
+The first setup attempt, `handoff/swap-io-02`, failed before producing paging
+evidence: the system manager's PATH contains only systemd tools, so the setup
+script could not find `cat`. Automatic factory restoration returned healthy
+M69 `7f5b8d96-fcec-423f-9881-b24e464d2fab`, retaining all prior proofs. The
+restricted-PATH failure was reproduced on the host; an explicit target PATH
+then passed actual device setup/process/cleanup against a harmless temporary
+file. Evidence: `handoff/swap-io-host-checks/setup-reproduction.json` and
+`target-setup/`. The retry uses that tested service environment.
+
+The opt-in `mainlineNixosPowerSwapBundle` enables
+`CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y` from boot, retaining the previously
+qualified watchdog correction. Its complete build passes, but it is not yet
+hardware-qualified or installed. Artifact pins are in
+[POWER_QUALIFICATION.md](POWER_QUALIFICATION.md).
+
+The corrected hardware trial `handoff/swap-io-03` passed on M69 boot
+`f48ecf05-1772-49e7-898a-ce9bd3740c5e`, following the successful reinstall and
+ordinary reboot in `handoff/fixed-swap-04`. The probe verified all 134,217,728
+bytes under the enforced 67,108,864-byte memory limit. Its own `VmSwap`
+reached 131,080 KiB, including 8 KiB beyond the mapped test buffer. p34 counters
+advanced by 262,184 written sectors and 238,384 read sectors (512 bytes each).
+The service exited successfully with no remaining process. The captured
+kernel diagnostics contained no OOM, I/O-error or kernel-fault matches.
+
+The independent policy observation was `Y` during the test; stopping the
+service ran `ExecStopPost` and restored `N`. Full Linux/watchdog health, active
+swap, all ten retained ordinary Nix outputs and original home/EFI proofs
+passed. The independent rescue accepted the complete commit. The final locked
+audit repeats live health and retention, verifies all fifteen executed-source
+hashes and the probe digest, and confirms inactive services and no writer.
+This qualifies real paging under memory-cgroup pressure with the runtime
+correction. Installed M69 still has its original disabled-shrinker policy;
+booting and promoting the built correction remains necessary.

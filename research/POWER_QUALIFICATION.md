@@ -69,7 +69,9 @@ never flashed. It is not the new candidate above.
 Normal boot and recovery are the first checks. Hardware watchdog expiry,
 ordinary suspend and failed-suspend paths remain to be exercised before image
 I/O. Fixed-swap installation, automatic factory restoration and active swap
-after an ordinary reboot now pass; paging under pressure remains unqualified.
+after an ordinary reboot now pass. Paging under pressure also passes with the
+zswap shrinker temporarily enabled; its persistent kernel correction still
+needs a device boot.
 See `STORAGE_QUALIFICATION.md`. This power runner still expects factory GPT and
 no swap, so its admission/recovery checks need adaptation before another
 candidate trial. A72 offline/on and RTC power-on need validation.
@@ -96,3 +98,40 @@ verified all ten ordinary Nix outputs and their proof bytes, home GC roots and
 database identities, then confirmed no writer remained. All eleven archived
 qualification sources match the executed code. The candidate remains opt-in;
 M69 is still installed, and the published EFI default is unchanged.
+
+## Candidate with zswap writeback enabled
+
+The first bounded swap pressure trial exposed a memory-cgroup OOM with M69's
+zswap shrinker disabled. Linux 7.1 stores incompressible pages in its zswap
+pool, so pressure-driven writeback needs separate validation; see
+[STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md).
+The runtime correction subsequently passed in `handoff/swap-io-03`: a 128 MiB
+pattern survived real p34 writes/reads under a 64 MiB memory-cgroup limit,
+with full health and retained data afterward. Cleanup restored the original
+runtime setting. This does not qualify a boot with the new candidate below.
+
+`mainlineNixosPowerSwapBundle` extends the watchdog-fixed power candidate with
+`nix/mainline-swap.fragment`. The complete built configuration differs from
+the previous power kernel only by enabling
+`CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y`. The new fragment is recorded in the A72
+provenance manifest and the device tree is rebound to the selected kernel.
+The complete build and all sixteen real-driver watchdog PM sequences pass.
+Earlier M69 and power bundle identities remain unchanged.
+
+```sh
+nix build .#mainlineNixosPowerSwapBundle --out-link ../handoff/power-swap-linux
+```
+
+| Artifact | Identity |
+|---|---|
+| Bundle | `/nix/store/mb5adwsfnri1jswcxhs6vl23hnj3jy5m-gemini-mainline-nixos-bundle` |
+| Kernel | `/nix/store/b26xkc1n67c1xiz90fnzqg17w5dhvff3-gemini-mainline-power-swap-kernel-7.1.3` |
+| System | `/nix/store/7vg1vqfn8v19px9k8bhcyi4yvndpszzb-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade` |
+| Padded p22 SHA-256 | `fb8d164dfd9b658bb3c247fd7ec39106ed30ca4656c09d94a6c1efcc50a31f9a` |
+| Squashfs | 427,048,960 bytes; `f52643cb9360a48ca4b9058d34d1aa579535ffdcae7386a8cbcdb955195605a7` |
+| Kernel notes SHA-256 | `1bffbfeaa804fe8e0bd6735250ed38214b99b27efc86dca595b02d29940748b3` |
+
+Build logs, the exact configuration diff and the artifact manifest are in
+`handoff/power-swap-build`. This candidate is not installed and has not passed
+a device boot. The old factory-only power runner cannot qualify it without
+explicit updates for the new system, kernel identity and swap layout.

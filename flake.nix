@@ -902,6 +902,15 @@
       baselineDtb = mainlineP22Baseline.serviceabilityDtb;
     };
 
+    mainlinePowerSwapKernel = import ./nix/mainline-swap-kernel.nix {
+      kernel = mainlinePowerKernel;
+    };
+    mainlinePowerSwapDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlinePowerSwapKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
     # The accepted baseline plus MicroSD, and nothing else.
     #
     # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
@@ -1269,6 +1278,17 @@
       }];
     };
 
+    mainlineNixosPowerSwapSystemCross = mainlineNixosPowerSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 20 mainlinePowerSwapKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 20 mainlinePowerSwapKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 20 mainlinePowerSwapKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 20 mainlinePowerSwapKernel;
+        };
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1328,6 +1348,7 @@
     mainlineNixosKeysSquashfs = mkMainlineSquashfs mainlineNixosKeysSystemCross.config.system.build.toplevel;
 
     mainlineNixosPowerSquashfs = mkMainlineSquashfs mainlineNixosPowerSystemCross.config.system.build.toplevel;
+    mainlineNixosPowerSwapSquashfs = mkMainlineSquashfs mainlineNixosPowerSwapSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1421,6 +1442,15 @@
       squashfs = mainlineNixosPowerSquashfs;
       nixosToplevel = mainlineNixosPowerSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosPowerSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosPowerSwap = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlinePowerSwapKernel;
+      serviceabilityDtb = mainlinePowerSwapDtb;
+      squashfs = mainlineNixosPowerSwapSquashfs;
+      nixosToplevel = mainlineNixosPowerSwapSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosPowerSwapSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -1966,6 +1996,8 @@
       mainlineNixosKeysBundle = mainlineNixosKeys.bundle;
       mainlineNixosPowerBundle = mainlineNixosPower.bundle;
       mainlineNixosPowerKernel = mainlinePowerKernel;
+      mainlineNixosPowerSwapBundle = mainlineNixosPowerSwap.bundle;
+      mainlineNixosPowerSwapKernel = mainlinePowerSwapKernel;
       watchdogHibernationCheck = import ./nix/watchdog-hibernation-check.nix {
         inherit buildPkgs crossPkgs;
         source = linux-gemini;
@@ -2066,6 +2098,7 @@
       gemini-mainline-nix = mainlineNixosNixSystemCross;
       gemini-mainline-keys = mainlineNixosKeysSystemCross;
       gemini-mainline-power = mainlineNixosPowerSystemCross;
+      gemini-mainline-power-swap = mainlineNixosPowerSwapSystemCross;
     };
 
     # Development shell

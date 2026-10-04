@@ -1,0 +1,3 @@
+# Linux 7.1 keeps incompressible pages in zswap. Let memory-cgroup reclaim
+# write those pages to p34 instead of exhausting the group's memory limit.
+CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y
