@@ -92,7 +92,8 @@ supervised rescue returned healthy direct M69 boot
 partitions. This proves EFI application entry/return; M69's kernel still has
 EFI disabled, so the full EFI Linux trial uses a separate kernel and system.
 
-The full EFI profile subsequently passed in `handoff/uboot-efi-linux-04`.
+The full EFI profile subsequently passed in `handoff/uboot-efi-linux-04`
+and repeated in `handoff/uboot-efi-linux-05`.
 It required removing stale LK carrier initrd properties and rebinding the
 DT's CPU provenance to the actual EFI kernel. Linux verified its runtime
 identity, brought up both A72 cores, initialized EFI and its initrd table,
@@ -100,7 +101,10 @@ retained all 4 GiB and LK reservations, and passed full service health.
 The matching content-addressed squashfs was installed separately on p29;
 the accepted M69 squashfs was verified before and after installation.
 Automatic mtkclient rescue restored healthy M69 boot
-`57d9effa-69ba-4f0f-bbc6-1c085f031b2b`, with unchanged GPT and boot partitions.
+`57d9effa-69ba-4f0f-bbc6-1c085f031b2b`, then
+`b01b9b87-d724-4f1d-9cc3-583eae64617e`, with unchanged GPT and boot partitions.
+The two EFI boots had identical memory maps and LK handoff data; neither
+needed physical recovery.
 The exact artifacts and failed-trial diagnoses are recorded in
 [BOOT_HANDOFF.md](BOOT_HANDOFF.md). This qualifies EFI Linux handoff, while
 the production EFI console, storage and boot-manager paths remain unfinished.

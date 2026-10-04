@@ -5,7 +5,7 @@ after removing an unmapped framebuffer probe. Both automatically recovered
 fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles and
 one corrected EFI-application/FIT handoff cycle also passed. The corrected
 EFI Linux profile passed full service health, ExitBootServices, the full
-4 GiB EFI memory map and automatic M69 rescue in trial 04. GOP, keyboard,
+4 GiB EFI memory map and automatic M69 rescue in trials 04 and 05. GOP, keyboard,
 storage and a boot manager remain unfinished.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
@@ -385,3 +385,14 @@ phase `0x474d10ee`. Automatic rescue restored healthy direct M69 boot
 `57d9effa-69ba-4f0f-bbc6-1c085f031b2b`. Both full image readbacks and all
 GPT/p22/p30/p31 guards passed. The result is `profile_qualified=true`;
 M69 remains the persistent boot image.
+
+The identical carrier repeated successfully in `handoff/uboot-efi-linux-05`.
+Candidate boot `72aa37b6-5e8f-4206-8596-c7fc04e7c583` independently passed
+runtime identity, both A72 starts, full service health and EFI checks. Its
+40-entry EFI map and complete LK handoff tree matched trial 04 exactly.
+After the planned reboot, preloader returned at 206.019 seconds and the
+automatic rescue restored healthy M69 boot
+`b01b9b87-d724-4f1d-9cc3-583eae64617e`. Candidate/rescue full readbacks,
+fresh exit-event phase, GPT and all boot-partition checks passed again.
+Neither successful trial needed physical recovery. `repeat-comparison.json`
+records the independent boot identities and matching evidence.
