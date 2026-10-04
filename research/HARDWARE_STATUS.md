@@ -24,8 +24,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 
 | Area | Required evidence |
 |---|---|
-| Recovery / mtkclient | Read/reboot and exact accepted-image boot rewrite now pass; integrate the candidate/rollback workflow and qualify unattended failure recovery |
-| U-Boot / UEFI | See BOOT_HANDOFF.md; host builds alone do not qualify hardware |
+| Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
+| U-Boot / UEFI | Software reset, watchdog expiry and the first full M69 FIT handoff pass; repeat handoff and EFI/UEFI work remain. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -45,8 +45,9 @@ The mtkclient logs (`handoff/mtkclient-test/printgpt.log`, `multi.log`) show two
 successful GPT reads, including the then-existing swap partition. Subsequent
 return to Linux was not demonstrated. Claims that the whole DA/read sequence
 failed at USB speed switching are not supported by these logs. The successful
-M69 flashing transaction still uses SP Flash Tool. The owner now prioritises
-making mtkclient work.
+M69 flashing transaction at the start of this work used SP Flash Tool. The
+owner then prioritised making mtkclient work; the qualified boot-only trials
+below now use it without a vendor-tool fallback.
 
 The patched mtkclient package and supervised read/reboot runner are described
 in [MTKCLIENT.md](MTKCLIENT.md). The initial October 4 trial read the primary
@@ -70,6 +71,15 @@ Detailed evidence and the packet-size diagnosis are in MTKCLIENT.md.
 
 The following boot-only write trial also passed: the DA acknowledged writing
 the exact accepted M69 image, full readback matched, and it rebooted
-automatically to healthy M69. Current boot ID is
+automatically to healthy M69. That trial returned boot ID
 `74d10f78-c5e0-48fd-915d-9eea69e6b87b`; GPT/p22 hashes and geometry remain
 unchanged. Evidence: `handoff/mtkclient-boot-write-20261004-01`.
+
+The durable candidate/rescue baseline subsequently passed, followed by
+hardware-qualified U-Boot software-reset and 31-second watchdog-expiry tests.
+Removing an unmapped post-MMU framebuffer probe resolved the early U-Boot
+failure. The first plain U-Boot FIT handoff then reached fully healthy M69
+with its Linux-visible marker, full RAM bank and unchanged modem reservations.
+The supervised trial restored direct M69 afterward. Details and exact
+artifacts are in [BOOT_HANDOFF.md](BOOT_HANDOFF.md); these boot tests do not
+qualify EFI Linux, writable persistence, fixed swap or hibernation.

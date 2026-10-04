@@ -2,7 +2,8 @@
 
 Status: software reset and 31-second watchdog expiry are hardware-qualified
 after removing an unmapped framebuffer probe. Both automatically recovered
-fully healthy M69 through mtkclient. Linux handoff is being qualified.
+fully healthy M69 through mtkclient. The first plain Linux handoff also passed;
+repeat qualification is running. EFI smoke remains unqualified.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -169,3 +170,20 @@ ramdisk, but must remain within low RAM. After observation it reboots the
 identified candidate into the already waiting M69 rescue. These profiles do
 not permanently accept a carrier. The M69 kernel's forced command line
 retains its existing baseline health capability.
+
+## First Linux handoff
+
+`handoff/uboot-handoff-fbfix-01` booted the exact handoff carrier into healthy
+M69, boot ID `2534bdc5-fdeb-41fa-aeb5-7cd234312097`. Linux exposed
+`/chosen/gemini,uboot-handoff=fit`; the 4 GiB RAM bank, complete 48-byte modem
+table and LK reservations matched the direct-Linux baseline. Usable memory
+was 3,784,496 KiB versus 3,784,500 KiB on direct M69. The expected dummy-read
+allocation range began at `0x458fc000` after the larger FIT ramdisk instead of
+`0x45259000` after the direct-Linux initramfs; its upper bound was unchanged.
+
+The runner then rebooted into its waiting rescue writer. Full accepted M69
+health returned as boot `caaedcf2-65c5-4872-9131-fed97f1ad29d`, with unchanged
+GPT/p22/p30/p31. The rescue phase was `0x474d10e9`, written by
+`armv8_switch_to_el2_prep` immediately before Linux entry. The initial result's
+decoder did not yet name that value; the recorded Linux marker and full
+candidate health independently prove the handoff.
