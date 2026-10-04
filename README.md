@@ -64,8 +64,9 @@ console/GPU restoration.
 The accepted path uses the existing boot firmware, an Android-format Linux
 image, a watchdog-managed initramfs and NixOS stage 2. The Nix store squashfs
 on p29 is mounted read-only. U-Boot/UEFI, GOP and a boot manager are unfinished.
-The [U-Boot profiles](research/BOOT_HANDOFF.md) are host-built qualification
-artifacts; none of the new carriers has been accepted on hardware.
+The [U-Boot profiles](research/BOOT_HANDOFF.md) have returned automatically to
+rescue in hardware trials. Their early reset remains under investigation;
+Linux handoff and the intended watchdog-expiry path are still unqualified.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797
@@ -73,8 +74,10 @@ shutdown packet size, and propagate partition-write failures. Two corrected
 October 4 sessions read GPT and the full M69 boot image with matching hashes
 and returned automatically to healthy M69. A boot-only rewrite of the exact
 accepted image also passed write acknowledgement, full readback and a fresh
-healthy boot. SP Flash Tool remains available while the remaining recovery
-workflow is migrated to mtkclient.
+healthy boot. The durable candidate/rescue supervisor has also passed a full
+M69 baseline trial and restored M69 after the U-Boot trials using mtkclient.
+The older general SP Flash Tool harness remains available; the new supervised
+bootloader runner selects mtkclient explicitly with no automatic fallback.
 
 Device trials need a fresh device/boot identity, the shared host locks, and
 verification of the resulting boot and health. Preserve the factory GPT while

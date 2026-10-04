@@ -259,3 +259,13 @@ lock inheritance and systemd session lifetime. The first baseline attempt,
 `handoff/mtkclient-supervisor-baseline-01`, stopped before reboot or DA access:
 `setsid` forked under systemd and its parent exited. `setsid --wait` fixes that
 lifetime; the original failed evidence and unchanged-device check are retained.
+
+The optional `--capture-boot-phase` read-only diagnostic reads exactly four
+bytes from TOPRGU NONRST_REG2 (`0x10007024`) using `da peek`, followed by the
+same GPT/boot reads, acknowledged reboot and full M69 health check. Hardware
+qualification passed in `handoff/mtkclient-phase-read-01`, with no eMMC writes,
+199.0 seconds to healthy M69 and boot ID
+`15d76bb0-5d91-498e-8727-e047d6f5088b`. It read zero after a normal Linux reboot;
+this does not establish whether a U-Boot phase survives a direct rescue path.
+The candidate/rescue backend now records that same fixed register before
+each write so the next rescue can investigate the early U-Boot return.

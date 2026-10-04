@@ -102,3 +102,11 @@ these corrected reset/watchdog hashes:
 | EFI smoke | `a282352804bad1df2128ab66ab24848c138dd57bd4f6ce63336354058d21a75a` |
 | Reset | `9da4d1d570fd864b6a6f65012516e532644088cfdae488e720d03532cc08dc65` |
 | Watchdog | `1dd22447fc113180a30cefc368d5091f7df64046960537880d73775959e38016` |
+
+The corrected watchdog trial (`handoff/uboot-watchdog-mtkclient-02`) also
+recovered healthy M69, boot ID `3c53798b-adfa-42ec-a540-5b68f97e6e3f`, but its
+return was 9.044 seconds. The key-readback correction therefore does not
+resolve the observed early return. Do not promote this result to watchdog
+qualification or proceed on the assumption that `board_late_init` was reached.
+Next diagnostic: qualify a read-only TOPRGU phase capture, then capture the
+phase during rescue if the register survives the vendor boot stages.

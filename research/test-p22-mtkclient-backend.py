@@ -111,6 +111,7 @@ class EvidenceTests(unittest.TestCase):
         self.gptsha = backend.digest(self.gpt)
         (self.directory / 'boot-readback.img').write_bytes(self.image)
         (self.directory / 'gpt-primary.bin').write_bytes(self.gpt)
+        (self.directory / 'boot-phase.bin').write_bytes(bytes.fromhex('ec104d47'))
         self.log = backend.WRITE_ACK + '\n' + backend.ACK + '\n'
 
     def verify(self, rc=0, log=None):
@@ -131,6 +132,15 @@ class EvidenceTests(unittest.TestCase):
     def test_nonzero_with_valid_bytes_still_fails(self):
         with self.assertRaises(RuntimeError):
             self.verify(rc=1)
+
+    def test_missing_or_partial_phase_read_fails(self):
+        path = self.directory / 'boot-phase.bin'
+        path.write_bytes(b'abc')
+        with self.assertRaises(RuntimeError):
+            self.verify()
+        path.unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.verify()
 
     def test_short_read_or_different_gpt_fails(self):
         for name in ('boot-readback.img', 'gpt-primary.bin'):

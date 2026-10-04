@@ -20,7 +20,8 @@ MTK = '/nix/store/vl6ynxsir46vp8w3445w342vdf0xm23b-mtkclient-gemini-2.1.4.1/bin/
 SIZE = 16777216
 ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote boot.img to sector 362496 with sector count 32768.'
-COMMANDS = ('printgpt;ro 0 0x8000 gpt-primary.bin;w boot boot.img;'
+COMMANDS = ('da peek 0x10007024 4 --filename boot-phase.bin;'
+            'printgpt;ro 0 0x8000 gpt-primary.bin;w boot boot.img;'
             'r boot boot-readback.img;reset --bootmode reboot')
 KEYS = {'version', 'mtk', 'stage_image', 'candidate_state', 'rollback_state',
         'candidate_sha256', 'rollback_sha256', 'gpt_sha256', 'usb_port'}
@@ -123,6 +124,8 @@ def verify_result(returncode, log, directory, expected, gpt_sha):
         path = directory / name
         if path.stat().st_size != size or digest(path.read_bytes()) != sha:
             raise RuntimeError(name + ': readback length or SHA-256 mismatch')
+    if (directory / 'boot-phase.bin').stat().st_size != 4:
+        raise RuntimeError('TOPRGU phase read must return exactly four bytes')
 
 
 def scan_missed(returncode, log, window):
@@ -137,7 +140,7 @@ def attempt(config, state, directory, expected):
     image = checked_image(Path(config['stage_image']), expected)
     (directory / 'boot.img').write_bytes(image)
     (directory / 'boot.img').chmod(0o400)
-    for name in ('gpt-primary.bin', 'boot-readback.img'):
+    for name in ('gpt-primary.bin', 'boot-readback.img', 'boot-phase.bin'):
         (directory / name).touch(exist_ok=False)
     window = BootWindow()
     window.observe(usb_snapshot(config['usb_port']), time.monotonic())
@@ -210,6 +213,9 @@ def main():
     try:
         rc = attempt(config, args.state, directory, expected)
         result.update(returncode=rc, first_boot_window_departed=(rc == 0))
+        if rc == 0:
+            phase = int.from_bytes((directory / 'boot-phase.bin').read_bytes(), 'little')
+            result['toprgu_phase_before_write'] = f'0x{phase:08x}'
     except Exception as error:
         result['error'] = str(error)
         print(str(error), file=sys.stderr, flush=True)
