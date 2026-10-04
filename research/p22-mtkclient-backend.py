@@ -158,7 +158,7 @@ def attempt(config, state, directory, expected):
                                  stderr=subprocess.STDOUT, stdin=9)
         try:
             while child.poll() is None:
-                log = logpath.read_text()
+                log = logpath.read_text(errors='replace')
                 window.acknowledged |= ACK in log
                 window.observe(usb_snapshot(config['usb_port']), time.monotonic())
                 if not ready and 'Waiting for PreLoader' in log:
@@ -171,7 +171,7 @@ def attempt(config, state, directory, expected):
             # The privileged timeout reaps its client before any terminal
             # state releases the supervisor to another attempt.
             child.wait(timeout=190)
-    log = logpath.read_text()
+    log = logpath.read_text(errors='replace')
     window.acknowledged |= ACK in log
     save(directory / 'exit.json', {'returncode': child.returncode})
     try:
@@ -214,6 +214,7 @@ def main():
         result['error'] = str(error)
         print(str(error), file=sys.stderr, flush=True)
     finally:
+        result['returncode'] = rc
         save(args.state.with_name(args.state.name + '.mtk.json'), result)
     return rc
 

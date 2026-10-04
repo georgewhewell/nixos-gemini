@@ -211,3 +211,51 @@ require physical recovery. Keep the existing SP Flash Tool rescue available
 while migrating the remaining recovery workflow. U-Boot carrier trials and
 repartitioning require their own qualification; this accepted-image mode
 does not allow arbitrary boot images or changes to the partition table.
+
+## Durable candidate/rescue qualification
+
+`tools/qualify-uboot-recovery.py` uses the existing transaction holder,
+writer wrapper and rollback supervisor with the pinned mtkclient backend.
+Its baseline hardware trial passed in workspace
+`handoff/mtkclient-supervisor-baseline-02`. Both writes were to accepted M69;
+both had DA write acknowledgements, complete readbacks and automatic reboots.
+The intermediate healthy boot was `3b867164-e6a3-4753-9945-36b479b50a1d` and
+the final healthy rescue boot was `dd0c674a-74cc-4b6d-bc3b-879bd55700a4`.
+GPT, p22, p30, p31, factory geometry, system version and service health matched.
+No physical recovery was needed. One device-free 180-second scan expired and
+was retried before the deliberate second Linux reboot reached rescue.
+
+The backend observes the physical USB port and device numbers from DA entry
+through the first normal post-DA preloader's departure. Only then does it
+report candidate success and arm rescue immediately. This prevents rescue
+from catching the initial boot and falsely appearing to recover a candidate
+that never executed. It also avoids the legacy 15-second delay, which could
+miss an early U-Boot reset. Each attempt records the USB sequence and raw DA
+log separately. A connected failure is terminal; only a timeout with no
+observed MediaTek device or handshake evidence maps to a retryable scan miss.
+
+Private staged images are bound to the candidate/rescue role and exact SHA.
+The privileged client retains the writer lock through its stdin descriptor,
+including if its host observer disappears. Host systemd services own the
+bounded transaction, candidate writer, rescue supervisor and network watcher.
+Selecting this backend never falls back to SP Flash Tool.
+
+```sh
+python3 tools/qualify-uboot-recovery.py --profile baseline \
+  --out ../handoff/mtkclient-supervisor-preflight-new
+```
+
+Use a fresh directory and add `--execute` to run the complete baseline trial.
+The separate `reset` and `watchdog` profiles select only the pinned M69 U-Boot
+carriers in `BOOT_HANDOFF.md`. They always restore M69, and a successful
+recovery alone does not prove which code initiated the candidate reset.
+The older general recovery harness retains its existing backend selection;
+this runner qualifies the shared supervisor path for the bootloader trials.
+
+Host validation: 15 backend evidence/order tests, the full recovery-harness
+suite, self-accept supervisor tests (including immediate mtkclient arming and
+no retry on connected failure), shellcheck, and real host checks of privileged
+lock inheritance and systemd session lifetime. The first baseline attempt,
+`handoff/mtkclient-supervisor-baseline-01`, stopped before reboot or DA access:
+`setsid` forked under systemd and its parent exited. `setsid --wait` fixes that
+lifetime; the original failed evidence and unchanged-device check are retained.

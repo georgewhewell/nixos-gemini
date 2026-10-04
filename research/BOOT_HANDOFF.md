@@ -43,6 +43,15 @@ modem reservations, and full M69 health. Repeat boots before adding the EFI
 smoke test. A completed EFI path still needs EFI Linux/ExitBootServices,
 GOP, keyboard, storage and a boot manager.
 
+The mtkclient candidate/rescue supervisor now has a hardware-qualified M69
+baseline (`handoff/mtkclient-supervisor-baseline-02`); both writes, readbacks,
+USB reboot sequences and final full service health passed. Run
+`python3 tools/qualify-uboot-recovery.py --profile reset --out NEW_DIRECTORY`
+for read-only preflight; `--execute` starts the pinned reset carrier with the
+durable M69 rescue supervisor already waiting. `--profile watchdog` selects
+the independent expiry carrier. The runner's recovery result deliberately
+does not equate a preloader return with proof of U-Boot execution.
+
 The September 9 carrier flashed but no Linux or later reset was observed;
 its failure boundary is unknown. The later panic/reset fix was never deployed.
 Do not reuse that trial's M37 payload or stale device guard.
