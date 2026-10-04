@@ -16,6 +16,7 @@ crossPkgs.buildUBoot {
   postBuild = ''
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-smoke-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-reset-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-watchdog-readback-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-boot-flow-host.py
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/mach-mediatek/mt6797/init.o \
       | sed -n '/<reset_cpu>:/,/^$/p' > reset-cpu-disassembly.txt

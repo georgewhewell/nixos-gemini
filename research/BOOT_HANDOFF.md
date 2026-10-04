@@ -1,8 +1,10 @@
 # Gemini U-Boot qualification, 2026-10-04
 
-Status: host-built and tested; no new U-Boot image has been flashed. The device
-still runs accepted M69. These profiles are based on the later U-Boot worktree,
-not the September 4 WIP branch.
+Status: the reset and watchdog carriers have been flashed and automatically
+rescued through mtkclient. Both recovered fully healthy M69. The watchdog
+carrier returned too early to qualify its intended 31-second expiry; Linux
+handoff remains unqualified. These profiles are based on the later U-Boot
+worktree, not the September 4 WIP branch.
 
 ## Profiles
 
@@ -56,7 +58,7 @@ The September 9 carrier flashed but no Linux or later reset was observed;
 its failure boundary is unknown. The later panic/reset fix was never deployed.
 Do not reuse that trial's M37 payload or stale device guard.
 
-## Built carriers
+## Original carriers and first hardware trials
 
 | Flake output | p22 SHA-256 |
 |---|---|
@@ -68,3 +70,35 @@ Do not reuse that trial's M37 payload or stale device guard.
 Artifacts and logs are rooted in the workspace `handoff/uboot-m69*` and
 `handoff/boot-consolidation-build.log`. The accepted direct-Linux M69 p22 hash is
 `913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3`.
+
+The original source revision is `77c8387ae485f3c76e508bce83e82ec892ee9ec0`.
+The reset trial (`handoff/uboot-reset-mtkclient-01`) returned to preloader
+13.792 seconds after the first post-flash preloader departed. The watchdog
+trial (`handoff/uboot-watchdog-mtkclient-01`) returned in 9.050 seconds,
+shorter than its programmed 31-second wait. Both candidate and rescue images
+had acknowledged writes and complete verified readbacks. Final M69 health
+and GPT/p22/p30/p31 checks passed without physical recovery. These are rescue
+path passes, not proof that either intended U-Boot test branch was reached.
+
+Investigation found the watchdog setup readback compared the low write-key
+bits against the written value. M69's recorded LK handoff has WDT_LENGTH
+`0x5000`, with no `0x8` write key. U-Boot would reject an otherwise correct
+timer readback without that key and reset at `GEMINI_PHASE_WDT_FAILURE`,
+before either test branch. This is a plausible cause, not yet a measured
+phase: `/dev/mem` is absent in M69, so the retained phase register could not
+be read after rescue. The source fix `0fd3dad965c4ed586e43dcec95facae42b740a00`
+compares only the timer field. Its production-function regression reproduces
+the old failure, accepts key-present/key-absent readbacks, and rejects incorrect
+timer, enable, auto-restart, IRQ and dual-mode values.
+
+All four corrected carriers cross-built successfully with that regression
+included in each build. They are rooted at `handoff/uboot-m69-wdt-readback*`;
+log: `handoff/uboot-wdt-readback-build.log`. The qualification runner now pins
+these corrected reset/watchdog hashes:
+
+| Profile | Corrected p22 SHA-256 |
+|---|---|
+| Handoff | `d1a71f14cd36730d690b608ccfa9c68d548541db8f019e71ae1a8f238e276589` |
+| EFI smoke | `a282352804bad1df2128ab66ab24848c138dd57bd4f6ce63336354058d21a75a` |
+| Reset | `9da4d1d570fd864b6a6f65012516e532644088cfdae488e720d03532cc08dc65` |
+| Watchdog | `1dd22447fc113180a30cefc368d5091f7df64046960537880d73775959e38016` |

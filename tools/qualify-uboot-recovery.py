@@ -25,10 +25,10 @@ LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
     'baseline': (ACCEPTED, '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'),
-    'reset': (WORKSPACE / 'handoff/uboot-m69-2/boot-padded-p22.img',
-              'a63157a63b6c77c0db610900340e36792e6f47ae36c6a9b85daa6b1be0ff0ed9'),
-    'watchdog': (WORKSPACE / 'handoff/uboot-m69-3/boot-padded-p22.img',
-                 '25d0c8449562bad3291ef17315d3f788991a85303f74051e837ee58c6f4bdf3f'),
+    'reset': (WORKSPACE / 'handoff/uboot-m69-wdt-readback-2/boot-padded-p22.img',
+              '9da4d1d570fd864b6a6f65012516e532644088cfdae488e720d03532cc08dc65'),
+    'watchdog': (WORKSPACE / 'handoff/uboot-m69-wdt-readback-3/boot-padded-p22.img',
+                 '1dd22447fc113180a30cefc368d5091f7df64046960537880d73775959e38016'),
 }
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
@@ -97,6 +97,26 @@ def healthy_return(ssh, before, directory, name):
                 (directory / (name + '-last-stdout.txt')).write_text(error.stdout or '')
         time.sleep(3)
     raise RuntimeError('Fresh healthy accepted M69 did not return within 360s')
+
+
+def recovery_timing(directory, profile):
+    events = []
+    for state in ('candidate.state', 'supervisor-rollback.state'):
+        evidence = json.loads((directory / (state + '.mtk.json')).read_text())
+        events.append(json.loads((Path(evidence['attempt']) / 'usb-events.json').read_text()))
+    initial_departure = events[0][-1]['monotonic']
+    rescue_entry = next(event['monotonic'] for event in events[1]
+                        if event['usb'] and event['usb'][0] == '0e8d')
+    elapsed = round(rescue_entry - initial_departure, 3)
+    result = dict(seconds_from_initial_boot_preloader_departure_to_rescue_preloader=elapsed,
+                  uboot_execution_proven=False)
+    if profile == 'watchdog':
+        # A return earlier than the programmed timeout disproves this expiry
+        # qualification. Meeting the lower bound alone does not prove it.
+        result.update(programmed_watchdog_seconds=31,
+                      watchdog_elapsed_minimum_met=(elapsed >= 31), watchdog_expiry_proven=False)
+    qualify.save(directory, 'recovery-timing.json', result)
+    return result
 
 
 def stage(directory, profile, before):
@@ -188,12 +208,15 @@ def trial(directory, profile, before, ssh):
         evidence = json.loads(state.with_name(state.name + '.mtk.json').read_text())
         if evidence.get('returncode') != 0 or evidence.get('first_boot_window_departed') is not True:
             raise RuntimeError('Recovered baseline, but a writer lacks complete evidence')
+    timing = recovery_timing(directory, profile)
     result = dict(result='passed', profile=profile, recovered_boot_id=after['boot_id'],
                   proof='candidate-and-rescue-writes-with-automatic-reboot',
                   uboot_execution_proven=False)
     qualify.save(directory, 'result.json', result)
     qualify.run(['systemctl', '--user', 'stop', owner_unit, net_unit])
     print(f'PASS: {profile} recovery path; fresh healthy M69. Evidence: {directory}', flush=True)
+    if profile == 'watchdog' and not timing['watchdog_elapsed_minimum_met']:
+        print('Watchdog expiry NOT qualified: recovery preceded its programmed timeout', flush=True)
 
 
 def main():
