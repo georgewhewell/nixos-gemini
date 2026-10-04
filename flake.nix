@@ -1920,6 +1920,8 @@
       mtkclient = import ./nix/mtkclient.nix {inherit buildPkgs;};
       mtkclientGpt = import ./nix/mtkclient-gpt.nix {inherit buildPkgs;};
       mtkclientBackup = import ./nix/mtkclient-backup.nix {inherit buildPkgs;};
+      mtkclientSwap = import ./nix/mtkclient-swap.nix {inherit buildPkgs;};
+      geminiSwapProbe = import ./nix/gemini-swap-probe.nix {inherit buildPkgs crossPkgs;};
       ubootHandoff = ubootProfiles.handoff.uboot;
       ubootHandoffBundle = ubootProfiles.handoff.bundle;
       ubootEfiLinux = ubootProfiles.efiLinux.uboot;

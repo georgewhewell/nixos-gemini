@@ -314,9 +314,8 @@ acknowledged reboot. Fresh healthy M69 returned automatically as boot
 the original persistence proof and published EFI files passed subsequent checks.
 
 This package accepts only the original factory bytes. The existing boot-only
-package and recovery backend are unchanged. The disk still has 33 partitions
-and no swap. Host tests cover partial-write/restoration failures; provisioning
-a changed layout and recovering it on hardware remain separate work. See
+package and recovery backend are unchanged. That trial left 33 partitions
+and no swap. Host tests cover partial-write/restoration failures. See
 [STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md) for exact bounds, artifacts
 and the fixed-swap prerequisites.
 
@@ -329,3 +328,17 @@ expected home/Nix file proofs. Fresh healthy M69 returned automatically with
 all ten ordinary Nix outputs retained. This performs no DA flash writes and
 does not provision swap. See the storage qualification report for package
 identity, the reproducible build-input correction and backup provenance.
+
+## Fixed-swap installation and restoration
+
+The separate `mtkclientSwap` package now qualifies the bounded GPT/header
+transition. `handoff/fixed-swap-01` proved automatic factory restoration after
+the host rejected an installed layout because it misparsed BusyBox `blkid`.
+The corrected `handoff/fixed-swap-02` passed installation, full DA readback,
+healthy Linux with active 5 GiB swap, an ordinary reboot and retained data.
+Current M69 boot is `2cdddb4d-755f-43d7-acb6-e830d4a2984d`; p22/p30/p31 and
+flashinfo remain unchanged. The disk now has p34 and the smaller p32 partition
+extent, with no ext4 resize. Paging under pressure and hibernation are separate.
+The older factory-only boot/power profiles need explicit adaptation before
+reuse. See [STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md) for the guarded
+command, independent rescue, exact package and complete evidence.

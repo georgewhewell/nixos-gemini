@@ -20,18 +20,19 @@ hardware video codecs remain unfinished. The retained M51 record has successful
 WPA3/PMF on-air data and reconnect tests; scanning while associated remains limited. Cellular registration/eSIM and weak
 reception remain open.
 
-The device has the factory 33-partition GPT. Persistent home and the writable
-Nix layer now survive supervised reboots, using the existing p32 filesystem.
-There is no p34 swap. mtkclient has now rewritten and verified both existing
-GPT copies on hardware, with automatic healthy Linux return and data retention;
-installing the proposed swap layout remains separate. A candidate has passed
+Persistent home and the writable Nix layer survive supervised reboots, using
+the existing p32 filesystem. The fixed 5 GiB p34 swap partition is now active
+and survives an ordinary reboot. mtkclient installation and automatic factory
+layout restoration have both passed on hardware, preserving the filesystem,
+boot images and retained data. A candidate has passed
 ordinary sandboxed Nix builds through the daemon as the unprivileged `gemini` user, retaining the
 output through recovery. Installed M69 still lacks its network namespace and
 daemon-unit fixes; normal NixOS generation updates remain unfinished. See
 [storage evidence](research/PERSISTENCE.md).
 A complete offline backup of the persistent filesystem now passes journal
 recovery in a separate host copy, filesystem checks and retained-file proofs.
-The fixed-swap GPT and header are prepared; provisioning is still pending.
+Paging under pressure remains to be checked; swap activation alone does not
+prove hibernation.
 The hibernation-watchdog kernel correction has now passed a separate normal
 boot/recovery trial, including an ordinary Nix build and data retention.
 Hibernation, deep idle and the complete lid power policy are not qualified.
@@ -107,8 +108,9 @@ The older general SP Flash Tool harness remains available; the new supervised
 bootloader runner selects mtkclient explicitly with no automatic fallback.
 
 Device trials need a fresh device/boot identity, the shared host locks, and
-verification of the resulting boot and health. Preserve the factory GPT while
-SP Flash Tool is the recovery fallback. Modem NV partitions can legitimately
+verification of the resulting boot and health. The installed fixed-swap layout
+requires the dedicated two-layout recovery checks; historical factory-only
+boot/power profiles must be adapted before reuse. Modem NV partitions can legitimately
 change during modem operation and must not be treated as immutable hashes.
 
 Current workspace observations are in `handoff/current-device.md`, alongside

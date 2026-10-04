@@ -68,8 +68,11 @@ never flashed. It is not the new candidate above.
 
 Normal boot and recovery are the first checks. Hardware watchdog expiry,
 ordinary suspend and failed-suspend paths remain to be exercised before image
-I/O. Fixed swap needs its own complete GPT write/readback/rollback transaction;
-see `STORAGE_QUALIFICATION.md`. A72 offline/on and RTC power-on need validation.
+I/O. Fixed-swap installation, automatic factory restoration and active swap
+after an ordinary reboot now pass; paging under pressure remains unqualified.
+See `STORAGE_QUALIFICATION.md`. This power runner still expects factory GPT and
+no swap, so its admission/recovery checks need adaptation before another
+candidate trial. A72 offline/on and RTC power-on need validation.
 
 A full hibernation proof must preserve a process and memory sentinel through
 save, power-off and resume with the same kernel, then verify peripherals and

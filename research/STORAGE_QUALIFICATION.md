@@ -1,18 +1,19 @@
 # Fixed swap qualification
 
-Persistent home and the Nix store/database already work on the existing p32
-filesystem. The GPT still has 33 factory partitions, no p34 and no active swap.
-The requested fixed 5 GiB swap partition remains unfinished.
+Persistent home and the Nix store/database work on p32. The fixed 5 GiB p34
+swap partition is now installed and active, including after an ordinary reboot
+in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
+`handoff/fixed-swap-01`. Paging under pressure and hibernation remain unqualified.
 
 ## Filesystem and partition geometry
 
-Current p32 has 32,737,247 sectors from sector 89,372,672. Its ext4 filesystem
+Factory p32 had 32,737,247 sectors from sector 89,372,672. Its ext4 filesystem
 has 2,781,184 blocks of 4,096 bytes: exactly 22,249,472 sectors. It therefore
 fits the proposed smaller p32 without changing filesystem geometry. That
 observation must be repeated immediately before any eventual partition change.
 It is not permission to reformat or shrink a different filesystem.
 
-The proposed p34 starts at sector 111,622,144 and contains 10,485,760 sectors
+The installed p34 starts at sector 111,622,144 and contains 10,485,760 sectors
 (5 GiB). p33 `flashinfo` stays at sector 122,109,919 with 32,768 sectors. All
 other partition entries, p32's start/identity/attributes, and both GPT headers'
 unchanged fields are preserved.
@@ -96,11 +97,11 @@ four GPT readback files and protected-partition hashes passed verification.
 The DA acknowledged reboot, and Linux returned automatically as healthy M69
 boot `2c468de5-5249-43a0-ab38-6be1cf570603`. All ten ordinary Nix outputs,
 their database/GC-root identities, the original home/fixed-output proof and
-published EFI files survived. The layout is unchanged: 33 partitions, no p34,
+published EFI files survived. That trial left 33 partitions, no p34,
 no swap. This proves successful factory-copy writes; failure restoration is
-covered by host tests, while a changed-layout transaction remains unqualified.
+covered by host tests. The later changed-layout trial is recorded below.
 
-## Required before installation
+## Installation prerequisites
 
 The mtkclient boot-only lane and factory-GPT rewrites are qualified. The boot
 backend and healthy-return checks still expect the factory GPT, so using them
@@ -199,9 +200,87 @@ agreement. The prepared artifact is `handoff/fixed-swap-header-01`:
 - Future write: 4,096 bytes at byte offset 57,150,537,728.
 
 The native oracle test also rejects altered version, bounds, UUID, label,
-reserved bytes and swap signature. This header has not been written to the
-device and swap activation remains unqualified. The transition must verify
+reserved bytes and swap signature. At this preparation stage, the header had
+not been written to the device. The transition must verify
 the current filesystem extent and save the old header bytes, write/read back
 the new header before publishing p34, and restore those bytes as well as GPT
 on rollback. A standard swap header must be present before Linux's early
 resume probe can see the new partition.
+
+## Controlled layout transition
+
+`mtkclientSwap` adds `gemini-fixed-swap DIRECTORY [--restore]`. It accepts
+only six pinned factory/proposed GPT and header artifacts, the identified
+MT6797 eMMC, unchanged protected images and the exact existing ext4 extent.
+Installation writes and independently reads back the swap header, backup GPT
+and primary GPT, in that order. It then verifies both complete GPT copies,
+the header, unchanged ext4 superblock and protected images before reboot.
+There is no filesystem resize or write inside the persistent filesystem.
+
+An admitted failure attempts factory restoration. Restoration also accepts
+torn writes confined to byte positions that differ between the two reviewed
+layouts; changes outside that set are rejected. It restores backup GPT,
+primary GPT and the original header, and requires complete final readbacks
+before reboot. Twelve package tests cover bounds, partial writes, failed
+readbacks/restoration, device/filesystem identity, stale inputs and CLI dispatch.
+
+`tools/qualify-fixed-swap.py` holds both flash locks and starts an independent
+rescue service before reboot. Worker failure without a verified commit causes
+the rescue to acquire both locks and restore the factory layout. A successful
+commit requires fresh healthy Linux, exact active swap, retained home/Nix/EFI
+data and an additional ordinary reboot with the same checks. Ten host tests
+cover the complete DA evidence, altered artifacts, both layout guards,
+BusyBox swap identification and independent recovery after worker failure.
+
+```sh
+nix build .#mtkclientSwap --out-link ../handoff/mtkclient-swap
+python3 tools/test-qualify-fixed-swap.py
+python3 tools/qualify-fixed-swap.py --out NEW_DIRECTORY
+```
+
+The default command is a read-only factory-layout preflight; `--execute`
+performs the transition. The pinned package is
+`/nix/store/n4p7mz68zms2m6pawpwfbrs1sbdjq4vs-mtkclient-gemini-swap-2.1.4.1`.
+Build and test evidence is in `handoff/fixed-swap-host-checks`.
+
+The first trial, `handoff/fixed-swap-01`, installed the exact layout and
+Linux activated 5,242,876 KiB of swap. Its host health check incorrectly
+expected BusyBox `blkid` to return a bare partition UUID; it instead returned
+a full filesystem record. The trial therefore failed. The independent rescue
+then restored the original GPT and header, verified its complete DA sequence,
+and returned to healthy factory-layout M69 boot
+`0904beeb-2517-4d99-8ab9-0b80b302d3d1`, retaining all ten ordinary Nix outputs,
+the original persistence proof and published EFI files. The rejected install
+profile remains rejected; the complete hardware restoration evidence is valid.
+
+The corrected verifier resolves the partition-UUID symlink and parses the full
+`blkid` filesystem record. It independently revalidates the first trial's
+restoration artifacts and execution archive before reusing that evidence.
+Older boot and power qualification profiles still require the factory layout;
+they must be explicitly adapted and checked before use with fixed swap.
+
+The corrected trial `handoff/fixed-swap-02` passed the full install and
+ordinary-reboot sequence. Installation returned healthy M69 boot
+`5c846ac4-82a4-420d-b735-2fc0eb573f25`; the ordinary reboot returned
+`2cdddb4d-755f-43d7-acb6-e830d4a2984d`. Both activated exactly 5,242,876 KiB
+of p34 swap and retained the original persistence proof, all ten ordinary Nix
+outputs and published EFI files. GPT/header readbacks and protected-image
+hashes matched. The independent rescue accepted the verified commit and
+stopped. Hibernation remains disabled. The final locked audit repeats the
+live identity, active-swap and retention checks and verifies all thirteen
+executed-source hashes, inactive trial services and absence of a writer.
+
+## Prepared paging probe
+
+`geminiSwapProbe` builds a static AArch64 probe for real swap I/O. It fills
+128 MiB of anonymous memory with a deterministic incompressible pattern,
+requests page-out, requires at least 64 MiB in its own `VmSwap`, and checks
+every word after reading it back. It also requires at least 64 MiB of both
+reads and writes in p34's block counters, so compressed RAM alone cannot
+satisfy the check. The probe does not write directly to the block device.
+
+The host self-test, strict compiler checks and static ELF inspection pass.
+The artifact is `handoff/fixed-swap-io-probe`, binary SHA-256
+`e2d910dc9ccacf3521f091089890cac47e12ee06a1f6df2b98d8ffe859862867`.
+It has not been executed on the device. Active swap and reboot persistence
+do not establish paging under pressure or hibernation save/restore.
