@@ -42,6 +42,23 @@ class EfiProof(unittest.TestCase):
                 r.verify_handoff_tree({},dict(after,**{key:value}),'efi-keyboard')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},after,'efi-console')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree(after,after,'efi-keyboard')
+    def test_native_key_event_path_requires_layout_and_actual_efi_polls(self):
+        good={r.KEYBOARD_LAYOUT:b'gemian-us-v1\0'.hex(),r.KEYBOARD_NATIVE_POLLS:'0000057a'}
+        r.verify_native_keyboard(good,True)
+        with self.assertRaises(RuntimeError):r.verify_native_keyboard(good,False)
+        for key,values in ((r.KEYBOARD_LAYOUT,('',b'us\0'.hex(),None)),
+                           (r.KEYBOARD_NATIVE_POLLS,('',None,'-1','00000013','000000000000057a'))):
+            missing=dict(good);del missing[key]
+            with self.assertRaises(RuntimeError):r.verify_native_keyboard(missing,True)
+            for bad in values:
+                with self.subTest(key=key,bad=bad),self.assertRaises(RuntimeError):
+                    r.verify_native_keyboard(dict(good,**{key:bad}),True)
+    def test_native_efi_poll_frequency_is_not_the_debounced_matrix_frequency(self):
+        # Trial 01 made 3,559,386 native calls but only 1,402 physical scans.
+        # The console test busy-polls; the driver's 10 ms gate limits I2C scans.
+        for polls in (20,1_000_001,3_559_386,0xffffffff):
+            r.verify_native_keyboard({r.KEYBOARD_LAYOUT:b'gemian-us-v1\0'.hex(),
+                                      r.KEYBOARD_NATIVE_POLLS:f'{polls:08x}'},True)
     def test_mmc_requires_exact_full_reads_and_native_bus_evidence(self):
         tree={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex(),
               r.KEYBOARD_MARKER:b'scanned\0'.hex(),r.KEYBOARD_SCANS:'00000100',r.KEYBOARD_ERROR:'00000000'}
@@ -84,8 +101,10 @@ class EfiProof(unittest.TestCase):
         r.verify_handoff_tree({},manager,'efi-manager')
         for profile,base in (('efi-nix-provision',provision),('efi-nix-manager',manager),
                              ('efi-nix-dt-provision',provision),('efi-nix-dt-manager',manager),
-                             ('efi-nix-dt-cross-manager',manager)):
+                             ('efi-nix-dt-cross-manager',manager),('efi-nix-keys-manager',manager)):
             current=dict(base,**{'chosen/gemini,uefi-mmc-boot-sha256':r.PROFILES[profile][1]})
+            if profile in r.KEY_EVENT_PROFILES:
+                current.update({r.KEYBOARD_LAYOUT:b'gemian-us-v1\0'.hex(),r.KEYBOARD_NATIVE_POLLS:'0000057a'})
             r.verify_handoff_tree({},current,profile)
             self.assertEqual(r.candidate_system({'system':'old'},profile),r.persistent_nix.SYSTEM)
             with self.assertRaises(RuntimeError):r.verify_handoff_tree({},base,profile)

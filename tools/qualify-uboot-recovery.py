@@ -28,6 +28,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-nix-keys-manager': (WORKSPACE / 'handoff/efi-key-events-manager/boot-padded-p22.img',
+                            '91384c8e6c6fb07b7afaa1ea14a04253be21a7cfe8e7264b5db8a54d09dbe963'),
     'efi-nix-dt-cross-manager': (WORKSPACE / 'handoff/efi-cross-entry-dt-manager/boot-padded-p22.img',
                                  'd399b431e2683039848550bd64e2c43be343522b0d14cf1551a06511d02615d4'),
     'efi-nix-dt-provision': (WORKSPACE / 'handoff/nix-efi-entry-dt-candidates-1/boot-padded-p22.img',
@@ -64,7 +66,9 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-ENTRY_DT_PROFILES = ('efi-nix-dt-provision', 'efi-nix-dt-manager', 'efi-nix-dt-cross-manager')
+KEY_EVENT_PROFILES = ('efi-nix-keys-manager',)
+CROSS_DT_PROFILES = ('efi-nix-dt-cross-manager',) + KEY_EVENT_PROFILES
+ENTRY_DT_PROFILES = ('efi-nix-dt-provision', 'efi-nix-dt-manager') + CROSS_DT_PROFILES
 NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager') + ENTRY_DT_PROFILES
 NIX_PROFILES = ('persistent-nix',) + NIX_EFI_PROFILES
 EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') + NIX_EFI_PROFILES
@@ -117,7 +121,7 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
-for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256 gemini,uefi-storage-result gemini,uefi-storage-status gemini,uefi-manager-result gemini,uefi-manager-stage gemini,uefi-manager-status gemini,uefi-manager-sha256; do
+for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-keyboard-layout gemini,uefi-keyboard-native-polls gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256 gemini,uefi-storage-result gemini,uefi-storage-status gemini,uefi-manager-result gemini,uefi-manager-stage gemini,uefi-manager-status gemini,uefi-manager-sha256; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
 awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
@@ -128,11 +132,13 @@ CONSOLE_MARKER = 'chosen/gemini,uefi-console-result'
 KEYBOARD_MARKER = 'chosen/gemini,uefi-keyboard-result'
 KEYBOARD_SCANS = 'chosen/gemini,uefi-keyboard-scans'
 KEYBOARD_ERROR = 'chosen/gemini,uefi-keyboard-error'
+KEYBOARD_LAYOUT = 'chosen/gemini,uefi-keyboard-layout'
+KEYBOARD_NATIVE_POLLS = 'chosen/gemini,uefi-keyboard-native-polls'
 MMC_MARKERS = tuple("chosen/gemini,uefi-mmc-" + name for name in
                     ('result', 'stage', 'error', 'elapsed-ms', 'clock', 'width', 'gpt-sha256', 'boot-sha256', 'boot2-sha256', 'boot3-sha256', 'file-sha256'))
 STORAGE_MARKER = "chosen/gemini,uefi-storage-result"
 STORAGE_STATUS = "chosen/gemini,uefi-storage-status"
-MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR, STORAGE_MARKER, STORAGE_STATUS) + MMC_MARKERS + tuple("chosen/gemini,uefi-manager-" + name for name in ("result", "stage", "status", "sha256"))
+MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR, KEYBOARD_LAYOUT, KEYBOARD_NATIVE_POLLS, STORAGE_MARKER, STORAGE_STATUS) + MMC_MARKERS + tuple("chosen/gemini,uefi-manager-" + name for name in ("result", "stage", "status", "sha256"))
 
 
 def handoff_tree(ssh):
@@ -153,11 +159,25 @@ def handoff_tree(ssh):
 def profile_kind(profile):
     return {'efi-nix-provision': 'efi-provision', 'efi-nix-manager': 'efi-manager',
             'efi-nix-dt-provision': 'efi-provision', 'efi-nix-dt-manager': 'efi-manager',
-            'efi-nix-dt-cross-manager': 'efi-manager'}.get(profile, profile)
+            'efi-nix-dt-cross-manager': 'efi-manager',
+            'efi-nix-keys-manager': 'efi-manager'}.get(profile, profile)
+
+
+def verify_native_keyboard(tree, required):
+    if not required:
+        if KEYBOARD_LAYOUT in tree or KEYBOARD_NATIVE_POLLS in tree:
+            raise RuntimeError('Unexpected native key-event evidence in another profile')
+        return
+    polls = tree.get(KEYBOARD_NATIVE_POLLS, '')
+    if (tree.get(KEYBOARD_LAYOUT) != b'gemian-us-v1\0'.hex() or
+            not isinstance(polls, str) or not re.fullmatch('[0-9a-f]{8}', polls) or
+            int(polls, 16) < 20):
+        raise RuntimeError('Native EFI key-event polling or layout is not proven')
 
 
 def verify_handoff_tree(before, after, profile):
     kind = profile_kind(profile)
+    verify_native_keyboard(after, profile in KEY_EVENT_PROFILES)
     if any(key in before for key in MARKERS):
         raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
     for key, value in before.items():
@@ -305,6 +325,12 @@ def candidate_return(ssh, before, directory, profile):
         tree = handoff_tree(ssh)
         qualify.save(directory, 'candidate-tree.json', tree)
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
+        if profile in KEY_EVENT_PROFILES:
+            qualify.save(directory, 'native-keyboard-evidence.json', dict(
+                boot_id=after['boot_id'], layout='gemian-us-v1',
+                native_efi_polls=int(tree[KEYBOARD_NATIVE_POLLS], 16),
+                matrix_scans=int(tree[KEYBOARD_SCANS], 16), scan_error=0,
+                physical_key_press_observed=False))
         if profile in EFI_LINUX_PROFILES:
             efi_linux.evidence(ssh, directory, qualify, tree)
         files = files_profile_for(profile)
@@ -318,7 +344,7 @@ def candidate_return(ssh, before, directory, profile):
             efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False, profile=files)
             if profile in ENTRY_DT_PROFILES:
                 entry_dt.evidence(directory,after['boot_id'],efi_files,qualify)
-            if profile == 'efi-nix-dt-cross-manager':
+            if profile in CROSS_DT_PROFILES:
                 entry_dt.cross_evidence(directory,after['boot_id'],efi_files,qualify,*PROFILES[profile])
         if profile in NIX_PROFILES:
             persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
@@ -620,7 +646,10 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
                       nix_persistence_qualified=nix_retained)
     if profile in ENTRY_DT_PROFILES:
         result.update(entry_dt_handoff_qualified=profile_kind(profile)=='efi-manager' and qualified,
-                      cross_kernel_generation_selection_qualified=profile=='efi-nix-dt-cross-manager' and qualified)
+                      cross_kernel_generation_selection_qualified=profile in CROSS_DT_PROFILES and qualified)
+    if profile in KEY_EVENT_PROFILES:
+        result.update(native_efi_input_polling_qualified=qualified,
+                      physical_key_press_observed=False)
     if verify_persistence:
         result['persistence_qualified'] = persistent_after is not None
     if profile == 'watchdog':
@@ -670,7 +699,7 @@ def main():
             efi_linux.payload(persistent_nix.store_profile(efi_linux,require_efi=args.profile in NIX_EFI_PROFILES))
         if profile_kind(args.profile) in ('efi-provision','efi-manager'):
             efi_files.payload(files_profile_for(args.profile))
-        if args.profile == 'efi-nix-dt-cross-manager':
+        if args.profile in CROSS_DT_PROFILES:
             _,manifest=efi_files.payload(files_profile_for(args.profile))
             entry_dt.cross_carrier(candidate,sha,entry_dt.BUNDLE/'tree'/manifest['entry_device_tree'])
         qualify.accepted_boot_bytes(ACCEPTED)

@@ -215,3 +215,23 @@ retained all seven ordinary build outputs, home GC roots, proof hashes and
 registered NAR/derivation identities. It reconfirmed healthy M69, both flash
 locks free and no writer; every trial handle is terminal. Evidence is in
 `all-nix-outputs/` and `final-idle-check.json`.
+
+
+The native EFI input retry `handoff/efi-key-events-manager-02` passed the same
+complete manager, selected-entry DT and sandboxed daemon-build checks.
+Candidate `7318eee6-a9a0-4fb1-ad67-4b993b37f026` created
+`/nix/store/c7679k2rcaqw74hax6pcxdjcsr5bmkv6-gemini-daemon-99d09aee533443478a6242c44eb0f09f`,
+with proof SHA-256
+`c4cb51011bc22acbd6685f69bc5c22ef0c768cb1acb8583a1d3f44bc2f1822ed`.
+Automatic rescue returned healthy M69
+`58169ffb-952a-478a-ad72-59595d939729` and verified the new output, home GC root,
+registered NAR/derivation, original proof and boot files. Its preceding attempt
+was rejected by a host keyboard-poll counter check before the build phase and
+created no ordinary output; it is not counted as a successful Nix trial.
+
+
+The final locked audit independently verified all eight successful ordinary
+build outputs, their proof bytes, home GC roots and registered NAR/derivation
+identities. It reconfirmed healthy M69, free flash locks and no writer. Evidence
+is in `handoff/efi-key-events-manager-02/all-nix-outputs/` and
+`final-idle-check.json`; both native-key trial handles are terminal.

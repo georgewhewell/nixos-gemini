@@ -80,8 +80,11 @@ daemon build as an unprivileged user, retaining its output and database through
 automatic M69 recovery. Per-entry device trees now pass the same complete
 boot and recovery checks, preserving the selected kernel's CPU identity and
 LK's runtime reservations even when the carrier embeds an older kernel.
-Physical key selection and normal NixOS generation
-updates remain to be qualified.
+A further opt-in keyboard profile preserves native EFI modifiers and Unicode;
+all 416 compact-US key/Shift/Fn/Caps combinations match the captured Gemian
+XKB map in host tests, and real controller polling passes the complete
+manager/boot/recovery trial. Physical menu selection, the separate power/Escape
+input, desktop layout integration and normal NixOS generation updates remain.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797

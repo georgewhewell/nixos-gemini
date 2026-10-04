@@ -50,6 +50,11 @@
       url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=c50f76ab4995037008b4b5ab37a828bd23e3373c&shallow=1";
       flake = false;
     };
+    u-boot-gemini-keys-src = {
+      # Native Unicode/modifier input; earlier qualified profiles keep their pins.
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=c04e060491543815fbb4eb25631155438c4e8758&shallow=1";
+      flake = false;
+    };
     u-boot-src = {
       # Exact upstream base for the reviewable MT6797 stage-0 patch.
       url = "github:u-boot/u-boot/cc8c034e78eba6b2a3845783889b80753bb1af1e";
@@ -69,6 +74,7 @@
     u-boot-src,
     u-boot-gemini-src,
     u-boot-gemini-dt-src,
+    u-boot-gemini-keys-src,
   }: let
     # Build system (your machine)
     buildSystem = "x86_64-linux";
@@ -136,14 +142,15 @@
       mkProfile = options: rec {
         uboot = import ./nix/uboot-handoff.nix ({
           inherit buildPkgs crossPkgs;
-          source = if options.efiDtFixup or false then u-boot-gemini-dt-src else u-boot-gemini-src;
+          source = if options.efiKeyEvents or false then u-boot-gemini-keys-src
+            else if options.efiDtFixup or false then u-boot-gemini-dt-src else u-boot-gemini-src;
         } // builtins.removeAttrs options ["efiProvision" "nixSystem" "entryDtb"]);
         bundle = import ./nix/uboot-carrier.nix ({
           inherit buildPkgs uboot;
           linuxBundle = if options.entryDtb or false then mainlineNixosNixEfiDtProvision else if options.nixSystem or false
             then (if options.efiProvision or false then mainlineNixosNixEfiProvision else mainlineNixosNix.bundle)
             else if options.efiProvision or false then mainlineNixosEfiProvision else if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
-        } // builtins.removeAttrs options ["nixSystem" "efiDtFixup" "entryDtb"]);
+        } // builtins.removeAttrs options ["nixSystem" "efiDtFixup" "efiKeyEvents" "entryDtb"]);
       };
     in {
       handoff = mkProfile {};
@@ -160,6 +167,7 @@
       efiNixDtManager = mkProfile {nixSystem = true; efiDtFixup = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
       # The older EFI carrier must boot the independently published Nix kernel.
       efiCrossDtManager = mkProfile {efiDtFixup = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
+      efiCrossKeysManager = mkProfile {efiKeyEvents = true; efiDtFixup = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
       efiNixDtProvision = mkProfile {entryDtb = true; nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
@@ -1840,6 +1848,7 @@
       ubootEfiNixManagerBundle = ubootProfiles.efiNixManager.bundle;
       ubootEfiNixDtManagerBundle = ubootProfiles.efiNixDtManager.bundle;
       ubootEfiCrossDtManagerBundle = ubootProfiles.efiCrossDtManager.bundle;
+      ubootEfiCrossKeysManagerBundle = ubootProfiles.efiCrossKeysManager.bundle;
       ubootEfiNixDtProvisionBundle = ubootProfiles.efiNixDtProvision.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;

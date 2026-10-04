@@ -17,8 +17,10 @@ recovery. Loading its own device tree through EFI DT fixup also passes the
 complete hardware trial, with selected CPU provenance and LK data retained.
 A separate trial also boots the newer entry from a carrier containing the
 older kernel and DT, proving independence for these two qualified builds.
-Physical key actuation,
-complete modifier qualification and normal NixOS generation updates remain.
+Native Unicode/modifier events now pass host mapping and protocol checks,
+while real input polling passes the full manager/boot/recovery trial. Physical
+key actuation, power/Escape input, desktop layout integration and normal NixOS
+generation updates remain.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -58,6 +60,11 @@ manifest records payload and carrier hashes.
   the new payload; the manager profile requires that exact entry's EFI evidence.
   Both require an unprivileged ordinary daemon build and its retention through
   M69 recovery. The runner names are `efi-nix-provision` and `efi-nix-manager`.
+
+- Native EFI keys (`ubootEfiCrossKeysManagerBundle` / `efi-nix-keys-manager`):
+  preserve Unicode and modifiers through the native EFI input protocols. This
+  also requires cross-kernel entry-DT selection, an ordinary daemon build and
+  retention through automatic M69 recovery.
 
 All profiles use TOPRGU for generic reset. LK handoff validation is independent
 of EFI. The FIT source window now accepts up to 16 MiB at 0x45000000, within the
@@ -1201,3 +1208,104 @@ retained all seven ordinary build outputs, home GC roots, proof hashes and
 registered NAR/derivation identities. It reconfirmed healthy M69, both flash
 locks free and no writer; every trial handle is terminal. Evidence is in
 `all-nix-outputs/` and `final-idle-check.json`.
+
+
+## Native Unicode and modifier key events
+
+U-Boot `c04e060491543815fbb4eb25631155438c4e8758` adds the opt-in
+`GEMINI_EFI_KEY_EVENTS` profile. The captured Gemian
+`planet_vndr/gemini(us)` map is resolved with libxkbcommon into all 52 matrix
+keys across Shift, Fn and Caps Lock states. Its text symbols include Unicode
+and dead accents; desktop action keysyms without a text/EFI meaning remain
+silent. This is the compact Gemini US map, whereas the current Weston desktop
+still selects generic US and needs its corresponding layout integration.
+The matrix contains no Escape keycode; the separate power/Escape input path
+also needs investigation before claiming complete physical key coverage.
+
+One bounded event queue carries Unicode, scan code, left/right modifier state
+and Caps state. The EFI input methods consume it directly; the U-Boot console
+consumes the same events as complete UTF-8/ANSI packets. Fn is the physical
+Left Meta position used as a layout selector, not an EFI Logo modifier. The
+extended EFI protocol distinguishes Ctrl+I from Tab and Ctrl+M from Return;
+the basic protocol and text console produce conventional control characters.
+Caps can be toggled with Fn+Tab or the supported EFI SetState request. Dead
+accents produce NFC characters when available, otherwise a base character
+and combining mark. Navigation/reset cancels pending composition.
+
+The existing chip-ID admission, I2C setup, two-scan debounce, ghost suppression
+and error latch remain. Repeat uses a 500 ms delay and 80 ms interval. Tests
+cover releases, simultaneous keys, queue limits, timer wrap, read faults,
+composition, modifiers and serial fallback through the production matrix
+reader, event engine and actual EFI input methods. All 416 key/Shift/Fn/Caps
+combinations match the independently resolved captured XKB map.
+AddressSanitizer/UndefinedBehaviorSanitizer and the legacy keyboard tests pass.
+The complete AArch64 firmware/carrier build passes every existing regression
+and the new native-input tests. Evidence is in
+`handoff/keyboard-events-host-checks`.
+
+This profile adds `gemini,uefi-keyboard-layout=gemian-us-v1` and an actual native
+EFI poll counter to the Linux DT. Qualification requires the expected layout,
+at least 20 native calls during the bounded console test, successful matrix
+health, the independent kernel/DT boot, full Linux health, an ordinary
+sandboxed Nix build and recovery
+with persistence. Native polling alone cannot claim physical key actuation.
+The runner records `physical_key_press_observed=false` explicitly.
+
+The new output is `ubootEfiCrossKeysManagerBundle`, rooted at
+`handoff/efi-key-events-manager`; the runner profile is `efi-nix-keys-manager`.
+It embeds the older EFI payload and selects the already published newer
+Nix/DT entry, without changing the boot files. Its p22 SHA-256 is
+`91384c8e6c6fb07b7afaa1ea14a04253be21a7cfe8e7264b5db8a54d09dbe963`.
+Its firmware is
+`/nix/store/vp5x0cz40rnkqpsp4qrx2fjgadvk3kzr-uboot-mt6797-gemini-efi-manager-dt-keys-0-aarch64-unknown-linux-gnu-2026.10-m69`.
+Older qualified M69, EFI, Nix and both DT-manager artifact paths remain
+unchanged. `handoff/efi-key-events-preflight-01` passed all read-only admission
+checks; hardware trial completion is recorded separately below.
+
+
+Trial `handoff/efi-key-events-manager-01` reached healthy candidate Linux
+`c231a3c7-1d47-4d7a-bc08-956e310a1353`, but the host verifier rejected its
+3,559,386 native EFI calls against an unsupported one-million-call ceiling.
+The console application busy-polls the input protocol; the separate 10 ms
+matrix gate limited hardware scanning to 1,402 scans with zero errors.
+This was a host-check error, not evidence of a keyboard or boot failure.
+The verifier now checks the expected unsigned 32-bit counter and minimum
+activity without conflating protocol calls with physical scans. A regression
+covers the recorded count and the counter's full range. All 107 relevant
+qualification/backend tests pass.
+
+Trial 01 remains unqualified: rejection occurred before the complete EFI,
+manager, entry-DT and ordinary-build checks. Replaying its tree evidence does
+not replace those missing checks. Its original executed sources and result
+are retained. Automatic rescue returned healthy M69
+`14f253e4-7af8-4f3a-9391-933cc9abbfba`; a fresh locked audit verified all seven
+previous ordinary outputs and idle flash ownership. The retry uses identical
+firmware and the corrected host verifier.
+
+
+Retry `handoff/efi-key-events-manager-02` reached candidate
+`7318eee6-a9a0-4fb1-ad67-4b993b37f026` with 3,541,839 native EFI calls,
+1,402 matrix scans and zero errors. Systemd-boot 261.2 selected the published
+DT-bearing Nix entry after 9.785960 seconds. The complete selected CPU
+provenance, both A72s, all 4 GiB across 49 EFI descriptors, LK reservations,
+console/storage checks and Linux service health passed. The older carrier
+and newer selected kernel again differ in seven checked provenance fields.
+An ordinary unprivileged sandboxed daemon build passed, with a separate
+network namespace and no visibility of the user's home.
+
+
+The retry completed with the entire profile qualified. Automatic rescue
+restored healthy M69 `58169ffb-952a-478a-ad72-59595d939729`; the rescue interval
+was 241.092 seconds. Both complete p22 writes/readbacks and reset sequences
+passed. GPT/p30/p31, every published boot-file set and the original persistence
+proof are unchanged. The result marks native EFI polling, Linux handoff,
+entry-DT selection, cross-kernel selection, the ordinary daemon build and
+Nix persistence qualified; physical key actuation remains explicitly false.
+All eight archived qualification sources match the current source bytes.
+
+
+The final locked audit independently verified all eight successful ordinary
+build outputs, their proof bytes, home GC roots and registered NAR/derivation
+identities. It reconfirmed healthy M69, free flash locks and no writer. Evidence
+is in `handoff/efi-key-events-manager-02/all-nix-outputs/` and
+`final-idle-check.json`; both native-key trial handles are terminal.

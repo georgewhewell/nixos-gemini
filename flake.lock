@@ -111,6 +111,7 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
         "u-boot-gemini-dt-src": "u-boot-gemini-dt-src",
+        "u-boot-gemini-keys-src": "u-boot-gemini-keys-src",
         "u-boot-gemini-src": "u-boot-gemini-src",
         "u-boot-src": "u-boot-src",
         "vendor-kernel": "vendor-kernel"
@@ -130,6 +131,25 @@
       "original": {
         "ref": "gemini-boot-consolidation",
         "rev": "c50f76ab4995037008b4b5ab37a828bd23e3373c",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
+      }
+    },
+    "u-boot-gemini-keys-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791113591,
+        "narHash": "sha256-lvRELXd8siRAlrqq6l4u/mdIdHruveJaOK9uW/XcvOQ=",
+        "ref": "gemini-boot-consolidation",
+        "rev": "c04e060491543815fbb4eb25631155438c4e8758",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
+      },
+      "original": {
+        "ref": "gemini-boot-consolidation",
+        "rev": "c04e060491543815fbb4eb25631155438c4e8758",
         "shallow": true,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"

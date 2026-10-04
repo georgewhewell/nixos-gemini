@@ -23,8 +23,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after the cross-kernel DT manager trial is
-`055f7573-d77d-43f9-80e4-ca06ae55e3b7`, with `/persist`,
+healthy M69 boot after the native EFI key-event manager retry is
+`58169ffb-952a-478a-ad72-59595d939729`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed swap is still absent.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -41,7 +41,15 @@ direct Nix trial. Subsequent per-entry DT provisioning and manager trials
 passed full EFI/Linux health, selected CPU provenance, ordinary builds and
 automatic rescue. The cross-kernel manager trial then booted the newer entry
 from the older carrier and passed the same full checks. Its final locked audit
-retained seven ordinary outputs with free locks and no writer. Direct M69 remains installed. See
+retained seven ordinary outputs with free locks and no writer. The subsequent
+native Unicode/modifier profile also passed full EFI/manager/entry-DT health,
+an ordinary build and automatic M69 recovery in
+`handoff/efi-key-events-manager-02`. The first attempt was rejected by a host
+poll-counter ceiling; the corrected retry used identical firmware. All 416
+compact-US key/Shift/Fn/Caps combinations match captured Gemian XKB in host
+tests. The final locked audit retained all eight ordinary outputs and their
+home GC roots/database identities, with free flash locks and no writer.
+Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
 ## Remaining work
@@ -49,7 +57,7 @@ retained seven ordinary outputs with free locks and no writer. Direct M69 remain
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Physical key selection, full modifier qualification, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, desktop layout integration, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive supervised reboot with unchanged GPT. Ordinary unprivileged daemon builds pass both direct boot and the distro-manager path, retaining their outputs through M69 recovery. Normal generation updates and fixed-size swap remain. The owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
