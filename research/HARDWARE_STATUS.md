@@ -3,11 +3,12 @@
 The objective remains complete hardware enablement and consolidation. Camera
 and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
-proof. Current direct-Linux baseline is M69 (`master` 3f8e9d5, kernel c0dbf01b2bdaa).
+proof. Current direct-Linux baseline is M69 (baseline configuration 3f8e9d5,
+kernel c0dbf01b2bdaa).
 
 ## Fresh device observations
 
-Read-only checks are retained at workspace
+Initial read-only checks before the mtkclient trials are retained at workspace
 `handoff/boot-consolidation-20261004/live-state.txt`:
 
 - Boot ID fcce1f76-8617-480c-9dcb-5617e109cc7d; p22 matches M69; accepted healthy.
@@ -23,7 +24,7 @@ Read-only checks are retained at workspace
 
 | Area | Required evidence |
 |---|---|
-| Recovery / mtkclient | Repeatable read, boot-only write/readback and return to accepted Linux; failure recovery and host ownership |
+| Recovery / mtkclient | Read/reboot and exact accepted-image boot rewrite now pass; integrate the candidate/rollback workflow and qualify unattended failure recovery |
 | U-Boot / UEFI | See BOOT_HANDOFF.md; host builds alone do not qualify hardware |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
@@ -48,11 +49,12 @@ M69 flashing transaction still uses SP Flash Tool. The owner now prioritises
 making mtkclient work.
 
 The patched mtkclient package and supervised read/reboot runner are described
-in [MTKCLIENT.md](MTKCLIENT.md). The October 4 hardware trial read the primary
+in [MTKCLIENT.md](MTKCLIENT.md). The initial October 4 trial read the primary
 GPT and full M69 boot partition with matching hashes. The DA acknowledged
 reboot, but Linux did not return within three minutes; USB remained at the
 preloader and the owner reported a black screen. The read/reboot trial failed,
-and boot-only writes remain unqualified. No eMMC writes were issued.
+and boot-only writes had not yet been tested. No eMMC writes were issued in
+that initial trial.
 After the owner's force restart, the vendor Linux USB gadget returned
 (`0fce:7169`). SSH via `gemini@gemini` confirmed Gemian / Debian 9, kernel
 `3.18.41+`, fresh boot ID `1508c791-df3f-4384-b4fd-5704338ef3ca`, and unchanged
@@ -62,6 +64,12 @@ not a new healthy M69 observation.
 After correcting the MT6797 DA shutdown payload from 32 to 28 bytes, two
 sessions returned automatically to healthy M69 with unchanged GPT/p22 hashes.
 The full repeat runner passed in 194.4 seconds using its corrected six-minute
-health deadline. Current accepted boot ID is
-`6b1b01f6-cd4b-462f-8b5a-3de4b73c909a`; boot-only writes remain unqualified.
+health deadline, returning boot ID
+`6b1b01f6-cd4b-462f-8b5a-3de4b73c909a`.
 Detailed evidence and the packet-size diagnosis are in MTKCLIENT.md.
+
+The following boot-only write trial also passed: the DA acknowledged writing
+the exact accepted M69 image, full readback matched, and it rebooted
+automatically to healthy M69. Current boot ID is
+`74d10f78-c5e0-48fd-915d-9eea69e6b87b`; GPT/p22 hashes and geometry remain
+unchanged. Evidence: `handoff/mtkclient-boot-write-20261004-01`.

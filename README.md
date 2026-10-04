@@ -71,9 +71,10 @@ The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797
 shutdown packet size, and propagate partition-write failures. Two corrected
 October 4 sessions read GPT and the full M69 boot image with matching hashes
-and returned automatically to healthy M69. Boot-only write/readback remains
-unqualified. SP Flash Tool remains the known rescue fallback until that
-succeeds.
+and returned automatically to healthy M69. A boot-only rewrite of the exact
+accepted image also passed write acknowledgement, full readback and a fresh
+healthy boot. SP Flash Tool remains available while the remaining recovery
+workflow is migrated to mtkclient.
 
 Device trials need a fresh device/boot identity, the shared host locks, and
 verification of the resulting boot and health. Preserve the factory GPT while

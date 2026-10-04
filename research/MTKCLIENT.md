@@ -1,9 +1,11 @@
 # Gemini mtkclient qualification
 
-Status, 2026-10-04: read/reboot is working with the MT6797 packet-size fix.
+Status, 2026-10-04: read/reboot and an accepted-image boot rewrite are working
+with the MT6797 packet-size fix.
 Two corrected DA sessions read the primary GPT and complete boot partition,
-then returned automatically to healthy M69 with matching hashes. Boot-only
-writes remain unqualified.
+then returned automatically to healthy M69 with matching hashes. A subsequent
+boot-only write was acknowledged, read back in full and followed by another
+fresh healthy M69 boot. The GPT and accepted boot contents remain unchanged.
 
 ## Corrected hardware trials
 
@@ -83,7 +85,7 @@ mtkclient sent eight words (32 bytes), including a final reserved zero. Patch
 DA codes retain the existing packet size. The regression test reads the
 capacity instruction from the checksum-guarded bundled DA and exercises
 the rejected old packet and accepted new packet despite identical status
-replies. All 24 package tests pass (8 reset, 7 write, 9 runner).
+replies. The packet-fix build passed 24 tests (8 reset, 7 write, 9 runner).
 
 The first trial's host USB log also shows no disconnect/re-enumeration
 between DA acknowledgement and manual recovery. The persistent
@@ -129,6 +131,7 @@ nix build .#mtkclient --out-link ../handoff/mtkclient-gemini
 ../handoff/mtkclient-gemini/bin/mtk reset --help
 python3 tools/qualify-mtkclient.py \
   --mtk ../handoff/mtkclient-gemini/bin/mtk \
+  --ssh-host 10.15.19.82 --ssh-host-key-alias 192.168.23.70 \
   --out ../handoff/mtkclient-preflight-new
 ```
 
@@ -153,6 +156,7 @@ Run this when someone can force-restart the Gemini if the DA leaves it hung:
 ```sh
 python3 tools/qualify-mtkclient.py \
   --mtk ../handoff/mtkclient-gemini/bin/mtk \
+  --ssh-host 10.15.19.82 --ssh-host-key-alias 192.168.23.70 \
   --out ../handoff/mtkclient-read-reboot-new --execute
 ```
 
@@ -168,10 +172,42 @@ Exit code zero from mtkclient alone is insufficient. Logs and snapshots remain
 in the evidence directory. There are no automatic retries or fallback flashes;
 an incomplete session can require physical recovery.
 
-After repeatable read/reboot passes, qualify a write of the already accepted
-M69 image to `boot` only, with full readback and a fresh healthy Linux boot.
-Require an acknowledged write as well as matching readback. A failed write
-stops `multi` before its reset command, so that failure may require physical
-recovery; it must never be reported as a passing write/reboot trial.
-Keep the existing SP Flash Tool rescue available until this sequence works.
-U-Boot carrier trials and repartitioning follow that qualification.
+## Accepted-image write qualification
+
+The hardware trial passed at workspace
+`handoff/mtkclient-boot-write-20261004-01`. The patched DA acknowledged writing
+all 32,768 sectors of `boot` starting at sector 362496. The complete 16 MiB
+readback and subsequent Linux p22 hash both matched accepted M69; the primary
+GPT and partition geometry were unchanged. Automatic reboot produced healthy
+boot ID `74d10f78-c5e0-48fd-915d-9eea69e6b87b` after 194.7 seconds, with
+no manual recovery.
+Package: `/nix/store/vl6ynxsir46vp8w3445w342vdf0xm23b-mtkclient-gemini-2.1.4.1`;
+canonical workspace root: `handoff/mtkclient-gemini`. The accepted image is
+rooted at `handoff/accepted-m69/boot-padded-p22.img`.
+
+The opt-in write mode rejects any image whose size is not 16 MiB or whose
+SHA-256 differs from accepted M69. It stages a private copy, verifies that
+copy again before starting the DA, and writes only the `boot` partition.
+The command without `--execute` performs preflight and stages the image:
+
+```sh
+python3 tools/qualify-mtkclient.py \
+  --mtk ../handoff/mtkclient-gemini/bin/mtk \
+  --ssh-host 10.15.19.82 --ssh-host-key-alias 192.168.23.70 \
+  --rewrite-accepted-boot ../handoff/accepted-m69/boot-padded-p22.img \
+  --out ../handoff/mtkclient-write-preflight-new
+```
+
+Use a new output directory and add `--execute` for the supervised hardware
+trial. Passing requires the patched client's acknowledgement of writing
+sector 362496, count 32768, full readback, unchanged GPT and a fresh healthy
+M69 boot. An identical-image readback alone is insufficient evidence of a
+successful write. The image guard, absence of DA access during preflight,
+and mandatory write acknowledgement are covered by four additional runner
+tests; the complete package build now passes 28 tests.
+
+A failed write stops `multi` before its reset command, so that failure may
+require physical recovery. Keep the existing SP Flash Tool rescue available
+while migrating the remaining recovery workflow. U-Boot carrier trials and
+repartitioning require their own qualification; this accepted-image mode
+does not allow arbitrary boot images or changes to the partition table.

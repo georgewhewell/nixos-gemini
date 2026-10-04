@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -79,6 +80,62 @@ class QualificationTests(unittest.TestCase):
                  patch.object(q, 'trial') as trial, contextlib.redirect_stdout(io.StringIO()):
                 q.main()
             trial.assert_not_called()
+
+    def test_write_image_requires_exact_size_and_accepted_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'image'
+            data = b'a' * (16 * 1024 * 1024)
+            with patch.object(q, 'ACCEPTED_BOOT', hashlib.sha256(data).hexdigest()):
+                source.write_bytes(data)
+                self.assertEqual(q.accepted_boot_bytes(source), data)
+                for bad in (data[:-1], data + b'x', b'x' + data[1:]):
+                    source.write_bytes(bad)
+                    with self.assertRaises(RuntimeError):
+                        q.accepted_boot_bytes(source)
+
+    def test_invalid_staged_write_cannot_start_client_or_reboot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / 'accepted-boot.img').write_bytes(b'wrong image')
+            with patch.object(q.subprocess, 'Popen') as client, \
+                 patch.object(q.subprocess, 'run') as reboot, self.assertRaises(RuntimeError):
+                q.trial(SimpleNamespace(mtk='/fake/mtk', rewrite_accepted_boot='requested'),
+                        directory, self.before(), ['ssh'])
+            client.assert_not_called()
+            reboot.assert_not_called()
+
+    def test_identical_image_write_requires_both_write_and_reboot_ack(self):
+        q.verify_da_result(0, q.ACK, False)
+        q.verify_da_result(0, q.WRITE_ACK + '\n' + q.ACK, True)
+        for code, log in ((0, q.ACK), (0, q.WRITE_ACK),
+                          (1, q.WRITE_ACK + '\n' + q.ACK),
+                          (0, q.WRITE_ACK.replace('362496', '1') + '\n' + q.ACK)):
+            with self.subTest(code=code, log=log), self.assertRaises(RuntimeError):
+                q.verify_da_result(code, log, True)
+
+    def test_write_preflight_only_stages_verified_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            source, mtk = directory / 'source.img', directory / 'mtk'
+            data = b'a' * (16 * 1024 * 1024)
+            source.write_bytes(data)
+            mtk.touch()
+            out = directory / 'result'
+            argv = ['qualify', '--mtk', str(mtk), '--out', str(out),
+                    '--lock-dir', str(directory), '--rewrite-accepted-boot', str(source)]
+            with patch.object(q, 'ACCEPTED_BOOT', hashlib.sha256(data).hexdigest()), \
+                 patch.object(q.sys, 'argv', argv), patch.object(q, 'check_host_idle'), \
+                 patch.object(q, 'run', return_value='--bootmode {shutdown,reboot,fastboot}'), \
+                 patch.object(q, 'snapshot', return_value=self.before()), \
+                 patch.object(q, 'trial') as trial, contextlib.redirect_stdout(io.StringIO()):
+                q.main()
+            trial.assert_not_called()
+            self.assertEqual((out / 'accepted-boot.img').read_bytes(), data)
+            plan = json.loads((out / 'plan.json').read_text())
+            self.assertFalse(plan['execute'])
+            self.assertTrue(plan['write_requested'])
+            self.assertEqual([c for c in plan['commands'].split(';') if c.startswith('w ')],
+                             ['w boot accepted-boot.img'])
 
     def test_early_mtk_exit_never_reboots_linux(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Qualify the Gemini's DA read/reboot path; never write to eMMC.
+"""Qualify the Gemini's DA read/reboot path, optionally rewriting accepted boot.
 
 Default: inspect accepted Linux and the host CLI. --execute: catch one normal
 reboot, read GPT/boot through the DA, request normal boot, verify fresh Linux.
+--rewrite-accepted-boot IMAGE additionally writes the exact accepted M69 image
+to boot only; it rejects every other image. It still requires --execute.
 Use --execute with someone available to force-restart the Gemini if it hangs.
 """
 import argparse
@@ -20,7 +22,10 @@ import time
 ACCEPTED_BOOT = '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'
 ACCEPTED_SYSTEM = '/nix/store/0xbrhrl8ym703g1449gni51dkv7jwlqv-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade'
 COMMANDS = 'printgpt;ro 0 0x8000 gpt-primary.bin;r boot boot-readback.img;reset --bootmode reboot'
+WRITE_COMMANDS = ('printgpt;ro 0 0x8000 gpt-primary.bin;w boot accepted-boot.img;'
+                  'r boot boot-readback.img;reset --bootmode reboot')
 ACK = 'Download agent acknowledged reboot request'
+WRITE_ACK = 'Wrote accepted-boot.img to sector 362496 with sector count 32768.'
 # M69 runs cellular, GPU, audio, connectivity and desktop checks before
 # self-acceptance. A successful DA reboot exceeded the original 180s window.
 HEALTH_TIMEOUT = 360
@@ -69,6 +74,24 @@ def verify_reads(directory, before):
             raise RuntimeError(f'{name}: length or SHA-256 mismatch')
 
 
+def accepted_boot_bytes(path):
+    if path.stat().st_size != 16 * 1024 * 1024:
+        raise RuntimeError('Write input must be the complete 16 MiB accepted M69 boot image')
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != ACCEPTED_BOOT:
+        raise RuntimeError('Write input does not match the accepted M69 boot SHA-256')
+    return data
+
+
+def verify_da_result(returncode, log, writing):
+    if returncode != 0 or ACK not in log:
+        raise RuntimeError('Linux returned, but mtkclient did not acknowledge reboot successfully')
+    # An identical-image readback alone cannot prove that a write succeeded.
+    # This line is emitted only after the patched DA backend reports success.
+    if writing and WRITE_ACK not in log.splitlines():
+        raise RuntimeError('No acknowledged write to the exact accepted boot extent')
+
+
 def verify_return(before, after):
     if before['boot_id'] == after['boot_id']:
         raise RuntimeError('SSH still reports the original boot')
@@ -99,6 +122,11 @@ def check_host_idle():
 
 
 def trial(args, directory, before, ssh):
+    writing = getattr(args, 'rewrite_accepted_boot', None) is not None
+    if writing:
+        # Verify the private staged copy immediately before starting the DA.
+        accepted_boot_bytes(directory / 'accepted-boot.img')
+    commands = WRITE_COMMANDS if writing else COMMANDS
     # A fresh working directory prevents accidental reuse of cached DA state.
     # The DA client runs as root and inherits umask 077. Create its readback
     # files as the invoking user so verification can read them afterwards.
@@ -108,7 +136,7 @@ def trial(args, directory, before, ssh):
             pass
     # timeout bounds the privileged child even if this observer is interrupted.
     command = ['sudo', '-n', 'env', 'PYTHONUNBUFFERED=1', 'timeout',
-               '--kill-after=5s', '180s', str(args.mtk), 'multi', COMMANDS]
+               '--kill-after=5s', '180s', str(args.mtk), 'multi', commands]
     logpath = directory / 'mtk.log'
     with logpath.open('w') as logfile:
         child = subprocess.Popen(command, cwd=directory, stdout=logfile,
@@ -162,13 +190,13 @@ def trial(args, directory, before, ssh):
         raise RuntimeError(f'Fresh healthy M69 was not observed within {HEALTH_TIMEOUT}s; '
                            'inspect the saved observations before recovery')
     save(directory, 'after.json', after)
-    if returncode != 0 or ACK not in logpath.read_text():
-        raise RuntimeError('Linux returned, but mtkclient did not acknowledge reboot successfully')
+    verify_da_result(returncode, logpath.read_text(), writing)
     verify_reads(directory, before)
-    save(directory, 'result.json', {'result': 'passed', 'writes_to_emmc': False,
+    save(directory, 'result.json', {'result': 'passed', 'writes_to_emmc': writing,
                                     'health_timeout_seconds': HEALTH_TIMEOUT,
                                     'seconds_to_healthy_linux': round(time.monotonic() - observation_start, 1)})
-    print(f'PASS: GPT and boot match; fresh healthy M69. Evidence: {directory}')
+    print(f'PASS: {"boot write acknowledged; " if writing else ""}'
+          f'GPT and boot match; fresh healthy M69. Evidence: {directory}')
 
 
 def main():
@@ -178,11 +206,17 @@ def main():
     parser.add_argument('--ssh-key', type=Path, default=Path('/home/grw/.ssh/gemini-stage1-ed25519'))
     parser.add_argument('--ssh-host', default='192.168.23.70', help='Accepted M69 SSH address')
     parser.add_argument('--ssh-host-key-alias', help='Known-host identity when using another address')
+    parser.add_argument('--rewrite-accepted-boot', type=Path,
+                        help='Additionally rewrite boot with this exact accepted M69 image')
     parser.add_argument('--lock-dir', type=Path,
                         default=Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829'))
     parser.add_argument('--execute', action='store_true', help='Run the supervised read/reboot trial')
     args = parser.parse_args()
     args.mtk = args.mtk.resolve(strict=True)
+    payload = None
+    if args.rewrite_accepted_boot is not None:
+        args.rewrite_accepted_boot = args.rewrite_accepted_boot.resolve(strict=True)
+        payload = accepted_boot_bytes(args.rewrite_accepted_boot)
     ssh = ['ssh', '-F', '/dev/null', '-i', str(args.ssh_key), '-o', 'IdentitiesOnly=yes',
            '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'ControlPath=none',
            '-o', 'StrictHostKeyChecking=yes']
@@ -201,8 +235,16 @@ def main():
         before = snapshot(ssh)
         directory = args.out.resolve()
         directory.mkdir(mode=0o700)
+        if payload is not None:
+            staged = directory / 'accepted-boot.img'
+            with staged.open('xb') as output:
+                output.write(payload)
+            staged.chmod(0o400)
         save(directory, 'before.json', before)
-        save(directory, 'plan.json', {'mtk': str(args.mtk), 'commands': COMMANDS,
+        save(directory, 'plan.json', {'mtk': str(args.mtk),
+                                      'commands': WRITE_COMMANDS if payload is not None else COMMANDS,
+                                      'write_requested': payload is not None,
+                                      'write_source': str(args.rewrite_accepted_boot) if payload is not None else None,
                                       'execute': args.execute, 'ssh_host': args.ssh_host,
                                       'ssh_host_key_alias': args.ssh_host_key_alias})
         if not args.execute:
@@ -212,7 +254,8 @@ def main():
         try:
             trial(args, directory, before, ssh)
         except Exception as error:
-            save(directory, 'result.json', {'result': 'failed', 'error': str(error)})
+            save(directory, 'result.json', {'result': 'failed', 'error': str(error),
+                                           'write_requested': payload is not None})
             raise
 
 
