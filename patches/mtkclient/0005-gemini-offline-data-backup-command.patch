@@ -1,0 +1,26 @@
+--- a/mtk.py
++++ b/mtk.py
+@@ -200,6 +200,10 @@
+                                     help="Verify and rewrite only the pinned Gemini factory GPT")
+     rewrite.add_argument("directory", help="Fresh private qualification directory")
+ 
++    backup = subparsers.add_parser("gemini-data-backup", parents=[base],
++                                   help="Read the pinned Gemini offline ext4 extent without device writes")
++    backup.add_argument("directory", help="Fresh private backup directory")
++
+     # ─── Other commands ──────────────────────────────────────────────────
+ 
+     cmd_fs = subparsers.add_parser("fs", help="Mount as FUSE filesystem")
+--- a/mtkclient/Library/DA/mtk_da_handler.py
++++ b/mtkclient/Library/DA/mtk_da_handler.py
+@@ -1261,6 +1261,10 @@
+             from mtkclient.Library.gemini_gpt_rewrite import rewrite_factory
+             if not rewrite_factory(mtk, args.directory):
+                 sys.exit(1)
++        elif cmd == "gemini-data-backup":
++            from mtkclient.Library.gemini_data_backup import capture
++            if not capture(mtk, args.directory):
++                sys.exit(1)
+         elif cmd == "gpt":
+             directory = args.directory
+             self.da_gpt(directory=directory)

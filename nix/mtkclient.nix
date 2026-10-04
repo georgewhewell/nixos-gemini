@@ -11,7 +11,12 @@ buildPkgs.mtkclient.overrideAttrs (old: {
     runHook preCheck
     ${buildPkgs.python3.interpreter} ${./test-mtkclient-reset.py}
     ${buildPkgs.python3.interpreter} ${./test-mtkclient-write.py}
-    ${buildPkgs.python3.interpreter} ${../tools}/test-qualify-mtkclient.py
+    # Keep host orchestrator pins out of the package hash. Importing the whole
+    # tools directory creates a hash cycle when a runner pins this package.
+    mkdir qualification-tests
+    cp ${../tools/qualify-mtkclient.py} qualification-tests/qualify-mtkclient.py
+    cp ${../tools/test-qualify-mtkclient.py} qualification-tests/test-qualify-mtkclient.py
+    ${buildPkgs.python3.interpreter} qualification-tests/test-qualify-mtkclient.py
     runHook postCheck
   '';
 })

@@ -319,3 +319,13 @@ and no swap. Host tests cover partial-write/restoration failures; provisioning
 a changed layout and recovering it on hardware remain separate work. See
 [STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md) for exact bounds, artifacts
 and the fixed-swap prerequisites.
+
+The read-only `mtkclientBackup` extension then captured the complete 10.6 GiB
+p32 filesystem in `handoff/data-backup-02`, with per-chunk and whole-image
+verification. The first attempt rejected a pending ext4 journal and recovered
+normally; the corrected path preserves the raw image and replays the journal
+only in a host copy. That copy passed forced read-only fsck and all twelve
+expected home/Nix file proofs. Fresh healthy M69 returned automatically with
+all ten ordinary Nix outputs retained. This performs no DA flash writes and
+does not provision swap. See the storage qualification report for package
+identity, the reproducible build-input correction and backup provenance.

@@ -111,3 +111,97 @@ independent readback, recovery that admits both exact layouts and restores the
 original GPT on failure, then boot and data-retention checks. Swap formatting,
 activation and reboot persistence must be verified afterwards. Hibernation
 save/restore is a further requirement, described in `POWER_QUALIFICATION.md`.
+
+## Offline persistent-data backup
+
+`mtkclientBackup` adds `gemini-data-backup DIRECTORY`, a read-only DA command.
+It admits the exact factory GPT and protected boot images, identifies p32 by
+its ext4 UUID and exact 11,391,729,664-byte filesystem extent, and captures the
+whole extent in 679 consecutive 16 MiB reads. It also preserves the original
+4 KiB at the proposed swap start. Each chunk has a recorded digest, and the
+host independently checks every chunk, the complete digest, filesystem
+identity and GPT/protected data before accepting the backup.
+
+The first hardware attempt, `handoff/data-backup-01`, refused the filesystem
+because the ext4 journal-recovery flag remained set after shutdown. It
+captured no filesystem data, performed no flash writes, and returned
+automatically to healthy M69 boot `9452a763-5179-4336-929c-1e6d55fbde96`.
+Published EFI files, all ten ordinary Nix outputs and the original persistence
+proof passed subsequent checks; the backup attempt remains unqualified.
+
+The corrected capture preserves the untouched offline journal instead of
+requiring it to be already replayed. `tools/check-gemini-backup-image.py`
+copies the captured bytes to a new private host file, verifies the copy's
+input digest, and runs `e2fsck -p -E journal_only` on that copy. A subsequent
+forced read-only check must pass. The original image's hash must remain
+unchanged, and recovered UUID, extent and clean state must match expectations.
+Known home and Nix proof files are read from the recovered image using
+`debugfs`, without mounting it. This is host-copy journal recovery, not
+permission to repair or format the live data partition.
+
+```sh
+nix build .#mtkclientBackup --out-link ../handoff/mtkclient-backup
+python3 tools/test-qualify-data-backup.py
+python3 tools/test-check-gemini-backup-image.py
+python3 tools/qualify-data-backup.py --out NEW_DIRECTORY
+```
+
+Add `--execute` for the bounded offline capture and automatic Linux return.
+Nine package tests exercise exact capture, short reads, device/filesystem
+identity, pending journal preservation, failure recovery and real CLI
+dispatch. Six host verifier tests reject missing/reordered chunks, altered
+images and inconsistent evidence. Four tests using native ext4 tools prove
+that journal replay preserves the raw snapshot and file bytes, and that it
+does not hide unrelated bitmap corruption. Evidence is under
+`handoff/data-backup-host-checks`.
+
+The corrected hardware trial `handoff/data-backup-02` passed. It captured all
+11,391,729,664 bytes, returned automatically to healthy M69 boot
+`31c4b11e-73e6-4e3a-a22d-214d03c0ef81`, and retained the original home proof,
+all ten ordinary Nix outputs and published EFI files. The raw image is
+`data.ext4`, SHA-256
+`30dfab1e1016f033c1a427f23d76be750b36eb82f5592bcd5e15186877bec434`.
+Its recovered host copy is `data-recovered.ext4`, SHA-256
+`faf8cff46f5b8cdc28bc3f91f39aaba7d7c0d066c2ab33ab584eda9c5bc8573d`.
+Journal-only replay and the forced read-only check both returned zero. The
+recovered image contains all twelve expected file proofs: the original home
+and fixed-output files plus each of the ten ordinary build proofs. Both images
+are private and read-only. No filesystem, GPT or boot-partition writes were
+issued through the DA. The final locked audit found no writer and matched all
+thirteen executed-source hashes before the package-pin update described below.
+
+The trial used package
+`/nix/store/yrsqgzlcrjfbk60i7lgy1w0d045gfrai-mtkclient-gemini-backup-2.1.4.1`,
+retained through `data-backup-02/mtkclient`. A packaging correction now copies
+only the two required host test files into the Nix build instead of importing
+the entire tools directory. This removes the package-hash cycle caused by host
+runners pinning that same package. The reproducible package is
+`/nix/store/y65zyaa56fv5m08ra7hnjdj35g35a3kf-mtkclient-gemini-backup-2.1.4.1`.
+All 1,276 files match the trial package after substituting only each package's
+own store prefix; the runtime, dependencies and download-agent bytes are the
+same. `data-backup-host-checks/package-equivalence.json` records that comparison.
+The runner now pins this package; its executed trial archive retains the
+original pin. The capture is a snapshot of that shutdown, not a live backup
+of changes made by subsequent Linux boots.
+
+## Prepared swap header
+
+`tools/prepare-gemini-swap-header.py` uses pinned native `mkswap` on a new
+sparse host file and retains only the inspected first 4 KiB. It checks every
+byte against Linux's `union swap_header` and requires independent `blkid`
+agreement. The prepared artifact is `handoff/fixed-swap-header-01`:
+
+- Partition extent: 5,368,709,120 bytes; usable swap: 5,368,705,024 bytes.
+- Page size: 4,096 bytes; filesystem UUID:
+  `85ae0e4c-91cb-4b97-a960-fc6780f42361`; label: `gemini-swap`.
+- Header SHA-256:
+  `807f5f949455432666930598531247d0b6dc2bb23ba2ab3b18bc60f1f7382e7d`.
+- Future write: 4,096 bytes at byte offset 57,150,537,728.
+
+The native oracle test also rejects altered version, bounds, UUID, label,
+reserved bytes and swap signature. This header has not been written to the
+device and swap activation remains unqualified. The transition must verify
+the current filesystem extent and save the old header bytes, write/read back
+the new header before publishing p34, and restore those bytes as well as GPT
+on rollback. A standard swap header must be present before Linux's early
+resume probe can see the new partition.

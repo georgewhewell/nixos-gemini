@@ -29,6 +29,9 @@ ordinary sandboxed Nix builds through the daemon as the unprivileged `gemini` us
 output through recovery. Installed M69 still lacks its network namespace and
 daemon-unit fixes; normal NixOS generation updates remain unfinished. See
 [storage evidence](research/PERSISTENCE.md).
+A complete offline backup of the persistent filesystem now passes journal
+recovery in a separate host copy, filesystem checks and retained-file proofs.
+The fixed-swap GPT and header are prepared; provisioning is still pending.
 The hibernation-watchdog kernel correction has now passed a separate normal
 boot/recovery trial, including an ordinary Nix build and data retention.
 Hibernation, deep idle and the complete lid power policy are not qualified.
