@@ -2,8 +2,9 @@
 
 Status: software reset and 31-second watchdog expiry are hardware-qualified
 after removing an unmapped framebuffer probe. Both automatically recovered
-fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles also
-passed. EFI smoke remains unqualified.
+fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles and
+one corrected EFI-application/FIT handoff cycle also passed. EFI Linux boot
+and ExitBootServices remain unqualified.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -214,8 +215,8 @@ Source review identified an ordering fault: `board_late_init` runs before
 `EVT_LAST_STAGE_INIT`, where `install_smbios_table` sets `gd->arch.smbios_start`.
 The EFI profile enables SMBIOS, so its earlier `efi_init_obj_list` calls
 `efi_smbios_register` with no installed table and returns `EFI_NOT_FOUND`.
-The retained command status cannot distinguish this error from another EFI
-failure; hardware testing of the ordering correction is still required.
+The retained command status could not distinguish this error from another
+EFI failure; the subsequent corrected trial below establishes the outcome.
 
 Revision `71c1f7044f20a60379c48dafcf8f5281c4bd8f0f` defers the EFI payload
 dispatcher to `EVT_MAIN_LOOP`, after all last-stage handlers and before
@@ -231,3 +232,22 @@ to their qualified framebuffer-fix images. Only EFI smoke changed, to p22
 SHA-256 `3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74`.
 The linked EFI map contains both the last-stage SMBIOS handler and the
 main-loop payload handler. The runner pins these updated artifact roots.
+
+## Corrected EFI smoke passed
+
+`handoff/uboot-efi-smoke-order-01` reached healthy candidate M69 boot
+`4decc2d8-bdf9-4834-8e7c-0a27fcb91daf` with both Linux-visible properties:
+`gemini,uefi-hello-result=passed` and `gemini,uboot-handoff=fit`. This proves
+successful EFI application entry/return followed by the FIT Linux handoff.
+The full M69 system and service checks passed, GPT/p30/p31 matched, and the
+4 GiB RAM bank, complete modem table and LK reservations were preserved.
+Usable RAM matched direct M69 at 3,784,500 KiB. The raw Linux FDT and kernel
+log are archived with the trial.
+
+The runner then restored the exact accepted direct-Linux p22 image through
+its waiting mtkclient supervisor. Final healthy M69 boot was
+`7f567308-9b27-4719-af29-edf5c6f8496e`; GPT/p22/p30/p31 matched and no physical
+recovery was needed. The retained `os_jump` phase was `0x474d10e9`.
+The trial reports `profile_qualified=true`. This is one EFI-application
+smoke pass, not EFI Linux/ExitBootServices, GOP, input, storage or boot-manager
+qualification.

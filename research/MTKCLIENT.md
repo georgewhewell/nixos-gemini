@@ -2,7 +2,9 @@
 
 Status, 2026-10-04: read/reboot, boot-only writes and supervised U-Boot
 candidate/rescue cycles are working with the MT6797 packet-size fix. Software
-reset, watchdog expiry and two full M69 FIT handoffs have passed on hardware.
+reset, watchdog expiry, two full M69 FIT handoffs and one corrected EFI
+application/FIT handoff have passed on hardware. Each trial restored healthy
+direct M69 automatically.
 Two corrected DA sessions read the primary GPT and complete boot partition,
 then returned automatically to healthy M69 with matching hashes. A subsequent
 boot-only write was acknowledged, read back in full and followed by another

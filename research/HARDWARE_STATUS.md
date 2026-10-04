@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry and two full M69 FIT handoff/rescue cycles pass; EFI/UEFI work remains. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, two M69 FIT handoff cycles and one EFI-application/FIT cycle pass; EFI Linux/ExitBootServices, GOP, input, storage and boot manager remain. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -83,3 +83,11 @@ with its Linux-visible marker, full RAM bank and unchanged modem reservations.
 The supervised trial restored direct M69 afterward. Details and exact
 artifacts are in [BOOT_HANDOFF.md](BOOT_HANDOFF.md); these boot tests do not
 qualify EFI Linux, writable persistence, fixed swap or hibernation.
+
+The EFI smoke retry also passed after deferring the EFI dispatcher until
+SMBIOS initialization completed. Linux exposed both EFI-success and FIT
+handoff markers and passed full M69 health and LK-memory checks. Its
+supervised rescue returned healthy direct M69 boot
+`7f567308-9b27-4719-af29-edf5c6f8496e`, with unchanged GPT and all boot
+partitions. This proves EFI application entry/return; M69's kernel still has
+EFI disabled, so EFI Linux and ExitBootServices remain separate work.
