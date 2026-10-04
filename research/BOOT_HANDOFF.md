@@ -1,9 +1,9 @@
 # Gemini U-Boot qualification, 2026-10-04
 
-Status: the reset and watchdog carriers have been flashed and automatically
-rescued through mtkclient. Both recovered fully healthy M69. The watchdog
-carrier returned too early to qualify its intended 31-second expiry; Linux
-handoff remains unqualified. These profiles are based on the later U-Boot
+Status: software reset and 31-second watchdog expiry are hardware-qualified
+after removing an unmapped framebuffer probe. Both automatically recovered
+fully healthy M69 through mtkclient. Linux handoff is being qualified.
+These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
 ## Profiles
@@ -93,7 +93,7 @@ timer, enable, auto-restart, IRQ and dual-mode values.
 
 All four corrected carriers cross-built successfully with that regression
 included in each build. They are rooted at `handoff/uboot-m69-wdt-readback*`;
-log: `handoff/uboot-wdt-readback-build.log`. The qualification runner now pins
+log: `handoff/uboot-wdt-readback-build.log`. The earlier qualification runner pinned
 these corrected reset/watchdog hashes:
 
 | Profile | Corrected p22 SHA-256 |
@@ -129,7 +129,43 @@ known marker that differs from the pre-candidate value; missing, stale and
 unknown values cannot prove execution. Reaching `board_init` does not qualify
 the later reset/watchdog test branches.
 
-The next diagnostic can instrument the initcalls between `board_init` and
-`board_late_init` in `common/board_r.c`, reusing the now-qualified register
-capture. This avoids relying on a fleeting display or on a console buffer
-overwritten by the download agent at `0x40000000`.
+## Framebuffer fault fixed; reset and watchdog qualified
+
+Source review found `gemini_r_band()` writing the framebuffer at `0x7dfb0000`
+around `console_init_r`, after `initr_caches()` had enabled the MMU. That
+address lies outside both the 96 MiB DDR mapping and the MMIO mapping.
+U-Boot revision `285fb4088dbf7aaa0a2abb75202b97a4d55b666b` removes the helper
+and its two calls. All four carriers cross-built and passed the existing
+production-function, LK FDT, FIT extraction and AArch64 layout checks.
+Artifacts: `handoff/uboot-m69-fbfix*`; log: `handoff/uboot-fbfix-build.log`.
+
+| Profile | Current p22 SHA-256 |
+|---|---|
+| Handoff | `365ac36a96e095a93e0b7071241c4569f5e052164bd8de8bf793dbbd4bd9ff8c` |
+| EFI smoke | `3c7c408e72e745912246fa8993f062430b8ca01cb7c8008645beb024a93bfd95` |
+| Reset | `e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950` |
+| Watchdog | `5f02a4db11c14fdd604626b48fdd71886db9d90ff699c936d397800a4278c66d` |
+
+The watchdog trial (`handoff/uboot-watchdog-fbfix-01`) captured fresh phase
+`0x474d10ed`, proving entry into the no-kick WFI branch. Preloader returned
+after 40.110 seconds, consistent with the 31-second watchdog plus startup
+overhead. Automatic rescue produced healthy M69 boot
+`886f161d-ab6b-4395-8626-2ce854be4fea`.
+
+The software-reset trial (`handoff/uboot-reset-fbfix-01`) captured fresh phase
+`0x474d10ec` and returned after 9.064 seconds, before the armed watchdog could
+expire. Rescue produced healthy M69 boot `56273f52-f246-4058-8f52-fc0d26eaf56f`.
+Both trials verified complete candidate/rescue writes and readbacks, unchanged
+GPT/p22/p30/p31 after recovery, and full M69 service health. Neither required
+physical intervention. `profile_qualified=true` requires the intended fresh
+marker and the appropriate timing window; a recovery pass alone is insufficient.
+
+The runner also supports `--profile handoff` and `--profile efi-smoke`. It
+requires the exact pinned carrier in p22, the accepted M69 system and full
+health, a new boot identity, the expected Linux-visible markers, the full
+4 GiB RAM bank, the complete modem table, and unchanged LK reservations.
+LK's low-bank dummy-read allocation window may move after the larger FIT
+ramdisk, but must remain within low RAM. After observation it reboots the
+identified candidate into the already waiting M69 rescue. These profiles do
+not permanently accept a carrier. The M69 kernel's forced command line
+retains its existing baseline health capability.
