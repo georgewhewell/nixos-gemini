@@ -61,6 +61,9 @@ class EfiProof(unittest.TestCase):
                 'boot2-sha256':r.P30_SHA,'boot3-sha256':r.P31_SHA,'file-sha256':r.MMC_FILE_SHA}
         tree.update({'chosen/gemini,uefi-mmc-'+key:value for key,value in values.items()})
         r.verify_handoff_tree({},tree,'efi-storage')
+        provision=dict(tree,**{'chosen/gemini,uefi-mmc-boot-sha256':r.PROFILES['efi-provision'][1]})
+        r.verify_handoff_tree({},provision,'efi-provision')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-provision')
         for key,wrong in ((r.STORAGE_MARKER,b'failed\0'.hex()),(r.STORAGE_STATUS,'800000000000000e'),
                           (r.STORAGE_STATUS,'00000000'),('chosen/gemini,uefi-mmc-boot-sha256',r.PROFILES['efi-mmc'][1])):
             with self.assertRaises(RuntimeError): r.verify_handoff_tree({},dict(tree,**{key:wrong}),'efi-storage')

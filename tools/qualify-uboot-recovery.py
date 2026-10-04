@@ -26,6 +26,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-provision': (WORKSPACE / 'handoff/uboot-efi-provision/boot-padded-p22.img',
+                      'eabf8e42eeca5d08a7f7564dee82b44b44bb485235b74e1d6a81b08ba6dc97eb'),
     'efi-storage': (WORKSPACE / 'handoff/uboot-efi-storage-eof/boot-padded-p22.img',
                     '73095ee31d2128c6cadf920b8cc9e451f1900010dcda8c252376126d07779a0f'),
     'efi-mmc': (WORKSPACE / 'handoff/uboot-efi-mmc/boot-padded-p22.img',
@@ -46,7 +48,7 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage')
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision')
 LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 MMC_GPT_SHA = '6addff62cc67f5b5fac9bd87194b6643f4029262251c51c1e43e1b5b64cb887d'
@@ -133,10 +135,10 @@ def verify_handoff_tree(before, after, profile):
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
-    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage') else None
+    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision') else None
     if after.get(CONSOLE_MARKER) != expected_console:
         raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
-    if profile in ('efi-keyboard', 'efi-mmc', 'efi-storage'):
+    if profile in ('efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision'):
         scans = bytes.fromhex(after.get(KEYBOARD_SCANS, ''))
         if (after.get(KEYBOARD_MARKER) != b'scanned\0'.hex() or
                 after.get(KEYBOARD_ERROR) != '00000000' or
@@ -146,11 +148,11 @@ def verify_handoff_tree(before, after, profile):
     elif any(key in after for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)):
         raise RuntimeError('Unexpected EFI keyboard evidence in another profile')
 
-    if profile in ('efi-mmc', 'efi-storage'):
+    if profile in ('efi-mmc', 'efi-storage', 'efi-provision'):
         verify_mmc_tree(after, profile)
     elif any(key in after for key in MMC_MARKERS):
         raise RuntimeError('Unexpected native MMC evidence in another profile')
-    if profile == 'efi-storage':
+    if profile in ('efi-storage', 'efi-provision'):
         if after.get(STORAGE_MARKER) != b'passed\0'.hex() or after.get(STORAGE_STATUS) != '0000000000000000':
             raise RuntimeError('EFI storage protocol application failed: ' + repr(
                 {key: after.get(key) for key in (STORAGE_MARKER, STORAGE_STATUS)}))
@@ -183,6 +185,7 @@ def module(name, path):
 qualify = module('qualify_mtk', ROOT / 'tools/qualify-mtkclient.py')
 backend = module('mtk_backend', ROOT / 'research/p22-mtkclient-backend.py')
 efi_linux = module('efi_linux', ROOT / 'tools/qualify-efi-linux.py')
+efi_files = module('efi_files', ROOT / 'tools/qualify-efi-files.py')
 
 
 def candidate_system(before, profile):
@@ -235,6 +238,8 @@ def candidate_return(ssh, before, directory, profile):
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
         if profile in EFI_LINUX_PROFILES:
             efi_linux.evidence(ssh, directory, qualify, tree)
+        if profile == 'efi-provision':
+            efi_files.evidence(ssh, after['boot_id'], directory, qualify)
         return after
     raise RuntimeError('Healthy candidate Linux did not return within 360s')
 
@@ -422,6 +427,9 @@ def trial(directory, profile, before, ssh):
     recovery_before = before
     if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
         try:
+            if profile == 'efi-provision':
+                efi_files.provision(ssh, before, PROFILES[profile][1], directory, qualify,
+                    lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
             if profile in EFI_LINUX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
@@ -507,6 +515,8 @@ def main():
         backend.checked_image(candidate.resolve(strict=True), sha)
         if args.profile in EFI_LINUX_PROFILES:
             efi_linux.payload()
+        if args.profile == 'efi-provision':
+            efi_files.payload()
         qualify.accepted_boot_bytes(ACCEPTED)
         usb = backend.usb_snapshot('3-2')
         if usb is None or usb[:2] != ('0525', 'a4a2'):

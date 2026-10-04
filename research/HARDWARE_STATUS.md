@@ -36,6 +36,14 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 
 ## Storage and recovery correction
 
+The distro-manager files have now been installed additively on the existing
+p29 ext4 filesystem in `handoff/uboot-efi-provision-01`. All five hashes and
+both existing squashfs stores were checked, p29 was returned to read-only,
+candidate Linux passed full health and automatic rescue restored healthy
+M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. This prepares systemd-boot;
+launching the manager and normal NixOS generation updates remain unqualified.
+There was no formatting, GPT change or persistent writable-store enablement.
+
 The September 29 note claiming p34 was provisioned is historical. Claude later
 restored the factory GPT after SP Flash Tool refused the modified layout with
 error 8502. The fixed-size LVM alternative was proposed, but is not implemented

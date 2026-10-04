@@ -131,10 +131,10 @@
         uboot = import ./nix/uboot-handoff.nix ({
           inherit buildPkgs crossPkgs;
           source = u-boot-gemini-src;
-        } // options);
+        } // builtins.removeAttrs options ["efiProvision"]);
         bundle = import ./nix/uboot-carrier.nix ({
           inherit buildPkgs uboot;
-          linuxBundle = if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
+          linuxBundle = if options.efiProvision or false then mainlineNixosEfiProvision else if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
         } // options);
       };
     in {
@@ -145,6 +145,7 @@
       efiKeyboard = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true;};
       efiMmc = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true;};
       efiStorage = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true;};
+      efiProvision = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -1277,6 +1278,19 @@
       stage2BaselineAcceptScript = mainlineNixosEfiSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
+    efiBootFiles = import ./nix/gemini-efi-boot-files.nix {
+      inherit buildPkgs;
+      bootloader = crossPkgs.systemd;
+      linuxBundle = mainlineNixosEfi.bundle;
+      kernel = mainlineEfiKernel;
+    };
+    mainlineNixosEfiProvision = import ./nix/gemini-efi-provision.nix {
+      inherit buildPkgs;
+      baseBundle = mainlineNixosEfi.bundle;
+      rescueBundle = mainlineNixos.bundle;
+      bootFiles = efiBootFiles;
+    };
+
     # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and
     # its composed DTB differ -- so this candidate reuses the p29 payload that
     # the accepted baseline already installed instead of provisioning again.
@@ -1746,6 +1760,7 @@
       ubootEfiKeyboardBundle = ubootProfiles.efiKeyboard.bundle;
       ubootEfiMmcBundle = ubootProfiles.efiMmc.bundle;
       ubootEfiStorageBundle = ubootProfiles.efiStorage.bundle;
+      ubootEfiProvisionBundle = ubootProfiles.efiProvision.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;
@@ -1769,12 +1784,7 @@
       mainlineNixosKernel = mainlineP22Baseline.kernel;
       mainlineNixosEfiKernel = mainlineEfiKernel;
       mainlineNixosEfiBundle = mainlineNixosEfi.bundle;
-      geminiEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
-        inherit buildPkgs;
-        bootloader = crossPkgs.systemd;
-        linuxBundle = mainlineNixosEfi.bundle;
-        kernel = mainlineEfiKernel;
-      };
+      geminiEfiBootFiles = efiBootFiles;
 
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;

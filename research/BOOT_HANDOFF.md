@@ -634,8 +634,7 @@ AArch64 distro manager, the existing qualified EFI kernel/initramfs in a
 content-addressed directory, a Type 1 boot entry and an eight-second menu.
 It retains the forced kernel command line and requires the LK-derived FDT
 in the EFI configuration table. This does not implement normal NixOS
-generation updates yet. The files have not been published to the device;
-no p29 filesystem or GPT migration has occurred.
+generation updates yet. No p29 filesystem or GPT migration has occurred.
 
 
 Read-only boot-file publication preflight is retained at
@@ -651,6 +650,51 @@ publish references only after their payloads, retain both existing stores,
 and restore the read-only mount before normal boot. Reuse the existing
 store-provisioning pattern rather than changing the live mounted store.
 
-The first `geminiEfiBootFiles` build is still running. Its log is
-`handoff/gemini-efi-boot-files-build.log`; no success or publication is claimed.
+The cross build completed successfully with systemd 261.2. The publication
+bundle is `handoff/gemini-efi-boot-files-publish`: a canonical five-file archive
+of 20,449,280 bytes, SHA-256
+`3acf483171660dc96b373966ed80e1c2e36286149bec3c3715f1ca14550b36d7`.
+The manager itself is 176,128 bytes, SHA-256
+`ed24e7e8b385f25f9df8812c899ecf581a6aa87368827b6a4a41fe4cb6f513cd`.
+Kernel and initramfs retain the qualified EFI payload's exact bytes.
+
+The opt-in `ubootEfiProvisionBundle` adds a Stage 1 hook after the existing
+store hash check and before any store loop attachment. The accepted M69 and
+base EFI initramfs remain unchanged. The host checks fresh boot identity,
+candidate p22/GPT hashes, EFI storage proof and the read-only mount, then
+uploads only the pinned archive into RAM. Stage 1 verifies it before mounting
+p29 with journaling enabled. It requires a live watchdog, at least 120 seconds
+remaining on the recovery lease, no attached store loops, sufficient space
+and matching hashes for both existing squashfs stores.
+
+Publication checks all five source and destination paths before writing,
+rejects symlinks and conflicting files, copies through exclusive temporary
+files, verifies each copy and publishes by a hard link that cannot overwrite
+an existing destination. Payloads precede their entry and loader configuration.
+An interrupted run can reuse already verified files. Both stores are checked
+again, p29 is restored to read-only and all five files are read back before
+normal boot resumes. The host independently verifies the files from healthy
+candidate Linux before the existing supervisor restores M69.
+
+Twenty-one focused host tests pass for publication, the Stage 1 mount/lease
+sequence and host upload/readback, including partial copies, conflicting
+files, symlink parents, corrupt archives, a short lease, mount failures,
+disabled journaling and failed read-only restoration. Eight existing EFI
+qualification tests also pass. The provisioning carrier is
+`handoff/uboot-efi-provision`, SHA-256
+`eabf8e42eeca5d08a7f7564dee82b44b44bb485235b74e1d6a81b08ba6dc97eb`;
+its firmware remains source `b2227743b300dc5f1ab8ace581dbbe746a4ba91a`.
+Read-only admission passed in `handoff/uboot-efi-provision-preflight-01`.
 The accepted M69 bundle still evaluates to the same store path recorded above.
+
+Hardware trial `handoff/uboot-efi-provision-01` passed. Candidate boot
+`f2ec2e7b-ac40-4050-ab46-5595589b4771` installed the archive, rechecked both
+stores, restored p29 read-only and reached full Linux health. Independent
+Stage 2 readback matched all five file hashes (`boot-files.json`). Native
+MMC, EFI storage, display, keyboard polling, both A72 starts and the complete
+EFI memory/LK reservation checks also passed. Automatic rescue returned
+healthy direct M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. Both full p22
+writes/readbacks and reboot acknowledgements passed; GPT/p30/p31 remained
+exact. The fresh retained phase was ExitBootServices, and candidate departure
+to rescue entry took 311.354 seconds. No physical intervention was required.
+These files are installed; systemd-boot itself has not yet been booted.
