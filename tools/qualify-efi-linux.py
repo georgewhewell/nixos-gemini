@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EFI Linux evidence and unique-file provisioning for the p22 trial runner.
+"""Linux store provisioning and EFI evidence for the supervised p22 runner.
 
 No independent writer or reboot path. The caller owns the bounded rescue lane.
 All SSH uses the existing pinned Gemini host key, including Stage 1.
@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
+from typing import NamedTuple
 
 ACCEPTED_STORE_SHA = '1ef4d81260718cbb66ff10745f6460552a37ffb31d27565392bba301acd8f527'
 ACCEPTED_STORE = f'mainline-nixos-{ACCEPTED_STORE_SHA}.squashfs'
@@ -19,25 +20,40 @@ STORE_SHA = '2475e3d85aecd02091b5bfe070bc2963ba8a64981e29ac71258c712c8b3fadd0'
 STORE_SIZE = 426971136
 
 
-def payload():
-    if not re.fullmatch('[0-9a-f]{64}', STORE_SHA) or STORE_SIZE <= 0:
-        raise RuntimeError('EFI Linux profile has no pinned store')
-    name = f'mainline-nixos-{STORE_SHA}.squashfs'
-    source = BUNDLE / name
-    if source.stat().st_size != STORE_SIZE:
-        raise RuntimeError('EFI store size differs from the pinned bundle')
+class StoreProfile(NamedTuple):
+    bundle: Path
+    system: str
+    sha: str
+    size: int
+    require_efi: bool
+
+
+def efi_profile():
+    return StoreProfile(BUNDLE, SYSTEM, STORE_SHA, STORE_SIZE, True)
+
+
+def payload(profile=None):
+    p = profile or efi_profile()
+    if (not re.fullmatch('[0-9a-f]{64}', p.sha) or p.size <= 0 or
+            not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', p.system)):
+        raise RuntimeError('Linux profile has no pinned store/system')
+    name = f'mainline-nixos-{p.sha}.squashfs'
+    source = p.bundle / name
+    if source.stat().st_size != p.size:
+        raise RuntimeError('Linux store size differs from the pinned bundle')
     with source.open('rb') as f:
-        if hashlib.file_digest(f, 'sha256').hexdigest() != STORE_SHA:
-            raise RuntimeError('EFI store hash differs from the pinned bundle')
-    manifest = (BUNDLE / 'MANIFEST').read_text().splitlines()
-    if f'system={SYSTEM}' not in manifest or f'store-file={name}' not in manifest:
-        raise RuntimeError('EFI userspace identity differs from the pinned bundle')
+        if hashlib.file_digest(f, 'sha256').hexdigest() != p.sha:
+            raise RuntimeError('Linux store hash differs from the pinned bundle')
+    manifest = (p.bundle / 'MANIFEST').read_text().splitlines()
+    if f'system={p.system}' not in manifest or f'store-file={name}' not in manifest:
+        raise RuntimeError('Linux userspace identity differs from the pinned bundle')
     return source, name
 
 
-def upload_command(name, before, boot_sha):
+def upload_command(name, before, boot_sha, profile=None):
     # Inputs below are pinned paths/hashes or captured hexadecimal identities.
-    if name != f'mainline-nixos-{STORE_SHA}.squashfs' or not re.fullmatch('[0-9a-f]{64}', STORE_SHA):
+    p = profile or efi_profile()
+    if name != f'mainline-nixos-{p.sha}.squashfs' or not re.fullmatch('[0-9a-f]{64}', p.sha):
         raise ValueError('Unpinned EFI store name')
     if not all(re.fullmatch('[0-9a-f]{64}', v) for v in (boot_sha, before['gpt_sha256'])):
         raise ValueError('Invalid image identity')
@@ -45,21 +61,23 @@ def upload_command(name, before, boot_sha):
         raise ValueError('Invalid boot identity')
     target = '/mnt/gemian/nixos/' + name
     tmp = target + '.provision.tmp'
-    required = f'store-provision=required target={target} temp={tmp} sha256={STORE_SHA} size={STORE_SIZE}'
+    required = f'store-provision=required target={target} temp={tmp} sha256={p.sha} size={p.size}'
+    boot_guard = '''test "$(cat /sys/firmware/efi/fw_platform_size)" = 64
+test "$(tr -d '\\000' < /sys/firmware/devicetree/base/chosen/gemini,uboot-handoff)" = efi''' if p.require_efi else '''test ! -e /sys/firmware/efi
+test ! -e /sys/firmware/devicetree/base/chosen/gemini,uboot-handoff'''
     return f'''set -eu
 umask 077
 test "$(cat /proc/sys/kernel/random/boot_id)" != '{before['boot_id']}'
 test "$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)" = '{boot_sha}'
 test "$(head -c 32768 /dev/mmcblk0 | sha256sum | cut -d' ' -f1)" = '{before['gpt_sha256']}'
-test "$(cat /sys/firmware/efi/fw_platform_size)" = 64
-test "$(tr -d '\\000' < /sys/firmware/devicetree/base/chosen/gemini,uboot-handoff)" = efi
+{boot_guard}
 test "$(cat /run/store-provision.required)" = '{required}'
 test ! -L /mnt/gemian/nixos
 opts=$(awk '$1 == "/dev/mmcblk0p29" && $2 == "/mnt/gemian" && $3 == "ext4" {{print $4}}' /proc/mounts)
 case ",$opts," in *,rw,*) ;; *) exit 1 ;; esac
 case ",$opts," in *,noload,*|*,norecovery,*) exit 1 ;; esac
 available=$(df -Pk /mnt/gemian/nixos | awk '$1 == "/dev/mmcblk0p29" && $6 == "/mnt/gemian" {{print $4}}')
-test "$available" -ge {(STORE_SIZE + 1023)//1024 + 1024}
+test "$available" -ge {(p.size + 1023)//1024 + 1024}
 test ! -e '{target}' && test ! -L '{target}'
 test ! -e '{tmp}' && test ! -L '{tmp}'
 test -f '/mnt/gemian/nixos/{ACCEPTED_STORE}'
@@ -67,26 +85,27 @@ test ! -L '/mnt/gemian/nixos/{ACCEPTED_STORE}'
 test "$(sha256sum '/mnt/gemian/nixos/{ACCEPTED_STORE}' | cut -d' ' -f1)" = '{ACCEPTED_STORE_SHA}'
 # Exclusive creation, hash validation, then an atomic link that cannot overwrite.
 (set -C; cat > '{tmp}')
-test "$(stat -c %s '{tmp}')" = '{STORE_SIZE}'
+test "$(stat -c %s '{tmp}')" = '{p.size}'
 test "$(stat -c %h '{tmp}')" = 1
-test "$(sha256sum '{tmp}' | cut -d' ' -f1)" = '{STORE_SHA}'
+test "$(sha256sum '{tmp}' | cut -d' ' -f1)" = '{p.sha}'
 ln '{tmp}' '{target}'
 test "$(stat -c %i '{tmp}')" = "$(stat -c %i '{target}')"
 rm -- '{tmp}'
 sync
-test "$(sha256sum '{target}' | cut -d' ' -f1)" = '{STORE_SHA}'
+test "$(sha256sum '{target}' | cut -d' ' -f1)" = '{p.sha}'
 test "$(sha256sum '/mnt/gemian/nixos/{ACCEPTED_STORE}' | cut -d' ' -f1)" = '{ACCEPTED_STORE_SHA}'
-printf '%s\\n' 'store-provision=ready sha256={STORE_SHA} size={STORE_SIZE}' > /run/store-provision.ready
-printf '%s\\n' 'EFI store installed and accepted store retained'
+printf '%s\\n' 'store-provision=ready sha256={p.sha} size={p.size}' > /run/store-provision.ready
+printf '%s\\n' 'Linux store installed and accepted store retained'
 '''
 
 
-def provision(ssh, before, boot_sha, directory, qualify, rescued):
-    source, name = payload()
+def provision(ssh, before, boot_sha, directory, qualify, rescued, profile=None):
+    p = profile or efi_profile()
+    source, name = payload(p)
     deadline = time.monotonic() + 150
     while time.monotonic() < deadline:
         if rescued():
-            raise RuntimeError('Automatic rescue ran before EFI Stage 1 provisioning')
+            raise RuntimeError('Automatic rescue ran before Linux Stage 1 provisioning')
         try:
             state = qualify.run(ssh + [
                 'if test -s /run/store-provision.required; then cat /run/store-provision.required; '
@@ -94,19 +113,19 @@ def provision(ssh, before, boot_sha, directory, qualify, rescued):
         except subprocess.SubprocessError:
             time.sleep(3)
             continue
-        if state == SYSTEM:
+        if state == p.system:
             return  # A previous checked trial already installed this unique file.
         if not state.startswith('store-provision=required '):
             time.sleep(3)
             continue
-        command = upload_command(name, before, boot_sha)
+        command = upload_command(name, before, boot_sha, p)
         (directory / 'store-upload.sh').write_text(command)
-        print('EFI Stage 1 is reachable with the known host key; provisioning matching userspace', flush=True)
+        print('Linux Stage 1 is reachable with the known host key; provisioning matching userspace', flush=True)
         with source.open('rb') as f, (directory / 'store-upload.log').open('w') as log:
             subprocess.run(ssh + [command], stdin=f, stdout=log, stderr=subprocess.STDOUT,
                            check=True, timeout=300)
         return
-    raise RuntimeError('EFI Stage 1 did not expose provisioning within 150s')
+    raise RuntimeError('Linux Stage 1 did not expose provisioning within 150s')
 
 
 def verify_evidence(log, properties, platform_size, tree):

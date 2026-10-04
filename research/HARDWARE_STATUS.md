@@ -23,10 +23,13 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot is `a2fd95cf-c7d0-4fc5-a058-b8b1bb3a0339`, with `/persist`,
+healthy M69 boot is `303e9296-7043-42a1-86fa-c39b219d4395`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed swap is still absent.
-Ordinary Nix builds revealed missing network namespaces and daemon units;
-the opt-in correction is built but unbooted. See [PERSISTENCE.md](PERSISTENCE.md).
+Ordinary Nix builds revealed missing network namespaces and daemon units.
+The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
+daemon build ran in its own network namespace, both A72s and full health
+passed, and its output/database survived recovery. Direct M69 remains
+installed. See [PERSISTENCE.md](PERSISTENCE.md).
 
 ## Remaining work
 
@@ -34,7 +37,7 @@ the opt-in correction is built but unbooted. See [PERSISTENCE.md](PERSISTENCE.md
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. The real distro systemd-boot manager now boots the installed Linux entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Physical key selection, full modifier qualification, persistent EFI settings and normal NixOS generation management remain. See BOOT_HANDOFF.md |
-| Persistence and fixed-size swap | Home and Nix storage/database survive supervised M69 reboot with unchanged GPT. Qualify the prepared ordinary-build/daemon correction, normal generation updates and fixed-size swap; owner requested fixed swap rather than a swap file |
+| Persistence and fixed-size swap | Home and Nix storage/database survive supervised reboot with unchanged GPT. The candidate's ordinary daemon builds now pass as an unprivileged user; integrate it with distro boot and normal generation updates, then qualify fixed-size swap. The owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |

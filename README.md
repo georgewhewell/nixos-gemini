@@ -22,9 +22,11 @@ reception remain open.
 
 The device has the factory 33-partition GPT. Persistent home and the writable
 Nix layer now survive supervised reboots, using the existing p32 filesystem.
-There is no p34 swap. Ordinary Nix builds exposed missing network namespaces
-and daemon units in M69; a separate candidate fixes both and has built, but
-awaits hardware qualification. See [storage evidence](research/PERSISTENCE.md).
+There is no p34 swap. A separate candidate has passed ordinary sandboxed Nix
+builds through the daemon as the unprivileged `gemini` user, retaining the
+output through recovery. Installed M69 still lacks its network namespace and
+daemon-unit fixes; distro boot integration remains. See
+[storage evidence](research/PERSISTENCE.md).
 Hibernation, deep idle and the complete lid power policy are not qualified.
 Camera and vibrator are excluded from the owner's completion scope.
 

@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Reject false daemon/sandbox evidence and crossed boot/store profiles."""
+import hashlib
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+spec=importlib.util.spec_from_file_location('recovery',Path(__file__).with_name('qualify-uboot-recovery.py'))
+r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
+n=r.persistent_nix
+
+class PersistentNix(unittest.TestCase):
+    def test_namespace_identity_and_nonroot_builder(self):
+        proof=dict(token='a'*32,uid='1000',net='net:[200]',outside_home='absent')
+        n.verify_builder(proof,'a'*32,'net:[100]','net:[100]')
+        for key,bad in (('token','b'*32),('uid','0'),('uid','unknown'),('net','net:[100]'),
+                        ('net','missing'),('outside_home','visible')):
+            with self.subTest(key=key,bad=bad),self.assertRaises(RuntimeError):
+                n.verify_builder(dict(proof,**{key:bad}),'a'*32,'net:[100]','net:[100]')
+        with self.assertRaises(RuntimeError):n.verify_builder(proof,'a'*32,'net:[100]','net:[200]')
+    def test_direct_candidate_cannot_claim_uboot(self):
+        tree={'memory/reg':'same','reserved-memory/ccci/reg':'same'}
+        r.verify_handoff_tree(tree,tree,'persistent-nix')
+        with self.assertRaises(RuntimeError):
+            r.verify_handoff_tree(tree,dict(tree,**{r.HANDOFF_MARKER:b'efi\0'.hex()}),'persistent-nix')
+        with self.assertRaises(RuntimeError):
+            r.verify_handoff_tree(tree,dict(tree,**{'memory/reg':'changed'}),'persistent-nix')
+        self.assertFalse(r.phase_evidence('0x474d10e0','0x474d10ee','persistent-nix')['uboot_execution_proven'])
+        self.assertEqual(r.candidate_system({'system':'accepted'},'persistent-nix'),n.SYSTEM)
+        self.assertEqual(r.rescue_identity({'system':'accepted','boot_id':'old'}, {'boot_id':'new'})['system'],'accepted')
+    def test_profile_hash_size_and_system_all_required(self):
+        e=r.efi_linux
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);raw=b'pinned test store';sha=hashlib.sha256(raw).hexdigest()
+            name='mainline-nixos-'+sha+'.squashfs';path=root/name;path.write_bytes(raw)
+            manifest=root/'MANIFEST';manifest.write_text(f'system={n.SYSTEM}\nstore-file={name}\n')
+            p=e.StoreProfile(root,n.SYSTEM,sha,len(raw),False)
+            self.assertEqual(e.payload(p),(path,name))
+            with self.assertRaises(RuntimeError):e.payload(p._replace(size=len(raw)+1))
+            path.write_bytes(b'x'*len(raw))
+            with self.assertRaises(RuntimeError):e.payload(p)
+            path.write_bytes(raw);manifest.write_text(f'system={e.SYSTEM}\nstore-file={name}\n')
+            with self.assertRaises(RuntimeError):e.payload(p)
+            with self.assertRaises(RuntimeError):e.payload(p._replace(system='$(false)'))
+    def test_direct_and_efi_upload_admission_remain_separate(self):
+        e=r.efi_linux;before=dict(boot_id='a'*8+'-'+ 'a'*4+'-'+ 'a'*4+'-'+ 'a'*4+'-'+ 'a'*12,gpt_sha256='b'*64)
+        p=n.store_profile(e);name='mainline-nixos-'+p.sha+'.squashfs'
+        direct=e.upload_command(name,before,n.BOOT_SHA,p)
+        self.assertIn('test ! -e /sys/firmware/efi',direct)
+        self.assertIn('test ! -e /sys/firmware/devicetree/base/chosen/gemini,uboot-handoff',direct)
+        self.assertIn('(set -C; cat > ',direct)
+        check=f'test "$(sha256sum \'/mnt/gemian/nixos/{e.ACCEPTED_STORE}\' | cut -d\' \' -f1)" = \'{e.ACCEPTED_STORE_SHA}\''
+        self.assertLess(direct.index(check),direct.index('(set -C; cat > '))
+        self.assertGreater(direct.rindex(check),direct.index("ln '"))
+        efi=e.upload_command('mainline-nixos-'+e.STORE_SHA+'.squashfs',before,'c'*64)
+        self.assertIn('fw_platform_size)',efi)
+        self.assertNotIn('test ! -e /sys/firmware/efi',efi)
+        with self.assertRaises(ValueError):e.upload_command(name,before,n.BOOT_SHA)
+        with self.assertRaises(ValueError):e.upload_command(name,dict(before,boot_id='$(false)'),n.BOOT_SHA,p)
+
+if __name__=='__main__':unittest.main()

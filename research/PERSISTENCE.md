@@ -52,7 +52,7 @@ Both p22 writes/readbacks and automatic resets passed; GPT/p30/p31 hashes
 remain unchanged. The terminal result has `persistence_qualified=true`, and a
 fresh final audit confirmed the same healthy boot, free locks and no writer.
 
-## Ordinary Nix builds: defects found and candidate prepared
+## Ordinary Nix builds: defects and qualified correction
 
 The storage checks exposed two pre-existing M69 configuration gaps:
 
@@ -82,7 +82,9 @@ The candidate built successfully and is rooted at
 `handoff/persistent-nix-candidate`. Host checks in
 `handoff/persistent-nix-candidate-host-checks` verify all manifest hashes, the
 kernel configuration difference, complete daemon/socket units, enabled socket,
-database seeding order and sandbox policy. It has **not been boot-tested**.
+database seeding order and sandbox policy. Its subsequent hardware trial
+passed as described below; it remains an opt-in candidate, with direct M69
+installed after recovery.
 
 | Candidate component | Identity |
 |---|---|
@@ -93,8 +95,45 @@ database seeding order and sandbox policy. It has **not been boot-tested**.
 | Store SHA-256 | `a55afc6b3ad2816a04b92659755982314195093707714ebc169e0bc8ce597d9d` |
 | Store size | 426,987,520 bytes |
 
-Next qualification must cover a real ordinary build through the daemon, an
-unprivileged client's access, both A72 starts, complete service health, and
-automatic restoration of M69 with the persistent data retained. This candidate
-does not implement fixed swap, hibernation, normal generation updates or
-persistent EFI settings.
+## Ordinary daemon build: hardware pass
+
+`handoff/persistent-nix-01` passed the pinned `persistent-nix` profile of
+`tools/qualify-uboot-recovery.py`. Its userspace store was installed under the
+unique hash-named p29 filename above; the M69 store was verified before and
+after publication. This is a direct LK/Linux boot of the EFI-capable kernel,
+so the profile neither requires nor claims a U-Boot/EFI handoff.
+
+Candidate boot `c6225ffd-b18e-4d85-8e25-0a1bf5d0fec0` passed full service
+health, exact runtime kernel configuration, late-CPU identity binding, both
+A72 online checks, the 4 GiB memory bank and LK reservations. The existing
+M69 home file, fixed-output build and database records remained intact while
+using the candidate's lower store and seeded database.
+
+The ordinary build ran through `nix-build --store daemon` as `gemini` (UID
+1000), launched by a transient systemd service. It declared no fixed output
+hash. The builder used network namespace `net:[4026532559]`, distinct from
+the host and daemon's `net:[4026531833]`, ran as non-root inside its sandbox,
+and could not see `/home/gemini`. Sandbox policy and fallback policy were
+checked as `true` and `false`, respectively. The resulting store directory is:
+
+`/nix/store/y05f867msys00kbdwy1ivjpifg3h6rw6-gemini-daemon-ab69a8311a0d48e18c57e72d629aa364`
+
+The ordinary build's output root lives in the persistent user's home. Its
+proof-file SHA-256 is
+`189364e47715c00352ed0b075e0a58b37e105a7929c82f3f52f877250e219cdc`.
+Rescue boot `303e9296-7043-42a1-86fa-c39b219d4395` returned healthy M69 and
+retained that output, root, NAR hash and derivation, together with the original
+M69 persistence proof. Both boot writes/readbacks and automatic resets passed;
+GPT/p30/p31 hashes are unchanged. The candidate-to-rescue preloader interval
+was 329.225 seconds, including provisioning and qualification.
+
+The terminal result sets `profile_qualified`, `ordinary_daemon_build_qualified`
+and `nix_persistence_qualified` to true; `uboot_execution_proven` remains false.
+The final audit reconfirmed the recovered healthy boot, free locks and no
+writer. Four new host tests cover sandbox evidence and profile separation;
+all 70 relevant verifier/backend regression tests pass.
+
+This qualifies the daemon and ordinary sandboxed builds on the candidate.
+The installed M69 image still has the two original limitations. Integration
+with the distro boot path and normal generation management remains; fixed
+swap, hibernation and persistent EFI settings are also incomplete.

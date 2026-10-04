@@ -66,9 +66,9 @@ def run(ssh, command, directory, name, timeout=60):
     return result.stdout
 
 
-def evidence(ssh, boot_id, directory, qualify, previous=None):
+def evidence(ssh, boot_id, directory, qualify, previous=None, system=None):
     phase='persistence-after' if previous else 'persistence-before'
-    system=qualify.ACCEPTED_SYSTEM
+    system=system or qualify.ACCEPTED_SYSTEM
     raw=run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {system}
