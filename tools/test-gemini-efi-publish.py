@@ -115,4 +115,18 @@ class Publication(unittest.TestCase):
             self.manifest.write_text('\n'.join(bad)+'\n')
             self.assertNotEqual(self.run_script('activate',previous=sha),0)
             self.assertEqual(before,self.snapshot())
+    def test_six_file_entry_publishes_device_tree_before_default(self):
+        sha=self.old_default();relative='EFI/Gemini/abc/gemini.dtb';data=b'entry device tree'
+        (self.source/relative).write_bytes(data)
+        rows=self.manifest.read_text().splitlines()
+        rows.insert(3,f'{hashlib.sha256(data).hexdigest()} {len(data)} {relative}')
+        self.manifest.write_text('\n'.join(rows)+'\n')
+        self.assertEqual(self.run_script('activate',previous=sha),0)
+        self.assertEqual((self.dest/relative).read_bytes(),data)
+        self.assertEqual(self.run_script('verify'),0)
+        extra='EFI/Gemini/abc/unexpected';(self.source/extra).write_bytes(data)
+        rows.insert(4,f'{hashlib.sha256(data).hexdigest()} {len(data)} {extra}')
+        self.manifest.write_text('\n'.join(rows)+'\n');before=self.snapshot()
+        self.assertNotEqual(self.run_script('activate',previous=sha),0)
+        self.assertEqual(before,self.snapshot())
 if __name__=='__main__':unittest.main()

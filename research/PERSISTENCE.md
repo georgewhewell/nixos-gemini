@@ -183,3 +183,35 @@ home GC root and registered NAR/derivation identity. The locked final audit is
 `handoff/efi-nix-provision-02/final-idle-check.json`; per-output evidence is in
 its `all-nix-outputs/` directory. Factory GPT is unchanged and fixed swap remains
 unprovisioned.
+
+
+The subsequent six-file DT publication and manager trials,
+`handoff/efi-entry-dt-provision-01` and `handoff/efi-entry-dt-manager-01`, also
+passed ordinary unprivileged builds and retention through automatic M69
+rescue. The selected DT carries its own CPU identity; LK's memory and modem
+reservations remain intact. The second trial's locked audit independently
+retained all six ordinary outputs, home GC roots and database identities.
+The current default selects the DT-bearing entry
+`gemini-49d449df65df5f412d738d56cde096e212d61d437bb7faca7afccf86f6729da3.conf`;
+both earlier entries/payloads and their configuration backups are preserved.
+Normal NixOS generation installation and fixed swap remain incomplete.
+
+
+`handoff/efi-entry-dt-cross-manager-01` subsequently booted this selected entry
+from a carrier containing the older EFI kernel and DT. Candidate
+`e0e358ec-c55f-48c5-88eb-034e11b115db` retained the selected CPU provenance,
+passed full EFI/Linux health and built another ordinary sandboxed output:
+`/nix/store/xs9rihi5nvjqd44l7smxw7a6r37mq19j-gemini-daemon-0903d3c227654da4a9be340dfb186a49`.
+Its proof SHA-256 is
+`4643d37c28a2a82beeb6869bf1e2831c5f0196911f40188768cb4e0ee2949b95`.
+Automatic recovery returned healthy M69
+`055f7573-d77d-43f9-80e4-ca06ae55e3b7` and verified the output, home root,
+registered NAR and derivation, original persistence proof and all boot files.
+The complete profile, cross-kernel selection and Nix persistence flags pass.
+
+
+The final locked audit in `handoff/efi-entry-dt-cross-manager-01` independently
+retained all seven ordinary build outputs, home GC roots, proof hashes and
+registered NAR/derivation identities. It reconfirmed healthy M69, both flash
+locks free and no writer; every trial handle is terminal. Evidence is in
+`all-nix-outputs/` and `final-idle-check.json`.

@@ -45,6 +45,11 @@
       url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=3da3110deebdb351eff0cd48d76271596dfa407d&shallow=1";
       flake = false;
     };
+    u-boot-gemini-dt-src = {
+      # Per-entry DT candidate; qualified firmware profiles retain their pin.
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=c50f76ab4995037008b4b5ab37a828bd23e3373c&shallow=1";
+      flake = false;
+    };
     u-boot-src = {
       # Exact upstream base for the reviewable MT6797 stage-0 patch.
       url = "github:u-boot/u-boot/cc8c034e78eba6b2a3845783889b80753bb1af1e";
@@ -63,6 +68,7 @@
     ixoo-candidate,
     u-boot-src,
     u-boot-gemini-src,
+    u-boot-gemini-dt-src,
   }: let
     # Build system (your machine)
     buildSystem = "x86_64-linux";
@@ -130,14 +136,14 @@
       mkProfile = options: rec {
         uboot = import ./nix/uboot-handoff.nix ({
           inherit buildPkgs crossPkgs;
-          source = u-boot-gemini-src;
-        } // builtins.removeAttrs options ["efiProvision" "nixSystem"]);
+          source = if options.efiDtFixup or false then u-boot-gemini-dt-src else u-boot-gemini-src;
+        } // builtins.removeAttrs options ["efiProvision" "nixSystem" "entryDtb"]);
         bundle = import ./nix/uboot-carrier.nix ({
           inherit buildPkgs uboot;
-          linuxBundle = if options.nixSystem or false
+          linuxBundle = if options.entryDtb or false then mainlineNixosNixEfiDtProvision else if options.nixSystem or false
             then (if options.efiProvision or false then mainlineNixosNixEfiProvision else mainlineNixosNix.bundle)
             else if options.efiProvision or false then mainlineNixosEfiProvision else if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
-        } // builtins.removeAttrs options ["nixSystem"]);
+        } // builtins.removeAttrs options ["nixSystem" "efiDtFixup" "entryDtb"]);
       };
     in {
       handoff = mkProfile {};
@@ -151,6 +157,10 @@
       efiManager = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
       efiNixProvision = mkProfile {nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
       efiNixManager = mkProfile {nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
+      efiNixDtManager = mkProfile {nixSystem = true; efiDtFixup = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
+      # The older EFI carrier must boot the independently published Nix kernel.
+      efiCrossDtManager = mkProfile {efiDtFixup = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
+      efiNixDtProvision = mkProfile {entryDtb = true; nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -1339,6 +1349,21 @@
       bootFiles = nixEfiBootFiles;
       activateFrom = "9547db8cf45f9d032c9792411c7f06bbde375e7b9f620deea6c09740b4d34266";
     };
+    nixEfiDtBootFiles = import ./nix/gemini-efi-boot-files.nix {
+      inherit buildPkgs;
+      bootloader = crossPkgs.systemd;
+      linuxBundle = mainlineNixosNix.bundle;
+      kernel = mainlineNixKernel;
+      versionedEntry = true;
+      entryDtb = true;
+    };
+    mainlineNixosNixEfiDtProvision = import ./nix/gemini-efi-provision.nix {
+      inherit buildPkgs;
+      baseBundle = mainlineNixosNix.bundle;
+      rescueBundle = mainlineNixos.bundle;
+      bootFiles = nixEfiDtBootFiles;
+      activateFrom = "de14c808c332e2a9df4461364bca149519f9087bbe13b90d3e1e411545c578a2";
+    };
 
     # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and
     # its composed DTB differ -- so this candidate reuses the p29 payload that
@@ -1813,6 +1838,9 @@
       ubootEfiManagerBundle = ubootProfiles.efiManager.bundle;
       ubootEfiNixProvisionBundle = ubootProfiles.efiNixProvision.bundle;
       ubootEfiNixManagerBundle = ubootProfiles.efiNixManager.bundle;
+      ubootEfiNixDtManagerBundle = ubootProfiles.efiNixDtManager.bundle;
+      ubootEfiCrossDtManagerBundle = ubootProfiles.efiCrossDtManager.bundle;
+      ubootEfiNixDtProvisionBundle = ubootProfiles.efiNixDtProvision.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;
@@ -1840,6 +1868,7 @@
       mainlineNixosNixBundle = mainlineNixosNix.bundle;
       geminiEfiBootFiles = efiBootFiles;
       geminiNixEfiBootFiles = nixEfiBootFiles;
+      geminiNixEfiDtBootFiles = nixEfiDtBootFiles;
 
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;

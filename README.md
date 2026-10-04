@@ -77,7 +77,10 @@ systemd-boot manager also boots the installed Linux entry after its unattended
 menu timeout, with independent EFI-variable and file-hash evidence. Its new
 versioned entry boots the Nix-enabled system and passes an ordinary sandboxed
 daemon build as an unprivileged user, retaining its output and database through
-automatic M69 recovery. Physical key selection and normal NixOS generation
+automatic M69 recovery. Per-entry device trees now pass the same complete
+boot and recovery checks, preserving the selected kernel's CPU identity and
+LK's runtime reservations even when the carrier embeds an older kernel.
+Physical key selection and normal NixOS generation
 updates remain to be qualified.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this

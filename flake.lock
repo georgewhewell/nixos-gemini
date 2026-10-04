@@ -110,9 +110,29 @@
         "linux-gemini-next": "linux-gemini-next",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
+        "u-boot-gemini-dt-src": "u-boot-gemini-dt-src",
         "u-boot-gemini-src": "u-boot-gemini-src",
         "u-boot-src": "u-boot-src",
         "vendor-kernel": "vendor-kernel"
+      }
+    },
+    "u-boot-gemini-dt-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791110494,
+        "narHash": "sha256-Ic4k4c+EVNsDN2Yn3NgAKKn8ZUaTVJ6IyhlyJRtociw=",
+        "ref": "gemini-boot-consolidation",
+        "rev": "c50f76ab4995037008b4b5ab37a828bd23e3373c",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
+      },
+      "original": {
+        "ref": "gemini-boot-consolidation",
+        "rev": "c50f76ab4995037008b4b5ab37a828bd23e3373c",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
       }
     },
     "u-boot-gemini-src": {

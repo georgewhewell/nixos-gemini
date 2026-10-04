@@ -28,6 +28,12 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-nix-dt-cross-manager': (WORKSPACE / 'handoff/efi-cross-entry-dt-manager/boot-padded-p22.img',
+                                 'd399b431e2683039848550bd64e2c43be343522b0d14cf1551a06511d02615d4'),
+    'efi-nix-dt-provision': (WORKSPACE / 'handoff/nix-efi-entry-dt-candidates-1/boot-padded-p22.img',
+                             'ac6f70b9655f0a8c181901966ab0c03a37d485df6ccbf59cdb62905aae7b1adc'),
+    'efi-nix-dt-manager': (WORKSPACE / 'handoff/nix-efi-entry-dt-manager-pad/boot-padded-p22.img',
+                           'ef5c215b95da370e993710785d23c84c57dda47e40dab600b2ee302ef1d4ec19'),
     'efi-nix-provision': (WORKSPACE / 'handoff/nix-efi-provision-reproducible/boot-padded-p22.img',
                           '238072a0243de05435dcee15f60aa8304c36c07fe8431c49dfd5f6e03b9aa121'),
     'efi-nix-manager': (WORKSPACE / 'handoff/nix-efi-candidates-2/boot-padded-p22.img',
@@ -58,7 +64,8 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager')
+ENTRY_DT_PROFILES = ('efi-nix-dt-provision', 'efi-nix-dt-manager', 'efi-nix-dt-cross-manager')
+NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager') + ENTRY_DT_PROFILES
 NIX_PROFILES = ('persistent-nix',) + NIX_EFI_PROFILES
 EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') + NIX_EFI_PROFILES
 UBOOT_LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
@@ -144,7 +151,9 @@ def handoff_tree(ssh):
 
 
 def profile_kind(profile):
-    return {'efi-nix-provision': 'efi-provision', 'efi-nix-manager': 'efi-manager'}.get(profile, profile)
+    return {'efi-nix-provision': 'efi-provision', 'efi-nix-manager': 'efi-manager',
+            'efi-nix-dt-provision': 'efi-provision', 'efi-nix-dt-manager': 'efi-manager',
+            'efi-nix-dt-cross-manager': 'efi-manager'}.get(profile, profile)
 
 
 def verify_handoff_tree(before, after, profile):
@@ -230,6 +239,20 @@ efi_files = module('efi_files', ROOT / 'tools/qualify-efi-files.py')
 efi_manager = module('efi_manager', ROOT / 'tools/qualify-efi-manager.py')
 persistence = module('persistence', ROOT / 'tools/qualify-gemini-persistence.py')
 persistent_nix = module('persistent_nix', ROOT / 'tools/qualify-persistent-nix.py')
+entry_dt = module('entry_dt', ROOT / 'tools/qualify-efi-entry-dt.py')
+
+
+def files_profile_for(profile):
+    if profile in ENTRY_DT_PROFILES:
+        return entry_dt.files_profile(efi_files)
+    return persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None
+
+
+def previous_files_evidence(ssh,boot_id,directory,profile,name):
+    persistent_nix.activation_evidence(ssh,boot_id,directory,qualify,persistence,name=name)
+    if profile in ENTRY_DT_PROFILES:
+        entry_dt.previous_files(ssh,boot_id,directory,qualify,persistence,
+                                persistent_nix,efi_files,name+'-nix')
 
 
 def candidate_system(before, profile):
@@ -284,18 +307,24 @@ def candidate_return(ssh, before, directory, profile):
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
         if profile in EFI_LINUX_PROFILES:
             efi_linux.evidence(ssh, directory, qualify, tree)
-        files = persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None
+        files = files_profile_for(profile)
         if profile_kind(profile) == 'efi-provision':
             efi_files.evidence(ssh, after['boot_id'], directory, qualify, profile=files)
         if profile_kind(profile) == 'efi-manager':
             kwargs = dict(entry=persistent_nix.EFI_ENTRY, kernel=persistent_nix.KERNEL) if profile in NIX_EFI_PROFILES else {}
+            if profile in ENTRY_DT_PROFILES:
+                kwargs['entry']=entry_dt.ENTRY
             efi_manager.evidence(ssh, after['boot_id'], directory, qualify, tree, **kwargs)
             efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False, profile=files)
+            if profile in ENTRY_DT_PROFILES:
+                entry_dt.evidence(directory,after['boot_id'],efi_files,qualify)
+            if profile == 'efi-nix-dt-cross-manager':
+                entry_dt.cross_evidence(directory,after['boot_id'],efi_files,qualify,*PROFILES[profile])
         if profile in NIX_PROFILES:
             persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
                                     require_efi=profile in NIX_EFI_PROFILES)
             if profile in NIX_EFI_PROFILES:
-                persistent_nix.activation_evidence(ssh, after['boot_id'], directory, qualify, persistence)
+                previous_files_evidence(ssh,after['boot_id'],directory,profile,'previous-efi-files')
             if candidate_snapshot(ssh, before, profile) != after:
                 raise RuntimeError('Candidate health or protected identity changed after Nix build')
         return after
@@ -500,7 +529,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
             if profile_kind(profile) == 'efi-provision':
                 efi_files.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS),
-                    profile=persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None)
+                    profile=files_profile_for(profile))
             if profile in EFI_LINUX_PROFILES and profile not in NIX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
@@ -546,9 +575,8 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
                 persistent_nix.after_recovery(ssh, after['boot_id'], directory, qualify, persistence)
                 if profile in NIX_EFI_PROFILES:
                     efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False,
-                        name='recovered-boot-files.json', profile=persistent_nix.files_profile(efi_files))
-                    persistent_nix.activation_evidence(ssh, after['boot_id'], directory, qualify, persistence,
-                        name='recovered-previous-efi-files')
+                        name='recovered-boot-files.json', profile=files_profile_for(profile))
+                    previous_files_evidence(ssh,after['boot_id'],directory,profile,'recovered-previous-efi-files')
                 nix_retained = True
             else:
                 persistent_nix.old_persistence(ssh, after['boot_id'], directory, qualify, persistence,
@@ -590,6 +618,9 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     if profile in NIX_PROFILES:
         result.update(ordinary_daemon_build_qualified=candidate_qualified,
                       nix_persistence_qualified=nix_retained)
+    if profile in ENTRY_DT_PROFILES:
+        result.update(entry_dt_handoff_qualified=profile_kind(profile)=='efi-manager' and qualified,
+                      cross_kernel_generation_selection_qualified=profile=='efi-nix-dt-cross-manager' and qualified)
     if verify_persistence:
         result['persistence_qualified'] = persistent_after is not None
     if profile == 'watchdog':
@@ -638,7 +669,10 @@ def main():
         if args.profile in NIX_PROFILES:
             efi_linux.payload(persistent_nix.store_profile(efi_linux,require_efi=args.profile in NIX_EFI_PROFILES))
         if profile_kind(args.profile) in ('efi-provision','efi-manager'):
-            efi_files.payload(persistent_nix.files_profile(efi_files) if args.profile in NIX_EFI_PROFILES else None)
+            efi_files.payload(files_profile_for(args.profile))
+        if args.profile == 'efi-nix-dt-cross-manager':
+            _,manifest=efi_files.payload(files_profile_for(args.profile))
+            entry_dt.cross_carrier(candidate,sha,entry_dt.BUNDLE/'tree'/manifest['entry_device_tree'])
         qualify.accepted_boot_bytes(ACCEPTED)
         usb = backend.usb_snapshot('3-2')
         if usb is None or usb[:2] != ('0525', 'a4a2'):
@@ -652,26 +686,28 @@ def main():
         if args.profile in NIX_PROFILES:
             persistent_nix.old_persistence(ssh, before['boot_id'], directory, qualify, persistence,
                 qualify.ACCEPTED_SYSTEM, 'before-old-persistence')
-        if args.profile == 'efi-nix-provision':
+        if args.profile in ('efi-nix-provision','efi-nix-dt-provision'):
             try:
                 efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
-                    name='before-new-boot-files.json', profile=persistent_nix.files_profile(efi_files))
-                persistent_nix.activation_evidence(ssh, before['boot_id'], directory, qualify, persistence,
-                    name='before-previous-efi-files')
+                    name='before-new-boot-files.json', profile=files_profile_for(args.profile))
+                previous_files_evidence(ssh,before['boot_id'],directory,args.profile,'before-previous-efi-files')
             except (subprocess.SubprocessError, RuntimeError, ValueError):
                 efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
-                    name='before-old-boot-files.json')
+                    name='before-old-boot-files.json',
+                    profile=persistent_nix.files_profile(efi_files) if args.profile in ENTRY_DT_PROFILES else None)
         if profile_kind(args.profile) == 'efi-manager':
             efi_files.evidence(ssh, before['boot_id'], directory, qualify,
                                require_verified=False, name='before-boot-files.json',
-                               profile=persistent_nix.files_profile(efi_files) if args.profile in NIX_EFI_PROFILES else None)
+                               profile=files_profile_for(args.profile))
+            if args.profile in ENTRY_DT_PROFILES:
+                previous_files_evidence(ssh,before['boot_id'],directory,args.profile,'before-previous-efi-files')
         if tree is not None:
             qualify.save(directory, 'before-tree.json', tree)
         sources = directory / 'executed-sources'
         sources.mkdir(mode=0o700)
         source_hashes = {}
         for name in ('qualify-uboot-recovery.py', 'qualify-mtkclient.py', 'qualify-efi-linux.py',
-                     'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-gemini-persistence.py',
+                     'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-efi-entry-dt.py', 'qualify-gemini-persistence.py',
                      'qualify-persistent-nix.py'):
             raw = (ROOT / 'tools' / name).read_bytes()
             (sources / name).write_bytes(raw)

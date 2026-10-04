@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Build immutable systemd-boot trial files and their checked publication archive."""
-import gzip, hashlib, io, json, struct, sys, tarfile
+import gzip, hashlib, io, json, struct, subprocess, sys, tarfile, tempfile
 from pathlib import Path
 out, bootloader, linux, kernel = map(Path, sys.argv[1:5])
-assert sys.argv[5:] in ([], ['--versioned-entry'])
+assert sys.argv[5:] in ([], ['--versioned-entry'], ['--versioned-entry', '--entry-dtb'])
 versioned = bool(sys.argv[5:])
+entry_dtb = '--entry-dtb' in sys.argv[5:]
 image = gzip.decompress((linux/'kernel/Image.gz').read_bytes())
 initrd = (linux/'initramfs.cpio.gz').read_bytes()
 manager = (bootloader/'lib/systemd/boot/efi/systemd-bootaa64.efi').read_bytes()
@@ -20,6 +21,18 @@ for name, data in [('Linux', image), ('systemd-boot', manager)]:
 config = (kernel/'kernel.config').read_text()
 assert 'CONFIG_CMDLINE_FORCE=y\n' in config
 payload = hashlib.sha256(image + initrd).hexdigest()
+dtb = None
+if entry_dtb:
+    dtb = (linux/'gemini-usb11-host.dtb').read_bytes()
+    assert struct.unpack_from('>I',dtb)[0] == 0xd00dfeed
+    identity = b'gemini-efi-entry-dtb-v1\0'
+    for data in (image,initrd,dtb):
+        identity += struct.pack('>Q',len(data)) + data
+    payload = hashlib.sha256(identity).hexdigest()
+    with tempfile.TemporaryDirectory() as tmp:
+        path=Path(tmp)/'entry.dtb';path.write_bytes(dtb)
+        subprocess.run(['fdtput','-t','s',str(path),'/chosen','gemini,efi-entry-id',payload],check=True)
+        dtb=path.read_bytes()
 directory = 'EFI/Gemini/' + payload
 entry = 'gemini-' + payload + '.conf' if versioned else 'gemini-efi-trial.conf'
 title = 'NixOS Gemini' if versioned else 'NixOS Gemini (EFI trial)'
@@ -31,8 +44,11 @@ files = {
                            "editor no\nauto-entries no\nauto-firmware no\nrandom-seed-mode off\n").encode(),
     'loader/entries/' + entry: ("title " + title + "\n"
         "sort-key gemini\nversion 7.1.3\nlinux /" + directory + "/linux.efi\n"
-        "initrd /" + directory + "/initrd.cpio.gz\n").encode(),
+        "initrd /" + directory + "/initrd.cpio.gz\n" +
+        ("devicetree /" + directory + "/gemini.dtb\n" if entry_dtb else "")).encode(),
 }
+if entry_dtb:
+    files[directory + '/gemini.dtb'] = dtb
 tree = out/'tree'
 for name, data in files.items():
     path = tree/name
@@ -47,6 +63,9 @@ manifest = {'status': 'host-prepared-not-published-or-booted',
                          'image device handle bound to the containing filesystem'],
             'files': {name: {'size':len(data), 'sha256':hashlib.sha256(data).hexdigest()}
                       for name, data in files.items()}}
+if entry_dtb:
+    manifest['entry_device_tree']=directory+'/gemini.dtb'
+    manifest['requires'].append('Gemini EFI DT fixup preserving LK delta and entry CPU provenance')
 # Publish payloads first and menu configuration last.
 order = [name for name in files if not name.startswith('loader/')] + [
     'loader/entries/' + entry, 'loader/loader.conf']

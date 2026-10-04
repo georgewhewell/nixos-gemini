@@ -43,7 +43,7 @@ buildPkgs.runCommand "gemini-efi-provision-bundle" {
   manifest=json.loads((files/'manifest.json').read_text())
   with tarfile.open(files/'boot-files.tar') as archive:
       members=archive.getmembers()
-      assert len(members)==len(manifest['files'])==5
+      assert len(members)==len(manifest['files']) and len(members) in (5,6)
       assert {m.name for m in members}==set(manifest['files'])
       for m in members:
           assert m.isfile() and not m.name.startswith('/') and '..' not in Path(m.name).parts

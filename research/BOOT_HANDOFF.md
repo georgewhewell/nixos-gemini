@@ -13,7 +13,11 @@ and filesystem hash checks below. EFI file access and a distro systemd-boot
 launch now pass separate qualifications below, including selected-entry,
 boot-volume and unattended menu timing evidence. A versioned Nix-enabled entry
 also passes an ordinary unprivileged daemon build and persistence through M69
-recovery. Physical key actuation,
+recovery. Loading its own device tree through EFI DT fixup also passes the
+complete hardware trial, with selected CPU provenance and LK data retained.
+A separate trial also boots the newer entry from a carrier containing the
+older kernel and DT, proving independence for these two qualified builds.
+Physical key actuation,
 complete modifier qualification and normal NixOS generation updates remain.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
@@ -524,6 +528,17 @@ now encodes the additional navigation keys for EFI. Host tests exercise
 these combinations, including ghost/debounce/error handling; the full
 cross build and carrier checks pass. Full Fn text-symbol/layout parity and
 Alt/Meta behavior remain unfinished.
+
+A later source audit confirms that the current Weston configuration explicitly
+uses generic `keymap_layout=us`; the captured Gemian keyboard defaults also say
+`us` without a variant. The installed `planet_vndr/gemini(us)` definitions
+remain a reference for the compact keyboard's extra symbols, rather than proof
+that the current desktop activates that variant. Its US variant inherits GB
+common keys and overrides Fn+1/2, the apostrophe-position key and several
+letters. The current U-Boot input helper has no Alt-prefix emission, although
+EFI's console parser already understands an Escape prefix as Alt. Further
+symbol/modifier work should test the matrix-to-EFI translation end to end,
+including release, repeat and simultaneous keys, against these source files.
 
 This follow-up is built but not separately flashed. Its carrier at
 `handoff/uboot-efi-keyboard-fn` has SHA-256
@@ -1047,3 +1062,142 @@ tests pass. Each EFI trial archives its seven exact executed host sources and
 their hashes in `executed-sources/` and `plan.json`; subsequent pin changes do
 not rewrite historical evidence. Accepted M69 and the original direct EFI and
 Nix bundle paths remain unchanged.
+
+## Per-entry device tree handoff
+
+The opt-in DT-fixup profile lets systemd-boot load the entry's own DT through the BLS
+`devicetree` directive. Its firmware compares the hash-checked original DT in
+its embedded FIT with LK's live tree, then applies LK's changes to the selected
+entry. Unchanged kernel nodes, CPU provenance, phandle numbering and command
+line remain owned by that entry. Firmware RAM geometry and reservations are
+retained; stale initrd-address properties are removed so EFI LoadFile2 remains
+the initrd authority. Conflicting deletions, changed firmware phandles,
+malformed trees and insufficient buffers fail the fixup.
+
+U-Boot `fded2918d273c78d646db5224e54444c7419ec5f` introduced the helper and
+board hook. Review of the actual EFI copy path found that it adds 64 KiB to
+LK's already expanded 512 KiB DT. `c50f76ab4995037008b4b5ab37a828bd23e3373c`
+corrects the entry-buffer bound; the corresponding regression fails on the
+first revision and passes after the fix. Neither earlier manager image was
+flashed. `GEMINI_EFI_DT_FIXUP` enables the hook and `SYS_FDT_PAD=0x10000` allows
+space for LK's 22 KiB memory table and other dynamic properties.
+
+The production helper and board hook pass host tests for independent entry
+properties and phandles, LK additions/deletions, exact CPU identity retention,
+idempotence, malformed inputs, hash failures, unaligned embedded DTs,
+allocation failures and reservation conflicts. Tests also merge captured LK
+data from the Nix-enabled boot into the older EFI kernel's DT without replacing
+its CPU provenance. AddressSanitizer and UndefinedBehaviorSanitizer pass.
+The corrected complete firmware/carrier cross build passes all existing boot,
+reset, display, keyboard, storage and EFI regressions. Padding failure/success
+logs are in `handoff/entry-dt-host-checks`.
+
+The six-file package adds `gemini.dtb` to the content-addressed kernel/initrd
+payload. Its identity covers all three original components; the published DT
+carries that identity in `/chosen/gemini,efi-entry-id`. The Linux verifier
+requires the selected entry's full provenance record and the firmware's
+`gemini,uefi-dt-fixup=lk-delta-v1` marker, in addition to the manager's own entry
+variables, exact boot-file readback, full EFI map and ordinary service health.
+A successful FIT fallback cannot satisfy those manager and entry-DT checks.
+
+| Component | SHA-256 |
+|---|---|
+| Six-file archive, 20,510,720 bytes | `3dfa2790fabf3a7875adc0b75c27e54f8607931a923a5db15958b26f2232a76b` |
+| Entry DT, 63,997 bytes | `e99e32b198cc0263288cbb81220b947abec5726314f5e393427f7f274347bcb3` |
+| Provisioning p22 carrier | `ac6f70b9655f0a8c181901966ab0c03a37d485df6ccbf59cdb62905aae7b1adc` |
+| Corrected manager p22 carrier | `ef5c215b95da370e993710785d23c84c57dda47e40dab600b2ee302ef1d4ec19` |
+
+The entry is
+`gemini-49d449df65df5f412d738d56cde096e212d61d437bb7faca7afccf86f6729da3.conf`.
+Archive and provisioning roots are `handoff/nix-efi-entry-dt-candidates` and
+`-1`; the corrected manager root is `handoff/nix-efi-entry-dt-manager-pad`.
+The initial `-2`/`nix-efi-entry-dt-manager` firmware lacks the padding fix and
+must not be used. The new flake outputs are `geminiNixEfiDtBootFiles`,
+`ubootEfiNixDtProvisionBundle` and `ubootEfiNixDtManagerBundle`; the runner
+profiles are `efi-nix-dt-provision` and `efi-nix-dt-manager`. The Nix-enabled
+kernel/system and the previously qualified manager retain their original
+artifact paths. The `efi-nix-dt-manager` candidate uses the same Nix kernel
+on both sides.
+The separate cross-kernel profile described below tests independence from
+the kernel and DT embedded in the carrier.
+
+
+Provisioning trial `handoff/efi-entry-dt-provision-01` published the six-file
+archive and activated the new default. Candidate
+`ab5c37a1-0338-43ea-953a-3a8d9f1f2d43` passed EFI/Linux health and an ordinary
+sandboxed daemon build. Automatic rescue restored healthy M69
+`2c9526c2-8a41-44e9-9cc4-8d2d6b51d011`, retaining the original legacy entry,
+the preceding Nix entry, both configuration backups and the new publication.
+Both full p22 writes/readbacks and resets passed; GPT/p30/p31 were unchanged.
+The rescue interval was 324.635 seconds. Its locked final audit retained all
+five ordinary build outputs and found no active writer.
+
+The cross-kernel profile, `efi-nix-dt-cross-manager`, keeps the older EFI
+kernel and DT embedded in the carrier but selects the published Nix-enabled
+entry. It uses the same corrected U-Boot binary. The host verifier extracts all
+three FIT components directly from the pinned Android image, requires exact
+older payload bytes and the same older DT in LK's appended copy, and requires
+the selected DT to have different kernel configuration and GNU build identities.
+Linux must then verify the selected entry's complete provenance and pass the
+ordinary daemon build. The new output is `ubootEfiCrossDtManagerBundle`, rooted
+at `handoff/efi-cross-entry-dt-manager`; p22 SHA-256 is
+`d399b431e2683039848550bd64e2c43be343522b0d14cf1551a06511d02615d4`.
+Host tests also apply older captured LK data to the newer kernel DT successfully.
+The completed hardware result is recorded below.
+
+
+Trial `handoff/efi-entry-dt-manager-01` qualified the corrected manager.
+Candidate `8072e910-1639-4cd2-bbc9-b9ecca0e8e97` booted the selected DT through
+systemd-boot 261.2, with a 9.785083-second menu interval and exact entry/volume
+EFI variables. Runtime DT retained every selected CPU-provenance property and
+both entry/fixup markers. Linux verified its CPU identity, the full 4 GiB EFI
+map (49 descriptors), LK reservations, all service health and an ordinary
+unprivileged daemon build. Native keyboard polling recorded 1,402 scans and
+zero errors; physical key input remains untested.
+
+Automatic rescue returned healthy M69 `03a22836-6f5e-4805-8ee2-c5cc2558593b`.
+The complete result sets `entry_dt_handoff_qualified`,
+`ordinary_daemon_build_qualified` and `nix_persistence_qualified` true, while
+`cross_kernel_generation_selection_qualified` correctly remains false for
+this same-kernel trial. The rescue interval was 240.975 seconds. Both full
+writes/readbacks and resets passed, with GPT/p30/p31 and all three boot-file
+sets retained. This qualifies the DT fixup on the device; the separate
+cross-kernel profile below establishes independence from the carrier.
+
+
+The cross-kernel candidate boot `e0e358ec-c55f-48c5-88eb-034e11b115db` passed
+all checks in `handoff/efi-entry-dt-cross-manager-01`. Its exact older FIT
+kernel/initramfs/DT and LK DT copy differ from the selected entry. Seven CPU
+provenance properties differ, including both kernel configuration and GNU
+build identities; the runtime DT matches the newer selected entry in full.
+The Linux CPU verifier accepted that binding and both A72 cores came online.
+Systemd-boot's menu interval was 9.784276 seconds, the EFI map contained
+49 descriptors covering 4 GiB, and all LK reservations and service health
+passed. An ordinary unprivileged sandboxed daemon build also passed.
+Automatic recovery restored healthy M69
+`055f7573-d77d-43f9-80e4-ca06ae55e3b7`. The complete result sets
+`cross_kernel_generation_selection_qualified`, `entry_dt_handoff_qualified`,
+`ordinary_daemon_build_qualified` and `nix_persistence_qualified` true.
+Both full p22 writes/readbacks and resets passed; GPT/p30/p31 and every
+published boot-file set remained unchanged. The rescue interval was
+247.945 seconds.
+
+All 105 relevant host regression tests pass, alongside the firmware's native
+C checks, sanitizer runs and complete AArch64 build. Rebuilt legacy five-file
+archives match their qualified bytes exactly; accepted M69, original EFI,
+Nix Linux and the earlier manager retain their artifact paths. Host evidence
+is in `handoff/entry-dt-host-checks`. Each current trial archives eight exact
+executed qualification sources and their hashes.
+
+These trials qualify per-entry DT selection between the two known kernel
+builds. Normal NixOS generation installation, boot-file retention policy,
+persistent EFI settings and physical keyboard selection are still separate
+work. Direct M69 remains installed, and the newer DT-bearing entry remains
+the published default for the qualified DT-fixup firmware.
+
+
+The final locked audit in `handoff/efi-entry-dt-cross-manager-01` independently
+retained all seven ordinary build outputs, home GC roots, proof hashes and
+registered NAR/derivation identities. It reconfirmed healthy M69, both flash
+locks free and no writer; every trial handle is terminal. Evidence is in
+`all-nix-outputs/` and `final-idle-check.json`.

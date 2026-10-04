@@ -19,6 +19,7 @@ class FilesProfile(NamedTuple):
     bundle: Path
     sha: str
     size: int
+    count: int = 5
 
 def default_profile():
     return FilesProfile(BUNDLE,ARCHIVE_SHA,ARCHIVE_SIZE)
@@ -31,7 +32,7 @@ def payload(profile=None):
     if archive.stat().st_size!=p.size or digest!=p.sha:
         raise RuntimeError('Boot-file archive differs from the pinned artifact')
     manifest=json.loads((p.bundle/'manifest.json').read_text())
-    if manifest['archive']!={'sha256':p.sha,'size':p.size} or len(manifest['files'])!=5:
+    if manifest['archive']!={'sha256':p.sha,'size':p.size} or len(manifest['files'])!=p.count:
         raise RuntimeError('Boot-file manifest differs from the pinned archive')
     found={}
     with tarfile.open(archive) as tf:

@@ -29,13 +29,15 @@ def files_profile(files):
     return files.FilesProfile(WORKSPACE/'handoff/nix-efi-candidates',
         '4d98df6ccc325f7f1354ca85a66bb6d8f02dad94b586c64301bce4e7a0f1bc0f',20449280)
 
-def activation_evidence(ssh,boot_id,directory,qualify,persistence,name='previous-efi-files'):
+def activation_evidence(ssh,boot_id,directory,qualify,persistence,name='previous-efi-files',previous_files=None,previous_sha=OLD_LOADER_SHA):
     # Retain the previous manager entry/payload and its checked default backup.
     p=WORKSPACE/'handoff/gemini-efi-boot-files-publish/manifest.json'
-    old=json.loads(p.read_text())['files']
+    old=previous_files if previous_files is not None else json.loads(p.read_text())['files']
+    if not re.fullmatch('[0-9a-f]{64}',previous_sha) or old['loader/loader.conf']['sha256']!=previous_sha:
+        raise ValueError('Previous loader configuration is not pinned')
     commands=['set -eu',f'test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}']
     for relative,info in old.items():
-        if relative=='loader/loader.conf':relative+='.gemini-backup-'+OLD_LOADER_SHA
+        if relative=='loader/loader.conf':relative+='.gemini-backup-'+previous_sha
         path='/gemian/'+relative
         for parent in reversed(Path(path).parents):
             if str(parent)!='/':commands.append(f'test -d {parent} && test ! -L {parent}')
@@ -44,7 +46,7 @@ def activation_evidence(ssh,boot_id,directory,qualify,persistence,name='previous
                      f'test "$(sha256sum {path} | cut -d\' \' -f1)" = {info["sha256"]}']
     persistence.run(ssh,'\n'.join(commands),directory,name)
     qualify.save(directory,name+'.json',dict(boot_id=boot_id,old_entry_and_payload_retained=True,
-                                                        previous_default_backup_sha256=OLD_LOADER_SHA))
+                                                        previous_default_backup_sha256=previous_sha))
 
 
 def old_persistence(ssh, boot_id, directory, qualify, persistence, system, name):

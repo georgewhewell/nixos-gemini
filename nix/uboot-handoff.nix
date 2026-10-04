@@ -1,4 +1,4 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, efiStorage ? false, efiManager ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, efiStorage ? false, efiManager ? false, efiDtFixup ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
@@ -7,17 +7,21 @@ assert !efiKeyboard || efiConsole;
 assert !efiMmc || efiKeyboard;
 assert !efiStorage || efiMmc;
 assert !efiManager || efiStorage;
+assert !efiDtFixup || efiLinux;
 let
   profile = if efiManager then "efi-manager" else if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
   defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
 in
 crossPkgs.buildUBoot {
-  pname = "uboot-mt6797-gemini-${profile}-${toString recoveryTest}";
+  pname = "uboot-mt6797-gemini-${profile}${buildPkgs.lib.optionalString efiDtFixup "-dt"}-${toString recoveryTest}";
   version = "2026.10-m69";
   src = source;
   inherit defconfig;
   preConfigure = ''
-    echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${defconfig}
+    echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${defconfig}${buildPkgs.lib.optionalString efiDtFixup ("\n" + ''
+    echo 'CONFIG_GEMINI_EFI_DT_FIXUP=y' >> configs/${defconfig}
+    echo 'CONFIG_SYS_FDT_PAD=0x10000' >> configs/${defconfig}
+    '')}
     ${buildPkgs.lib.optionalString efiConsole ''
     echo 'CONFIG_GEMINI_EFI_CONSOLE=y' >> configs/${defconfig}
     ${buildPkgs.lib.optionalString efiKeyboard "echo CONFIG_GEMINI_EFI_KEYBOARD=y >> configs/${defconfig}"}
@@ -62,7 +66,12 @@ crossPkgs.buildUBoot {
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-manager-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-path-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-bootbin-host.py
-    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-partition-path-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-partition-path-host.py${buildPkgs.lib.optionalString efiDtFixup ("\n" + ''
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-entry-fdt-host.py
+    grep -Fqx 'CONFIG_GEMINI_EFI_DT_FIXUP=y' .config
+    grep -Fqx 'CONFIG_OF_BOARD_SETUP=y' .config
+    grep -Fqx 'CONFIG_SYS_FDT_PAD=0x10000' .config
+    '')}
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
     grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
     ${crossPkgs.stdenv.cc.targetPrefix}nm u-boot > linked-symbols.txt

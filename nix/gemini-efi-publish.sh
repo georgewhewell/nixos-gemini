@@ -79,7 +79,7 @@ while read -r sha bytes relative; do
         fi
     fi
 done < "$manifest"
-[ "$records" -eq 5 ] || exit 1
+[ "$records" -ge 5 ] && [ "$records" -le 6 ] || exit 1
 if [ "$mode" = activate ]; then
     [ "$config_seen" = yes ] || exit 1
     [ -f "$root/loader/loader.conf" ] && [ ! -L "$root/loader/loader.conf" ] || exit 1

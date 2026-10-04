@@ -48,7 +48,7 @@ efi_provision_boot_files() {
         || fail "efi-files-upload-hash"
     mkdir /run/efi-files.tree || fail "efi-files-stage-exists"
     # The archive's exact hash is embedded in this initramfs. The builder only
-    # emits the five named regular files, with no links or traversal paths.
+    # emits the named regular files, with no links or traversal paths.
     tar -xf /run/efi-boot-files.upload -C /run/efi-files.tree || fail "efi-files-extract"
     # Do not start a filesystem transaction close to the recovery deadline.
     grep -qx 'format=gemini-unattended-recovery-lease-v1' /run/unattended-recovery.lease-deadline \
