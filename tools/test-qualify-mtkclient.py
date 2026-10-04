@@ -67,6 +67,26 @@ class QualificationTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 q.verify_reads(directory, before)
 
+    def test_phase_capture_is_fixed_address_read_only(self):
+        commands = q.commands_for(False, True).split(';')
+        self.assertEqual(commands[0], 'da peek 0x10007024 4 --filename boot-phase.bin')
+        self.assertFalse(any(command.startswith(('w ', 'da poke', 'e ')) for command in commands))
+        self.assertEqual(q.commands_for(False, False), q.COMMANDS)
+        self.assertEqual(q.commands_for(True, False), q.WRITE_COMMANDS)
+
+    def test_phase_capture_requires_complete_little_endian_word(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            path = directory / 'boot-phase.bin'
+            path.write_bytes(bytes.fromhex('ec104d47'))
+            result = q.phase_readback(directory)
+            self.assertEqual(result['value_hex'], '0x474d10ec')
+            self.assertFalse(result['retention_across_vendor_boot_stages_qualified'])
+            for bad in (b'', b'abc', b'abcde'):
+                path.write_bytes(bad)
+                with self.assertRaises(RuntimeError):
+                    q.phase_readback(directory)
+
     def test_default_preflight_cannot_start_trial(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
