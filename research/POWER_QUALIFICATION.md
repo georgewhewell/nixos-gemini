@@ -70,11 +70,10 @@ Normal boot and recovery are the first checks. Hardware watchdog expiry,
 ordinary suspend and failed-suspend paths remain to be exercised before image
 I/O. Fixed-swap installation, automatic factory restoration and active swap
 after an ordinary reboot now pass. Paging under pressure also passes with the
-zswap shrinker temporarily enabled; its persistent kernel correction still
-needs a device boot.
-See `STORAGE_QUALIFICATION.md`. This power runner still expects factory GPT and
-no swap, so its admission/recovery checks need adaptation before another
-candidate trial. A72 offline/on and RTC power-on need validation.
+zswap shrinker enabled from boot in the successor candidate below.
+See `STORAGE_QUALIFICATION.md`. The older power runner still expects factory
+GPT and no swap; the separate power/swap profile handles the installed layout.
+A72 offline/on and RTC power-on need validation.
 
 A full hibernation proof must preserve a process and memory sentinel through
 save, power-off and resume with the same kernel, then verify peripherals and
@@ -108,7 +107,7 @@ pool, so pressure-driven writeback needs separate validation; see
 The runtime correction subsequently passed in `handoff/swap-io-03`: a 128 MiB
 pattern survived real p34 writes/reads under a 64 MiB memory-cgroup limit,
 with full health and retained data afterward. Cleanup restored the original
-runtime setting. This does not qualify a boot with the new candidate below.
+runtime setting. The later trial below separately qualifies the boot-time policy.
 
 `mainlineNixosPowerSwapBundle` extends the watchdog-fixed power candidate with
 `nix/mainline-swap.fragment`. The complete built configuration differs from
@@ -132,6 +131,69 @@ nix build .#mainlineNixosPowerSwapBundle --out-link ../handoff/power-swap-linux
 | Kernel notes SHA-256 | `1bffbfeaa804fe8e0bd6735250ed38214b99b27efc86dca595b02d29940748b3` |
 
 Build logs, the exact configuration diff and the artifact manifest are in
-`handoff/power-swap-build`. This candidate is not installed and has not passed
-a device boot. The old factory-only power runner cannot qualify it without
-explicit updates for the new system, kernel identity and swap layout.
+`handoff/power-swap-build`. This candidate has passed the device trial below,
+but has not replaced installed M69. The old factory-only power runner cannot
+qualify it; use the separate profile for its system, kernel and swap layout.
+
+## Supervised boot with the fixed-swap layout
+
+`tools/qualify-power-swap.py` provides a separate `power-swap` profile using
+the existing boot-only writer and durable recovery supervisor. Its private
+runner instance checks exact primary/backup GPT, swap header, p30/p31 and
+flashinfo identities before admission and after both candidate and recovery
+boots. The older factory-layout profiles retain their original behavior.
+
+```sh
+python3 tools/test-power-swap.py
+python3 tools/qualify-power-swap.py --out NEW_DIRECTORY
+```
+
+The default is read-only preflight. `--execute` runs the bounded candidate
+trial, additive installation of its matching userspace store and automatic
+M69 recovery. The candidate must expose the pinned ELF notes and configuration,
+active fixed swap, owned watchdog and enabled zswap shrinker. It runs the
+128 MiB paging probe under the 64 MiB cgroup limit without any runtime policy
+writes, then an ordinary unprivileged Nix build. Linux health, CPU provenance,
+RAM/LK reservations, published EFI files and data retention are also required.
+Sleep and hibernation remain disabled throughout this profile.
+
+The final audit checks the original ten Nix outputs, outputs from earlier
+power/swap trials and the new candidate's output. It waits for the existing
+candidate/recovery services to terminate before checking M69 and releasing
+ownership, then verifies all executed sources under both flash locks.
+Seven profile tests cover storage and kernel identity, unchanged legacy
+profiles, retained outputs and the absence of runtime policy writers. Ten
+paging tests and three existing power-kernel tests also pass. Read-only
+preflight passed in `handoff/power-swap-preflight-01`; host evidence is under
+`handoff/power-swap-qualification`.
+
+## Default-policy paging hardware result
+
+Trial `handoff/power-swap-01` booted candidate
+`f1ea8c93-9778-414a-adb7-e5f53c85d3a4` with the pinned kernel notes and actual
+configuration. Its zswap shrinker was enabled from boot; the test performed
+no runtime policy writes. All 134,217,728 pattern bytes survived under the
+64 MiB memory limit and 256 MiB swap limit. Own VmSwap reached 131,080 KiB,
+with 262,192 sectors read and 262,272 written on p34. Captured kernel
+diagnostics had no OOM, I/O-error or kernel-fault matches. Full Linux health,
+both A72s and their provenance, RAM/LK reservations, watchdog ownership,
+published EFI files and an ordinary unprivileged Nix build passed.
+
+Automatic mtkclient recovery returned healthy M69 boot
+`707c2314-6c75-4cd7-bdb5-3daf94b41b18`, preserving fixed swap and the protected
+storage identities. The legacy runner completed successfully, but the outer
+worker then exited with an error when it redundantly stopped two already
+collected transient host services (`systemctl` exit 5). The original result
+is retained as `result-before-final-audit.json`. A recorded
+`complete-audit.py` skipped only that redundant stop after independently
+verifying both units inactive with no process, then completed the unchanged
+final audit. It held both flash locks, repeated live health and all eleven
+Nix-output retention checks, verified all twenty-four executed source hashes
+and found no writer. See `audit-completion.json` and `final-idle-check.json`.
+
+The runner now handles already terminal or concurrently collected units while
+rejecting other stop failures and surviving processes. Four additional host
+regressions pass; this cleanup revision was made after the recorded audit
+and has not required another hardware trial. Archived trial sources retain
+the executed version. The candidate remains opt-in, recovered M69 retains
+`shrinker_enabled=N`, and sleep/hibernation were never requested.

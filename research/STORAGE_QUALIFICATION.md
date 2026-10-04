@@ -4,8 +4,9 @@ Persistent home and the Nix store/database work on p32. The fixed 5 GiB p34
 swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
 `handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
-temporarily enabled; the default-policy correction and hibernation remain
-unqualified. The latest active-swap boot is recorded in `handoff/swap-io-03`.
+enabled from boot in the corrected candidate. Its automatic M69 recovery and
+final audit retained all eleven Nix build outputs in `handoff/power-swap-01`.
+Promotion of that correction and hibernation remain unfinished.
 
 ## Filesystem and partition geometry
 
@@ -336,8 +337,8 @@ file. Evidence: `handoff/swap-io-host-checks/setup-reproduction.json` and
 
 The opt-in `mainlineNixosPowerSwapBundle` enables
 `CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y` from boot, retaining the previously
-qualified watchdog correction. Its complete build passes, but it is not yet
-hardware-qualified or installed. Artifact pins are in
+qualified watchdog correction. Its complete build and the subsequent normal
+boot/paging/recovery trial pass, but it has not replaced M69. Artifact pins are in
 [POWER_QUALIFICATION.md](POWER_QUALIFICATION.md).
 
 The corrected hardware trial `handoff/swap-io-03` passed on M69 boot
@@ -357,4 +358,16 @@ audit repeats live health and retention, verifies all fifteen executed-source
 hashes and the probe digest, and confirms inactive services and no writer.
 This qualifies real paging under memory-cgroup pressure with the runtime
 correction. Installed M69 still has its original disabled-shrinker policy;
-booting and promoting the built correction remains necessary.
+promoting the tested correction remains necessary.
+
+Trial `handoff/power-swap-01` subsequently qualified the kernel's default
+policy without runtime setting changes. It verified the same 128 MiB pattern
+under the 64 MiB memory limit, with 262,192 sectors read and 262,272 written
+on p34. Candidate health and an ordinary Nix build passed. Automatic recovery
+returned healthy M69 boot `707c2314-6c75-4cd7-bdb5-3daf94b41b18` on the exact
+fixed-swap layout. Its final locked audit retained all eleven ordinary
+outputs and original home/EFI proofs, matched twenty-four executed sources
+and found no writer. The outer worker encountered a duplicate-stop error
+after recovery; a separately recorded completion verified both services
+terminal and ran the unchanged final audit. Details and the subsequent
+cleanup fix are in [POWER_QUALIFICATION.md](POWER_QUALIFICATION.md).

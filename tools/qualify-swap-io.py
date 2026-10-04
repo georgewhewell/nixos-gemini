@@ -146,7 +146,7 @@ printf 'writeback='; cat /sys/fs/cgroup/system.slice/memory.zswap.writeback
     f.q.preserved_files(before['boot_id'], directory, 'before')
 
 
-def run_probe(directory, before, unit):
+def run_probe(directory, before, unit, runtime_policy=True):
     if not re.fullmatch(r'gemini-swap-io-[0-9]+-[0-9]+', unit):
         raise ValueError('Invalid target service name')
     remote = '/run/' + unit
@@ -158,6 +158,9 @@ mkdir {remote}
 cat > {remote}/probe
 chmod 0500 {remote}/probe
 test "$(sha256sum {remote}/probe | cut -d' ' -f1)" = {PROBE_SHA}
+'''
+    if runtime_policy:
+        transfer += f'''
 cat > {remote}/enable-shrinker <<'ENABLE'
 {enable}
 ENABLE
@@ -170,14 +173,18 @@ chmod 0500 {remote}/enable-shrinker {remote}/restore-shrinker
     sent = subprocess.run(f.q.SSH + [transfer], input=(directory / 'probe').read_bytes(), capture_output=True, timeout=30)
     save(directory, 'transfer.json', dict(returncode=sent.returncode, stderr=sent.stderr.decode(errors='replace')))
     sent.check_returncode()
+    policy_options = (f'--property=ExecStartPre={remote}/enable-shrinker --property=ExecStopPost={remote}/restore-shrinker'
+                      if runtime_policy else '')
+    policy_guard = '' if runtime_policy else 'test "$(cat /sys/module/zswap/parameters/shrinker_enabled)" = Y'
     command = f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(before['boot_id'])}
 test "$(sha256sum {remote}/probe | cut -d' ' -f1)" = {PROBE_SHA}
+{policy_guard}
 systemd-run --quiet --unit={unit} --setenv=PATH=/run/current-system/sw/bin \
  --property=RuntimeMaxSec=90 --property=RemainAfterExit=yes \
  --property=TimeoutStopSec=5 --property=MemoryMax=67108864 \
  --property=MemorySwapMax=268435456 --property=KillMode=control-group \
- --property=ExecStartPre={remote}/enable-shrinker --property=ExecStopPost={remote}/restore-shrinker \
+ {policy_options} \
  --property=StandardOutput=file:{remote}/stdout --property=StandardError=file:{remote}/stderr \
  {remote}/probe
 '''
@@ -216,11 +223,13 @@ journalctl -k -b --no-pager -n 160
     # RemainAfterExit retains the exited process's result for inspection; it
     # does not keep the probe running. Release the unit after collecting it.
     f.q.r.persistence.run(f.q.SSH, f'systemctl stop {unit}.service', directory, 'target-stop')
+    restoration_guard = f'test "$(cat {remote}/policy-restored)" = restored=N' if runtime_policy else ''
     restored = f.q.r.persistence.run(f.q.SSH, f'''set -eu
-test "$(cat {remote}/policy-restored)" = restored=N
+{restoration_guard}
 cat /sys/module/zswap/parameters/shrinker_enabled
 ''', directory, 'memory-policy-restored').strip()
-    if restored != 'N': raise RuntimeError('Original zswap runtime policy was not restored')
+    if restored != ('N' if runtime_policy else 'Y'):
+        raise RuntimeError('Final zswap policy differs from the requested test mode')
     return verified
 
 

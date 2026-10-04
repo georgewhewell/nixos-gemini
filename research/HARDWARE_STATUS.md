@@ -23,8 +23,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after fixed-swap installation and an ordinary reboot is
-`f48ecf05-1772-49e7-898a-ce9bd3740c5e`, with `/persist`,
+healthy M69 boot after the power/swap candidate's automatic recovery is
+`707c2314-6c75-4cd7-bdb5-3daf94b41b18`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -77,8 +77,13 @@ shrinker disabled. `handoff/swap-io-03` now passes a 128 MiB memory pattern
 under a 64 MiB cgroup limit with the shrinker temporarily enabled, including
 real p34 reads/writes, full health and all retained data. Its final audit
 checks all fifteen sources and no active writer. The runtime setting was
-restored afterward. The permanent correction builds as an opt-in power
-candidate; its boot and hibernation remain unqualified.
+restored afterward. The permanent correction subsequently passed normal boot,
+the same paging test without runtime policy writes, an ordinary Nix build
+and automatic M69 recovery in `handoff/power-swap-01`. The final locked audit
+retained all eleven build outputs and matched all twenty-four executed
+sources. A duplicate stop of already collected host services interrupted
+the worker's final audit; a separately recorded completion performed the
+unchanged live checks. The correction remains opt-in; hibernation is unqualified.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -86,10 +91,10 @@ Direct M69 remains installed. See
 
 | Area | Required evidence |
 |---|---|
-| Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. General harness migration and adapting older factory-only boot/power profiles to the installed swap layout remain |
+| Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
-| Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit passes with zswap writeback temporarily enabled; booting/promoting that policy correction and normal generation updates remain |
-| Power | The hibernation-watchdog kernel fix passes normal boot, exact runtime identity, ordinary builds and automatic recovery. Its successor also enables zswap writeback by default and builds successfully, but has not booted on the device. Hardware expiry, suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
+| Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Linux watchdog expiry, suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
