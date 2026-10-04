@@ -16,8 +16,8 @@ they do not replace physical peripheral, audio or power qualification.
 The desktop uses Weston with Panfrost rendering and a terminal for `gemini`.
 Display scanout currently bypasses IOMMU translation because translated
 scanout stalled intermittently. JPEG encode/decode has prior hardware evidence;
-hardware video codecs remain unfinished. WPA3/PMF support is present, but
-on-air qualification is still needed. Cellular registration/eSIM and weak
+hardware video codecs remain unfinished. The retained M51 record has successful
+WPA3/PMF on-air data and reconnect tests; scanning while associated remains limited. Cellular registration/eSIM and weak
 reception remain open.
 
 The device has the factory 33-partition GPT. Persistent home and the writable
@@ -25,9 +25,13 @@ Nix layer now survive supervised reboots, using the existing p32 filesystem.
 There is no p34 swap. A separate candidate has passed ordinary sandboxed Nix
 builds through the daemon as the unprivileged `gemini` user, retaining the
 output through recovery. Installed M69 still lacks its network namespace and
-daemon-unit fixes; distro boot integration remains. See
+daemon-unit fixes; normal NixOS generation updates remain unfinished. See
 [storage evidence](research/PERSISTENCE.md).
+The hibernation-watchdog kernel correction has now passed a separate normal
+boot/recovery trial, including an ordinary Nix build and data retention.
 Hibernation, deep idle and the complete lid power policy are not qualified.
+See [power evidence](research/POWER_QUALIFICATION.md) and the
+[fixed-swap plan](research/STORAGE_QUALIFICATION.md).
 Camera and vibrator are excluded from the owner's completion scope.
 
 See [the completion inventory](research/HARDWARE_STATUS.md) for current evidence

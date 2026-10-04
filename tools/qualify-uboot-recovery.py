@@ -28,6 +28,7 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'power-kernel': (WORKSPACE / 'handoff/power-kernel-linux/boot-padded-p22.img', 'd2bb1ef41563db0bffaa64f5293f979aeae167b93ab85ea5db67c9fe7d1d1fbc'),
     'desktop-keyboard': (WORKSPACE / 'handoff/desktop-keyboard-linux/boot-padded-p22.img',
                          'ac9b5091f5410a9e988128197770922396dd27e8aec7fb06cd0149505d7cdf49'),
     'efi-nix-keys-manager': (WORKSPACE / 'handoff/efi-key-events-manager/boot-padded-p22.img',
@@ -70,7 +71,9 @@ PROFILES = {
 }
 KEY_EVENT_PROFILES = ('efi-nix-keys-manager',)
 DESKTOP_PROFILES = ('desktop-keyboard',)
-DIRECT_NIX_PROFILES = ('persistent-nix',) + DESKTOP_PROFILES
+POWER_PROFILES = ('power-kernel',)
+CURRENT_FILES_PROFILES = DESKTOP_PROFILES + POWER_PROFILES
+DIRECT_NIX_PROFILES = ('persistent-nix',) + DESKTOP_PROFILES + POWER_PROFILES
 CROSS_DT_PROFILES = ('efi-nix-dt-cross-manager',) + KEY_EVENT_PROFILES
 ENTRY_DT_PROFILES = ('efi-nix-dt-provision', 'efi-nix-dt-manager') + CROSS_DT_PROFILES
 NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager') + ENTRY_DT_PROFILES
@@ -265,9 +268,12 @@ persistence = module('persistence', ROOT / 'tools/qualify-gemini-persistence.py'
 persistent_nix = module('persistent_nix', ROOT / 'tools/qualify-persistent-nix.py')
 entry_dt = module('entry_dt', ROOT / 'tools/qualify-efi-entry-dt.py')
 desktop_keyboard = module('desktop_keyboard', ROOT / 'tools/qualify-desktop-keyboard.py')
+power_kernel = module('power_kernel', ROOT / 'tools/qualify-power-kernel.py')
 
 
 def store_profile_for(profile):
+    if profile in POWER_PROFILES:
+        return power_kernel.store_profile(efi_linux)
     if profile in DESKTOP_PROFILES:
         return desktop_keyboard.store_profile(efi_linux)
     if profile not in NIX_PROFILES:
@@ -276,19 +282,21 @@ def store_profile_for(profile):
 
 
 def files_profile_for(profile):
-    if profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
+    if profile in ENTRY_DT_PROFILES + CURRENT_FILES_PROFILES:
         return entry_dt.files_profile(efi_files)
     return persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None
 
 
 def previous_files_evidence(ssh,boot_id,directory,profile,name):
     persistent_nix.activation_evidence(ssh,boot_id,directory,qualify,persistence,name=name)
-    if profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
+    if profile in ENTRY_DT_PROFILES + CURRENT_FILES_PROFILES:
         entry_dt.previous_files(ssh,boot_id,directory,qualify,persistence,
                                 persistent_nix,efi_files,name+'-nix')
 
 
 def candidate_system(before, profile):
+    if profile in POWER_PROFILES:
+        return power_kernel.SYSTEM
     if profile in DESKTOP_PROFILES:
         return desktop_keyboard.SYSTEM
     if profile in NIX_PROFILES:
@@ -365,12 +373,16 @@ def candidate_return(ssh, before, directory, profile):
             if profile in DESKTOP_PROFILES:
                 desktop_keyboard.evidence(ssh, after['boot_id'], directory, qualify,
                                           persistence, persistent_nix)
+            if profile in POWER_PROFILES:
+                power_kernel.evidence(ssh, after['boot_id'], directory, qualify, persistence)
+            if profile in CURRENT_FILES_PROFILES:
                 efi_files.evidence(ssh, after['boot_id'], directory, qualify,
                                   require_verified=False, profile=files)
             persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
                                     require_efi=profile in NIX_EFI_PROFILES,
-                                    system=candidate_system(before, profile))
-            if profile in NIX_EFI_PROFILES + DESKTOP_PROFILES:
+                                    system=candidate_system(before, profile),
+                                    kernel=power_kernel.KERNEL if profile in POWER_PROFILES else persistent_nix.KERNEL)
+            if profile in NIX_EFI_PROFILES + CURRENT_FILES_PROFILES:
                 previous_files_evidence(ssh,after['boot_id'],directory,profile,'previous-efi-files')
             if candidate_snapshot(ssh, before, profile) != after:
                 raise RuntimeError('Candidate health or protected identity changed after Nix build')
@@ -620,7 +632,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         try:
             if candidate_qualified:
                 persistent_nix.after_recovery(ssh, after['boot_id'], directory, qualify, persistence)
-                if profile in NIX_EFI_PROFILES + DESKTOP_PROFILES:
+                if profile in NIX_EFI_PROFILES + CURRENT_FILES_PROFILES:
                     efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False,
                         name='recovered-boot-files.json', profile=files_profile_for(profile))
                     previous_files_evidence(ssh,after['boot_id'],directory,profile,'recovered-previous-efi-files')
@@ -671,6 +683,9 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     if profile in KEY_EVENT_PROFILES:
         result.update(native_efi_input_polling_qualified=qualified,
                       physical_key_press_observed=False)
+    if profile in POWER_PROFILES:
+        result.update(power_kernel_normal_operation_qualified=qualified,
+                      hibernation_io_qualified=False, sleep_requested=False)
     if profile in DESKTOP_PROFILES:
         result.update(desktop_keymap_qualified=qualified, physical_key_press_observed=False)
     if verify_persistence:
@@ -720,7 +735,7 @@ def main():
             efi_linux.payload()
         if args.profile in NIX_PROFILES:
             efi_linux.payload(store_profile_for(args.profile))
-        if profile_kind(args.profile) in ('efi-provision','efi-manager') or args.profile in DESKTOP_PROFILES:
+        if profile_kind(args.profile) in ('efi-provision','efi-manager') or args.profile in CURRENT_FILES_PROFILES:
             efi_files.payload(files_profile_for(args.profile))
         if args.profile in CROSS_DT_PROFILES:
             _,manifest=efi_files.payload(files_profile_for(args.profile))
@@ -747,11 +762,11 @@ def main():
                 efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
                     name='before-old-boot-files.json',
                     profile=persistent_nix.files_profile(efi_files) if args.profile in ENTRY_DT_PROFILES else None)
-        if profile_kind(args.profile) == 'efi-manager' or args.profile in DESKTOP_PROFILES:
+        if profile_kind(args.profile) == 'efi-manager' or args.profile in CURRENT_FILES_PROFILES:
             efi_files.evidence(ssh, before['boot_id'], directory, qualify,
                                require_verified=False, name='before-boot-files.json',
                                profile=files_profile_for(args.profile))
-            if args.profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
+            if args.profile in ENTRY_DT_PROFILES + CURRENT_FILES_PROFILES:
                 previous_files_evidence(ssh,before['boot_id'],directory,args.profile,'before-previous-efi-files')
         if tree is not None:
             qualify.save(directory, 'before-tree.json', tree)
@@ -760,8 +775,13 @@ def main():
         source_hashes = {}
         for name in ('qualify-uboot-recovery.py', 'qualify-mtkclient.py', 'qualify-efi-linux.py',
                      'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-efi-entry-dt.py', 'qualify-gemini-persistence.py',
-                     'qualify-persistent-nix.py', 'qualify-desktop-keyboard.py'):
+                     'qualify-persistent-nix.py', 'qualify-desktop-keyboard.py', 'qualify-power-kernel.py'):
             raw = (ROOT / 'tools' / name).read_bytes()
+            (sources / name).write_bytes(raw)
+            source_hashes[name] = backend.digest(raw)
+        if args.profile in POWER_PROFILES:
+            name = 'generate-late-cpu-provenance.py'
+            raw = (ROOT / 'nix' / name).read_bytes()
             (sources / name).write_bytes(raw)
             source_hashes[name] = backend.digest(raw)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),

@@ -893,6 +893,15 @@
       baselineDtb = mainlineP22Baseline.serviceabilityDtb;
     };
 
+    mainlinePowerKernel = import ./nix/mainline-power-kernel.nix {
+      kernel = mainlineNixKernel;
+    };
+    mainlinePowerDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlinePowerKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
     # The accepted baseline plus MicroSD, and nothing else.
     #
     # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
@@ -1247,6 +1256,19 @@
       }];
     };
 
+    mainlineNixosPowerSystemCross = mainlineNixosKeysSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 30 mainlinePowerKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 30 mainlinePowerKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 30 mainlinePowerKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 30 mainlinePowerKernel;
+        };
+        # Normal boot/recovery is qualified before sleep or image I/O.
+        gemini.powerPolicy.hibernation.enable = nixpkgs-old.lib.mkForce false;
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1304,6 +1326,8 @@
     mainlineNixosEfiSquashfs = mkMainlineSquashfs mainlineNixosEfiSystemCross.config.system.build.toplevel;
     mainlineNixosNixSquashfs = mkMainlineSquashfs mainlineNixosNixSystemCross.config.system.build.toplevel;
     mainlineNixosKeysSquashfs = mkMainlineSquashfs mainlineNixosKeysSystemCross.config.system.build.toplevel;
+
+    mainlineNixosPowerSquashfs = mkMainlineSquashfs mainlineNixosPowerSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1390,6 +1414,15 @@
       rescueBundle = mainlineNixos.bundle;
       bootFiles = efiBootFiles;
     };
+    mainlineNixosPower = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlinePowerKernel;
+      serviceabilityDtb = mainlinePowerDtb;
+      squashfs = mainlineNixosPowerSquashfs;
+      nixosToplevel = mainlineNixosPowerSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosPowerSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
     nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
       inherit buildPkgs;
       bootloader = crossPkgs.systemd;
@@ -1927,6 +1960,13 @@
       mainlineNixosNixKernel = mainlineNixKernel;
       mainlineNixosNixBundle = mainlineNixosNix.bundle;
       mainlineNixosKeysBundle = mainlineNixosKeys.bundle;
+      mainlineNixosPowerBundle = mainlineNixosPower.bundle;
+      mainlineNixosPowerKernel = mainlinePowerKernel;
+      watchdogHibernationCheck = import ./nix/watchdog-hibernation-check.nix {
+        inherit buildPkgs crossPkgs;
+        source = linux-gemini;
+        baseKernel = mainlinePowerKernel;
+      };
       geminiEfiBootFiles = efiBootFiles;
       geminiNixEfiBootFiles = nixEfiBootFiles;
       geminiNixEfiDtBootFiles = nixEfiDtBootFiles;
@@ -2021,6 +2061,7 @@
       gemini-mainline = mainlineNixosSystemCross;
       gemini-mainline-nix = mainlineNixosNixSystemCross;
       gemini-mainline-keys = mainlineNixosKeysSystemCross;
+      gemini-mainline-power = mainlineNixosPowerSystemCross;
     };
 
     # Development shell
