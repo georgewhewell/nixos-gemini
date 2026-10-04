@@ -2,7 +2,9 @@
 """Build immutable systemd-boot trial files and their checked publication archive."""
 import gzip, hashlib, io, json, struct, sys, tarfile
 from pathlib import Path
-out, bootloader, linux, kernel = map(Path, sys.argv[1:])
+out, bootloader, linux, kernel = map(Path, sys.argv[1:5])
+assert sys.argv[5:] in ([], ['--versioned-entry'])
+versioned = bool(sys.argv[5:])
 image = gzip.decompress((linux/'kernel/Image.gz').read_bytes())
 initrd = (linux/'initramfs.cpio.gz').read_bytes()
 manager = (bootloader/'lib/systemd/boot/efi/systemd-bootaa64.efi').read_bytes()
@@ -19,13 +21,15 @@ config = (kernel/'kernel.config').read_text()
 assert 'CONFIG_CMDLINE_FORCE=y\n' in config
 payload = hashlib.sha256(image + initrd).hexdigest()
 directory = 'EFI/Gemini/' + payload
+entry = 'gemini-' + payload + '.conf' if versioned else 'gemini-efi-trial.conf'
+title = 'NixOS Gemini' if versioned else 'NixOS Gemini (EFI trial)'
 files = {
     'EFI/systemd/systemd-bootaa64.efi': manager,
     directory + '/linux.efi': image,
     directory + '/initrd.cpio.gz': initrd,
-    'loader/loader.conf': ("default gemini-efi-trial.conf\ntimeout 8\nconsole-mode keep\n"
+    'loader/loader.conf': ("default " + entry + "\ntimeout 8\nconsole-mode keep\n"
                            "editor no\nauto-entries no\nauto-firmware no\nrandom-seed-mode off\n").encode(),
-    'loader/entries/gemini-efi-trial.conf': ("title NixOS Gemini (EFI trial)\n"
+    'loader/entries/' + entry: ("title " + title + "\n"
         "sort-key gemini\nversion 7.1.3\nlinux /" + directory + "/linux.efi\n"
         "initrd /" + directory + "/initrd.cpio.gz\n").encode(),
 }
@@ -37,7 +41,7 @@ for name, data in files.items():
 manifest = {'status': 'host-prepared-not-published-or-booted',
             'bootloader': str(bootloader), 'linux_payload': str(linux),
             'kernel': str(kernel), 'payload_identity': payload,
-            'entry': 'gemini-efi-trial.conf', 'menu_timeout_seconds': 8,
+            'entry': entry, 'menu_timeout_seconds': 8,
             'requires': ['LK-derived FDT in EFI configuration table',
                          'native EFI Block I/O and Simple File System',
                          'image device handle bound to the containing filesystem'],
@@ -45,7 +49,7 @@ manifest = {'status': 'host-prepared-not-published-or-booted',
                       for name, data in files.items()}}
 # Publish payloads first and menu configuration last.
 order = [name for name in files if not name.startswith('loader/')] + [
-    'loader/entries/gemini-efi-trial.conf', 'loader/loader.conf']
+    'loader/entries/' + entry, 'loader/loader.conf']
 (out/'files.manifest').write_text(''.join(
     f"{hashlib.sha256(files[name]).hexdigest()} {len(files[name])} {name}\n" for name in order))
 with tarfile.open(out/'boot-files.tar', 'w', format=tarfile.USTAR_FORMAT) as archive:

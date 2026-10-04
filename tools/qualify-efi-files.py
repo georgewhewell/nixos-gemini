@@ -8,20 +8,30 @@ import shlex
 import subprocess
 import tarfile
 import time
+from typing import NamedTuple
 
 BUNDLE=Path(__file__).resolve().parents[2]/'handoff/gemini-efi-boot-files-publish'
 ARCHIVE_SHA='3acf483171660dc96b373966ed80e1c2e36286149bec3c3715f1ca14550b36d7'
 ARCHIVE_SIZE=20449280
 
 
-def payload():
-    archive=BUNDLE/'boot-files.tar'
+class FilesProfile(NamedTuple):
+    bundle: Path
+    sha: str
+    size: int
+
+def default_profile():
+    return FilesProfile(BUNDLE,ARCHIVE_SHA,ARCHIVE_SIZE)
+
+def payload(profile=None):
+    p=profile or default_profile()
+    archive=p.bundle/'boot-files.tar'
     with archive.open('rb') as src:
         digest=hashlib.file_digest(src,'sha256').hexdigest()
-    if archive.stat().st_size!=ARCHIVE_SIZE or digest!=ARCHIVE_SHA:
+    if archive.stat().st_size!=p.size or digest!=p.sha:
         raise RuntimeError('Boot-file archive differs from the pinned artifact')
-    manifest=json.loads((BUNDLE/'manifest.json').read_text())
-    if manifest['archive']!={'sha256':ARCHIVE_SHA,'size':ARCHIVE_SIZE} or len(manifest['files'])!=5:
+    manifest=json.loads((p.bundle/'manifest.json').read_text())
+    if manifest['archive']!={'sha256':p.sha,'size':p.size} or len(manifest['files'])!=5:
         raise RuntimeError('Boot-file manifest differs from the pinned archive')
     found={}
     with tarfile.open(archive) as tf:
@@ -35,13 +45,15 @@ def payload():
     return archive,manifest
 
 
-def marker(state):
-    return f'efi-files={state} sha256={ARCHIVE_SHA} size={ARCHIVE_SIZE}'
+def marker(state,profile=None):
+    p=profile or default_profile()
+    return f'efi-files={state} sha256={p.sha} size={p.size}'
 
 
-def upload_command(before, boot_sha):
+def upload_command(before, boot_sha, profile=None):
+    p=profile or default_profile()
     if not re.fullmatch(r'[0-9a-f-]{36}',before['boot_id']) or not all(
-            re.fullmatch('[0-9a-f]{64}',v) for v in (boot_sha,before['gpt_sha256'],ARCHIVE_SHA)):
+            re.fullmatch('[0-9a-f]{64}',v) for v in (boot_sha,before['gpt_sha256'],p.sha)):
         raise ValueError('Boot-file upload requires exact boot and GPT identities')
     return f'''set -eu
 umask 077
@@ -50,22 +62,23 @@ test "$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)" = '{boot_sha}'
 test "$(head -c 32768 /dev/mmcblk0 | sha256sum | cut -d' ' -f1)" = '{before['gpt_sha256']}'
 test "$(cat /sys/firmware/efi/fw_platform_size)" = 64
 test "$(tr -d '\\000' < /sys/firmware/devicetree/base/chosen/gemini,uefi-storage-result)" = passed
-test "$(cat /run/efi-boot-files.required)" = '{marker('required')}'
+test "$(cat /run/efi-boot-files.required)" = '{marker('required',p)}'
 opts=$(awk '$1 == "/dev/mmcblk0p29" && $2 == "/mnt/gemian" && $3 == "ext4" {{print $4}}' /proc/mounts)
 case ",$opts," in *,ro,*) ;; *) exit 1 ;; esac
 test ! -e /run/efi-boot-files.upload && test ! -L /run/efi-boot-files.upload
 test ! -e /run/efi-boot-files.ready && test ! -L /run/efi-boot-files.ready
 (set -C; cat > /run/efi-boot-files.upload)
-test "$(stat -c %s /run/efi-boot-files.upload)" = '{ARCHIVE_SIZE}'
+test "$(stat -c %s /run/efi-boot-files.upload)" = '{p.size}'
 test "$(stat -c %h /run/efi-boot-files.upload)" = 1
-test "$(sha256sum /run/efi-boot-files.upload | cut -d' ' -f1)" = '{ARCHIVE_SHA}'
-printf '%s\\n' '{marker('ready')}' > /run/efi-boot-files.ready
+test "$(sha256sum /run/efi-boot-files.upload | cut -d' ' -f1)" = '{p.sha}'
+printf '%s\\n' '{marker('ready',p)}' > /run/efi-boot-files.ready
 printf '%s\\n' 'Boot files uploaded to RAM; Stage 1 owns checked publication'
 '''
 
 
-def provision(ssh,before,boot_sha,directory,qualify,rescued):
-    archive,_=payload()
+def provision(ssh,before,boot_sha,directory,qualify,rescued,profile=None):
+    p=profile or default_profile()
+    archive,_=payload(p)
     deadline=time.monotonic()+240
     while time.monotonic()<deadline:
         if rescued():
@@ -75,13 +88,13 @@ def provision(ssh,before,boot_sha,directory,qualify,rescued):
                                   'elif test -s /run/efi-boot-files.required; then cat /run/efi-boot-files.required; fi']).strip()
         except subprocess.SubprocessError:
             time.sleep(3);continue
-        if state==marker('verified'):
+        if state==marker('verified',p):
             return
         if not state:
             time.sleep(3);continue
-        if state!=marker('required'):
+        if state!=marker('required',p):
             raise RuntimeError('Stage 1 requested different boot files: '+state)
-        command=upload_command(before,boot_sha)
+        command=upload_command(before,boot_sha,p)
         (directory/'boot-files-upload.sh').write_text(command)
         print('Trusted Stage 1 requested the pinned boot files; uploading the archive to RAM',flush=True)
         with archive.open('rb') as src,(directory/'boot-files-upload.log').open('w') as log:
@@ -90,13 +103,14 @@ def provision(ssh,before,boot_sha,directory,qualify,rescued):
     raise RuntimeError('Stage 1 did not request the pinned boot files within 240s')
 
 
-def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-files.json'):
-    _,manifest=payload()
+def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-files.json',profile=None):
+    p=profile or default_profile()
+    _,manifest=payload(p)
     command=['set -eu',"printf 'boot_id='; cat /proc/sys/kernel/random/boot_id",
              '''opts=$(awk '$1 == "/dev/mmcblk0p29" && $2 == "/gemian" && $3 == "ext4" {print $4}' /proc/mounts)''',
              '''case ",$opts," in *,ro,*) ;; *) exit 1 ;; esac''']
     if require_verified:
-        command.append(f'test "$(cat /run/efi-boot-files.verified)" = {shlex.quote(marker("verified"))}')
+        command.append(f'test "$(cat /run/efi-boot-files.verified)" = {shlex.quote(marker("verified",p))}')
     for relative,info in manifest['files'].items():
         path=Path('/gemian')/relative
         for parent in reversed(path.parents):
@@ -111,5 +125,5 @@ def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-file
     hashes={row.split()[1].removeprefix('/gemian/'):row.split()[0] for row in rows[1:]}
     if hashes!={name:info['sha256'] for name,info in manifest['files'].items()}:
         raise RuntimeError('Published boot files failed independent Linux readback')
-    qualify.save(directory,name,dict(boot_id=boot_id,archive_sha256=ARCHIVE_SHA,
+    qualify.save(directory,name,dict(boot_id=boot_id,archive_sha256=p.sha,
                                                 p29_read_only=True,files=manifest['files']))

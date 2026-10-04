@@ -73,8 +73,14 @@ efi_provision_boot_files() {
     efi_available=$(df -Pk /mnt/gemian | awk 'NR == 2 { print $4 }')
     [ "$efi_available" -ge $((efi_archive_size / 1024 + 8192)) ] \
         || provision_abort "efi-files-space"
-    /bin/gemini-efi-publish install /mnt/gemian /run/efi-files.tree /etc/gemini-efi-files.manifest \
-        || provision_abort "efi-files-publication"
+    if [ -f /etc/gemini-efi-activate-from ]; then
+        efi_previous=$(cat /etc/gemini-efi-activate-from)
+        /bin/gemini-efi-publish activate /mnt/gemian /run/efi-files.tree /etc/gemini-efi-files.manifest "$efi_previous" \
+            || provision_abort "efi-files-activation"
+    else
+        /bin/gemini-efi-publish install /mnt/gemian /run/efi-files.tree /etc/gemini-efi-files.manifest \
+            || provision_abort "efi-files-publication"
+    fi
     efi_verify_stores || provision_abort "efi-files-protected-store-after"
     restore_store_readonly || fail "efi-files-ro-restore"
     /bin/gemini-efi-publish verify /mnt/gemian /run/efi-files.tree /etc/gemini-efi-files.manifest \

@@ -74,8 +74,11 @@ Linux trial retained the full 4 GiB memory map, passed service health and
 automatically restored the accepted M69 image through mtkclient. GOP/text,
 native keyboard polling and read-only native/EFI storage now pass. The distro
 systemd-boot manager also boots the installed Linux entry after its unattended
-menu timeout, with independent EFI-variable and file-hash evidence. Physical
-key selection and normal NixOS generation updates remain to be qualified.
+menu timeout, with independent EFI-variable and file-hash evidence. Its new
+versioned entry boots the Nix-enabled system and passes an ordinary sandboxed
+daemon build as an unprivileged user, retaining its output and database through
+automatic M69 recovery. Physical key selection and normal NixOS generation
+updates remain to be qualified.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797

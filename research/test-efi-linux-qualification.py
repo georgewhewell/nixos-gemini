@@ -82,6 +82,11 @@ class EfiProof(unittest.TestCase):
                             r.efi_manager.PREFIX+'stage':b'start-image\0'.hex(),
                             r.efi_manager.PREFIX+'sha256':r.efi_manager.SHA})
         r.verify_handoff_tree({},manager,'efi-manager')
+        for profile,base in (('efi-nix-provision',provision),('efi-nix-manager',manager)):
+            current=dict(base,**{'chosen/gemini,uefi-mmc-boot-sha256':r.PROFILES[profile][1]})
+            r.verify_handoff_tree({},current,profile)
+            self.assertEqual(r.candidate_system({'system':'old'},profile),r.persistent_nix.SYSTEM)
+            with self.assertRaises(RuntimeError):r.verify_handoff_tree({},base,profile)
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-manager')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},manager,'efi-storage')
         for key in r.efi_manager.MARKERS:

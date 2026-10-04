@@ -34,13 +34,13 @@ def decode_variable(raw):
         raise RuntimeError('Invalid loader EFI variable: '+str(error)) from error
 
 
-def verify_variables(rows,boot_id):
+def verify_variables(rows,boot_id,entry='gemini-efi-trial.conf'):
     if rows.get('boot_id')!=boot_id or set(rows)!={'boot_id',*VARIABLES}:
         raise RuntimeError('Loader EFI variables are missing or from another boot')
     values={name:decode_variable(rows[name]) for name in VARIABLES}
     if not re.fullmatch(r'systemd-boot 261\.2(?:[ +().-][ -~]*)?',values['LoaderInfo']):
         raise RuntimeError('Unexpected distro manager: '+values['LoaderInfo'])
-    if values['LoaderEntrySelected']!='gemini-efi-trial.conf':
+    if values['LoaderEntrySelected']!=entry:
         raise RuntimeError('The manager selected a different boot entry')
     # U-Boot's DevicePathToText prefixes every node with '/', including FilePath.
     image=values['LoaderImageIdentifier'].replace('\\','/').lower()
@@ -58,13 +58,15 @@ def verify_variables(rows,boot_id):
     return dict(values,menu_to_exec_usec=elapsed)
 
 
-def evidence(ssh,boot_id,directory,qualify,tree):
+def evidence(ssh,boot_id,directory,qualify,tree,entry='gemini-efi-trial.conf',kernel=KERNEL):
     verify_tree(tree)
+    if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9._+-]+',str(kernel)):
+        raise ValueError('Loader evidence requires a pinned kernel path')
     command=f'''set -eu
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
 if ! awk '$2 == "/sys/firmware/efi/efivars" && $3 == "efivarfs" {{ found=1 }} END {{ exit !found }}' /proc/mounts; then
     printf 'loader-evidence: loading efivarfs\\n' >&2
-    {KMOD} -d {KERNEL} efivarfs
+    {KMOD} -d {kernel} efivarfs
     mkdir -p /sys/firmware/efi/efivars
     printf 'loader-evidence: mounting efivarfs read-only\\n' >&2
     mount -t efivarfs -o ro,nosuid,nodev,noexec efivarfs /sys/firmware/efi/efivars
@@ -90,7 +92,7 @@ done
         raise RuntimeError('Cannot read loader EFI variables: '+
                            (error.stderr or f'exit {error.returncode}').strip()) from error
     (directory/'manager-variables.txt').write_text(raw)
-    values=verify_variables(dict(row.split('=',1) for row in raw.splitlines()),boot_id)
+    values=verify_variables(dict(row.split('=',1) for row in raw.splitlines()),boot_id,entry)
     uuid=values['LoaderDevicePartUUID']
     path=qualify.run(ssh+[f'readlink -f /dev/disk/by-partuuid/{uuid}']).strip()
     if path!='/dev/mmcblk0p29':

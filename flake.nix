@@ -131,11 +131,13 @@
         uboot = import ./nix/uboot-handoff.nix ({
           inherit buildPkgs crossPkgs;
           source = u-boot-gemini-src;
-        } // builtins.removeAttrs options ["efiProvision"]);
+        } // builtins.removeAttrs options ["efiProvision" "nixSystem"]);
         bundle = import ./nix/uboot-carrier.nix ({
           inherit buildPkgs uboot;
-          linuxBundle = if options.efiProvision or false then mainlineNixosEfiProvision else if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
-        } // options);
+          linuxBundle = if options.nixSystem or false
+            then (if options.efiProvision or false then mainlineNixosNixEfiProvision else mainlineNixosNix.bundle)
+            else if options.efiProvision or false then mainlineNixosEfiProvision else if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
+        } // builtins.removeAttrs options ["nixSystem"]);
       };
     in {
       handoff = mkProfile {};
@@ -147,6 +149,8 @@
       efiStorage = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true;};
       efiProvision = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
       efiManager = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
+      efiNixProvision = mkProfile {nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiProvision = true;};
+      efiNixManager = mkProfile {nixSystem = true; efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true; efiManager = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -1321,6 +1325,20 @@
       rescueBundle = mainlineNixos.bundle;
       bootFiles = efiBootFiles;
     };
+    nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
+      inherit buildPkgs;
+      bootloader = crossPkgs.systemd;
+      linuxBundle = mainlineNixosNix.bundle;
+      kernel = mainlineNixKernel;
+      versionedEntry = true;
+    };
+    mainlineNixosNixEfiProvision = import ./nix/gemini-efi-provision.nix {
+      inherit buildPkgs;
+      baseBundle = mainlineNixosNix.bundle;
+      rescueBundle = mainlineNixos.bundle;
+      bootFiles = nixEfiBootFiles;
+      activateFrom = "9547db8cf45f9d032c9792411c7f06bbde375e7b9f620deea6c09740b4d34266";
+    };
 
     # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and
     # its composed DTB differ -- so this candidate reuses the p29 payload that
@@ -1793,6 +1811,8 @@
       ubootEfiStorageBundle = ubootProfiles.efiStorage.bundle;
       ubootEfiProvisionBundle = ubootProfiles.efiProvision.bundle;
       ubootEfiManagerBundle = ubootProfiles.efiManager.bundle;
+      ubootEfiNixProvisionBundle = ubootProfiles.efiNixProvision.bundle;
+      ubootEfiNixManagerBundle = ubootProfiles.efiNixManager.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;
@@ -1819,6 +1839,7 @@
       mainlineNixosNixKernel = mainlineNixKernel;
       mainlineNixosNixBundle = mainlineNixosNix.bundle;
       geminiEfiBootFiles = efiBootFiles;
+      geminiNixEfiBootFiles = nixEfiBootFiles;
 
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;

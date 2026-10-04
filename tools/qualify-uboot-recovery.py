@@ -28,6 +28,10 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-nix-provision': (WORKSPACE / 'handoff/nix-efi-provision-reproducible/boot-padded-p22.img',
+                          '238072a0243de05435dcee15f60aa8304c36c07fe8431c49dfd5f6e03b9aa121'),
+    'efi-nix-manager': (WORKSPACE / 'handoff/nix-efi-candidates-2/boot-padded-p22.img',
+                        '004def7151492f54d3e34bc84ddef33de4bfd378def703a5e7858a09e8f37093'),
     'persistent-nix': (WORKSPACE / 'handoff/persistent-nix-candidate/boot-padded-p22.img',
                         '0cd222881c2dcc56d8da25f54903f70cf4d93475bc591175251403ba971be50e'),
     'efi-manager': (WORKSPACE / 'handoff/uboot-efi-manager-partuuid/boot-padded-p22.img',
@@ -54,7 +58,9 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager')
+NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager')
+NIX_PROFILES = ('persistent-nix',) + NIX_EFI_PROFILES
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') + NIX_EFI_PROFILES
 UBOOT_LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 LINUX_PROFILES = UBOOT_LINUX_PROFILES + ('persistent-nix',)
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
@@ -137,7 +143,12 @@ def handoff_tree(ssh):
     return result
 
 
+def profile_kind(profile):
+    return {'efi-nix-provision': 'efi-provision', 'efi-nix-manager': 'efi-manager'}.get(profile, profile)
+
+
 def verify_handoff_tree(before, after, profile):
+    kind = profile_kind(profile)
     if any(key in before for key in MARKERS):
         raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
     for key, value in before.items():
@@ -161,10 +172,10 @@ def verify_handoff_tree(before, after, profile):
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
-    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') else None
+    expected_console = b'passed\0'.hex() if kind in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') else None
     if after.get(CONSOLE_MARKER) != expected_console:
         raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
-    if profile in ('efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
+    if kind in ('efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
         scans = bytes.fromhex(after.get(KEYBOARD_SCANS, ''))
         if (after.get(KEYBOARD_MARKER) != b'scanned\0'.hex() or
                 after.get(KEYBOARD_ERROR) != '00000000' or
@@ -174,17 +185,17 @@ def verify_handoff_tree(before, after, profile):
     elif any(key in after for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)):
         raise RuntimeError('Unexpected EFI keyboard evidence in another profile')
 
-    if profile in ('efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
+    if kind in ('efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
         verify_mmc_tree(after, profile)
     elif any(key in after for key in MMC_MARKERS):
         raise RuntimeError('Unexpected native MMC evidence in another profile')
-    if profile in ('efi-storage', 'efi-provision', 'efi-manager'):
+    if kind in ('efi-storage', 'efi-provision', 'efi-manager'):
         if after.get(STORAGE_MARKER) != b'passed\0'.hex() or after.get(STORAGE_STATUS) != '0000000000000000':
             raise RuntimeError('EFI storage protocol application failed: ' + repr(
                 {key: after.get(key) for key in (STORAGE_MARKER, STORAGE_STATUS)}))
     elif any(key in after for key in (STORAGE_MARKER, STORAGE_STATUS)):
         raise RuntimeError('Unexpected EFI storage protocol evidence in another profile')
-    if profile == 'efi-manager':
+    if kind == 'efi-manager':
         efi_manager.verify_tree(after)
     elif any(key in after for key in efi_manager.MARKERS):
         raise RuntimeError('Unexpected distro manager evidence in another profile')
@@ -222,7 +233,7 @@ persistent_nix = module('persistent_nix', ROOT / 'tools/qualify-persistent-nix.p
 
 
 def candidate_system(before, profile):
-    if profile == 'persistent-nix':
+    if profile in NIX_PROFILES:
         return persistent_nix.SYSTEM
     return efi_linux.SYSTEM if profile in EFI_LINUX_PROFILES else before['system']
 
@@ -273,13 +284,20 @@ def candidate_return(ssh, before, directory, profile):
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
         if profile in EFI_LINUX_PROFILES:
             efi_linux.evidence(ssh, directory, qualify, tree)
-        if profile == 'efi-provision':
-            efi_files.evidence(ssh, after['boot_id'], directory, qualify)
-        if profile == 'efi-manager':
-            efi_manager.evidence(ssh, after['boot_id'], directory, qualify, tree)
-            efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False)
-        if profile == 'persistent-nix':
-            persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence)
+        files = persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None
+        if profile_kind(profile) == 'efi-provision':
+            efi_files.evidence(ssh, after['boot_id'], directory, qualify, profile=files)
+        if profile_kind(profile) == 'efi-manager':
+            kwargs = dict(entry=persistent_nix.EFI_ENTRY, kernel=persistent_nix.KERNEL) if profile in NIX_EFI_PROFILES else {}
+            efi_manager.evidence(ssh, after['boot_id'], directory, qualify, tree, **kwargs)
+            efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False, profile=files)
+        if profile in NIX_PROFILES:
+            persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
+                                    require_efi=profile in NIX_EFI_PROFILES)
+            if profile in NIX_EFI_PROFILES:
+                persistent_nix.activation_evidence(ssh, after['boot_id'], directory, qualify, persistence)
+            if candidate_snapshot(ssh, before, profile) != after:
+                raise RuntimeError('Candidate health or protected identity changed after Nix build')
         return after
     raise RuntimeError('Healthy candidate Linux did not return within 360s')
 
@@ -366,7 +384,7 @@ def recovery_timing(directory, profile):
 def phase_evidence(before, after, profile):
     phase = PHASES.get(after)
     fault = {}
-    if profile == 'efi-manager' and isinstance(after,str) and re.fullmatch(r'0x[89a-f][0-9a-f]{7}',after):
+    if profile_kind(profile) == 'efi-manager' and isinstance(after,str) and re.fullmatch(r'0x[89a-f][0-9a-f]{7}',after):
         record=int(after,16)
         pc=0x40200000+((record&0x7ffff)<<2)
         ec=(record>>25)&0x3f
@@ -479,16 +497,17 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     recovery_before = before
     if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
         try:
-            if profile == 'efi-provision':
+            if profile_kind(profile) == 'efi-provision':
                 efi_files.provision(ssh, before, PROFILES[profile][1], directory, qualify,
-                    lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
-            if profile in EFI_LINUX_PROFILES:
+                    lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS),
+                    profile=persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None)
+            if profile in EFI_LINUX_PROFILES and profile not in NIX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS))
-            if profile == 'persistent-nix':
+            if profile in NIX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS),
-                    profile=persistent_nix.store_profile(efi_linux))
+                    profile=persistent_nix.store_profile(efi_linux,require_efi=profile in NIX_EFI_PROFILES))
             middle = candidate_return(ssh, before, directory, profile)
             # Require rescue to be a different boot from the observed candidate
             # as well as restoring the accepted direct-Linux image.
@@ -521,10 +540,15 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     print('Rescue write/readback and reboot verified; waiting for healthy M69', flush=True)
     after = healthy_return(ssh, recovery_before, directory, 'after')
     nix_retained = False
-    if profile == 'persistent-nix':
+    if profile in NIX_PROFILES:
         try:
             if candidate_qualified:
                 persistent_nix.after_recovery(ssh, after['boot_id'], directory, qualify, persistence)
+                if profile in NIX_EFI_PROFILES:
+                    efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False,
+                        name='recovered-boot-files.json', profile=persistent_nix.files_profile(efi_files))
+                    persistent_nix.activation_evidence(ssh, after['boot_id'], directory, qualify, persistence,
+                        name='recovered-previous-efi-files')
                 nix_retained = True
             else:
                 persistent_nix.old_persistence(ssh, after['boot_id'], directory, qualify, persistence,
@@ -554,7 +578,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         (directory / 'rescue-reboot-request.json').exists())
     if profile in LINUX_PROFILES:
         qualified = candidate_qualified
-    if profile == 'persistent-nix':
+    if profile in NIX_PROFILES:
         qualified = candidate_qualified and nix_retained
     result = dict(result='passed', profile=profile, recovered_boot_id=after['boot_id'],
                   proof='candidate-and-rescue-writes-with-automatic-reboot',
@@ -563,7 +587,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         result.update(linux_handoff_proven=candidate_qualified)
     if profile in UBOOT_LINUX_PROFILES:
         result.update(uboot_execution_proven=candidate_qualified or phase['uboot_execution_proven'])
-    if profile == 'persistent-nix':
+    if profile in NIX_PROFILES:
         result.update(ordinary_daemon_build_qualified=candidate_qualified,
                       nix_persistence_qualified=nix_retained)
     if verify_persistence:
@@ -609,12 +633,12 @@ def main():
             raise RuntimeError('Baseline contains a stale U-Boot/EFI marker')
         candidate, sha = PROFILES[args.profile]
         backend.checked_image(candidate.resolve(strict=True), sha)
-        if args.profile in EFI_LINUX_PROFILES:
+        if args.profile in EFI_LINUX_PROFILES and args.profile not in NIX_PROFILES:
             efi_linux.payload()
-        if args.profile == 'persistent-nix':
-            efi_linux.payload(persistent_nix.store_profile(efi_linux))
-        if args.profile in ('efi-provision','efi-manager'):
-            efi_files.payload()
+        if args.profile in NIX_PROFILES:
+            efi_linux.payload(persistent_nix.store_profile(efi_linux,require_efi=args.profile in NIX_EFI_PROFILES))
+        if profile_kind(args.profile) in ('efi-provision','efi-manager'):
+            efi_files.payload(persistent_nix.files_profile(efi_files) if args.profile in NIX_EFI_PROFILES else None)
         qualify.accepted_boot_bytes(ACCEPTED)
         usb = backend.usb_snapshot('3-2')
         if usb is None or usb[:2] != ('0525', 'a4a2'):
@@ -625,23 +649,43 @@ def main():
         shutil.copyfile(ROOT / 'research/p22-trex-transaction-holder.sh',
                         directory / 'p22-trex-transaction-holder.sh')
         qualify.save(directory, 'before.json', before)
-        if args.profile == 'persistent-nix':
+        if args.profile in NIX_PROFILES:
             persistent_nix.old_persistence(ssh, before['boot_id'], directory, qualify, persistence,
                 qualify.ACCEPTED_SYSTEM, 'before-old-persistence')
-        if args.profile == 'efi-manager':
+        if args.profile == 'efi-nix-provision':
+            try:
+                efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
+                    name='before-new-boot-files.json', profile=persistent_nix.files_profile(efi_files))
+                persistent_nix.activation_evidence(ssh, before['boot_id'], directory, qualify, persistence,
+                    name='before-previous-efi-files')
+            except (subprocess.SubprocessError, RuntimeError, ValueError):
+                efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
+                    name='before-old-boot-files.json')
+        if profile_kind(args.profile) == 'efi-manager':
             efi_files.evidence(ssh, before['boot_id'], directory, qualify,
-                               require_verified=False, name='before-boot-files.json')
+                               require_verified=False, name='before-boot-files.json',
+                               profile=persistent_nix.files_profile(efi_files) if args.profile in NIX_EFI_PROFILES else None)
         if tree is not None:
             qualify.save(directory, 'before-tree.json', tree)
+        sources = directory / 'executed-sources'
+        sources.mkdir(mode=0o700)
+        source_hashes = {}
+        for name in ('qualify-uboot-recovery.py', 'qualify-mtkclient.py', 'qualify-efi-linux.py',
+                     'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-gemini-persistence.py',
+                     'qualify-persistent-nix.py'):
+            raw = (ROOT / 'tools' / name).read_bytes()
+            (sources / name).write_bytes(raw)
+            source_hashes[name] = backend.digest(raw)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),
                      candidate_sha256=sha, rescue=str(ACCEPTED), execute=args.execute,
                      verify_persistence=args.verify_persistence,
+                     executed_sources_sha256=source_hashes,
                      nix_verifier_sha256=backend.digest(
-                         (ROOT / 'tools/qualify-persistent-nix.py').read_bytes()) if args.profile == 'persistent-nix' else None,
+                         (ROOT / 'tools/qualify-persistent-nix.py').read_bytes()) if args.profile in NIX_PROFILES else None,
                      persistence_verifier_sha256=backend.digest(
-                         (ROOT / 'tools/qualify-gemini-persistence.py').read_bytes()) if args.verify_persistence or args.profile == 'persistent-nix' else None,
+                         (ROOT / 'tools/qualify-gemini-persistence.py').read_bytes()) if args.verify_persistence or args.profile in NIX_PROFILES else None,
                      store_provisioner_sha256=backend.digest(
-                         (ROOT / 'tools/qualify-efi-linux.py').read_bytes()) if args.profile in EFI_LINUX_PROFILES or args.profile == 'persistent-nix' else None,
+                         (ROOT / 'tools/qualify-efi-linux.py').read_bytes()) if args.profile in EFI_LINUX_PROFILES or args.profile in NIX_PROFILES else None,
                      runner_sha256=backend.digest(Path(__file__).read_bytes())))
     if not args.execute:
         print(f'Preflight passed; no reboot or write. Evidence: {directory}')

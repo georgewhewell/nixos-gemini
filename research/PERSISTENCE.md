@@ -134,6 +134,52 @@ writer. Four new host tests cover sandbox evidence and profile separation;
 all 70 relevant verifier/backend regression tests pass.
 
 This qualifies the daemon and ordinary sandboxed builds on the candidate.
-The installed M69 image still has the two original limitations. Integration
-with the distro boot path and normal generation management remains; fixed
-swap, hibernation and persistent EFI settings are also incomplete.
+The installed M69 image still has the two original limitations. The subsequent
+EFI integration is described below. Normal generation management, fixed swap,
+hibernation and persistent EFI settings are incomplete.
+
+## Distro-manager integration
+
+`geminiNixEfiBootFiles` packages this same Nix-enabled kernel and userspace as a
+versioned systemd-boot entry. The bounded `efi-nix-provision` trial published
+the new payload, preserved the previous entry and payload, and switched the
+loader default after backing up its exact old configuration. Its candidate
+passed EFI Linux health and an ordinary daemon build; all boot files, the
+configuration backup and both old and new persistence proofs survived rescue.
+The complete result is `handoff/efi-nix-provision-01`.
+
+The `efi-nix-manager` trial then booted the published entry through the real
+distro systemd-boot 261.2 manager. Candidate boot
+`bdfccf9a-d47c-4130-8916-8596452f236c` passed full health, the exact kernel
+configuration, CPU provenance and both A72 online checks. The manager's own
+EFI variables selected
+`gemini-9c1bfbbbb260cf5830de42c587ea599cfbad29749ee66c61c65d2caf6caff999.conf` on p29;
+menu-to-execution time was 9,478,940 microseconds. An ordinary daemon build
+submitted as `gemini` again ran in a distinct network namespace without access
+to the user's home, with sandboxing enabled and fallback disabled.
+
+Its output is
+`/nix/store/10ihy8gva9za862c1vhq3ak2yhyw60id-gemini-daemon-2cec893b5e3b4c21b5ffc8f514e78fec`,
+rooted in `/home/gemini/.gemini-daemon-build-2cec893b5e3b4c21b5ffc8f514e78fec/result`.
+The proof-file SHA-256 is
+`af75e7fe0bf0b0c0748b87e8aca7863d022c792debf116796a0be7f6f832ae5b`.
+Artifact pins and the boot-publication contract are recorded in
+[BOOT_HANDOFF.md](BOOT_HANDOFF.md#nix-enabled-versioned-entry-and-default-activation).
+
+The complete `handoff/efi-nix-manager-01` result qualifies EFI handoff, the
+ordinary build and Nix persistence. Automatic rescue restored healthy M69
+`715150bb-63d5-48fb-ad86-9132df5e6274` and retained the output, root, NAR hash
+and derivation, the original persistence proof and both sets of boot files.
+GPT/p30/p31 remained unchanged. M69 stays the installed image; its daemon and
+namespace limitations are unchanged. The Nix-enabled manager is a qualified
+candidate, and arbitrary generation selection still requires per-entry CPU
+provenance handling.
+
+The later `efi-nix-provision-02` trial qualified deterministic initramfs
+packaging and reused the verified publication. Its final healthy M69 boot
+`6ab5f118-ecb3-49ff-9018-543c166b94fa` retained all four ordinary-build outputs
+from the direct trial and three EFI trials, including every proof hash,
+home GC root and registered NAR/derivation identity. The locked final audit is
+`handoff/efi-nix-provision-02/final-idle-check.json`; per-output evidence is in
+its `all-nix-outputs/` directory. Factory GPT is unchanged and fixed swap remains
+unprovisioned.

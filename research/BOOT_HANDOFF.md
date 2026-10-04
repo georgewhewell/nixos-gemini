@@ -11,7 +11,9 @@ text confirmed by the owner. Native keyboard initialization and polling
 also pass through EFI. Native eMMC reads now pass the full boot-partition
 and filesystem hash checks below. EFI file access and a distro systemd-boot
 launch now pass separate qualifications below, including selected-entry,
-boot-volume and unattended menu timing evidence. Physical key actuation,
+boot-volume and unattended menu timing evidence. A versioned Nix-enabled entry
+also passes an ordinary unprivileged daemon build and persistence through M69
+recovery. Physical key actuation,
 complete modifier qualification and normal NixOS generation updates remain.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
@@ -44,6 +46,14 @@ manifest records payload and carrier hashes.
   keyboard and storage checks. The checked FIT remains a fallback. A fallback
   boot does not qualify the manager profile; the runner also requires the
   manager's EFI variables, selected entry, p29 device identity and menu timing.
+- Nix EFI provisioning/manager (`ubootEfiNixProvisionBundle`,
+  `ubootEfiNixManagerBundle`): use the ordinary-build-qualified kernel and
+  userspace from `mainlineNixosNixBundle`. `geminiNixEfiBootFiles` emits a
+  content-addressed entry. The provisioning profile switches the precisely
+  pinned previous default only after preserving its configuration and publishing
+  the new payload; the manager profile requires that exact entry's EFI evidence.
+  Both require an unprivileged ordinary daemon build and its retention through
+  M69 recovery. The runner names are `efi-nix-provision` and `efi-nix-manager`.
 
 All profiles use TOPRGU for generic reset. LK handoff validation is independent
 of EFI. The FIT source window now accepts up to 16 MiB at 0x45000000, within the
@@ -921,3 +931,119 @@ phase was ExitBootServices. Candidate departure to rescue entry took 233.556
 seconds. The trial handle is terminal and the flash lane is idle. The accepted
 installation remains direct M69; the qualified U-Boot manager is an opt-in
 candidate. No physical intervention was required.
+
+## Nix-enabled versioned entry and default activation
+
+The Nix daemon correction qualified in [PERSISTENCE.md](PERSISTENCE.md) now has
+separate EFI boot files and carriers. The U-Boot source remains
+`3da3110deebdb351eff0cd48d76271596dfa407d`; the manager binary remains the
+qualified systemd-boot 261.2 image. The kernel, initramfs, userspace and CPU
+provenance match the directly qualified Nix candidate.
+
+| Component | SHA-256 |
+|---|---|
+| Boot-file archive, 20,449,280 bytes | `4d98df6ccc325f7f1354ca85a66bb6d8f02dad94b586c64301bce4e7a0f1bc0f` |
+| Original provisioning p22 carrier (trial 01) | `5958a922dfb113f64a8042d84d2e5ae0708ecc4fb86110b607bc9dd93c098088` |
+| Manager p22 carrier | `004def7151492f54d3e34bc84ddef33de4bfd378def703a5e7858a09e8f37093` |
+
+The artifacts are rooted at `handoff/nix-efi-candidates`, `-1` and `-2`,
+respectively. The new entry is
+`gemini-9c1bfbbbb260cf5830de42c587ea599cfbad29749ee66c61c65d2caf6caff999.conf`.
+Its payload directory uses the same full identity under `EFI/Gemini/`.
+
+The publisher's `activate` mode requires the old loader configuration hash
+`9547db8cf45f9d032c9792411c7f06bbde375e7b9f620deea6c09740b4d34266`.
+It checks all sources and existing destinations before publishing, retains
+the previous entry and payload, and backs up the old configuration as
+`loader/loader.conf.gemini-backup-<old-sha256>`. After syncing the payloads,
+entry and backup, it atomically renames the new configuration into place.
+Foreign configurations, backups, temporary files and symlinks are refused;
+retries accept only the same verified bytes. The bounded Stage 1 hook restores
+p29 to read-only before reporting success and preserves both protected stores.
+
+Trial `handoff/efi-nix-provision-01` passed the complete provisioning profile.
+Candidate `14de0b34-29eb-4806-8cbc-2684a572ffd1` passed EFI handoff, full Linux
+health, both A72s, the full memory map, LK reservations, all five new file
+hashes and retention of the old payload and configuration backup. An ordinary
+daemon build submitted as UID 1000 ran in a separate network namespace and
+could not access the user's home. Its output and database registration survived
+automatic recovery to healthy M69 `e0cd8653-6a33-473a-94b3-a4f8faf48f1f`,
+alongside the original persistence proof and both sets of boot files.
+Candidate departure to rescue entry took 376.090 seconds, including publication
+and qualification. Full candidate/rescue writes and readbacks, reset
+acknowledgements and unchanged GPT/p30/p31 passed; the terminal result qualifies
+the profile, ordinary daemon build and Nix persistence. The final audit found
+both locks free and no writer.
+
+Trial `handoff/efi-nix-manager-01` then passed the complete distro-manager
+profile. Candidate `bdfccf9a-d47c-4130-8916-8596452f236c` reported the new full
+entry name through systemd-boot's own `LoaderEntrySelected`, together with the
+expected manager path and p29 UUID. The menu-to-execution interval was
+9,478,940 microseconds. All five file hashes, the old configuration backup,
+48 EFI memory descriptors covering 4 GiB, LK reservations, both A72s and full
+service health passed. The keyboard completed 1,402 native scans with zero
+errors; no physical keypress was observed.
+
+An ordinary unprivileged daemon build passed its independent namespace and
+sandbox checks. Automatic rescue returned to healthy M69
+`715150bb-63d5-48fb-ad86-9132df5e6274`; its new output, home GC root, NAR hash
+and derivation survived, together with the original persistence proof and
+both boot-file sets. Both p22 writes/readbacks and automatic resets passed,
+GPT/p30/p31 remained exact, and rescue entry took 242.017 seconds. The terminal
+result sets `profile_qualified`, `linux_handoff_proven`,
+`ordinary_daemon_build_qualified` and `nix_persistence_qualified` to true.
+The final audit confirmed the same healthy rescue boot, free locks and no writer.
+
+Versioned filenames and default activation do not yet implement arbitrary
+NixOS generation selection. The carrier supplies a DT whose late-A72 provenance
+is bound to its kernel. Booting another kernel needs matching per-entry
+provenance while preserving LK's dynamic RAM/modem reservations. Retaining the
+previous entry therefore provides rollback material for its matching carrier;
+cross-kernel selection under the new carrier remains unqualified.
+
+Local source inspection identifies the existing route for that next step:
+systemd-boot 261.2 accepts a BLS `devicetree` file and calls
+`EFI_DT_FIXUP_PROTOCOL` before installing it. This U-Boot enables the protocol,
+whose handler invokes `image_setup_libfdt()`, but has no Gemini board fixup
+to transfer LK's dynamic data into a replacement entry DT. That transfer must
+retain the entry's CPU provenance and preserve the firmware's full memory map
+and reservations. The generic protocol being enabled is insufficient evidence.
+
+## Reproducible provisioning initramfs
+
+Correcting the provisioning manifest's activation-policy record exposed a
+pre-existing packaging defect: extracting and repacking its cpio assigned the
+current build timestamp and host inode numbers to every member. A metadata-only
+recipe change therefore changed the image even though all member contents were
+identical. `nix/gemini-efi-provision.nix` now sets a fixed source epoch,
+normalizes timestamps and uses cpio's reproducible inode/device metadata.
+It also lists the activation-policy file and its previous-configuration hash
+in `provision-manifest.json`.
+
+Checks in `handoff/nix-efi-reproducibility-checks` compare every member's name,
+content, mode, ownership and regular-file link topology with trial 01's
+initramfs. Only archive metadata changed. Separate Nix `--check` rebuilds of
+the provisioning bundle and complete carrier both pass. The corrected carrier
+is rooted at `handoff/nix-efi-provision-reproducible`, SHA-256
+`238072a0243de05435dcee15f60aa8304c36c07fe8431c49dfd5f6e03b9aa121`.
+The manager carrier and published boot-file archive are unchanged.
+
+Trial `handoff/efi-nix-provision-02` qualified that exact reproducible carrier.
+Candidate `0ed2010c-f53b-46ae-9c55-6adeba2066e1` reused the complete publication
+without requesting another archive upload, passed full EFI/Linux health and
+an ordinary unprivileged daemon build, then recovered automatically to healthy
+M69 `6ab5f118-ecb3-49ff-9018-543c166b94fa`. The new output and original
+persistence proof survived; both boot-file sets and configuration backup
+remained exact. Both full p22 writes/readbacks and resets passed, with unchanged
+GPT/p30/p31. Rescue entry took 234.675 seconds, and all qualification flags
+passed. The runner now pins this reproducible carrier for `efi-nix-provision`.
+
+The final locked audit independently verified all four ordinary build outputs
+from the direct Nix trial and these three EFI trials, including their home GC
+roots, proof hashes, registered NAR hashes and derivations. It reconfirmed the
+healthy M69 boot, both locks free and no writer. Evidence is in the last trial's
+`all-nix-outputs/` and `final-idle-check.json`. All 94 relevant host regression
+tests pass. Each EFI trial archives its seven exact executed host sources and
+their hashes in `executed-sources/` and `plan.json`; subsequent pin changes do
+not rewrite historical evidence. Accepted M69 and the original direct EFI and
+Nix bundle paths remain unchanged.

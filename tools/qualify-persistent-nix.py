@@ -19,8 +19,32 @@ OLD_CONTENT='f6060daac54edc95a47230072c20e6752f6b09306f3ddf8959a3fc917c9effdd'
 SYSTEMD='/nix/store/wmxjss8gx93bnz0bcj3si4gqrxl25p72-systemd-minimal-aarch64-unknown-linux-gnu-253.6/bin'
 
 
-def store_profile(provisioner):
-    return provisioner.StoreProfile(BUNDLE,SYSTEM,STORE_SHA,STORE_SIZE,False)
+EFI_ENTRY='gemini-9c1bfbbbb260cf5830de42c587ea599cfbad29749ee66c61c65d2caf6caff999.conf'
+OLD_LOADER_SHA='9547db8cf45f9d032c9792411c7f06bbde375e7b9f620deea6c09740b4d34266'
+
+def store_profile(provisioner,require_efi=False):
+    return provisioner.StoreProfile(BUNDLE,SYSTEM,STORE_SHA,STORE_SIZE,require_efi)
+
+def files_profile(files):
+    return files.FilesProfile(WORKSPACE/'handoff/nix-efi-candidates',
+        '4d98df6ccc325f7f1354ca85a66bb6d8f02dad94b586c64301bce4e7a0f1bc0f',20449280)
+
+def activation_evidence(ssh,boot_id,directory,qualify,persistence,name='previous-efi-files'):
+    # Retain the previous manager entry/payload and its checked default backup.
+    p=WORKSPACE/'handoff/gemini-efi-boot-files-publish/manifest.json'
+    old=json.loads(p.read_text())['files']
+    commands=['set -eu',f'test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}']
+    for relative,info in old.items():
+        if relative=='loader/loader.conf':relative+='.gemini-backup-'+OLD_LOADER_SHA
+        path='/gemian/'+relative
+        for parent in reversed(Path(path).parents):
+            if str(parent)!='/':commands.append(f'test -d {parent} && test ! -L {parent}')
+        commands += [f'test -f {path} && test ! -L {path}',
+                     f'test "$(stat -c %s {path})" = {info["size"]}',
+                     f'test "$(sha256sum {path} | cut -d\' \' -f1)" = {info["sha256"]}']
+    persistence.run(ssh,'\n'.join(commands),directory,name)
+    qualify.save(directory,name+'.json',dict(boot_id=boot_id,old_entry_and_payload_retained=True,
+                                                        previous_default_backup_sha256=OLD_LOADER_SHA))
 
 
 def old_persistence(ssh, boot_id, directory, qualify, persistence, system, name):
@@ -41,14 +65,15 @@ def verify_builder(evidence, token, host_net, daemon_net):
         raise RuntimeError('Builder did not receive its own network namespace')
 
 
-def evidence(ssh, boot_id, directory, qualify, persistence):
+def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False):
     old_persistence(ssh,boot_id,directory,qualify,persistence,SYSTEM,'candidate-old-persistence')
     config_sha=hashlib.sha256((KERNEL/'kernel.config').read_bytes()).hexdigest()
+    efi_guard='test "$(cat /sys/firmware/efi/fw_platform_size)" = 64' if require_efi else 'test ! -e /sys/firmware/efi'
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {SYSTEM}
 test "$(zcat /proc/config.gz | sha256sum | cut -d' ' -f1)" = {config_sha}
-test ! -e /sys/firmware/efi
+{efi_guard}
 test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
 test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
 dmesg | grep -F 'arm64-late-cpu-profile: verified the pre-finalization runtime identity binding' >/dev/null

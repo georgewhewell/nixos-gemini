@@ -51,6 +51,17 @@ class Manager(unittest.TestCase):
         for raw in ('','xx',encoded('ok',attrs=7),encoded('ok')[:-4],encoded('x\0y'),encoded('x\ny'),
                     '0600000000d80000',encoded('x'*3000)):
             with self.assertRaises(RuntimeError):m.decode_variable(raw)
+    def test_versioned_entry_requires_exact_selection_and_matching_kernel(self):
+        entry='gemini-'+'a'*64+'.conf'
+        rows=dict(self.rows,LoaderEntrySelected=encoded(entry))
+        m.verify_variables(rows,self.boot,entry)
+        with self.assertRaises(RuntimeError):m.verify_variables(rows,self.boot)
+        with self.assertRaises(RuntimeError):m.verify_variables(self.rows,self.boot,entry)
+        kernel='/nix/store/'+'b'*32+'-candidate-kernel'
+        with tempfile.TemporaryDirectory() as d:
+            q=SimpleNamespace(run=Mock(side_effect=['\n'.join(k+'='+v for k,v in rows.items()),'/dev/mmcblk0p29']),save=Mock())
+            m.evidence([],self.boot,Path(d),q,self.tree,entry=entry,kernel=kernel)
+            self.assertIn(m.KMOD+' -d '+kernel+' efivarfs',q.run.call_args_list[0].args[0][0])
     def test_evidence_requires_actual_p29_and_preserves_no_keypress_claim(self):
         raw='\n'.join(k+'='+v for k,v in self.rows.items())
         with tempfile.TemporaryDirectory() as d:
