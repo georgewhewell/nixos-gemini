@@ -51,6 +51,26 @@ class EfiProof(unittest.TestCase):
         self.assertEqual(r.phase_evidence('0x00000000','0x474d3016','efi-mmc')['uboot_phase'],
                          'mmc_resource_failure_errno_22')
 
+    def test_storage_requires_efi_application_and_native_mmc_success(self):
+        tree={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex(),
+              r.KEYBOARD_MARKER:b'scanned\0'.hex(),r.KEYBOARD_SCANS:'00000100',r.KEYBOARD_ERROR:'00000000',
+              r.STORAGE_MARKER:b'passed\0'.hex(),r.STORAGE_STATUS:'0000000000000000'}
+        values={'result':b'passed\0'.hex(),'stage':b'filesystem\0'.hex(),'error':'00000000',
+                'width':'00000008','clock':(25000000).to_bytes(4,'big').hex(),'elapsed-ms':'00001388',
+                'gpt-sha256':r.MMC_GPT_SHA,'boot-sha256':r.PROFILES['efi-storage'][1],
+                'boot2-sha256':r.P30_SHA,'boot3-sha256':r.P31_SHA,'file-sha256':r.MMC_FILE_SHA}
+        tree.update({'chosen/gemini,uefi-mmc-'+key:value for key,value in values.items()})
+        r.verify_handoff_tree({},tree,'efi-storage')
+        for key,wrong in ((r.STORAGE_MARKER,b'failed\0'.hex()),(r.STORAGE_STATUS,'800000000000000e'),
+                          (r.STORAGE_STATUS,'00000000'),('chosen/gemini,uefi-mmc-boot-sha256',r.PROFILES['efi-mmc'][1])):
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},dict(tree,**{key:wrong}),'efi-storage')
+        for key in r.MARKERS:
+            if key not in tree: continue
+            missing=dict(tree);del missing[key]
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},missing,'efi-storage')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-mmc')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree(tree,tree,'efi-storage')
+
     def setUp(self):
         self.entries = [(0x40000000,0x40001000,'Reserved'),
                         (0x40001000,0x43fff000,'Conventional'),

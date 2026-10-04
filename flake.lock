@@ -118,17 +118,17 @@
     "u-boot-gemini-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1791091929,
-        "narHash": "sha256-qcEauYxII79RQKJsiyIRgs7k7dYSQJrXKPBWqOWYstI=",
+        "lastModified": 1791093614,
+        "narHash": "sha256-KgV/o7p51j1T1Pn5Gvc467D1ssPlzNMOjZFgLa3U9s0=",
         "ref": "gemini-boot-consolidation",
-        "rev": "4973bd4a2e1c6392a48f0fc3117a3cd208dff449",
+        "rev": "b2227743b300dc5f1ab8ace581dbbe746a4ba91a",
         "shallow": true,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
       },
       "original": {
         "ref": "gemini-boot-consolidation",
-        "rev": "4973bd4a2e1c6392a48f0fc3117a3cd208dff449",
+        "rev": "b2227743b300dc5f1ab8ace581dbbe746a4ba91a",
         "shallow": true,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"

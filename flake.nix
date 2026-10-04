@@ -42,7 +42,7 @@
     };
     u-boot-gemini-src = {
       # Shared LK handoff and independently testable recovery/EFI profiles.
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=4973bd4a2e1c6392a48f0fc3117a3cd208dff449&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=b2227743b300dc5f1ab8ace581dbbe746a4ba91a&shallow=1";
       flake = false;
     };
     u-boot-src = {
@@ -144,6 +144,7 @@
       efiConsole = mkProfile {efiLinux = true; efiConsole = true;};
       efiKeyboard = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true;};
       efiMmc = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true;};
+      efiStorage = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true; efiMmc = true; efiStorage = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -1744,6 +1745,7 @@
       ubootEfiConsoleBundle = ubootProfiles.efiConsole.bundle;
       ubootEfiKeyboardBundle = ubootProfiles.efiKeyboard.bundle;
       ubootEfiMmcBundle = ubootProfiles.efiMmc.bundle;
+      ubootEfiStorageBundle = ubootProfiles.efiStorage.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;
@@ -1767,6 +1769,12 @@
       mainlineNixosKernel = mainlineP22Baseline.kernel;
       mainlineNixosEfiKernel = mainlineEfiKernel;
       mainlineNixosEfiBundle = mainlineNixosEfi.bundle;
+      geminiEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
+        inherit buildPkgs;
+        bootloader = crossPkgs.systemd;
+        linuxBundle = mainlineNixosEfi.bundle;
+        kernel = mainlineEfiKernel;
+      };
 
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;

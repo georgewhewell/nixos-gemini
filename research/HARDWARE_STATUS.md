@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior and boot manager remain. Fn navigation passes host tests and is included in the successful native-MMC boot. Native eMMC now passes full GPT/p22/p30/p31 and p29 file hash checks; EFI file loading remains. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior and boot manager remain. Fn navigation passes host tests and is included in the successful native-MMC boot. Native eMMC now passes full GPT/p22/p30/p31 and p29 file hash checks; EFI block/file/directory reads now pass after correcting EOF and zero-length read handling; loading the distro manager remains. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -137,3 +137,13 @@ scans without error. Automatic rescue restored healthy M69 boot
 `992b64b9-c885-4b69-a071-462272ab3b4d` with unchanged GPT/p22/p30/p31. Native firmware
 storage writes remain disabled; EFI filesystem access and the distro
 picker are subsequent milestones. See BOOT_HANDOFF.md for artifact pins.
+
+
+EFI storage protocol trial `handoff/uboot-efi-storage-02` passed after fixing
+EFI `Read()` EOF/zero-length semantics. A real EFI application checked p29
+Block I/O, Simple File System metadata, exact file bytes, seeking, EOF and
+directory enumeration, with write capability correctly reported absent.
+It then reached fully healthy EFI Linux and automatically restored healthy
+M69 `d811a8ba-9180-4f07-9316-3f37f619419d`. Protected hashes remained unchanged.
+The systemd-boot file bundle is being prepared on the host; it has not been
+published or booted, and normal NixOS generation updates remain unfinished.

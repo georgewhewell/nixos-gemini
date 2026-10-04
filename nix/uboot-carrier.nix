@@ -1,11 +1,12 @@
-{ buildPkgs, uboot, linuxBundle, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, recoveryTest ? 0 }:
+{ buildPkgs, uboot, linuxBundle, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, efiStorage ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
 assert !efiConsole || efiLinux;
 assert !efiKeyboard || efiConsole;
 assert !efiMmc || efiKeyboard;
-buildPkgs.runCommand "gemini-uboot-${if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}-carrier" {
+assert !efiStorage || efiMmc;
+buildPkgs.runCommand "gemini-uboot-${if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}-carrier" {
   nativeBuildInputs = [ buildPkgs.python3 buildPkgs.dtc buildPkgs.ubootTools ];
   SOURCE_DATE_EPOCH = 1788493603;
 } ''
@@ -91,7 +92,7 @@ buildPkgs.runCommand "gemini-uboot-${if efiMmc then "efi-mmc" else if efiKeyboar
   assert 0x40200000 + len(raw_kernel) < 0x43000000
   ${buildPkgs.lib.optionalString efiLinux "assert raw_kernel[:2] == b'MZ'"}
   manifest = {'status':'host-validated-not-booted', 'uboot':str(uboot),
-              'linux_payload':str(linux), 'profile':'${if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}',
+              'linux_payload':str(linux), 'profile':'${if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}',
               'recovery_test':${toString recoveryTest},
               'expected_outcome':'${if recoveryTest == 1 then "software-reset-to-rescue" else if recoveryTest == 2 then "watchdog-expiry-to-rescue" else "accepted-linux"}',
               'uboot_evidence_required':${if recoveryTest == 0 then (if efiLinux then "'/chosen/gemini,uboot-handoff=efi'" else "'/chosen/gemini,uboot-handoff=fit'") else "None"},

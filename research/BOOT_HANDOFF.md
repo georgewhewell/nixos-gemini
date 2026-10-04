@@ -10,7 +10,8 @@ EFI console profile additionally passed GOP pixel/stride checks and visible
 text confirmed by the owner. Native keyboard initialization and polling
 also pass through EFI. Native eMMC reads now pass the full boot-partition
 and filesystem hash checks below. Physical key actuation, complete modifier
-support, EFI file loading and a boot manager remain unfinished.
+support and a boot manager remain unfinished; EFI file access now passes
+the separate protocol qualification below.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -568,11 +569,88 @@ fresh retained phase was ExitBootServices (`0x474d10ee`), with 221.771 seconds
 from candidate preloader departure to rescue entry. The EFI map contained
 43 descriptors spanning all 4 GiB. No physical intervention was needed.
 
-This proves native PIO eMMC identification and block/ext4 reads. EFI Block
-I/O and Simple File System reads by an EFI application, then loading the
-distro manager, are the next boot-path milestones. U-Boot currently leaves
-its EFI read-only media flag at the default despite the absent MMC write
-API; that capability reporting should be corrected before the EFI storage
-trial. No filesystem migration or GPT change was performed. The accepted
+This proves native PIO eMMC identification and block/ext4 reads. The
+subsequent EFI Block I/O and Simple File System qualification below corrects
+the read-only capability reporting and verifies file access by an EFI
+application. Loading the distro manager remains the next boot-path milestone. No filesystem migration or GPT change was performed. The accepted
 `mainlineNixosBundle` still evaluates to
 `/nix/store/92140xp096mcjqp6laid183r1cw2ky95-gemini-mainline-nixos-bundle`.
+
+
+## EFI storage protocols and EOF correction
+
+The `ubootEfiStorageBundle` / `efi-storage` profile runs an additional real
+AArch64 EFI application on top of the qualified native MMC driver. It selects
+the unique p29 GPT extent, verifies the partition's read-only EFI Block I/O
+capability and ext4 superblock, then checks Simple File System volume/file
+metadata, the exact `9.8\n` file bytes, current position, EOF, a seek-and-read
+and bounded enumeration of `/etc` containing `debian_version`. It performs
+no writes. Result and 64-bit EFI status are retained separately under
+`/chosen/gemini,uefi-storage-{result,status}`; failure still boots Linux for
+inspection and automatic rescue. The runner requires both this application
+and the full native-MMC hash proof to pass.
+
+U-Boot source `7192eea8092258cc3d4ea8a1bb984257be732e72` also reports
+read-only media when the underlying block driver has no write callback,
+uses that capability in filesystem information and rejects writable/create
+opens before touching files. The transport command whitelist and absence of
+MMC/filesystem write support remain independent protections. Host tests run
+the actual EFI application with faulty protocols, malformed read results,
+duplicate volumes and bounded enumeration, and exercise the production
+read-only helper and file-open guard.
+
+Trial `handoff/uboot-efi-storage-01`, carrier
+`904262c53c512a528e949035ae948a14df0d60de4ed66bb5027d25bcbae6d5f1`, returned
+healthy candidate Linux `edb818ff-fee7-4d44-a365-5f672efc3051` with
+`EFI_DEVICE_ERROR` from the storage application. The profile correctly did
+not qualify. Automatic rescue returned fully healthy M69
+`22dbf523-4d6e-4d1e-94cb-fcc04e9215c5`, with all image/GPT checks passing.
+
+Review identified a real EFI-to-filesystem boundary bug: EFI `Read()` at EOF
+must succeed with zero bytes, whereas the ext4 reader rejects an effective
+zero-length read. Also, `fs_read(..., length=0)` means the whole file, so an
+EFI zero-length request must never be forwarded unchanged. A host regression
+using the production EFI function failed at its EOF assertion before the
+fix. Source `b2227743b300dc5f1ab8ace581dbbe746a4ba91a` handles zero-length
+and EOF reads without issuing filesystem reads, rejects negative positions
+and limits a final read to the remaining file size. EOF, empty files, zero
+length, partial reads and backend failure tests now pass, as do the complete
+firmware build and prior checks.
+
+The corrected carrier is `handoff/uboot-efi-storage-eof`, SHA-256
+`73095ee31d2128c6cadf920b8cc9e451f1900010dcda8c252376126d07779a0f`.
+Trial `handoff/uboot-efi-storage-02` passed with candidate boot
+`fb96b26d-6e87-4aab-b186-8fc3eea5fec5`: the unchanged EFI application returned
+success, native MMC hashes matched in 4,378 ms, display passed and 1,402
+keyboard scans completed without error. Linux passed full health, both A72
+starts, its 43-descriptor EFI map covering 4 GiB and all LK reservations.
+Automatic rescue restored healthy M69 `d811a8ba-9180-4f07-9316-3f37f619419d`.
+Both complete writes/readbacks, reboot acknowledgements, the fresh
+ExitBootServices marker and final GPT/p22/p30/p31 checks passed. Rescue entry
+was 222.118 seconds after candidate preloader departure. No person was needed.
+
+`geminiEfiBootFiles` prepares the next systemd-boot trial on the host: the
+AArch64 distro manager, the existing qualified EFI kernel/initramfs in a
+content-addressed directory, a Type 1 boot entry and an eight-second menu.
+It retains the forced kernel command line and requires the LK-derived FDT
+in the EFI configuration table. This does not implement normal NixOS
+generation updates yet. The files have not been published to the device;
+no p29 filesystem or GPT migration has occurred.
+
+
+Read-only boot-file publication preflight is retained at
+`handoff/gemini-efi-boot-files-device-preflight.txt`. After the second storage
+trial, p29 is clean and mounted `ro,norecovery`; 2,318,644 KiB is available.
+`/gemian/EFI` and `/gemian/loader` are absent. `/gemian/nixos` and the accepted
+squashfs remain present, with that squashfs backing the live loop-mounted
+store. New boot files should therefore be published during a dedicated
+Stage 1 gate before the store loop is mounted, using a journal-enabled
+mount and the existing bounded recovery lease. The installer must validate
+the exact bundle, refuse to overwrite different files or follow symlinks,
+publish references only after their payloads, retain both existing stores,
+and restore the read-only mount before normal boot. Reuse the existing
+store-provisioning pattern rather than changing the live mounted store.
+
+The first `geminiEfiBootFiles` build is still running. Its log is
+`handoff/gemini-efi-boot-files-build.log`; no success or publication is claimed.
+The accepted M69 bundle still evaluates to the same store path recorded above.

@@ -1,12 +1,13 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, efiStorage ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
 assert !efiConsole || efiLinux;
 assert !efiKeyboard || efiConsole;
 assert !efiMmc || efiKeyboard;
+assert !efiStorage || efiMmc;
 let
-  profile = if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
+  profile = if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
   defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
 in
 crossPkgs.buildUBoot {
@@ -21,6 +22,7 @@ crossPkgs.buildUBoot {
     ${buildPkgs.lib.optionalString efiKeyboard "echo CONFIG_GEMINI_EFI_KEYBOARD=y >> configs/${defconfig}"}
     ${buildPkgs.lib.optionalString efiMmc ''
     cat >> configs/${defconfig} <<'MMC_CONFIG'
+    ${buildPkgs.lib.optionalString efiStorage "CONFIG_GEMINI_EFI_STORAGE=y"}
     CONFIG_GEMINI_EFI_MMC=y
     CONFIG_MMC=y
     # CONFIG_MMC_WRITE is not set
@@ -42,7 +44,8 @@ crossPkgs.buildUBoot {
   filesToInstall = [
     "u-boot" "u-boot.bin" "u-boot.dtb" "u-boot.map" ".config"
   ] ++ buildPkgs.lib.optional efiSmoke "lib/efi_loader/helloworld.efi"
-    ++ buildPkgs.lib.optional efiConsole "lib/efi_loader/gemini_console.efi";
+    ++ buildPkgs.lib.optional efiConsole "lib/efi_loader/gemini_console.efi"
+    ++ buildPkgs.lib.optional efiStorage "lib/efi_loader/gemini_storage.efi";
   postBuild = ''
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-smoke-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-reset-host.py
@@ -51,6 +54,8 @@ crossPkgs.buildUBoot {
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-gop-stride-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-keyboard-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-mmc-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-storage-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-file-read-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-console-fdt-host.py
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
     grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
@@ -118,6 +123,7 @@ crossPkgs.buildUBoot {
       exit 1
     fi
     ''}
+    ${buildPkgs.lib.optionalString efiStorage "grep -Fqx CONFIG_GEMINI_EFI_STORAGE=y .config"}
     for symbol in EFI_VARIABLE_FILE_STORE EFI_VARIABLE_SF_STORE EFI_MM_COMM_TEE EFI_BOOTMGR EFI_NET FAT_WRITE FAT_RENAME FASTBOOT_FLASH ${buildPkgs.lib.optionalString (!efiMmc) "MMC"} MMC_WRITE MMC_HW_PARTITIONING SUPPORT_EMMC_BOOT SUPPORT_EMMC_RPMB MMC_IO_VOLTAGE MMC_UHS_SUPPORT MMC_HS200_SUPPORT MMC_HS400_SUPPORT CMD_MMC EXT4_WRITE ENV_IS_IN_MMC MTD NVME SCSI USB_STORAGE; do
       if grep -Eq "^CONFIG_$symbol=y$" .config; then
         echo "unexpected persistent or boot-manager option: $symbol" >&2
