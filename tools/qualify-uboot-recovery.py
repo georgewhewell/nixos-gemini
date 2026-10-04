@@ -26,10 +26,10 @@ LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
     'baseline': (ACCEPTED, '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'),
-    'reset': (WORKSPACE / 'handoff/uboot-m69-wdt-readback-2/boot-padded-p22.img',
-              '9da4d1d570fd864b6a6f65012516e532644088cfdae488e720d03532cc08dc65'),
-    'watchdog': (WORKSPACE / 'handoff/uboot-m69-wdt-readback-3/boot-padded-p22.img',
-                 '1dd22447fc113180a30cefc368d5091f7df64046960537880d73775959e38016'),
+    'reset': (WORKSPACE / 'handoff/uboot-m69-fbfix-2/boot-padded-p22.img',
+              'e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950'),
+    'watchdog': (WORKSPACE / 'handoff/uboot-m69-fbfix-3/boot-padded-p22.img',
+                 '5f02a4db11c14fdd604626b48fdd71886db9d90ff699c936d397800a4278c66d'),
 }
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
@@ -134,6 +134,21 @@ def phase_evidence(before, after, profile):
                 intended_test_branch_reached=(fresh and phase == intended))
 
 
+def profile_qualified(profile, phase, elapsed, host_rescue_reboot_requested):
+    if profile == 'baseline':
+        return True  # Both complete healthy Linux returns were already checked.
+    if host_rescue_reboot_requested or not phase['intended_test_branch_reached']:
+        return False
+    if profile == 'reset':
+        # An ineffective SWRST can fall back to the already armed 31s WDT.
+        return 0 < elapsed < 31
+    if profile == 'watchdog':
+        # Includes LK startup and the subsequent preloader enumeration. The
+        # prior measured overhead is ~14s; a late/manual return is not a pass.
+        return 31 <= elapsed <= 60
+    return False
+
+
 def stage(directory, profile, before):
     candidate_path, candidate_sha = PROFILES[profile]
     candidate = backend.checked_image(candidate_path.resolve(strict=True), candidate_sha)
@@ -228,14 +243,22 @@ def trial(directory, profile, before, ssh):
     timing = recovery_timing(directory, profile)
     phase = phase_evidence(*phases, profile)
     qualify.save(directory, 'phase-analysis.json', phase)
+    qualified = profile_qualified(profile, phase,
+        timing['seconds_from_initial_boot_preloader_departure_to_rescue_preloader'],
+        (directory / 'rescue-reboot-request.json').exists())
     result = dict(result='passed', profile=profile, recovered_boot_id=after['boot_id'],
                   proof='candidate-and-rescue-writes-with-automatic-reboot',
-                  **phase)
+                  profile_qualified=qualified, **phase)
+    if profile == 'watchdog':
+        timing['watchdog_expiry_proven'] = qualified
+        qualify.save(directory, 'recovery-timing.json', timing)
     qualify.save(directory, 'result.json', result)
     qualify.run(['systemctl', '--user', 'stop', owner_unit, net_unit])
     print(f'PASS: {profile} recovery path; fresh healthy M69. Evidence: {directory}', flush=True)
-    if profile == 'watchdog' and not timing['watchdog_elapsed_minimum_met']:
-        print('Watchdog expiry NOT qualified: recovery preceded its programmed timeout', flush=True)
+    if profile != 'baseline':
+        print(f'{profile} profile {"qualified" if qualified else "NOT qualified"}: '
+              f'phase={phase["uboot_phase"]}, elapsed='
+              f'{timing["seconds_from_initial_boot_preloader_departure_to_rescue_preloader"]}s', flush=True)
 
 
 def main():

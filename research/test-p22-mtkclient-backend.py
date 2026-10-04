@@ -125,6 +125,17 @@ class PhaseEvidenceTests(unittest.TestCase):
             self.assertTrue(qualification.phase_evidence('0x00000000', phase, profile)['intended_test_branch_reached'])
         self.assertFalse(qualification.phase_evidence('0x00000000', '0x474d10ec', 'watchdog')['intended_test_branch_reached'])
 
+    def test_recovery_timing_must_agree_with_the_intended_branch(self):
+        good = {'intended_test_branch_reached': True}
+        early = {'intended_test_branch_reached': False}
+        self.assertTrue(qualification.profile_qualified('reset', good, 13, False))
+        self.assertFalse(qualification.profile_qualified('reset', good, 44, False))
+        self.assertTrue(qualification.profile_qualified('watchdog', good, 44, False))
+        for elapsed in (9, 30.9, 61, 180):
+            self.assertFalse(qualification.profile_qualified('watchdog', good, elapsed, False))
+        self.assertFalse(qualification.profile_qualified('watchdog', early, 44, False))
+        self.assertFalse(qualification.profile_qualified('watchdog', good, 44, True))
+
 
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
