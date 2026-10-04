@@ -8,6 +8,10 @@ import unittest
 spec = importlib.util.spec_from_file_location('backend', Path(__file__).with_name('p22-mtkclient-backend.py'))
 backend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backend)
+spec = importlib.util.spec_from_file_location('qualification',
+    Path(__file__).resolve().parents[1] / 'tools/qualify-uboot-recovery.py')
+qualification = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(qualification)
 
 GADGET = ('0525', 'a4a2', '6')
 DA = ('0e8d', '2000', '7')
@@ -98,6 +102,28 @@ class ConfigTests(unittest.TestCase):
                            ('rollback_state', self.config['candidate_state'])):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 backend.config_for_state(dict(self.config, **{key: value}), Path(self.config['candidate_state']))
+
+
+class PhaseEvidenceTests(unittest.TestCase):
+    def test_fresh_early_phase_proves_execution_but_not_test_branch(self):
+        result = qualification.phase_evidence('0x00000000', '0x474d10e3', 'watchdog')
+        self.assertTrue(result['uboot_execution_proven'])
+        self.assertEqual(result['uboot_phase'], 'board_init')
+        self.assertFalse(result['intended_test_branch_reached'])
+
+    def test_stale_missing_and_unknown_phases_do_not_prove_execution(self):
+        for before, after in ((None, '0x474d10e3'), ('0x474d10e3', '0x474d10e3'),
+                              ('0x00000000', '0xdeadbeef'), ('0x00000000', None)):
+            with self.subTest(before=before, after=after):
+                self.assertFalse(qualification.phase_evidence(before, after, 'watchdog')['uboot_execution_proven'])
+
+    def test_baseline_never_proves_uboot_execution(self):
+        self.assertFalse(qualification.phase_evidence('0x00000000', '0x474d10e3', 'baseline')['uboot_execution_proven'])
+
+    def test_intended_branch_is_profile_specific(self):
+        for profile, phase in (('reset', '0x474d10ec'), ('watchdog', '0x474d10ed')):
+            self.assertTrue(qualification.phase_evidence('0x00000000', phase, profile)['intended_test_branch_reached'])
+        self.assertFalse(qualification.phase_evidence('0x00000000', '0x474d10ec', 'watchdog')['intended_test_branch_reached'])
 
 
 class EvidenceTests(unittest.TestCase):

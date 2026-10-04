@@ -108,5 +108,28 @@ recovered healthy M69, boot ID `3c53798b-adfa-42ec-a540-5b68f97e6e3f`, but its
 return was 9.044 seconds. The key-readback correction therefore does not
 resolve the observed early return. Do not promote this result to watchdog
 qualification or proceed on the assumption that `board_late_init` was reached.
-Next diagnostic: qualify a read-only TOPRGU phase capture, then capture the
-phase during rescue if the register survives the vendor boot stages.
+
+## Confirmed failure interval
+
+The read-only phase operation qualified in `handoff/mtkclient-phase-read-01`.
+The next identical corrected-watchdog trial,
+`handoff/uboot-watchdog-mtkclient-03`, captured `0x00000000` before writing the
+candidate and `0x474d10e3` at rescue, before restoring M69. The fresh marker
+proves U-Boot executed `board_init`; the failure occurs before
+`board_late_init`, whose first action writes a different marker. Retention
+through the direct preloader/DA rescue path is now observed on hardware.
+It returned in 9.069 seconds and recovered fully healthy M69, boot ID
+`833c472e-c6bd-42cd-9e40-7b2f192ad8da`, with unchanged GPT and all three boot
+partitions. No physical recovery was needed.
+
+The original runner result only reports recovery and was started before phase
+decoding was added. `phase-analysis.json` records the additional execution
+proof without overwriting that original result. Future runs decode only a
+known marker that differs from the pre-candidate value; missing, stale and
+unknown values cannot prove execution. Reaching `board_init` does not qualify
+the later reset/watchdog test branches.
+
+The next diagnostic can instrument the initcalls between `board_init` and
+`board_late_init` in `common/board_r.c`, reusing the now-qualified register
+capture. This avoids relying on a fleeting display or on a console buffer
+overwritten by the download agent at `0x40000000`.

@@ -268,4 +268,7 @@ qualification passed in `handoff/mtkclient-phase-read-01`, with no eMMC writes,
 `15d76bb0-5d91-498e-8727-e047d6f5088b`. It read zero after a normal Linux reboot;
 this does not establish whether a U-Boot phase survives a direct rescue path.
 The candidate/rescue backend now records that same fixed register before
-each write so the next rescue can investigate the early U-Boot return.
+each write. `handoff/uboot-watchdog-mtkclient-03` captured a fresh U-Boot
+`board_init` marker during rescue; see `BOOT_HANDOFF.md` for the failure
+interval. The backend/phase evidence suite now has 20 passing host tests,
+including rejection of stale, missing and unknown execution markers.

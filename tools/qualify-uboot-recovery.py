@@ -14,6 +14,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,11 @@ PROFILES = {
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
 P31_SHA = '1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
+PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
+          '0x474d10e2': 'board_early_init_f', '0x474d10e3': 'board_init',
+          '0x474d10e4': 'board_late_init', '0x474d10e5': 'watchdog_ready',
+          '0x474d10ec': 'reset_test', '0x474d10ed': 'watchdog_expiry_test',
+          '0x474d10f1': 'watchdog_setup_failure'}
 
 
 def module(name, path):
@@ -108,8 +114,7 @@ def recovery_timing(directory, profile):
     rescue_entry = next(event['monotonic'] for event in events[1]
                         if event['usb'] and event['usb'][0] == '0e8d')
     elapsed = round(rescue_entry - initial_departure, 3)
-    result = dict(seconds_from_initial_boot_preloader_departure_to_rescue_preloader=elapsed,
-                  uboot_execution_proven=False)
+    result = dict(seconds_from_initial_boot_preloader_departure_to_rescue_preloader=elapsed)
     if profile == 'watchdog':
         # A return earlier than the programmed timeout disproves this expiry
         # qualification. Meeting the lower bound alone does not prove it.
@@ -117,6 +122,16 @@ def recovery_timing(directory, profile):
                       watchdog_elapsed_minimum_met=(elapsed >= 31), watchdog_expiry_proven=False)
     qualify.save(directory, 'recovery-timing.json', result)
     return result
+
+
+def phase_evidence(before, after, profile):
+    phase = PHASES.get(after)
+    known_before = isinstance(before, str) and bool(re.fullmatch(r'0x[0-9a-f]{8}', before))
+    fresh = profile != 'baseline' and known_before and before != after and phase is not None
+    intended = {'reset': 'reset_test', 'watchdog': 'watchdog_expiry_test'}.get(profile)
+    return dict(phase_before_candidate=before, phase_at_rescue=after,
+                uboot_phase=phase, uboot_execution_proven=fresh,
+                intended_test_branch_reached=(fresh and phase == intended))
 
 
 def stage(directory, profile, before):
@@ -204,14 +219,18 @@ def trial(directory, profile, before, ssh):
     print('Rescue write/readback and reboot verified; waiting for healthy M69', flush=True)
     after = healthy_return(ssh, recovery_before, directory, 'after')
     # Both roles must have actual write, readback and USB ordering evidence.
+    phases = []
     for state in (candidate_state, directory / 'supervisor-rollback.state'):
         evidence = json.loads(state.with_name(state.name + '.mtk.json').read_text())
         if evidence.get('returncode') != 0 or evidence.get('first_boot_window_departed') is not True:
             raise RuntimeError('Recovered baseline, but a writer lacks complete evidence')
+        phases.append(evidence.get('toprgu_phase_before_write'))
     timing = recovery_timing(directory, profile)
+    phase = phase_evidence(*phases, profile)
+    qualify.save(directory, 'phase-analysis.json', phase)
     result = dict(result='passed', profile=profile, recovered_boot_id=after['boot_id'],
                   proof='candidate-and-rescue-writes-with-automatic-reboot',
-                  uboot_execution_proven=False)
+                  **phase)
     qualify.save(directory, 'result.json', result)
     qualify.run(['systemctl', '--user', 'stop', owner_unit, net_unit])
     print(f'PASS: {profile} recovery path; fresh healthy M69. Evidence: {directory}', flush=True)
