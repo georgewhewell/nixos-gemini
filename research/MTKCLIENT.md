@@ -1,13 +1,28 @@
 # Gemini mtkclient qualification
 
-Status, 2026-10-04: the supervised hardware trial read the primary GPT and
-complete boot partition correctly. The DA acknowledged the patched reboot
-request and mtkclient exited zero, but healthy Linux did **not** return within
-three minutes. USB remained at the MediaTek preloader and the owner reported
-a black screen. Read/reboot qualification failed; boot-only writes remain
-unqualified.
+Status, 2026-10-04: read/reboot is working with the MT6797 packet-size fix.
+Two corrected DA sessions read the primary GPT and complete boot partition,
+then returned automatically to healthy M69 with matching hashes. Boot-only
+writes remain unqualified.
 
-## October 4 read/reboot trial
+## Corrected hardware trials
+
+Both use the same seven-word shutdown payload, explicit normal reboot, fresh
+DA state, shared host locks, and USB SSH with the existing M69 host key.
+No eMMC writes or manual recovery were needed.
+
+| Workspace evidence | Result |
+|---|---|
+| `handoff/mtkclient-read-reboot-20261004-02` | Automatic M69 return confirmed, boot ID `bb58cca9-dfbe-4d41-98b6-8cf9aa67ff15`. The original 180-second health deadline expired during startup checks; a separate observation verified full health and both hashes at 252 seconds after DA exit. The original failed result is retained alongside `extended-result.json`. |
+| `handoff/mtkclient-read-reboot-20261004-03` | Full runner pass in 194.4 seconds, boot ID `6b1b01f6-cd4b-462f-8b5a-3de4b73c909a`, using a 360-second health deadline. GPT, p22, NixOS system and service health all matched preflight. |
+
+The repeat used package
+`/nix/store/d2arl80i2c18na36dg74g1ssjz02m0yl-mtkclient-gemini-2.1.4.1`.
+M69 runs cellular, GPU, audio, connectivity and desktop checks before
+self-acceptance; the runner now allows six minutes for that complete
+sequence. It retains partial SSH output when a health check is still pending.
+
+## Initial October 4 read/reboot failure
 
 Evidence: workspace `handoff/mtkclient-read-reboot-20261004-01`.
 The owner was available for physical recovery. Starting from healthy M69,
@@ -40,6 +55,41 @@ GPT still matched both preflight hashes, with the original partition geometry
 and no p34. See `after-manual-recovery.json` and `manual-recovery-ssh.txt`.
 Manual recovery to Gemian succeeded; it does not convert the automatic
 read/reboot trial into a pass or establish a fresh healthy M69 boot.
+
+A subsequent normal reboot from Gemian restored healthy M69, boot ID
+`bcdf57d3-47fb-4b5d-9284-990608709454`, with both storage hashes unchanged.
+Wired SSH was unavailable, so this was verified over `root@10.15.19.82`,
+retaining the known M69 host key through `HostKeyAlias=192.168.23.70`.
+The runner accepts `--ssh-host` and `--ssh-host-key-alias` for this path.
+
+## MT6797 shutdown packet defect
+
+Offline inspection of the actual bundled `MTK_DA_V5.bin` identified a packet
+size mismatch. Its MT6797 entry (DA code `0x6797`, entry 30, region 2) has
+SHA-256 `e7ad09de8ef025b9416ac4eca1c85938d3303c1aea462e5cfaa7c15721a1c45b`.
+At load address `0x40000000`:
+
+- `cmd_shutdown` starts at `0x400066d0`. At `0x400066d6` it sets receive
+  capacity to `0x1c` (28 bytes), covering seven 32-bit fields.
+- Its read callback goes through `0x4000c7f0` to `0x40008030`. The capacity
+  check at `0x400080a6` rejects a larger packet with `0xc0010006` before
+  reading the payload into the caller's buffer.
+- The shutdown handler ignores that return value at `0x4000670a` and sends
+  its independently initialized zero status at `0x40006716`. The success
+  status therefore does not prove the parameters were accepted.
+
+mtkclient sent eight words (32 bytes), including a final reserved zero. Patch
+`0003-mt6797-shutdown-packet-size.patch` omits that word for MT6797; other
+DA codes retain the existing packet size. The regression test reads the
+capacity instruction from the checksum-guarded bundled DA and exercises
+the rejected old packet and accepted new packet despite identical status
+replies. All 24 package tests pass (8 reset, 7 write, 9 runner).
+
+The first trial's host USB log also shows no disconnect/re-enumeration
+between DA acknowledgement and manual recovery. The persistent
+`MT65xx Preloader` descriptor alone did not establish that a reset occurred.
+Extraction metadata, disassembly, packet-contract evidence and USB events
+are in workspace `handoff/mtkclient-da-reboot-analysis`.
 
 ## What failed previously
 

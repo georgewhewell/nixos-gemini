@@ -58,3 +58,10 @@ After the owner's force restart, the vendor Linux USB gadget returned
 `3.18.41+`, fresh boot ID `1508c791-df3f-4384-b4fd-5704338ef3ca`, and unchanged
 p22/GPT hashes and partition geometry. Manual recovery succeeded; this is
 not a new healthy M69 observation.
+
+After correcting the MT6797 DA shutdown payload from 32 to 28 bytes, two
+sessions returned automatically to healthy M69 with unchanged GPT/p22 hashes.
+The full repeat runner passed in 194.4 seconds using its corrected six-minute
+health deadline. Current accepted boot ID is
+`6b1b01f6-cd4b-462f-8b5a-3de4b73c909a`; boot-only writes remain unqualified.
+Detailed evidence and the packet-size diagnosis are in MTKCLIENT.md.

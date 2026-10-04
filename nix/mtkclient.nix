@@ -4,6 +4,7 @@ buildPkgs.mtkclient.overrideAttrs (old: {
   patches = (old.patches or []) ++ [
     ../patches/mtkclient/0001-explicit-reboot-and-acknowledged-reset.patch
     ../patches/mtkclient/0002-report-partition-write-failures.patch
+    ../patches/mtkclient/0003-mt6797-shutdown-packet-size.patch
   ];
   doCheck = true;
   checkPhase = ''

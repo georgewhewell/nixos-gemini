@@ -89,6 +89,25 @@ class QualificationTests(unittest.TestCase):
                 q.trial(SimpleNamespace(mtk='/fake/mtk'), Path(tmp), self.before(), ['ssh'])
             reboot.assert_not_called()
 
+    def test_usb_ssh_target_keeps_known_host_verification(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            mtk = directory / 'mtk'
+            mtk.touch()
+            argv = ['qualify', '--mtk', str(mtk), '--out', str(directory / 'result'),
+                    '--lock-dir', str(directory), '--ssh-host', '10.15.19.82',
+                    '--ssh-host-key-alias', '192.168.23.70']
+            with patch.object(q.sys, 'argv', argv), patch.object(q, 'check_host_idle'), \
+                 patch.object(q, 'run', return_value='--bootmode {shutdown,reboot,fastboot}'), \
+                 patch.object(q, 'snapshot', return_value=self.before()) as snapshot, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                q.main()
+            ssh = snapshot.call_args.args[0]
+            self.assertEqual(ssh[-1], 'root@10.15.19.82')
+            self.assertIn('HostKeyAlias=192.168.23.70', ssh)
+            self.assertIn('StrictHostKeyChecking=yes', ssh)
+            self.assertIn('ControlPath=none', ssh)
+
     def test_readbacks_exist_before_privileged_client_and_cannot_be_reused(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

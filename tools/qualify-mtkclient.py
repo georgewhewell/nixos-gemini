@@ -21,6 +21,9 @@ ACCEPTED_BOOT = '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee
 ACCEPTED_SYSTEM = '/nix/store/0xbrhrl8ym703g1449gni51dkv7jwlqv-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade'
 COMMANDS = 'printgpt;ro 0 0x8000 gpt-primary.bin;r boot boot-readback.img;reset --bootmode reboot'
 ACK = 'Download agent acknowledged reboot request'
+# M69 runs cellular, GPU, audio, connectivity and desktop checks before
+# self-acceptance. A successful DA reboot exceeded the original 180s window.
+HEALTH_TIMEOUT = 360
 SNAPSHOT = r'''set -eu
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
 printf 'system='; readlink /run/current-system
@@ -137,7 +140,8 @@ def trial(args, directory, before, ssh):
     save(directory, 'mtk-exit.json', {'returncode': returncode})
     # Observe Linux even when mtkclient failed so the report records whether a
     # physical recovery is necessary. Do not start another DA session or write.
-    deadline = time.monotonic() + 180
+    observation_start = time.monotonic()
+    deadline = observation_start + HEALTH_TIMEOUT
     after = None
     while time.monotonic() < deadline:
         try:
@@ -150,15 +154,20 @@ def trial(args, directory, before, ssh):
             detail = str(error)
             if isinstance(error, subprocess.CalledProcessError) and error.stderr:
                 detail += '\n' + error.stderr.strip()
+            if isinstance(error, subprocess.CalledProcessError) and error.stdout:
+                (directory / 'last-observation-stdout.txt').write_text(error.stdout)
             (directory / 'last-observation-error.txt').write_text(detail + '\n')
         time.sleep(3)
     if after is None:
-        raise RuntimeError('Fresh healthy M69 was not observed; physical recovery may be needed')
+        raise RuntimeError(f'Fresh healthy M69 was not observed within {HEALTH_TIMEOUT}s; '
+                           'inspect the saved observations before recovery')
     save(directory, 'after.json', after)
     if returncode != 0 or ACK not in logpath.read_text():
         raise RuntimeError('Linux returned, but mtkclient did not acknowledge reboot successfully')
     verify_reads(directory, before)
-    save(directory, 'result.json', {'result': 'passed', 'writes_to_emmc': False})
+    save(directory, 'result.json', {'result': 'passed', 'writes_to_emmc': False,
+                                    'health_timeout_seconds': HEALTH_TIMEOUT,
+                                    'seconds_to_healthy_linux': round(time.monotonic() - observation_start, 1)})
     print(f'PASS: GPT and boot match; fresh healthy M69. Evidence: {directory}')
 
 
@@ -167,6 +176,8 @@ def main():
     parser.add_argument('--mtk', type=Path, required=True, help='Patched mtk executable')
     parser.add_argument('--out', type=Path, required=True, help='New evidence directory')
     parser.add_argument('--ssh-key', type=Path, default=Path('/home/grw/.ssh/gemini-stage1-ed25519'))
+    parser.add_argument('--ssh-host', default='192.168.23.70', help='Accepted M69 SSH address')
+    parser.add_argument('--ssh-host-key-alias', help='Known-host identity when using another address')
     parser.add_argument('--lock-dir', type=Path,
                         default=Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829'))
     parser.add_argument('--execute', action='store_true', help='Run the supervised read/reboot trial')
@@ -174,7 +185,10 @@ def main():
     args.mtk = args.mtk.resolve(strict=True)
     ssh = ['ssh', '-F', '/dev/null', '-i', str(args.ssh_key), '-o', 'IdentitiesOnly=yes',
            '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'ControlPath=none',
-           '-o', 'StrictHostKeyChecking=yes', 'root@192.168.23.70']
+           '-o', 'StrictHostKeyChecking=yes']
+    if args.ssh_host_key_alias:
+        ssh += ['-o', 'HostKeyAlias=' + args.ssh_host_key_alias]
+    ssh += ['root@' + args.ssh_host]
     os.umask(0o077)
     with ExitStack() as locks:
         for name in ('.p22-transaction.lock', '.p22-flash-writer.lock'):
@@ -189,7 +203,8 @@ def main():
         directory.mkdir(mode=0o700)
         save(directory, 'before.json', before)
         save(directory, 'plan.json', {'mtk': str(args.mtk), 'commands': COMMANDS,
-                                      'execute': args.execute})
+                                      'execute': args.execute, 'ssh_host': args.ssh_host,
+                                      'ssh_host_key_alias': args.ssh_host_key_alias})
         if not args.execute:
             print(f'Preflight passed; no reboot or DA access. Evidence: {directory}')
             return

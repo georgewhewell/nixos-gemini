@@ -1,0 +1,23 @@
+--- a/mtkclient/Library/DA/xflash/xflash_lib.py
++++ b/mtkclient/Library/DA/xflash/xflash_lib.py
+@@ -815,11 +815,17 @@
+                 # bootmode 0: shutdown 1: home screen, 2: fastboot
+                 if async_mode or dl_bit or bootmode != self.ShutDownModes.NORMAL:
+                     hasflags = 1
+-                enablewdt = 0  # Disable wdt
++                enablewdt = 0
+                 dont_resetrtc = 0  # Reset RTC
+                 leaveusb = 0  # Disconnect usb
+-                if self.xsend(pack("<IIIIIIII", hasflags, enablewdt, async_mode, bootmode, dl_bit,
+-                                   dont_resetrtc, leaveusb, 0)):
++                params = (hasflags, enablewdt, async_mode, bootmode, dl_bit,
++                          dont_resetrtc, leaveusb)
++                # MT6797's V5 DA accepts 28 bytes. An extra reserved word is
++                # rejected before copying, but cmd_shutdown ignores that error
++                # and still acknowledges success without executing the reset.
++                if self.config.chipconfig.dacode != 0x6797:
++                    params += (0,)
++                if self.xsend(pack("<" + "I" * len(params), *params)):
+                     status = self.status()
+                     if status == 0:
+                         # The DA is already disconnecting/rebooting. A host USB

@@ -1,5 +1,6 @@
 """Test real mtkclient reset dispatch and DA packets without accessing USB."""
 import contextlib
+import hashlib
 import importlib.util
 import io
 from pathlib import Path
@@ -101,6 +102,7 @@ class ResetTests(unittest.TestCase):
         da.error = Mock()
         da.eh = SimpleNamespace(status=str)
         da.mtk = SimpleNamespace(port=SimpleNamespace(close=Mock()))
+        da.config = SimpleNamespace(chipconfig=SimpleNamespace(dacode=0x6765))
         return da
 
     def test_xflash_wire_modes_and_no_usb_reset_after_ack(self):
@@ -112,6 +114,36 @@ class ResetTests(unittest.TestCase):
             self.assertEqual(struct.unpack('<8I', packet),
                              (int(mode != 0), 0, 0, mode, 0, 0, 0, 0))
             da.mtk.port.close.assert_called_once_with(reset=False)
+
+    def test_mt6797_packet_fits_real_da_receive_buffer_despite_success_status(self):
+        # Read the contract from the actual pinned MT6797 download agent.
+        # cmd_shutdown passes 28 bytes of capacity to the shared receiver,
+        # whose oversize error it ignores before acknowledging success.
+        loader = Path('mtkclient/Loader/MTK_DA_V5.bin').read_bytes()
+        entries = struct.unpack_from('<I', loader, 0x68)[0]
+        offset = next(0x6c + i * 0xdc for i in range(entries)
+                      if struct.unpack_from('<H', loader, 0x6c + i * 0xdc + 2)[0] == 0x6797)
+        start, length = struct.unpack_from('<II', loader, offset + 20 + 2 * 20)
+        da2 = loader[start:start + length]
+        self.assertEqual(hashlib.sha256(da2).hexdigest(),
+                         'e7ad09de8ef025b9416ac4eca1c85938d3303c1aea462e5cfaa7c15721a1c45b')
+        self.assertEqual(da2[0x66d0:0x66de], bytes.fromhex('70b500228cb01c23054603920493'))
+        capacity = struct.unpack_from('<H', da2, 0x66d6)[0] & 0xff
+        for mode in (1, 2):
+            with self.subTest(mode=mode):
+                received = bytearray(capacity)
+                def send(data):
+                    if isinstance(data, bytes) and len(data) <= capacity:
+                        received[:len(data)] = data
+                    return True  # Host USB writes also succeed for oversize packets.
+                send(struct.pack('<8I', 1, 0, 0, mode, 0, 0, 0, 0))
+                self.assertEqual(received, bytes(capacity))  # Old packet was discarded.
+                da = self.xflash([0, 0])
+                da.config.chipconfig.dacode = 0x6797
+                da.xsend.side_effect = send
+                self.assertTrue(da.shutdown(bootmode=mode))
+                self.assertEqual(struct.unpack('<7I', received), (1, 0, 0, mode, 0, 0, 0))
+                da.mtk.port.close.assert_called_once_with(reset=False)
 
     def test_xflash_failure_is_not_success(self):
         for statuses in ([1], [0, 1]):
