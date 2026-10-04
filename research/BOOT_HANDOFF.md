@@ -140,7 +140,7 @@ and its two calls. All four carriers cross-built and passed the existing
 production-function, LK FDT, FIT extraction and AArch64 layout checks.
 Artifacts: `handoff/uboot-m69-fbfix*`; log: `handoff/uboot-fbfix-build.log`.
 
-| Profile | Current p22 SHA-256 |
+| Profile | Framebuffer-fix p22 SHA-256 |
 |---|---|
 | Handoff | `365ac36a96e095a93e0b7071241c4569f5e052164bd8de8bf793dbbd4bd9ff8c` |
 | EFI smoke | `3c7c408e72e745912246fa8993f062430b8ca01cb7c8008645beb024a93bfd95` |
@@ -199,3 +199,35 @@ the modem probe validated the LK descriptor and reserved regions.
 M69 currently has `CONFIG_EFI` disabled. The EFI smoke profile exercises an
 EFI application before the qualified FIT handoff; EFI Linux and
 ExitBootServices still require a separate kernel/profile qualification.
+
+## Initial EFI smoke failure and initialization order
+
+`handoff/uboot-efi-smoke-fbfix-01` returned after 9.125 seconds with fresh
+phase `0x474d1e01`: `bootefi hello` returned command status 1. This proves
+the attempted command failed, not that the EFI application was entered.
+Automatic rescue restored healthy M69 boot
+`46485bd2-b360-4398-9300-06da9d5fe97c`, with unchanged GPT and boot partitions.
+The original decoder did not name this phase; `phase-analysis-v2.json`
+adds its interpretation without modifying the original result.
+
+Source review identified an ordering fault: `board_late_init` runs before
+`EVT_LAST_STAGE_INIT`, where `install_smbios_table` sets `gd->arch.smbios_start`.
+The EFI profile enables SMBIOS, so its earlier `efi_init_obj_list` calls
+`efi_smbios_register` with no installed table and returns `EFI_NOT_FOUND`.
+The retained command status cannot distinguish this error from another EFI
+failure; hardware testing of the ordering correction is still required.
+
+Revision `71c1f7044f20a60379c48dafcf8f5281c4bd8f0f` defers the EFI payload
+dispatcher to `EVT_MAIN_LOOP`, after all last-stage handlers and before
+autoboot or USB. Plain handoff and recovery profiles retain their earlier
+dispatch. The host regression executes the production wrapper and actual
+event binding, rejecting EFI execution before the last stage while retaining
+the existing reset/failure-path checks.
+
+All four updated carriers passed their cross-build checks at
+`handoff/uboot-m69-efi-order*` (log: `handoff/uboot-efi-order-build.log`).
+The plain handoff, reset and watchdog carriers are byte-for-byte identical
+to their qualified framebuffer-fix images. Only EFI smoke changed, to p22
+SHA-256 `3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74`.
+The linked EFI map contains both the last-stage SMBIOS handler and the
+main-loop payload handler. The runner pins these updated artifact roots.

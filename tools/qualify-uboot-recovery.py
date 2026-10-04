@@ -27,14 +27,14 @@ LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
     'baseline': (ACCEPTED, '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'),
-    'reset': (WORKSPACE / 'handoff/uboot-m69-fbfix-2/boot-padded-p22.img',
+    'reset': (WORKSPACE / 'handoff/uboot-m69-efi-order-2/boot-padded-p22.img',
               'e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950'),
-    'watchdog': (WORKSPACE / 'handoff/uboot-m69-fbfix-3/boot-padded-p22.img',
+    'watchdog': (WORKSPACE / 'handoff/uboot-m69-efi-order-3/boot-padded-p22.img',
                  '5f02a4db11c14fdd604626b48fdd71886db9d90ff699c936d397800a4278c66d'),
-    'handoff': (WORKSPACE / 'handoff/uboot-m69-fbfix/boot-padded-p22.img',
+    'handoff': (WORKSPACE / 'handoff/uboot-m69-efi-order/boot-padded-p22.img',
                 '365ac36a96e095a93e0b7071241c4569f5e052164bd8de8bf793dbbd4bd9ff8c'),
-    'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-fbfix-1/boot-padded-p22.img',
-                  '3c7c408e72e745912246fa8993f062430b8ca01cb7c8008645beb024a93bfd95'),
+    'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
+                  '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
 LINUX_PROFILES = ('handoff', 'efi-smoke')
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
@@ -49,7 +49,7 @@ PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
           '0x474d10ec': 'reset_test', '0x474d10ed': 'watchdog_expiry_test',
           '0x474d10f1': 'watchdog_setup_failure', '0x474d10f2': 'fit_failure',
           '0x474d10f3': 'efi_fdt_failure', '0x474d10f4': 'lk_fdt_failure',
-          '0x474d10f5': 'handoff_failure'}
+          '0x474d10f5': 'handoff_failure', '0x474d1e01': 'efi_command_failure'}
 HANDOFF_TREE = r'''set -eu
 dt=/sys/firmware/devicetree/base
 dump_property() {
