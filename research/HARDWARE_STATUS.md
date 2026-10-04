@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, Fn/modifiers, storage and boot manager remain. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior, storage and boot manager remain. Fn navigation now passes host tests. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -121,3 +121,9 @@ byte-for-byte. Host simulations cover arrows/Enter, Shift/Ctrl, debounce,
 repeat and bus failures. Physical key presses and full Fn/Alt semantics are
 not yet qualified. Gemian's installed XKB definitions identify LWIN as its
 third-level/Fn modifier; implementation can proceed from that source.
+
+The source-backed Fn follow-up now passes host tests and a complete firmware
+build: Fn+arrows, Fn+Shift+number function keys, and Shift+Backspace/Delete.
+It has not been separately flashed. Full Fn text-symbol parity and Alt/Meta
+semantics remain unfinished; the pinned hardware-qualified keyboard carrier
+is retained by the trial runner.

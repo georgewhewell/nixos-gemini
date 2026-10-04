@@ -494,3 +494,24 @@ arrows to PageUp/Home/PageDown/End. `keycodes/evdev` maps LWIN to X keycode
 matrix at row 4, column 3. Thus the absent KEY_FN DT entry does not imply an
 absent physical modifier; the source supplies a mapping to implement and
 validate. Alt/Meta behavior and real menu selection are still unqualified.
+
+
+The Fn follow-up is implemented at U-Boot `610657a0a5bb01c1213f76bd80d4f16a423c19ff`.
+It uses the installed Gemian definitions captured under
+`handoff/gemini-keyboard-source-20261004`: Fn+arrows produce
+PageUp/PageDown/Home/End, Fn+Shift+1 through 0 produce F1–F10, and
+Shift+Backspace produces Delete. Unsupported Fn combinations are suppressed
+rather than typing their unmodified letters. The production input helper
+now encodes the additional navigation keys for EFI. Host tests exercise
+these combinations, including ghost/debounce/error handling; the full
+cross build and carrier checks pass. Full Fn text-symbol/layout parity and
+Alt/Meta behavior remain unfinished.
+
+This follow-up is built but not separately flashed. Its carrier at
+`handoff/uboot-efi-keyboard-fn` has SHA-256
+`41171ae37f296acd38ad8f1b13f89faead71174b97ae945b41d37de244ddb419`. The qualification runner deliberately retains the
+hardware-qualified `2b66ccca...e2e9d5` keyboard carrier. The default direct
+Linux build remains M69. Next boot-path work is a read-only MMC profile:
+validate MSDC0 clocks/pins and the MT7623-compatible controller behavior,
+then verify GPT and existing file bytes before loading a distro manager.
+No ESP migration or storage-layout change was performed here.
