@@ -64,6 +64,16 @@ class EfiProof(unittest.TestCase):
         provision=dict(tree,**{'chosen/gemini,uefi-mmc-boot-sha256':r.PROFILES['efi-provision'][1]})
         r.verify_handoff_tree({},provision,'efi-provision')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-provision')
+        manager=dict(tree,**{'chosen/gemini,uefi-mmc-boot-sha256':r.PROFILES['efi-manager'][1],
+                            r.efi_manager.PREFIX+'result':b'starting\0'.hex(),
+                            r.efi_manager.PREFIX+'stage':b'start-image\0'.hex(),
+                            r.efi_manager.PREFIX+'sha256':r.efi_manager.SHA})
+        r.verify_handoff_tree({},manager,'efi-manager')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-manager')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},manager,'efi-storage')
+        for key in r.efi_manager.MARKERS:
+            wrong=dict(manager,**{key:'0000000000000000'})
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},wrong,'efi-manager')
         for key,wrong in ((r.STORAGE_MARKER,b'failed\0'.hex()),(r.STORAGE_STATUS,'800000000000000e'),
                           (r.STORAGE_STATUS,'00000000'),('chosen/gemini,uefi-mmc-boot-sha256',r.PROFILES['efi-mmc'][1])):
             with self.assertRaises(RuntimeError): r.verify_handoff_tree({},dict(tree,**{key:wrong}),'efi-storage')

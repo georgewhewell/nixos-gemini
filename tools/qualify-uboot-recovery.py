@@ -26,6 +26,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-manager': (WORKSPACE / 'handoff/uboot-efi-manager-file-stages/boot-padded-p22.img',
+                    '128bf5992f4f4c9d8af5612ef8c0829c9fd79c810323995c5b14d4de771cf4d0'),
     'efi-provision': (WORKSPACE / 'handoff/uboot-efi-provision/boot-padded-p22.img',
                       'eabf8e42eeca5d08a7f7564dee82b44b44bb485235b74e1d6a81b08ba6dc97eb'),
     'efi-storage': (WORKSPACE / 'handoff/uboot-efi-storage-eof/boot-padded-p22.img',
@@ -48,14 +50,29 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision')
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager')
 LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 MMC_GPT_SHA = '6addff62cc67f5b5fac9bd87194b6643f4029262251c51c1e43e1b5b64cb887d'
 MMC_FILE_SHA = 'fb9d072b57e41d245ace3e2256ac57ab4dfd42cf4c010993b4d6c3e67b44e16d'
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
 P31_SHA = '1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
-PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
+PHASES = {'0x474d4000': 'efi_manager_start', '0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
+          '0x474d4001': 'efi_prepare_begin', '0x474d4002': 'efi_mmc_qualification',
+          '0x474d4003': 'efi_object_initialization', '0x474d4010': 'efi_console_application',
+          '0x474d4011': 'efi_storage_application', '0x474d4012': 'efi_exit_event_registration',
+          '0x474d4020': 'efi_manager_storage_proof', '0x474d4021': 'efi_manager_file_size',
+          '0x474d4022': 'efi_manager_allocation', '0x474d4023': 'efi_manager_file_read',
+          '0x474d4024': 'efi_manager_file_hash', '0x474d4025': 'efi_manager_device_path',
+          '0x474d4026': 'efi_manager_fdt_metadata', '0x474d4027': 'efi_manager_return_cleanup',
+          '0x474d4030': 'efi_bootdev_clear', '0x474d4031': 'efi_bootdev_cleared',
+          '0x474d4033': 'efi_dp_from_name', '0x474d4034': 'efi_dp_split',
+          '0x474d4035': 'efi_dp_split_done', '0x474d4036': 'efi_bootdev_paths_done',
+          '0x474d4037': 'efi_dp_partition_lookup', '0x474d4038': 'efi_dp_from_partition',
+          '0x474d4039': 'efi_dp_from_file',
+          '0x474d4040': 'efi_dp_file_size', '0x474d4041': 'efi_dp_file_allocate',
+          '0x474d4042': 'efi_dp_file_allocated', '0x474d4043': 'efi_dp_file_encode',
+          '0x474d4044': 'efi_dp_file_encoded', '0x474d4045': 'efi_dp_file_complete',
           '0x474d10e2': 'board_early_init_f', '0x474d10e3': 'board_init',
           '0x474d10e4': 'board_late_init', '0x474d10e5': 'watchdog_ready',
           '0x474d10e6': 'fit_valid', '0x474d10e7': 'bootm_call',
@@ -82,7 +99,7 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
-for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256 gemini,uefi-storage-result gemini,uefi-storage-status; do
+for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256 gemini,uefi-storage-result gemini,uefi-storage-status gemini,uefi-manager-result gemini,uefi-manager-stage gemini,uefi-manager-status gemini,uefi-manager-sha256; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
 awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
@@ -97,7 +114,7 @@ MMC_MARKERS = tuple("chosen/gemini,uefi-mmc-" + name for name in
                     ('result', 'stage', 'error', 'elapsed-ms', 'clock', 'width', 'gpt-sha256', 'boot-sha256', 'boot2-sha256', 'boot3-sha256', 'file-sha256'))
 STORAGE_MARKER = "chosen/gemini,uefi-storage-result"
 STORAGE_STATUS = "chosen/gemini,uefi-storage-status"
-MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR, STORAGE_MARKER, STORAGE_STATUS) + MMC_MARKERS
+MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR, STORAGE_MARKER, STORAGE_STATUS) + MMC_MARKERS + tuple("chosen/gemini,uefi-manager-" + name for name in ("result", "stage", "status", "sha256"))
 
 
 def handoff_tree(ssh):
@@ -135,10 +152,10 @@ def verify_handoff_tree(before, after, profile):
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
-    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision') else None
+    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') else None
     if after.get(CONSOLE_MARKER) != expected_console:
         raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
-    if profile in ('efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision'):
+    if profile in ('efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
         scans = bytes.fromhex(after.get(KEYBOARD_SCANS, ''))
         if (after.get(KEYBOARD_MARKER) != b'scanned\0'.hex() or
                 after.get(KEYBOARD_ERROR) != '00000000' or
@@ -148,16 +165,20 @@ def verify_handoff_tree(before, after, profile):
     elif any(key in after for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)):
         raise RuntimeError('Unexpected EFI keyboard evidence in another profile')
 
-    if profile in ('efi-mmc', 'efi-storage', 'efi-provision'):
+    if profile in ('efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager'):
         verify_mmc_tree(after, profile)
     elif any(key in after for key in MMC_MARKERS):
         raise RuntimeError('Unexpected native MMC evidence in another profile')
-    if profile in ('efi-storage', 'efi-provision'):
+    if profile in ('efi-storage', 'efi-provision', 'efi-manager'):
         if after.get(STORAGE_MARKER) != b'passed\0'.hex() or after.get(STORAGE_STATUS) != '0000000000000000':
             raise RuntimeError('EFI storage protocol application failed: ' + repr(
                 {key: after.get(key) for key in (STORAGE_MARKER, STORAGE_STATUS)}))
     elif any(key in after for key in (STORAGE_MARKER, STORAGE_STATUS)):
         raise RuntimeError('Unexpected EFI storage protocol evidence in another profile')
+    if profile == 'efi-manager':
+        efi_manager.verify_tree(after)
+    elif any(key in after for key in efi_manager.MARKERS):
+        raise RuntimeError('Unexpected distro manager evidence in another profile')
 
 
 def verify_mmc_tree(tree, profile):
@@ -186,6 +207,7 @@ qualify = module('qualify_mtk', ROOT / 'tools/qualify-mtkclient.py')
 backend = module('mtk_backend', ROOT / 'research/p22-mtkclient-backend.py')
 efi_linux = module('efi_linux', ROOT / 'tools/qualify-efi-linux.py')
 efi_files = module('efi_files', ROOT / 'tools/qualify-efi-files.py')
+efi_manager = module('efi_manager', ROOT / 'tools/qualify-efi-manager.py')
 
 
 def candidate_system(before, profile):
@@ -240,6 +262,9 @@ def candidate_return(ssh, before, directory, profile):
             efi_linux.evidence(ssh, directory, qualify, tree)
         if profile == 'efi-provision':
             efi_files.evidence(ssh, after['boot_id'], directory, qualify)
+        if profile == 'efi-manager':
+            efi_manager.evidence(ssh, after['boot_id'], directory, qualify, tree)
+            efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False)
         return after
     raise RuntimeError('Healthy candidate Linux did not return within 360s')
 
@@ -515,7 +540,7 @@ def main():
         backend.checked_image(candidate.resolve(strict=True), sha)
         if args.profile in EFI_LINUX_PROFILES:
             efi_linux.payload()
-        if args.profile == 'efi-provision':
+        if args.profile in ('efi-provision','efi-manager'):
             efi_files.payload()
         qualify.accepted_boot_bytes(ACCEPTED)
         usb = backend.usb_snapshot('3-2')
@@ -527,6 +552,9 @@ def main():
         shutil.copyfile(ROOT / 'research/p22-trex-transaction-holder.sh',
                         directory / 'p22-trex-transaction-holder.sh')
         qualify.save(directory, 'before.json', before)
+        if args.profile == 'efi-manager':
+            efi_files.evidence(ssh, before['boot_id'], directory, qualify,
+                               require_verified=False, name='before-boot-files.json')
         if tree is not None:
             qualify.save(directory, 'before-tree.json', tree)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),

@@ -38,6 +38,11 @@ manifest records payload and carrier hashes.
   non-EFI kernel modules. `/chosen/gemini,uboot-handoff = "efi"` alone is
   insufficient: the runner checks Linux's EFI system table and full memory
   map as well as ordinary service health and LK reservations.
+- EFI manager (`ubootEfiManagerBundle`): start the pinned distro systemd-boot
+  from p29 through the native read-only filesystem after the existing console,
+  keyboard and storage checks. The checked FIT remains a fallback. A fallback
+  boot does not qualify the manager profile; the runner also requires the
+  manager's EFI variables, selected entry, p29 device identity and menu timing.
 
 All profiles use TOPRGU for generic reset. LK handoff validation is independent
 of EFI. The FIT source window now accepts up to 16 MiB at 0x45000000, within the
@@ -698,3 +703,96 @@ writes/readbacks and reboot acknowledgements passed; GPT/p30/p31 remained
 exact. The fresh retained phase was ExitBootServices, and candidate departure
 to rescue entry took 311.354 seconds. No physical intervention was required.
 These files are installed; systemd-boot itself has not yet been booted.
+
+## Distro manager launch
+
+U-Boot source `aeafd9be180019ffa7909cfe31603e860375f205` adds the opt-in
+`GEMINI_EFI_MANAGER` launcher. It requires the native MMC and EFI storage
+checks, reads exactly 176,128 bytes from `/EFI/systemd/systemd-bootaa64.efi`
+on `mmc 0:1d` (hexadecimal p29), checks the pinned SHA-256 above and binds the
+Loaded Image device path to that volume. The launcher runs after EFI memory
+preparation and exit-event registration, before the FIT kernel is decompressed.
+It supplies the checked LK FDT and no initrd: systemd-boot loads the selected
+kernel and registers its own LoadFile2 initrd from the installed Type 1 entry.
+
+The firmware records `gemini,uefi-manager-{result,stage,sha256}` before starting
+the manager and changes the result to `returned` with an EFI status on any
+return. Read/admission failures record their stage. Linux can therefore remain
+reachable through the FIT fallback while the profile correctly fails. The
+independent hardware watchdog and mtkclient rescue ownership are unchanged;
+all U-Boot storage write APIs remain disabled.
+
+The host requires a non-returning launch and independently reads systemd-boot's
+volatile EFI variables from Linux: version, exact selected entry and image
+path, a boot-volume UUID resolving to p29, and menu-to-execution timing matching
+the unattended eight-second menu. It rechecks all five installed file hashes.
+This uses the real distro manager with no synthetic keypress. Physical key
+actuation and visual inspection of this menu are not claimed.
+
+The complete cross build and firmware host checks passed, including injected
+file-size/read/hash/path failures, allocation failure, manager returns and
+metadata exhaustion. Four host evidence tests and eight integrated EFI proof
+tests passed. The carrier is `handoff/uboot-efi-manager`, SHA-256
+`a99963352d9d3fbf017bfcb613fd05f020556d684bda0729a26ac4fcc94187f3`.
+Its fallback FIT, kernel, initramfs and DTB remain the exact qualified EFI
+payload. Read-only admission and all five live file hashes passed in
+`handoff/uboot-efi-manager-preflight-01`.
+
+The first manager trial, `handoff/uboot-efi-manager-01`, did not reach Linux.
+The retained phase was `0x474d10e6` (FIT validated), before the explicit
+manager launch marker, so this does not show that systemd-boot ran. Rescue
+entry followed initial candidate departure by 26.327 seconds. Automatic
+recovery passed both full writes/readbacks and restored healthy M69
+`dd83a3fe-d624-44ab-a751-7a9d934fe571`, with GPT/p22/p30/p31 guards passing.
+Source `e24b294a22507fca9f63c0b7ed80937647a1efd8` adds retained phase markers
+around EFI preparation and the manager read/hash/device-path stages to
+identify that failure without requiring a screen observer.
+
+The diagnostic carrier (`handoff/uboot-efi-manager-stages`, SHA-256
+`ca803a3cd9ab517fce7b796f1e214f96ae539d796f3a339290ada3b1159535e5`)
+was tried in `handoff/uboot-efi-manager-02`. It reached phase `0x474d4025`,
+the EFI boot-device-path setup, after successfully reading and verifying the
+manager file. It did not reach the manager launch. Automatic rescue again
+passed, restoring healthy M69 `9772e3f1-1c80-4f5b-b947-1fb879318f2c` with
+all protected hashes unchanged; candidate-to-rescue entry took 26.352 seconds.
+Source `75b676ba8a46bc4da0fc9957028cae91a74766ba` adds finer retained markers
+inside that EFI device-path setup. Its cross build and existing tests passed.
+
+Trial `handoff/uboot-efi-manager-03` used `handoff/uboot-efi-manager-path`,
+SHA-256 `99105f1ec00c1a41755513da6b2cf5ebf73b666ba9afe03c6b8f06fc5d27954b`.
+It reached phase `0x474d4039`, immediately before constructing the EFI file
+path from the successfully constructed partition path. The manager still did
+not start. Rescue entry took 26.303 seconds; both writes/readbacks and final
+guards passed, restoring healthy M69 `f10de83d-e233-408d-87aa-f41f45e482e3`.
+
+Investigation found unaligned UTF-16 stores in the packed file-path converter.
+An MMC node is five bytes, so a following pathname may begin at an odd address.
+A regression using the actual converter and charset helpers reproduces an
+alignment-sanitizer failure before the fix. Source
+`cc1e892d742942bf15ef369c072efaa96453c41d` encodes characters in aligned local
+storage and copies their bytes, including the terminator, into the packed
+path. Tests pass at all eight byte offsets for ASCII, Unicode, malformed UTF-8
+and the empty string, with destination guards. This confirms the software
+defect and its correction; device verification is still required to establish
+whether it explains the retained failure.
+
+It did not resolve the device failure. Trial `handoff/uboot-efi-manager-04`
+used `handoff/uboot-efi-manager-aligned-path`, SHA-256
+`7c748701ca8cc3d1d4afc89a713dd30a0734ad2d7fec86d2abc5f30c14adadf1`, and
+again retained `0x474d4039`. The manager did not start. Automatic recovery
+passed in 26.337 seconds to rescue entry and restored fully healthy M69
+`8edbec93-5d47-44db-a48a-1d11eafa505c`; both writes/readbacks and all final
+GPT/boot-partition checks passed. The alignment fix is supported by its host
+regression but is not the established cause of this hardware failure.
+
+The next diagnostic source, `0f373c8a81937a1c2179527b700910d150755131`, separates
+file-path sizing, allocation, copy and encoding in retained phases
+`0x474d4040` through `0x474d4045`. Its cross build and all existing firmware
+checks passed. Carrier `handoff/uboot-efi-manager-file-stages` has SHA-256
+`128bf5992f4f4c9d8af5612ef8c0829c9fd79c810323995c5b14d4de771cf4d0` and
+is the current runner pin; it has not been booted yet. The accepted M69 bundle
+still evaluates to the exact original path. The flash lane was confirmed idle
+after trial 04 finished.
+Read-only admission for the next carrier passed in
+`handoff/uboot-efi-manager-preflight-05`, including fresh M69 health and all
+five installed-file hashes. No fifth manager trial has been started.

@@ -44,6 +44,16 @@ M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. This prepares systemd-boot;
 launching the manager and normal NixOS generation updates remain unqualified.
 There was no formatting, GPT change or persistent writable-store enablement.
 
+Four subsequent systemd-boot launch trials failed before the manager started.
+Retained markers narrow the failure to EFI file-path construction after the
+manager file was read and its hash verified. An unaligned UTF-16 store was
+found and fixed with a failing-then-passing sanitizer regression, but trial 04
+still failed at the same boundary. Further stage markers are built and ready;
+the manager remains unqualified. Every trial automatically restored healthy
+M69 with protected hashes unchanged, most recently boot
+`8edbec93-5d47-44db-a48a-1d11eafa505c`. See BOOT_HANDOFF.md for artifacts and
+the next unbooted diagnostic carrier.
+
 The September 29 note claiming p34 was provisioned is historical. Claude later
 restored the factory GPT after SP Flash Tool refused the modified layout with
 error 8502. The fixed-size LVM alternative was proposed, but is not implemented

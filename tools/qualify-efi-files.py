@@ -90,12 +90,13 @@ def provision(ssh,before,boot_sha,directory,qualify,rescued):
     raise RuntimeError('Stage 1 did not request the pinned boot files within 240s')
 
 
-def evidence(ssh,boot_id,directory,qualify):
+def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-files.json'):
     _,manifest=payload()
     command=['set -eu',"printf 'boot_id='; cat /proc/sys/kernel/random/boot_id",
-             f'test "$(cat /run/efi-boot-files.verified)" = {shlex.quote(marker("verified"))}',
              '''opts=$(awk '$1 == "/dev/mmcblk0p29" && $2 == "/gemian" && $3 == "ext4" {print $4}' /proc/mounts)''',
              '''case ",$opts," in *,ro,*) ;; *) exit 1 ;; esac''']
+    if require_verified:
+        command.append(f'test "$(cat /run/efi-boot-files.verified)" = {shlex.quote(marker("verified"))}')
     for relative,info in manifest['files'].items():
         path=Path('/gemian')/relative
         for parent in reversed(path.parents):
@@ -110,5 +111,5 @@ def evidence(ssh,boot_id,directory,qualify):
     hashes={row.split()[1].removeprefix('/gemian/'):row.split()[0] for row in rows[1:]}
     if hashes!={name:info['sha256'] for name,info in manifest['files'].items()}:
         raise RuntimeError('Published boot files failed independent Linux readback')
-    qualify.save(directory,'boot-files.json',dict(boot_id=boot_id,archive_sha256=ARCHIVE_SHA,
+    qualify.save(directory,name,dict(boot_id=boot_id,archive_sha256=ARCHIVE_SHA,
                                                 p29_read_only=True,files=manifest['files']))
