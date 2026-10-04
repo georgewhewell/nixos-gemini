@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('backend', Path(__file__).with_name('p22-mtkclient-backend.py'))
 backend = importlib.util.module_from_spec(spec)
@@ -135,6 +136,80 @@ class PhaseEvidenceTests(unittest.TestCase):
             self.assertFalse(qualification.profile_qualified('watchdog', good, elapsed, False))
         self.assertFalse(qualification.profile_qualified('watchdog', early, 44, False))
         self.assertFalse(qualification.profile_qualified('watchdog', good, 44, True))
+
+
+class HandoffEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.before = {'memory@40000000/reg': '00000000400000000000000100000000',
+                       'chosen/ccci,modem_info_v2': '00' * 48, 'memtotal_kib': '3784500'}
+        for index in (5, 6, 7):
+            self.before[f'reserved-memory/mblock-{index}-ccci/reg'] = '00000000880000000000000000600000'
+        self.range_key = 'reserved-memory/reserve-memory-dram_r0_dummy_read/alloc-ranges'
+        self.before[self.range_key] = '00000000452590000000000038d57000'
+        self.after = dict(self.before, **{qualification.HANDOFF_MARKER: b'fit\0'.hex()})
+
+    def test_full_memory_modem_reservations_and_markers(self):
+        qualification.verify_handoff_tree(self.before, self.after, 'handoff')
+        efi = dict(self.after, **{qualification.EFI_MARKER: b'passed\0'.hex()})
+        qualification.verify_handoff_tree(self.before, efi, 'efi-smoke')
+        for after, profile in ((self.before, 'handoff'), (self.after, 'efi-smoke'), (efi, 'handoff')):
+            with self.assertRaises(RuntimeError):
+                qualification.verify_handoff_tree(self.before, after, profile)
+        with self.assertRaises(RuntimeError):
+            qualification.verify_handoff_tree(self.after, self.after, 'handoff')
+        for key in self.before:
+            if key in ('memtotal_kib', self.range_key):
+                continue
+            altered = dict(self.after, **{key: '00'})
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                qualification.verify_handoff_tree(self.before, altered, 'handoff')
+
+    def test_lk_ramdisk_allocation_window_may_shift_but_must_remain_in_ram(self):
+        for start, end, valid in ((0x45900000, 0x7dfb0000, True),
+                                  (0x3ffff000, 0x7dfb0000, False),
+                                  (0x45900000, 0x80000000, False),
+                                  (0x45900000, 0x45900000, False)):
+            after = dict(self.after)
+            after[self.range_key] = (start.to_bytes(8, 'big') + (end-start).to_bytes(8, 'big')).hex()
+            if valid:
+                qualification.verify_handoff_tree(self.before, after, 'handoff')
+            else:
+                with self.assertRaises(RuntimeError):
+                    qualification.verify_handoff_tree(self.before, after, 'handoff')
+
+    def test_snapshot_requires_full_memory_and_modem_data(self):
+        for key, value in ((None, None), ('memtotal_kib', '96000'),
+                           ('memory@40000000/reg', '00000000400000000000000006000000'),
+                           ('chosen/ccci,modem_info_v2', '00'),
+                           ('reserved-memory/mblock-7-ccci/reg', '')):
+            tree = dict(self.before)
+            if key:
+                tree[key] = value
+            output = '\n'.join(f'{k}={v}' for k, v in tree.items())
+            with patch.object(qualification.qualify, 'run', return_value=output):
+                if key:
+                    with self.assertRaises(RuntimeError):
+                        qualification.handoff_tree([])
+                else:
+                    self.assertEqual(qualification.handoff_tree([]), tree)
+
+    def test_candidate_requires_exact_carrier_new_boot_and_unchanged_baseline(self):
+        before = dict(boot_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                      system=qualification.qualify.ACCEPTED_SYSTEM, healthy='yes',
+                      boot_sha256=qualification.qualify.ACCEPTED_BOOT, gpt_sha256='b'*64)
+        after = dict(before, boot_id='cccccccc-cccc-cccc-cccc-cccccccccccc',
+                     boot_sha256=qualification.PROFILES['handoff'][1])
+        hashes = qualification.P30_SHA + ' p30\n' + qualification.P31_SHA + ' p31\n'
+        for change in ({}, {'boot_id': before['boot_id']}, {'boot_sha256': before['boot_sha256']},
+                       {'gpt_sha256': 'd'*64}, {'system': 'other'}, {'healthy': 'no'}):
+            observed = dict(after, **change)
+            output = '\n'.join(f'{k}={v}' for k, v in observed.items())
+            with patch.object(qualification.qualify, 'run', side_effect=[output, hashes]):
+                if change:
+                    with self.assertRaises(RuntimeError):
+                        qualification.candidate_snapshot([], before, 'handoff')
+                else:
+                    self.assertEqual(qualification.candidate_snapshot([], before, 'handoff'), after)
 
 
 class EvidenceTests(unittest.TestCase):

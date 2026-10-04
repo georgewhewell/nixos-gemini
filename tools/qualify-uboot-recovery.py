@@ -4,6 +4,7 @@
 Default is read-only preflight. Baseline executes two accepted-M69 writes and
 normal Linux reboots. Reset/watchdog profiles select pinned M69 U-Boot carriers
 and leave the existing durable p22 supervisor responsible for restoring M69.
+Handoff/EFI smoke profiles inspect Linux before rebooting into that rescue.
 No candidate is accepted. A successful return proves the recovery path; it
 does not, by itself, prove which code initiated the candidate reset.
 """
@@ -30,15 +31,81 @@ PROFILES = {
               'e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950'),
     'watchdog': (WORKSPACE / 'handoff/uboot-m69-fbfix-3/boot-padded-p22.img',
                  '5f02a4db11c14fdd604626b48fdd71886db9d90ff699c936d397800a4278c66d'),
+    'handoff': (WORKSPACE / 'handoff/uboot-m69-fbfix/boot-padded-p22.img',
+                '365ac36a96e095a93e0b7071241c4569f5e052164bd8de8bf793dbbd4bd9ff8c'),
+    'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-fbfix-1/boot-padded-p22.img',
+                  '3c7c408e72e745912246fa8993f062430b8ca01cb7c8008645beb024a93bfd95'),
 }
+LINUX_PROFILES = ('handoff', 'efi-smoke')
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
 P31_SHA = '1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
 PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
           '0x474d10e2': 'board_early_init_f', '0x474d10e3': 'board_init',
           '0x474d10e4': 'board_late_init', '0x474d10e5': 'watchdog_ready',
+          '0x474d10e6': 'fit_valid', '0x474d10e7': 'bootm_call',
+          '0x474d10e8': 'os_prepared', '0x474d10ea': 'efi_enter', '0x474d10eb': 'efi_return',
           '0x474d10ec': 'reset_test', '0x474d10ed': 'watchdog_expiry_test',
-          '0x474d10f1': 'watchdog_setup_failure'}
+          '0x474d10f1': 'watchdog_setup_failure', '0x474d10f2': 'fit_failure',
+          '0x474d10f3': 'efi_fdt_failure', '0x474d10f4': 'lk_fdt_failure',
+          '0x474d10f5': 'handoff_failure'}
+HANDOFF_TREE = r'''set -eu
+dt=/sys/firmware/devicetree/base
+dump_property() {
+    test -f "$1"
+    printf '%s=' "${1#"$dt"/}"
+    od -An -v -tx1 "$1" | tr -d ' \n'
+    printf '\n'
+}
+for property in "$dt"/memory*/reg "$dt/chosen/ccci,modem_info_v2"; do
+    dump_property "$property"
+done
+find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
+    dump_property "$property"
+done
+for marker in gemini,uboot-handoff gemini,uefi-hello-result; do
+    if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
+done
+awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
+'''
+HANDOFF_MARKER = 'chosen/gemini,uboot-handoff'
+EFI_MARKER = 'chosen/gemini,uefi-hello-result'
+
+
+def handoff_tree(ssh):
+    result = dict(line.split('=', 1) for line in qualify.run(ssh + [HANDOFF_TREE]).splitlines())
+    memory = [value for key, value in result.items() if key.startswith('memory') and key.endswith('/reg')]
+    if memory != ['00000000400000000000000100000000']:
+        raise RuntimeError('Linux device tree does not retain the full 4 GiB LK memory bank')
+    if len(bytes.fromhex(result.get('chosen/ccci,modem_info_v2', ''))) != 48:
+        raise RuntimeError('Linux device tree lacks the complete LK modem table')
+    for index in (5, 6, 7):
+        if not result.get(f'reserved-memory/mblock-{index}-ccci/reg'):
+            raise RuntimeError('Linux device tree lacks an LK modem reservation')
+    if int(result.get('memtotal_kib', '0')) < 3 * 1024 * 1024:
+        raise RuntimeError('Linux reports less than 3 GiB usable memory')
+    return result
+
+
+def verify_handoff_tree(before, after, profile):
+    if HANDOFF_MARKER in before or EFI_MARKER in before:
+        raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
+    for key, value in before.items():
+        if key == 'reserved-memory/reserve-memory-dram_r0_dummy_read/alloc-ranges':
+            # LK begins this allocation window after the Android ramdisk.
+            # The FIT carrier is larger than the direct-Linux initramfs.
+            raw = bytes.fromhex(after.get(key, ''))
+            start, size = int.from_bytes(raw[:8], 'big'), int.from_bytes(raw[8:], 'big')
+            if len(raw) != 16 or start < 0x40000000 or size < 4096 or start + size > 0x7dfb0000:
+                raise RuntimeError('LK dummy-read allocation range is outside low RAM')
+            continue
+        if key != 'memtotal_kib' and after.get(key) != value:
+            raise RuntimeError(f'Linux handoff changed LK property {key}')
+    if after.get(HANDOFF_MARKER) != b'fit\0'.hex():
+        raise RuntimeError('Linux lacks the U-Boot FIT handoff marker')
+    expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
+    if after.get(EFI_MARKER) != expected_efi:
+        raise RuntimeError('Linux EFI marker does not match the requested profile')
 
 
 def module(name, path):
@@ -59,6 +126,55 @@ def snapshot(ssh):
         raise RuntimeError('Alternate boot partitions differ from the accepted baseline')
     result.update(p30_sha256=P30_SHA, p31_sha256=P31_SHA)
     return result
+
+
+def candidate_snapshot(ssh, before, profile):
+    if profile not in LINUX_PROFILES:
+        raise ValueError('Candidate Linux checks require a pinned Linux handoff profile')
+    result = dict(line.split('=', 1) for line in qualify.run(ssh + [qualify.SNAPSHOT]).splitlines())
+    expected = dict(before, boot_sha256=PROFILES[profile][1])
+    qualify.verify_return(expected, result)
+    if not re.fullmatch(r'[0-9a-f-]{36}', result.get('boot_id', '')):
+        raise RuntimeError('Candidate lacks a boot identity')
+    hashes = qualify.run(ssh + ['sha256sum /dev/mmcblk0p30 /dev/mmcblk0p31']).splitlines()
+    if [row.split()[0] for row in hashes] != [P30_SHA, P31_SHA]:
+        raise RuntimeError('Candidate changed an alternate boot partition')
+    return result
+
+
+def candidate_return(ssh, before, directory, profile):
+    deadline = time.monotonic() + qualify.HEALTH_TIMEOUT
+    while time.monotonic() < deadline:
+        if read_state(directory / 'supervisor.state').startswith(SUCCESS):
+            raise RuntimeError('Automatic rescue ran before healthy candidate Linux was observed')
+        try:
+            after = candidate_snapshot(ssh, before, profile)
+        except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
+            (directory / 'candidate-linux-last-error.txt').write_text(str(error) + '\n')
+            time.sleep(3)
+            continue
+        qualify.save(directory, 'candidate-linux.json', after)
+        tree = handoff_tree(ssh)
+        qualify.save(directory, 'candidate-tree.json', tree)
+        verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
+        return after
+    raise RuntimeError('Healthy candidate Linux did not return within 360s')
+
+
+def candidate_needs_rescue_reboot(ssh, before, profile):
+    # Even when Linux fails its service checks, restore the accepted image if
+    # this is still the exact candidate boot. An already recovered M69 does
+    # not need another reboot. Never reboot an unidentified Linux instance.
+    command = "cat /proc/sys/kernel/random/boot_id; readlink /run/current-system; " \
+              "sha256sum /dev/mmcblk0p22; head -c 32768 /dev/mmcblk0 | sha256sum"
+    try:
+        rows = qualify.run(ssh + [command]).splitlines()
+    except subprocess.SubprocessError:
+        return False
+    return (len(rows) == 4 and rows[0] != before['boot_id'] and
+            bool(re.fullmatch(r'[0-9a-f-]{36}', rows[0])) and rows[1] == before['system'] and
+            rows[2].split()[:1] == [PROFILES[profile][1]] and
+            rows[3].split()[:1] == [before['gpt_sha256']])
 
 
 def read_state(path):
@@ -222,7 +338,21 @@ def trial(directory, profile, before, ssh):
     except RuntimeError as error:
         (directory / 'candidate-error.txt').write_text(str(error) + '\n')
         print('Candidate did not verify; waiting for the existing rescue supervisor', flush=True)
-    if profile == 'baseline' and read_state(candidate_state).startswith('flash_rc=0 '):
+    candidate_qualified = False
+    if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
+        try:
+            candidate_return(ssh, before, directory, profile)
+            candidate_qualified = True
+            print('Candidate Linux health, FIT marker, RAM and LK reservations verified', flush=True)
+        except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
+            (directory / 'candidate-linux-error.txt').write_text(str(error) + '\n')
+            print(f'Candidate Linux NOT qualified: {error}', flush=True)
+        if candidate_needs_rescue_reboot(ssh, before, profile):
+            wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
+            print('Rebooting the identified candidate into the waiting rescue writer', flush=True)
+            reboot(ssh, directory, 'rescue-reboot-request.json')
+        recovery_before = before
+    elif profile == 'baseline' and read_state(candidate_state).startswith('flash_rc=0 '):
         middle = healthy_return(ssh, before, directory, 'baseline-middle')
         wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
         print('Baseline is healthy; rebooting once into the waiting rescue writer', flush=True)
@@ -246,9 +376,14 @@ def trial(directory, profile, before, ssh):
     qualified = profile_qualified(profile, phase,
         timing['seconds_from_initial_boot_preloader_departure_to_rescue_preloader'],
         (directory / 'rescue-reboot-request.json').exists())
+    if profile in LINUX_PROFILES:
+        qualified = candidate_qualified
     result = dict(result='passed', profile=profile, recovered_boot_id=after['boot_id'],
                   proof='candidate-and-rescue-writes-with-automatic-reboot',
                   profile_qualified=qualified, **phase)
+    if profile in LINUX_PROFILES:
+        result.update(linux_handoff_proven=candidate_qualified,
+                      uboot_execution_proven=candidate_qualified or phase['uboot_execution_proven'])
     if profile == 'watchdog':
         timing['watchdog_expiry_proven'] = qualified
         qualify.save(directory, 'recovery-timing.json', timing)
@@ -279,6 +414,9 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         qualify.check_host_idle()
         before = snapshot(ssh)
+        tree = handoff_tree(ssh) if args.profile in LINUX_PROFILES else None
+        if tree is not None and (HANDOFF_MARKER in tree or EFI_MARKER in tree):
+            raise RuntimeError('Baseline contains a stale U-Boot/EFI marker')
         candidate, sha = PROFILES[args.profile]
         backend.checked_image(candidate.resolve(strict=True), sha)
         qualify.accepted_boot_bytes(ACCEPTED)
@@ -291,6 +429,8 @@ def main():
         shutil.copyfile(ROOT / 'research/p22-trex-transaction-holder.sh',
                         directory / 'p22-trex-transaction-holder.sh')
         qualify.save(directory, 'before.json', before)
+        if tree is not None:
+            qualify.save(directory, 'before-tree.json', tree)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),
                      candidate_sha256=sha, rescue=str(ACCEPTED), execute=args.execute,
                      runner_sha256=backend.digest(Path(__file__).read_bytes())))
