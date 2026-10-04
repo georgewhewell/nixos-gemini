@@ -1,7 +1,8 @@
 # Persistent storage on the eMMC user area (handoff/power-policy.md).
 #
-# / stays tmpfs, as before.  After a one-time, explicit repartitioning
-# (gemini-storage-provision), two things persist:
+# / stays tmpfs, as before. The p32 layout can be initialized independently
+# on the existing empty gemini-data filesystem (research/PERSISTENCE.md).
+# gemini-storage-provision separately adds fixed swap by repartitioning:
 #
 #   p32 "userdata", ext4 "gemini-data":  /home, and a writable Nix layer:
 #       Stage 1 mounts an overlay on /nix/store (lower: this image's

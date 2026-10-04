@@ -208,6 +208,7 @@ backend = module('mtk_backend', ROOT / 'research/p22-mtkclient-backend.py')
 efi_linux = module('efi_linux', ROOT / 'tools/qualify-efi-linux.py')
 efi_files = module('efi_files', ROOT / 'tools/qualify-efi-files.py')
 efi_manager = module('efi_manager', ROOT / 'tools/qualify-efi-manager.py')
+persistence = module('persistence', ROOT / 'tools/qualify-gemini-persistence.py')
 
 
 def candidate_system(before, profile):
@@ -407,7 +408,9 @@ def stage(directory, profile, before):
     return config
 
 
-def trial(directory, profile, before, ssh):
+def trial(directory, profile, before, ssh, verify_persistence=False):
+    if verify_persistence and profile != 'baseline':
+        raise ValueError('Persistence qualification requires the accepted baseline profile')
     stamp = str(int(time.time())) + '-' + str(os.getpid())
     owner_unit, supervisor_unit, candidate_unit, net_unit = [f'p22-qual-{role}-{stamp}'
                                                   for role in ('owner', 'supervisor', 'candidate', 'net')]
@@ -457,6 +460,8 @@ def trial(directory, profile, before, ssh):
         (directory / 'candidate-error.txt').write_text(str(error) + '\n')
         print('Candidate did not verify; waiting for the existing rescue supervisor', flush=True)
     candidate_qualified = False
+    persistent_before = None
+    persistent_after = None
     recovery_before = before
     if profile in LINUX_PROFILES and read_state(candidate_state).startswith('flash_rc=0 '):
         try:
@@ -481,6 +486,13 @@ def trial(directory, profile, before, ssh):
             reboot(ssh, directory, 'rescue-reboot-request.json')
     elif profile == 'baseline' and read_state(candidate_state).startswith('flash_rc=0 '):
         middle = healthy_return(ssh, before, directory, 'baseline-middle')
+        if verify_persistence:
+            try:
+                persistent_before = persistence.evidence(ssh, middle['boot_id'], directory, qualify)
+                print('Persistent mounts, home test file and offline fixed-output Nix build verified', flush=True)
+            except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
+                (directory / 'persistence-before-error.txt').write_text(str(error) + '\n')
+                print(f'Persistence NOT qualified; continuing supervised recovery: {error}', flush=True)
         wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
         print('Baseline is healthy; rebooting once into the waiting rescue writer', flush=True)
         reboot(ssh, directory, 'rescue-reboot-request.json')
@@ -490,6 +502,13 @@ def trial(directory, profile, before, ssh):
     wait_state(supervisor_state, SUCCESS, 680)
     print('Rescue write/readback and reboot verified; waiting for healthy M69', flush=True)
     after = healthy_return(ssh, recovery_before, directory, 'after')
+    if persistent_before is not None:
+        try:
+            persistent_after = persistence.evidence(ssh, after['boot_id'], directory, qualify,
+                                                     previous=persistent_before)
+        except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
+            (directory / 'persistence-after-error.txt').write_text(str(error) + '\n')
+            print(f'Persistence did not survive recovery: {error}', flush=True)
     # Both roles must have actual write, readback and USB ordering evidence.
     phases = []
     for state in (candidate_state, directory / 'supervisor-rollback.state'):
@@ -511,12 +530,16 @@ def trial(directory, profile, before, ssh):
     if profile in LINUX_PROFILES:
         result.update(linux_handoff_proven=candidate_qualified,
                       uboot_execution_proven=candidate_qualified or phase['uboot_execution_proven'])
+    if verify_persistence:
+        result['persistence_qualified'] = persistent_after is not None
     if profile == 'watchdog':
         timing['watchdog_expiry_proven'] = qualified
         qualify.save(directory, 'recovery-timing.json', timing)
     qualify.save(directory, 'result.json', result)
     qualify.run(['systemctl', '--user', 'stop', owner_unit, net_unit])
     print(f'PASS: {profile} recovery path; fresh healthy M69. Evidence: {directory}', flush=True)
+    if verify_persistence:
+        print('Persistence across reboot: ' + ('PASS' if persistent_after else 'NOT qualified'), flush=True)
     if profile != 'baseline':
         print(f'{profile} profile {"qualified" if qualified else "NOT qualified"}: '
               f'phase={phase["uboot_phase"]}, elapsed='
@@ -528,7 +551,11 @@ def main():
     parser.add_argument('--profile', choices=PROFILES, default='baseline')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--verify-persistence', action='store_true',
+                        help='Retain a local fixed-output Nix build and home file across baseline boots')
     args = parser.parse_args()
+    if args.verify_persistence and args.profile != 'baseline':
+        parser.error('--verify-persistence requires --profile baseline')
     os.umask(0o077)
     directory = args.out.resolve()
     ssh = ['ssh', '-F', '/dev/null', '-i', '/home/grw/.ssh/gemini-stage1-ed25519',
@@ -567,12 +594,15 @@ def main():
             qualify.save(directory, 'before-tree.json', tree)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),
                      candidate_sha256=sha, rescue=str(ACCEPTED), execute=args.execute,
+                     verify_persistence=args.verify_persistence,
+                     persistence_verifier_sha256=backend.digest(
+                         (ROOT / 'tools/qualify-gemini-persistence.py').read_bytes()) if args.verify_persistence else None,
                      runner_sha256=backend.digest(Path(__file__).read_bytes())))
     if not args.execute:
         print(f'Preflight passed; no reboot or write. Evidence: {directory}')
         return
     try:
-        trial(directory, args.profile, before, ssh)
+        trial(directory, args.profile, before, ssh, args.verify_persistence)
     except Exception as error:
         qualify.save(directory, 'result.json', dict(result='failed', error=str(error), profile=args.profile,
                      note='Durable recovery services keep their bounded ownership; inspect units.json'))

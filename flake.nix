@@ -835,6 +835,15 @@
       baselineDtb = mainlineP22Baseline.serviceabilityDtb;
     };
 
+    mainlineNixKernel = import ./nix/mainline-nix-kernel.nix {
+      kernel = mainlineEfiKernel;
+    };
+    mainlineNixDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlineNixKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
     # The accepted baseline plus MicroSD, and nothing else.
     #
     # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
@@ -1168,6 +1177,17 @@
       }];
     };
 
+    mainlineNixosNixSystemCross = mainlineNixosEfiSystemCross.extendModules {
+      modules = [ ./nixos/persistent-nix.nix {
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 40 mainlineNixKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 40 mainlineNixKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 40 mainlineNixKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 40 mainlineNixKernel;
+        };
+      } ];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1223,6 +1243,7 @@
 
     mainlineNixosSquashfs = mkMainlineSquashfs mainlineNixosSystemCross.config.system.build.toplevel;
     mainlineNixosEfiSquashfs = mkMainlineSquashfs mainlineNixosEfiSystemCross.config.system.build.toplevel;
+    mainlineNixosNixSquashfs = mkMainlineSquashfs mainlineNixosNixSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1277,6 +1298,15 @@
       squashfs = mainlineNixosEfiSquashfs;
       nixosToplevel = mainlineNixosEfiSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosEfiSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosNix = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlineNixKernel;
+      serviceabilityDtb = mainlineNixDtb;
+      squashfs = mainlineNixosNixSquashfs;
+      nixosToplevel = mainlineNixosNixSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosNixSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     efiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -1786,6 +1816,8 @@
       mainlineNixosKernel = mainlineP22Baseline.kernel;
       mainlineNixosEfiKernel = mainlineEfiKernel;
       mainlineNixosEfiBundle = mainlineNixosEfi.bundle;
+      mainlineNixosNixKernel = mainlineNixKernel;
+      mainlineNixosNixBundle = mainlineNixosNix.bundle;
       geminiEfiBootFiles = efiBootFiles;
 
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
@@ -1876,6 +1908,7 @@
       # The mainline image's Stage-2 system, for nixos-rebuild --target-host
       # or nix copy + switch-to-configuration (handoff/power-policy.md).
       gemini-mainline = mainlineNixosSystemCross;
+      gemini-mainline-nix = mainlineNixosNixSystemCross;
     };
 
     # Development shell

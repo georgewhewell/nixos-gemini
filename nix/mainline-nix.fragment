@@ -1,0 +1,2 @@
+# Ordinary Nix sandboxed builds require CLONE_NEWNET.
+CONFIG_NET_NS=y

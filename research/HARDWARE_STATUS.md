@@ -20,13 +20,21 @@ Initial read-only checks before the mtkclient trials are retained at workspace
   (`layout missing=home`). The `/nix/store` is still the read-only squashfs.
 - No cpuidle driver is published at `/sys/devices/system/cpu/cpuidle/current_driver`.
 
+Subsequent storage work initialized the existing empty p32 filesystem without
+changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
+a local fixed-output Nix build/database survive supervised reboot. Current
+healthy M69 boot is `a2fd95cf-c7d0-4fc5-a058-b8b1bb3a0339`, with `/persist`,
+`/home`, `/nix/var` and the store overlay mounted. Fixed swap is still absent.
+Ordinary Nix builds revealed missing network namespaces and daemon units;
+the opt-in correction is built but unbooted. See [PERSISTENCE.md](PERSISTENCE.md).
+
 ## Remaining work
 
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. The real distro systemd-boot manager now boots the installed Linux entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Physical key selection, full modifier qualification, persistent EFI settings and normal NixOS generation management remain. See BOOT_HANDOFF.md |
-| Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
+| Persistence and fixed-size swap | Home and Nix storage/database survive supervised M69 reboot with unchanged GPT. Qualify the prepared ordinary-build/daemon correction, normal generation updates and fixed-size swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
@@ -42,7 +50,9 @@ both existing squashfs stores were checked, p29 was returned to read-only,
 candidate Linux passed full health and automatic rescue restored healthy
 M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. The later systemd-boot trial 10
 passed all candidate checks; normal NixOS generation updates remain unqualified.
-There was no formatting, GPT change or persistent writable-store enablement.
+That EFI provisioning performed no formatting, GPT change or persistent
+writable-store enablement. The later p32 initialization and reboot evidence
+are recorded separately in PERSISTENCE.md.
 
 The first six systemd-boot launch trials failed before the manager started.
 Trial 06 captured the exact U-Boot exception while traversing the EFI event

@@ -20,9 +20,11 @@ hardware video codecs remain unfinished. WPA3/PMF support is present, but
 on-air qualification is still needed. Cellular registration/eSIM and weak
 reception remain open.
 
-The device has the factory 33-partition GPT. There is no p34 swap, and current
-boot logs skip persistent storage because its directory layout is incomplete.
-Home and the Nix store therefore still use the volatile/read-only baseline.
+The device has the factory 33-partition GPT. Persistent home and the writable
+Nix layer now survive supervised reboots, using the existing p32 filesystem.
+There is no p34 swap. Ordinary Nix builds exposed missing network namespaces
+and daemon units in M69; a separate candidate fixes both and has built, but
+awaits hardware qualification. See [storage evidence](research/PERSISTENCE.md).
 Hibernation, deep idle and the complete lid power policy are not qualified.
 Camera and vibrator are excluded from the owner's completion scope.
 
