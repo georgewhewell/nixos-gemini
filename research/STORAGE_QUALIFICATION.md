@@ -4,8 +4,9 @@ Persistent home and the Nix store/database work on p32. The fixed 5 GiB p34
 swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
 `handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
-enabled from boot in the corrected candidate. Its automatic M69 recovery and
-final audit retained all eleven Nix build outputs in `handoff/power-swap-01`.
+enabled from boot in the corrected candidate. Its latest automatic M69
+recovery and final audit retained all twelve Nix build outputs after the
+controlled watchdog reset in `handoff/power-swap-02`.
 Promotion of that correction and hibernation remain unfinished.
 
 ## Filesystem and partition geometry

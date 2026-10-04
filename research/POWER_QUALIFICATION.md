@@ -66,9 +66,9 @@ never flashed. It is not the new candidate above.
 
 ## Remaining hardware sequence
 
-Normal boot and recovery are the first checks. Hardware watchdog expiry,
-ordinary suspend and failed-suspend paths remain to be exercised before image
-I/O. Fixed-swap installation, automatic factory restoration and active swap
+Normal boot, recovery and controlled Linux watchdog expiry now pass. Ordinary
+suspend and failed-suspend paths remain to be exercised before image I/O.
+Fixed-swap installation, automatic factory restoration and active swap
 after an ordinary reboot now pass. Paging under pressure also passes with the
 zswap shrinker enabled from boot in the successor candidate below.
 See `STORAGE_QUALIFICATION.md`. The older power runner still expects factory
@@ -197,3 +197,65 @@ regressions pass; this cleanup revision was made after the recorded audit
 and has not required another hardware trial. Archived trial sources retain
 the executed version. The candidate remains opt-in, recovered M69 retains
 `shrinker_enabled=N`, and sleep/hibernation were never requested.
+
+## Linux watchdog expiry qualification
+
+`tools/qualify-power-swap.py --watchdog-expiry` adds a controlled keepalive-loss
+test after the complete normal candidate checks, paging and ordinary Nix
+build. It keeps the same candidate kernel and exact fixed-swap storage guards.
+The default remains read-only preflight; hardware execution needs `--execute`.
+
+The trigger independently checks the running kernel, boot identity, service
+MainPID, process start time, watchdog descriptor, active 31-second nowayout
+configuration and at least 120 seconds remaining on the recovery lease. After
+sync, it rechecks ownership, sends SIGSTOP and records the stopped process.
+The open watchdog descriptor remains owned. A separate target service waits
+55 seconds before resuming the exact owner and requesting a software reboot
+if hardware expiry fails. Its stop callback also resumes that owner after an
+interrupted test; it cannot signal a different boot or reused PID.
+
+The host accepts only a preloader appearance within 20–45 seconds of the
+trigger request, with acknowledgement within eight seconds. The ten-second
+keepalive interval means expiry can occur before a full 31 seconds has passed
+since SIGSTOP. An independent USB record from the successful rescue writer
+must agree within two seconds, and any host-requested rescue reboot rejects
+the expiry claim. Complete M69 recovery, fixed-swap identities, all retained
+Nix outputs and source hashes remain required. This test does not request
+suspend or hibernation.
+
+Eight watchdog tests exercise the actual generated shell guards with fake
+signals/reboots, bounded fallback ordering, stale ownership, reset timing,
+independent USB evidence and ordering after complete candidate checks. The
+eleven power/swap tests also pass. Evidence is retained under
+`handoff/linux-watchdog-qualification`.
+
+Trial `handoff/power-swap-02` passed this profile. Candidate boot
+`fd151c7a-2e7f-4a13-8c0e-80380c996772` first passed full Linux health,
+default-policy paging, CPU/RAM checks and its ordinary Nix build. Watchdog
+owner PID 549 was identified by start time and open descriptor, then observed
+in state `T` after SIGSTOP. The host received that acknowledgement within
+0.742 seconds. Its USB observer measured preloader return at 25.337 seconds;
+the independent rescue backend measured 25.349 seconds. Their observations
+differ by 12 milliseconds. No software rescue reboot was requested, and both
+observations precede the 55-second target fallback.
+
+The rescue writer verified the M69 image and rebooted automatically. Healthy
+M69 boot `84c89631-45ff-4cd3-bc9f-821658785a18` retained the exact fixed-swap
+layout, original persistence/EFI proofs and all twelve ordinary Nix outputs.
+The final audit acquired both flash locks, verified all twenty-five executed
+source hashes and found no writer. All five host services terminated
+successfully, including the corrected cleanup path; no manual audit completion
+was needed. The new build output is
+`/nix/store/hfzgdmlvkq5kahmj4ap80r27y9q72y9s-gemini-daemon-ac814b8bd7a14fb6bfcd30718b59ff83`.
+Future power/swap trials retain it automatically. See `watchdog-trigger.json`,
+`watchdog-observation.json`, `watchdog-result.json` and `final-idle-check.json`.
+
+The next diagnostic stages are `pm_test=freezer` and `pm_test=devices`.
+Source inspection of the selected derivation confirms that both return
+before `suspend_enter()` reaches device noirq callbacks; the watchdog stops
+only in its noirq callback, and its hibernation notifier ignores ordinary
+suspend notifications. Thus these stages retain watchdog coverage. The
+default diagnostic delay is five seconds. Exact source hashes and derivation
+identity are retained in `linux-watchdog-qualification/pm-stage-source-audit.json`.
+This is preparation evidence, not a successful suspend test. Full s2idle and
+hibernation still enter intervals where the hardware watchdog is paused.

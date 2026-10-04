@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('paging', ROOT/'tools/qualify-swap-io.py')
 paging = importlib.util.module_from_spec(spec); spec.loader.exec_module(paging)
 f = paging.f
+watchdog_expiry = f.q.module('linux_watchdog', ROOT/'tools/qualify-linux-watchdog.py')
 PROFILE = 'power-swap'
 BUNDLE = Path('/nix/store/mb5adwsfnri1jswcxhs6vl23hnj3jy5m-gemini-mainline-nixos-bundle')
 KERNEL = Path('/nix/store/b26xkc1n67c1xiz90fnzqg17w5dhvff3-gemini-mainline-power-swap-kernel-7.1.3')
@@ -120,7 +121,7 @@ test "$(sha256sum /sys/kernel/notes | cut -d' ' -f1)" = {NOTES_SHA}
     return state
 
 
-def configure():
+def configure(watchdog=False):
     # A separate module instance keeps old factory-layout profiles unchanged.
     r = f.q.module('power_swap_recovery', ROOT/'tools/qualify-uboot-recovery.py')
     if r.power_kernel.notes_sha(KERNEL) != NOTES_SHA:
@@ -145,6 +146,10 @@ def configure():
 
     r.qualify.snapshot = snapshot
     r.qualify.verify_return = verify_return
+    r.watchdog_expiry_requested = watchdog
+    if watchdog:
+        watchdog_expiry.install(SimpleNamespace(ROOT=ROOT, f=f, paging=paging,
+                                                SYSTEM=SYSTEM, NOTES_SHA=NOTES_SHA), r)
     return r
 
 
@@ -170,7 +175,8 @@ def preflight(r, directory, execute):
         names = {('nix/' if name == 'generate-late-cpu-provenance.py' else 'tools/') + name
                  for name in plan['executed_sources_sha256']}
         names.update(json.loads((ROOT.parent/'handoff/fixed-swap-04/plan.json').read_text())['executed_sources_sha256'])
-        names.update(('tools/qualify-power-swap.py', 'tools/qualify-swap-io.py', 'nix/gemini-swap-probe.c'))
+        names.update(('tools/qualify-power-swap.py', 'tools/qualify-swap-io.py',
+                      'tools/qualify-linux-watchdog.py', 'nix/gemini-swap-probe.c'))
         names.update('research/'+name for name in ('p22-proof-supervisor.sh', 'p22-flash-wrapper.sh',
             'p22-mtkclient-backend.py', 'trex-gadget-net-watcher.sh', 'p22-trex-transaction-holder.sh'))
         hashes = {}
@@ -181,7 +187,8 @@ def preflight(r, directory, execute):
         (directory/'storage-snapshot.sh').write_text(r.qualify.SNAPSHOT)
         plan.update(execute=execute, storage_layout='fixed-swap', storage_identity=STORAGE,
             all_executed_sources_sha256=hashes, default_zswap_shrinker=True,
-            paging_probe_sha256=paging.PROBE_SHA, runtime_policy_writes=False)
+            paging_probe_sha256=paging.PROBE_SHA, runtime_policy_writes=False,
+            watchdog_expiry_requested=r.watchdog_expiry_requested)
         r.qualify.save(directory, 'plan.json', plan)
         return before
 
@@ -256,7 +263,17 @@ def finish(r, directory, before, error=None):
         if passed:
             proof = json.loads((directory/'power-swap-evidence.json').read_text())
             passed = proof.get('default_policy_paging_qualified') is True and proof.get('runtime_policy_writes') is False
+        if plan.get('watchdog_expiry_requested'):
+            expiry = dict(watchdog_expiry_qualified=False)
+            if passed:
+                try:
+                    expiry = watchdog_expiry.verify_final(SimpleNamespace(f=f, SYSTEM=SYSTEM), directory)
+                except (OSError, ValueError, RuntimeError, KeyError, StopIteration) as caught:
+                    passed = False; error = caught
+            r.qualify.save(directory, 'watchdog-result.json', expiry)
+            result.update(expiry)
         result.update(result='passed' if passed else 'failed',
+            profile_qualified=passed,
             fixed_swap_preserved=True, default_policy_paging_qualified=passed,
             recovered_boot_id=after['boot_id'], ordinary_outputs_retained=outputs,
             source_hashes_match=True, no_writer=True)
@@ -272,6 +289,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--watchdog-expiry', action='store_true',
+                        help='After full candidate checks, qualify keepalive loss and automatic recovery')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args(); directory = args.out.resolve()
     if args.execute and not args.worker:
@@ -279,7 +298,8 @@ def main():
         print('Starting durable power/swap worker '+unit, flush=True)
         child = subprocess.run(['systemd-run', '--user', '--collect', '--wait', '--pipe', '--quiet', '--unit='+unit,
             '--property=RuntimeMaxSec=2400', '--setenv=PATH='+os.environ['PATH'], '--setenv=GEMINI_POWER_SWAP_UNIT='+unit,
-            sys.executable, str(Path(__file__).resolve()), '--worker', '--out', str(directory)])
+            sys.executable, str(Path(__file__).resolve()), '--worker', '--out', str(directory)] +
+            (['--watchdog-expiry'] if args.watchdog_expiry else []))
         if child.returncode: raise RuntimeError('Power/swap worker failed; inspect its retained trial and recovery evidence')
         return
     if args.worker:
@@ -288,7 +308,7 @@ def main():
                 f.q.r.qualify.run(['systemctl', '--user', 'show', unit, '-p', 'MainPID', '--value']).strip() != str(os.getpid())):
             raise RuntimeError('Candidate trial lacks its durable owner')
     os.umask(0o077)
-    r = configure(); before = preflight(r, directory, args.worker)
+    r = configure(args.watchdog_expiry); before = preflight(r, directory, args.worker)
     if not args.worker:
         print('Power/swap preflight passed; no device writes or reboot'); return
     error = None

@@ -38,6 +38,9 @@ All eleven build outputs survived. Installed M69 retains its original policy;
 the tested correction still needs promotion. Hibernation remains unqualified.
 The hibernation-watchdog kernel correction has now passed a separate normal
 boot/recovery trial, including an ordinary Nix build and data retention.
+The successor candidate also passed controlled Linux watchdog expiry: stopping
+its keepalive process caused a reset in 25.3 seconds and automatic M69 recovery,
+with all twelve Nix build outputs retained.
 Hibernation, deep idle and the complete lid power policy are not qualified.
 See [power evidence](research/POWER_QUALIFICATION.md) and the
 [fixed-swap plan](research/STORAGE_QUALIFICATION.md).
