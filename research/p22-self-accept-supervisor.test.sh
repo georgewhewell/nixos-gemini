@@ -144,4 +144,28 @@ if run_supervisor "$run" "$wrapper" "$WORK/outside" "$CANDIDATE_SHA"; then
 fi
 grep -Fq 'supervisor_blocked_bad_self_accept_path ' "$run/supervisor.state"
 
+# The mtkclient backend has already observed the first post-DA boot window.
+# It must bypass the legacy delay and forward its config to the rescue writer.
+# A connected failure (rc=2) is terminal, never the retryable rc=1 scan miss.
+run=$(make_run mtkclient-connected-failure)
+wrapper=$run/wrapper.sh
+cat > "$wrapper" <<'EOF'
+#!/bin/sh
+test "${10}" = "${1%/*}/backend.json" || exit 99
+printf 'called\n' >> "$1.calls"
+printf 'flash_rc=2 connected-write-failure\n' > "$1"
+exit 2
+EOF
+chmod +x "$wrapper"
+if P22_SUPERVISOR_ARM_DELAY=25 timeout 8 sh "$SUPERVISOR" "$run" "$run/candidate.state" \
+    "$run/rescue.img" "$(cat "$run/rescue.sha")" "$run/stage.img" \
+    "$run/download.xml" "$run/flash.lock" 4 "$wrapper" \
+    "$run/rollback.state" "$run/rollback.log" "$run/supervisor.state" \
+    8 '' '' 5 5 "$run/backend.json"; then
+    exit 1
+fi
+grep -Fq 'supervisor_rollback_failed ' "$run/supervisor.state"
+test "$(wc -l < "$run/rollback.state.calls")" -eq 1
+grep -Fq 'scan-timeout=180s' "$run/rollback.log"
+
 echo 'p22 self-accept supervisor tests: passed'

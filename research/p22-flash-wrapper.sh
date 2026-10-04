@@ -12,6 +12,7 @@ LOCK_FILE=${6:-${STATE%/*}/flash.lock}
 TRANSACTION_OWNER_FILE=${7:-}
 SID_FILE=${8:-${STATE%/*}/tool.sid}
 STARTTIME_FILE=${9:-${STATE%/*}/tool.starttime}
+BACKEND_CONFIG=${10:-}
 TOOL=/nix/store/wlgln84hg9k6hnqdm6r24vn21fxf85b7-mtk-flash-tool-2018-04-07/opt/mtk-flash-tool/flash_tool
 
 if [ -n "$TRANSACTION_OWNER_FILE" ] && ! test -s "$TRANSACTION_OWNER_FILE"; then
@@ -63,15 +64,22 @@ case "$starttime" in
 esac
 printf '%s\n' "$starttime" > "$STARTTIME_FILE"
 
-printf 'tool_started %s\n' "$(date -Is)" > "$STATE"
 {
     printf '[%s] wrapper_pid=%s wrapper_pgid=%s\n' "$(date -Is)" "$$" "$pgid"
     printf '[%s] exact p22 Download Only wrapper started\n' "$(date -Is)"
 } >> "$LOG"
-# Keep this above the harness's 250-second state wait so timeout completion
+# Keep this below the harness's 250-second state wait so timeout completion
 # cannot race the final poll; the tool's own BROM wait remains bounded.
-timeout --foreground 240 sudo -n "$TOOL" -i "$XML" -r >> "$LOG" 2>&1
+if [ -n "$BACKEND_CONFIG" ]; then
+    # No vendor fallback after selecting mtkclient. The backend publishes
+    # tool_started only once the client is actually waiting for preloader.
+    timeout --foreground 240 python3 "${0%/*}/p22-mtkclient-backend.py" \
+        --config "$BACKEND_CONFIG" --state "$STATE" >> "$LOG" 2>&1
+else
+    printf 'tool_started %s\n' "$(date -Is)" > "$STATE"
+    timeout --foreground 240 sudo -n "$TOOL" -i "$XML" -r >> "$LOG" 2>&1
+fi
 rc=$?
 printf 'flash_rc=%s %s\n' "$rc" "$(date -Is)" > "$STATE"
-printf '[%s] Flash Tool exited rc=%s\n' "$(date -Is)" "$rc" >> "$LOG"
+printf '[%s] p22 writer exited rc=%s\n' "$(date -Is)" "$rc" >> "$LOG"
 exit "$rc"

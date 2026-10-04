@@ -1316,7 +1316,9 @@ test_stage2_rendered_validation_requires_handoff() {
     }
     SSH_PATH_POLICY=both
     validate_candidate_right_path_stage2
-    grep -Fq 'resolve_emmc_partition boot3' "$RUN_LOCAL/rendered-stage2-right.sh"
+    # This transport check resolves p29 for the Stage2 mount evidence.
+    # Boot-slot hashes belong to preflight and final recovery/acceptance.
+    grep -Fq 'p29=$(resolve_emmc_device)p29' "$RUN_LOCAL/rendered-stage2-right.sh"
     grep -Fq 'idVendor' "$RUN_LOCAL/rendered-stage2-right.sh"
     grep -Fq 'watchdog-owner=$stage2_pid' "$RUN_LOCAL/rendered-stage2-right.sh"
     ! grep -Fq '/run/probe-status' "$RUN_LOCAL/rendered-stage2-right.sh"

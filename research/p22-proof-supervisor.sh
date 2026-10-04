@@ -25,6 +25,7 @@ SIZE=16777216
 SUPERVISOR_TERMINAL=no
 ROLLBACK_WAIT_SECONDS=${16:-${P22_SUPERVISOR_ROLLBACK_TIMEOUT:-300}}
 CANDIDATE_WAIT_SECONDS=${17:-300}
+BACKEND_CONFIG=${18:-}
 # The candidate flash completes while the device is still leaving the
 # preloader session used for the write.  Give that first boot a short,
 # measured grace period, then keep an exact rescue writer scanning throughout
@@ -32,6 +33,16 @@ CANDIDATE_WAIT_SECONDS=${17:-300}
 # within about ten seconds and the earliest failed-kernel watchdog return is
 # about thirty seconds after that, so fifteen seconds separates the two.
 ROLLBACK_ARM_DELAY_SECONDS=${P22_SUPERVISOR_ARM_DELAY:-15}
+SCAN_TIMEOUT_SECONDS=120
+POLL_INTERVAL=1
+if [ -n "$BACKEND_CONFIG" ]; then
+    # The mtkclient wrapper reports success only after observing the first
+    # post-flash preloader disappear. Start immediately to catch early U-Boot
+    # reset tests; another fixed delay can miss their entire recovery window.
+    ROLLBACK_ARM_DELAY_SECONDS=0
+    SCAN_TIMEOUT_SECONDS=180
+    POLL_INTERVAL=0.1
+fi
 
 write_state() {
     printf '%s %s\n' "$1" "$(date -Is)" > "$SUPERVISOR_STATE"
@@ -104,7 +115,7 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
         'flash_rc=0 '*) break ;;
         flash_rc=*) candidate_failed=yes; break ;;
     esac
-    sleep 1
+    sleep "$POLL_INTERVAL"
 done
 case "$(cat "$CANDIDATE_STATE" 2>/dev/null || true)" in
     'flash_rc=0 '*) ;;
@@ -125,7 +136,7 @@ if [ "$candidate_failed" = no ]; then
     rollback_deadline=$(( $(date +%s) + ACCEPTANCE_WINDOW + ROLLBACK_WAIT_SECONDS ))
     arm_at=$(( $(date +%s) + ROLLBACK_ARM_DELAY_SECONDS ))
     while [ "$(date +%s)" -lt "$arm_at" ]; do
-        sleep 1
+        sleep "$POLL_INTERVAL"
     done
 else
     # A failed/partial candidate transaction is still unsafe to boot. Roll
@@ -155,11 +166,11 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
     fi
     rm -f "$ROLLBACK_STATE"
     deadline_remaining=$((deadline - $(date +%s)))
-    printf '[%s] rollback phase=brom-scan attempt=%s scan-timeout=120s deadline-remaining=%ss\n' \
-        "$(date -Is)" "$rollback_attempt" "$deadline_remaining" >> "$ROLLBACK_LOG"
+    printf '[%s] rollback phase=brom-scan attempt=%s scan-timeout=%ss deadline-remaining=%ss\n' \
+        "$(date -Is)" "$rollback_attempt" "$SCAN_TIMEOUT_SECONDS" "$deadline_remaining" >> "$ROLLBACK_LOG"
     setsid sh "$WRAPPER" "$ROLLBACK_STATE" "$ROLLBACK_LOG" "$XML" \
         "$pid_file" "$pgid_file" "$FLASH_LOCK" "$RUN_SHARED/transaction-owner" "$sid_file" \
-        "$starttime_file" \
+        "$starttime_file" "$BACKEND_CONFIG" \
         </dev/null >/dev/null 2>&1 &
     launch_pid=$!
     while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -176,7 +187,7 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
             'flash_rc=1 '*) break ;;
             flash_rc=*) write_state supervisor_rollback_failed; exit 1 ;;
         esac
-        sleep 1
+        sleep "$POLL_INTERVAL"
     done
     state=$(cat "$ROLLBACK_STATE" 2>/dev/null || true)
     if printf '%s\n' "$state" | grep -Fq 'flash_rc=1 '; then
@@ -189,7 +200,8 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
             write_state supervisor_candidate_self_accepted
             exit 0
         fi
-        # Flash Tool's own BROM scan is 120 seconds. Reap each missed scan and
+        # Flash Tool scans for 120s; mtkclient bounds each attempt at 180s and
+        # maps only a device-free timeout to rc=1. Reap each missed scan and
         # immediately reopen the same exact p22-only rescue transaction. This
         # keeps coverage continuous from the first possible failed-kernel
         # reset through the watchdog lease-expiry proof, under one absolute
