@@ -1918,6 +1918,7 @@
       usbNcmProbeBootImg = usbNcmProbeBootImg;
       probeInitramfs = probeInitramfs;
       mtkclient = import ./nix/mtkclient.nix {inherit buildPkgs;};
+      mtkclientGpt = import ./nix/mtkclient-gpt.nix {inherit buildPkgs;};
       ubootHandoff = ubootProfiles.handoff.uboot;
       ubootHandoffBundle = ubootProfiles.handoff.bundle;
       ubootEfiLinux = ubootProfiles.efiLinux.uboot;

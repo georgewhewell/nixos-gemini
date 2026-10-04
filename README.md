@@ -22,8 +22,10 @@ reception remain open.
 
 The device has the factory 33-partition GPT. Persistent home and the writable
 Nix layer now survive supervised reboots, using the existing p32 filesystem.
-There is no p34 swap. A separate candidate has passed ordinary sandboxed Nix
-builds through the daemon as the unprivileged `gemini` user, retaining the
+There is no p34 swap. mtkclient has now rewritten and verified both existing
+GPT copies on hardware, with automatic healthy Linux return and data retention;
+installing the proposed swap layout remains separate. A candidate has passed
+ordinary sandboxed Nix builds through the daemon as the unprivileged `gemini` user, retaining the
 output through recovery. Installed M69 still lacks its network namespace and
 daemon-unit fixes; normal NixOS generation updates remain unfinished. See
 [storage evidence](research/PERSISTENCE.md).

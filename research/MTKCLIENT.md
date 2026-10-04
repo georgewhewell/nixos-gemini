@@ -302,3 +302,20 @@ checks reject invalid data; valid bytes alone do not establish which boot
 produced a log. The second EFI Linux trial's fresh phase and captured kernel
 panic together identify its failed initramfs handoff. Device-specific RAM
 capture remains separate from any GPT-write qualification.
+
+## Factory GPT write qualification
+
+The separate `mtkclientGpt` package and `tools/qualify-gpt-rewrite.py` passed
+`handoff/gpt-rewrite-01`. One DA session admitted the exact factory GPT and
+protected boot images, rewrote the backup and primary in that order, verified
+each write independently, reread the complete GPT/protected data, and
+acknowledged reboot. Fresh healthy M69 returned automatically as boot
+`2c468de5-5249-43a0-ab38-6be1cf570603`; all ten retained ordinary Nix outputs,
+the original persistence proof and published EFI files passed subsequent checks.
+
+This package accepts only the original factory bytes. The existing boot-only
+package and recovery backend are unchanged. The disk still has 33 partitions
+and no swap. Host tests cover partial-write/restoration failures; provisioning
+a changed layout and recovering it on hardware remain separate work. See
+[STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md) for exact bounds, artifacts
+and the fixed-swap prerequisites.

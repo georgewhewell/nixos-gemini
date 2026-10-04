@@ -54,12 +54,59 @@ The older `codex/storage-consolidation` branch also has a tested extent guard
 for `gemini-storage-provision`; it is not deployed. Installed M69's old manual
 provisioning script is not the qualified path for this change.
 
+## Factory GPT writer
+
+The separate `mtkclientGpt` package adds a deliberately restricted
+`gemini-gpt-rewrite DIRECTORY` command. It accepts only the captured factory
+GPT bytes and the identified MT6797 eMMC geometry. In one connected download
+agent session it checks both GPT copies and all three boot partitions, captures
+`flashinfo`, writes the backup first, verifies its readback, then writes and
+verifies the primary. Complete GPT and protected-partition reads follow both
+writes. A failed admitted operation attempts to restore both original copies;
+reboot requires verified original GPT and protected data.
+
+`tools/qualify-gpt-rewrite.py` stages private inputs and evidence, pins the
+package and executed sources, and holds both flash locks through the bounded
+DA session and Linux/data-retention checks. Its default is a read-only
+preflight. The execution path runs in a durable host service and requires
+the complete admission/write/readback/reboot sequence, independent binary
+readbacks, a fresh healthy M69 boot, preserved EFI files and all ten previous
+ordinary Nix build outputs.
+
+```sh
+nix build .#mtkclientGpt --out-link ../handoff/mtkclient-gpt
+python3 tools/test-qualify-gpt-rewrite.py
+python3 tools/qualify-gpt-rewrite.py --out NEW_DIRECTORY
+```
+
+Add `--execute` only for the factory rewrite trial. This command cannot install
+the proposed swap layout. Thirteen package tests cover protocol addresses and
+payloads, partial writes, failed acknowledgements, readback/restoration errors,
+device identity, input files and CLI dispatch. Five host verifier tests reject
+incomplete or reordered evidence, altered readbacks and protected data changes.
+The build and test evidence is in `handoff/gpt-rewrite-host-checks`; fresh
+read-only preflight passed in `handoff/gpt-rewrite-preflight-02`.
+
+The hardware trial `handoff/gpt-rewrite-01` passed using
+`/nix/store/rj1a8wj8l9w7z7rfy6sw0ka2imlhrawy-mtkclient-gemini-gpt-2.1.4.1`.
+The backup write was exactly 16,896 bytes at byte offset 62,537,055,744;
+the primary was exactly 17,408 bytes at offset zero. Both were acknowledged
+and independently read back before proceeding. The complete 20-event journal,
+four GPT readback files and protected-partition hashes passed verification.
+The DA acknowledged reboot, and Linux returned automatically as healthy M69
+boot `2c468de5-5249-43a0-ab38-6be1cf570603`. All ten ordinary Nix outputs,
+their database/GC-root identities, the original home/fixed-output proof and
+published EFI files survived. The layout is unchanged: 33 partitions, no p34,
+no swap. This proves successful factory-copy writes; failure restoration is
+covered by host tests, while a changed-layout transaction remains unqualified.
+
 ## Required before installation
 
-The mtkclient boot-only lane is qualified. Its backend and healthy-return
-checks currently expect the factory GPT, so using it unchanged after adding
-p34 would break recovery verification. Fixed swap requires a separate complete
-transaction: offline persistent-data checks/backup, bounded GPT writes and
+The mtkclient boot-only lane and factory-GPT rewrites are qualified. The boot
+backend and healthy-return checks still expect the factory GPT, so using them
+unchanged after adding p34 would break recovery verification. Fixed swap
+requires a separate complete transaction: offline persistent-data checks/backup,
+bounded GPT writes and
 independent readback, recovery that admits both exact layouts and restores the
 original GPT on failure, then boot and data-retention checks. Swap formatting,
 activation and reboot persistence must be verified afterwards. Hibernation

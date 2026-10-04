@@ -1,0 +1,28 @@
+--- a/mtk.py
++++ b/mtk.py
+@@ -197,6 +197,10 @@
+     # Footer
+     cmd_parsers["footer"].add_argument("filename", help="Filename to store footer")
+ 
++    rewrite = subparsers.add_parser("gemini-gpt-rewrite", parents=[base],
++                                    help="Verify and rewrite only the pinned Gemini factory GPT")
++    rewrite.add_argument("directory", help="Fresh private qualification directory")
++
+     # ─── Other commands ──────────────────────────────────────────────────
+ 
+     cmd_fs = subparsers.add_parser("fs", help="Mount as FUSE filesystem")
+--- a/mtkclient/Library/DA/mtk_da_handler.py
++++ b/mtkclient/Library/DA/mtk_da_handler.py
+@@ -1257,7 +1257,11 @@
+             sys.exit(1)
+         if mtk.daloader.config.generatekeys and mtk.daloader.is_patched():
+             mtk.daloader.keys()
+-        if cmd == "gpt":
++        if cmd == "gemini-gpt-rewrite":
++            from mtkclient.Library.gemini_gpt_rewrite import rewrite_factory
++            if not rewrite_factory(mtk, args.directory):
++                sys.exit(1)
++        elif cmd == "gpt":
+             directory = args.directory
+             self.da_gpt(directory=directory)
+         elif cmd == "printgpt":
