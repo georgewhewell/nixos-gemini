@@ -1,11 +1,12 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
 assert !efiConsole || efiLinux;
 assert !efiKeyboard || efiConsole;
+assert !efiMmc || efiKeyboard;
 let
-  profile = if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
+  profile = if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
   defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
 in
 crossPkgs.buildUBoot {
@@ -18,7 +19,23 @@ crossPkgs.buildUBoot {
     ${buildPkgs.lib.optionalString efiConsole ''
     echo 'CONFIG_GEMINI_EFI_CONSOLE=y' >> configs/${defconfig}
     ${buildPkgs.lib.optionalString efiKeyboard "echo CONFIG_GEMINI_EFI_KEYBOARD=y >> configs/${defconfig}"}
-    echo 'CONFIG_DEFAULT_DEVICE_TREE="${if efiKeyboard then "mt6797-gemini-pda-keyboard" else "mt6797-gemini-pda-console"}"' >> configs/${defconfig}
+    ${buildPkgs.lib.optionalString efiMmc ''
+    cat >> configs/${defconfig} <<'MMC_CONFIG'
+    CONFIG_GEMINI_EFI_MMC=y
+    CONFIG_MMC=y
+    # CONFIG_MMC_WRITE is not set
+    # CONFIG_MMC_HW_PARTITIONING is not set
+    # CONFIG_SUPPORT_EMMC_BOOT is not set
+    # CONFIG_SUPPORT_EMMC_RPMB is not set
+    # CONFIG_CMD_MMC is not set
+    # CONFIG_MMC_IO_VOLTAGE is not set
+    # CONFIG_MMC_UHS_SUPPORT is not set
+    # CONFIG_MMC_HS200_SUPPORT is not set
+    # CONFIG_MMC_HS400_SUPPORT is not set
+    CONFIG_SYS_MMC_MAX_BLK_COUNT=128
+    MMC_CONFIG
+    ''}
+    echo 'CONFIG_DEFAULT_DEVICE_TREE="${if efiMmc then "mt6797-gemini-pda-mmc" else if efiKeyboard then "mt6797-gemini-pda-keyboard" else "mt6797-gemini-pda-console"}"' >> configs/${defconfig}
     ''}
   '';
   SOURCE_DATE_EPOCH = 1788493603;
@@ -33,6 +50,7 @@ crossPkgs.buildUBoot {
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-boot-flow-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-gop-stride-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-keyboard-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-mmc-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-console-fdt-host.py
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
     grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
@@ -87,7 +105,20 @@ crossPkgs.buildUBoot {
     done
     test "$(fdtget u-boot.dtb /i2c@1101c000/keyboard@5b compatible)" = planet,gemini-aw9523-keyboard
     ''}
-    for symbol in EFI_VARIABLE_FILE_STORE EFI_VARIABLE_SF_STORE EFI_MM_COMM_TEE EFI_BOOTMGR EFI_NET FAT_WRITE FAT_RENAME FASTBOOT_FLASH MMC MTD NVME SCSI USB_STORAGE; do
+    ${buildPkgs.lib.optionalString efiMmc ''
+    for symbol in GEMINI_EFI_MMC MMC DM_MMC MMC_MTK EFI_PARTITION FS_EXT4; do
+      grep -Fqx "CONFIG_$symbol=y" .config
+    done
+    test "$(fdtget u-boot.dtb /mmc@11230000 compatible)" = mediatek,mt6797-mmc
+    test "$(fdtget u-boot.dtb /mmc@11230000 bus-width)" = 8
+    test "$(fdtget u-boot.dtb /mmc@11230000 max-frequency)" = 25000000
+    grep -Fqx 'CONFIG_SYS_MMC_MAX_BLK_COUNT=128' .config
+    if grep -Eq ' (mmc_bwrite|mmc_berase|mmc_hwpart_config)$' linked-symbols.txt; then
+      echo 'MMC storage mutation API remains linked' >&2
+      exit 1
+    fi
+    ''}
+    for symbol in EFI_VARIABLE_FILE_STORE EFI_VARIABLE_SF_STORE EFI_MM_COMM_TEE EFI_BOOTMGR EFI_NET FAT_WRITE FAT_RENAME FASTBOOT_FLASH ${buildPkgs.lib.optionalString (!efiMmc) "MMC"} MMC_WRITE MMC_HW_PARTITIONING SUPPORT_EMMC_BOOT SUPPORT_EMMC_RPMB MMC_IO_VOLTAGE MMC_UHS_SUPPORT MMC_HS200_SUPPORT MMC_HS400_SUPPORT CMD_MMC EXT4_WRITE ENV_IS_IN_MMC MTD NVME SCSI USB_STORAGE; do
       if grep -Eq "^CONFIG_$symbol=y$" .config; then
         echo "unexpected persistent or boot-manager option: $symbol" >&2
         exit 1

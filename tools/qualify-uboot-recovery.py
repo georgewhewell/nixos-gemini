@@ -26,6 +26,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-mmc': (WORKSPACE / 'handoff/uboot-efi-mmc/boot-padded-p22.img',
+                '88c6aa8a2e466dd153c0fc19b0f2d17c5ddcdda5d1cd415bc3a166e0d681d5f4'),
     'efi-keyboard': (WORKSPACE / 'handoff/uboot-efi-keyboard/boot-padded-p22.img',
                      '2b66cccaba6e4fe52e2f172af09896c91ec7ad0fa4b34d79a195482e17e2e9d5'),
     'efi-console': (WORKSPACE / 'handoff/uboot-efi-console/boot-padded-p22.img',
@@ -42,9 +44,11 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard')
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc')
 LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
+MMC_GPT_SHA = '6addff62cc67f5b5fac9bd87194b6643f4029262251c51c1e43e1b5b64cb887d'
+MMC_FILE_SHA = 'fb9d072b57e41d245ace3e2256ac57ab4dfd42cf4c010993b4d6c3e67b44e16d'
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
 P31_SHA = '1fa78de9f8744a6818bcef2f6773737939f84364de982413910d4958d6d21513'
 PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
@@ -74,7 +78,7 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
-for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error; do
+for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
 awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
@@ -85,7 +89,9 @@ CONSOLE_MARKER = 'chosen/gemini,uefi-console-result'
 KEYBOARD_MARKER = 'chosen/gemini,uefi-keyboard-result'
 KEYBOARD_SCANS = 'chosen/gemini,uefi-keyboard-scans'
 KEYBOARD_ERROR = 'chosen/gemini,uefi-keyboard-error'
-MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)
+MMC_MARKERS = tuple("chosen/gemini,uefi-mmc-" + name for name in
+                    ('result', 'stage', 'error', 'elapsed-ms', 'clock', 'width', 'gpt-sha256', 'boot-sha256', 'boot2-sha256', 'boot3-sha256', 'file-sha256'))
+MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR) + MMC_MARKERS
 
 
 def handoff_tree(ssh):
@@ -123,10 +129,10 @@ def verify_handoff_tree(before, after, profile):
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
-    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard') else None
+    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard', 'efi-mmc') else None
     if after.get(CONSOLE_MARKER) != expected_console:
         raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
-    if profile == 'efi-keyboard':
+    if profile in ('efi-keyboard', 'efi-mmc'):
         scans = bytes.fromhex(after.get(KEYBOARD_SCANS, ''))
         if (after.get(KEYBOARD_MARKER) != b'scanned\0'.hex() or
                 after.get(KEYBOARD_ERROR) != '00000000' or
@@ -135,6 +141,25 @@ def verify_handoff_tree(before, after, profile):
                 {key: after.get(key) for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)}))
     elif any(key in after for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)):
         raise RuntimeError('Unexpected EFI keyboard evidence in another profile')
+
+    if profile == 'efi-mmc':
+        verify_mmc_tree(after)
+    elif any(key in after for key in MMC_MARKERS):
+        raise RuntimeError('Unexpected native MMC evidence in another profile')
+
+
+def verify_mmc_tree(tree):
+    values = {name.removeprefix('chosen/gemini,uefi-mmc-'): tree.get(name) for name in MMC_MARKERS}
+    expected = {'result': b'passed\0'.hex(), 'stage': b'filesystem\0'.hex(),
+                'error': '00000000', 'width': '00000008',
+                'gpt-sha256': MMC_GPT_SHA, 'boot-sha256': PROFILES['efi-mmc'][1],
+                'boot2-sha256': P30_SHA, 'boot3-sha256': P31_SHA, 'file-sha256': MMC_FILE_SHA}
+    if any(values[key] != value for key, value in expected.items()):
+        raise RuntimeError('Native MMC qualification failed or returned different bytes: ' + repr(values))
+    for key, maximum in (('clock', 25000000), ('elapsed-ms', 60000)):
+        value = values[key]
+        if not isinstance(value, str) or not re.fullmatch('[0-9a-f]{8}', value) or not 0 < int(value, 16) <= maximum:
+            raise RuntimeError('Native MMC qualification has an invalid ' + key + ': ' + repr(value))
 
 
 
@@ -285,6 +310,8 @@ def recovery_timing(directory, profile):
 
 def phase_evidence(before, after, profile):
     phase = PHASES.get(after)
+    if isinstance(after, str) and re.fullmatch('0x474d30[0-9a-f]{2}', after):
+        phase = 'mmc_resource_failure_errno_' + str(int(after[-2:], 16))
     known_before = isinstance(before, str) and bool(re.fullmatch(r'0x[0-9a-f]{8}', before))
     fresh = profile != 'baseline' and known_before and before != after and phase is not None
     intended = {'reset': 'reset_test', 'watchdog': 'watchdog_expiry_test'}.get(profile)

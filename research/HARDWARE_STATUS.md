@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior, storage and boot manager remain. Fn navigation now passes host tests. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior and boot manager remain. Fn navigation passes host tests and is included in the successful native-MMC boot. Native eMMC now passes full GPT/p22/p30/p31 and p29 file hash checks; EFI file loading remains. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -127,3 +127,13 @@ build: Fn+arrows, Fn+Shift+number function keys, and Shift+Backspace/Delete.
 It has not been separately flashed. Full Fn text-symbol parity and Alt/Meta
 semantics remain unfinished; the pinned hardware-qualified keyboard carrier
 is retained by the trial runner.
+
+
+The native eMMC trial `handoff/uboot-efi-mmc-01` also passed on October 4.
+It read and hashed the primary GPT, all three 16 MiB boot partitions and
+an existing p29 ext4 file in U-Boot, with all hashes matching. EFI Linux
+passed full health, 43 EFI descriptors covering 4 GiB and 1,402 keyboard
+scans without error. Automatic rescue restored healthy M69 boot
+`992b64b9-c885-4b69-a071-462272ab3b4d` with unchanged GPT/p22/p30/p31. Native firmware
+storage writes remain disabled; EFI filesystem access and the distro
+picker are subsequent milestones. See BOOT_HANDOFF.md for artifact pins.

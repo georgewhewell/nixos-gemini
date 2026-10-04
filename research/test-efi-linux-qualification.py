@@ -29,6 +29,28 @@ class EfiProof(unittest.TestCase):
                 r.verify_handoff_tree({},dict(after,**{key:value}),'efi-keyboard')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},after,'efi-console')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree(after,after,'efi-keyboard')
+    def test_mmc_requires_exact_full_reads_and_native_bus_evidence(self):
+        tree={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex(),
+              r.KEYBOARD_MARKER:b'scanned\0'.hex(),r.KEYBOARD_SCANS:'00000100',r.KEYBOARD_ERROR:'00000000'}
+        values={'result':b'passed\0'.hex(),'stage':b'filesystem\0'.hex(),'error':'00000000',
+                'width':'00000008','clock':(25000000).to_bytes(4,'big').hex(),'elapsed-ms':'00001388',
+                'gpt-sha256':r.MMC_GPT_SHA,'boot-sha256':r.PROFILES['efi-mmc'][1],
+                'boot2-sha256':r.P30_SHA,'boot3-sha256':r.P31_SHA,'file-sha256':r.MMC_FILE_SHA}
+        tree.update({'chosen/gemini,uefi-mmc-'+key:value for key,value in values.items()})
+        r.verify_handoff_tree({},tree,'efi-mmc')
+        for key in r.MMC_MARKERS:
+            for bad in (None, '', '0' * 64, 'ffffffff', '00000000'):
+                if bad == tree[key]: continue
+                with self.subTest(key=key,value=bad), self.assertRaises(RuntimeError):
+                    r.verify_handoff_tree({},dict(tree,**{key:bad}),'efi-mmc')
+            missing=dict(tree);del missing[key]
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},missing,'efi-mmc')
+        for profile in ('efi-keyboard','efi-console','efi-linux'):
+            with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,profile)
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree(tree,tree,'efi-mmc')
+        self.assertEqual(r.phase_evidence('0x00000000','0x474d3016','efi-mmc')['uboot_phase'],
+                         'mmc_resource_failure_errno_22')
+
     def setUp(self):
         self.entries = [(0x40000000,0x40001000,'Reserved'),
                         (0x40001000,0x43fff000,'Conventional'),

@@ -7,8 +7,10 @@ one corrected EFI-application/FIT handoff cycle also passed. The corrected
 EFI Linux profile passed full service health, ExitBootServices, the full
 4 GiB EFI memory map and automatic M69 rescue in trials 04 and 05. The new
 EFI console profile additionally passed GOP pixel/stride checks and visible
-text confirmed by the owner. Keyboard, storage and a boot manager remain
-unfinished.
+text confirmed by the owner. Native keyboard initialization and polling
+also pass through EFI. Native eMMC reads now pass the full boot-partition
+and filesystem hash checks below. Physical key actuation, complete modifier
+support, EFI file loading and a boot manager remain unfinished.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -56,8 +58,8 @@ transaction and a person at the device. Then boot M69 through the plain
 handoff, verify both new boot identity and the Linux-visible marker, LK RAM and
 modem reservations, and full M69 health. Repeat boots before adding the EFI
 smoke test. EFI Linux/ExitBootServices now has a separate qualification below;
-Keyboard, storage and a boot manager remain; GOP and visible EFI text now
-have a separate qualification below.
+Keyboard polling, GOP and visible EFI text have separate qualifications
+below. Storage and a boot manager are subsequent milestones.
 
 The mtkclient candidate/rescue supervisor now has a hardware-qualified M69
 baseline (`handoff/mtkclient-supervisor-baseline-02`); both writes, readbacks,
@@ -511,7 +513,66 @@ This follow-up is built but not separately flashed. Its carrier at
 `handoff/uboot-efi-keyboard-fn` has SHA-256
 `41171ae37f296acd38ad8f1b13f89faead71174b97ae945b41d37de244ddb419`. The qualification runner deliberately retains the
 hardware-qualified `2b66ccca...e2e9d5` keyboard carrier. The default direct
-Linux build remains M69. Next boot-path work is a read-only MMC profile:
-validate MSDC0 clocks/pins and the MT7623-compatible controller behavior,
-then verify GPT and existing file bytes before loading a distro manager.
+Linux build remains M69. The subsequent read-only MMC profile below includes
+this Fn follow-up and verifies MSDC0 operation and existing file bytes before
+loading a distro manager.
 No ESP migration or storage-layout change was performed here.
+
+
+## Read-only native eMMC profile
+
+`ubootEfiMmcBundle` / `efi-mmc` adds MSDC0 using the MT6797-compatible PIO
+path and retains the display and Fn-enabled keyboard. U-Boot source
+`4973bd4a2e1c6392a48f0fc3117a3cd208dff449` checks inherited pin muxes,
+PLL power and source selections before taking ownership of only the two
+MSDC0 clock gates. It derives both clock rates from live PLL registers,
+retaining LK's mux, pad drive, pulls and supply settings. The Linux reference
+has a 383,999,878 Hz source, 273 MHz HCLK and approximately 24 MHz actual
+8-bit legacy bus; the profile requests at most 25 MHz and no high-speed modes.
+
+MMC storage writes, erase support, boot/hardware partition configuration,
+RPMB and filesystem writes are excluded from the build. A command whitelist
+also rejects all data-write transfers and durable eMMC configuration commands
+at the host-controller boundary. Only reads, identification and the volatile
+bus-width/timing/erase-group geometry fields needed for initialization are
+allowed. Production-function host tests cover those restrictions, inherited
+clock/pin/power guards, gate/DMA failures and bounded complete-range hashing.
+
+The native probe requires the expected 512-byte sectors, 122,142,720-sector
+user area, eight-bit legacy bus and exact GPT extents. It hashes the primary
+32 KiB GPT region and all 16 MiB of each of p22, p30 and p31 in 64 KiB chunks,
+then reads and hashes `/etc/debian_version` on p29 through the ext4 reader.
+The host compares p22 against the actual carrier hash; embedding that hash
+in the carrier itself would be circular. It also checks all other fixed
+hashes, success stage, width, clock and elapsed time. Failure is retained in
+`/chosen/gemini,uefi-mmc-*` while Linux boot and automatic rescue continue.
+Early clock/pin failures use retained phase `0x474d30xx`, with errno in `xx`.
+The read loop has a 30-second deadline and bounded controller timeouts; the
+independent watchdog covers a stuck controller or filesystem operation.
+
+The first carrier is rooted at `handoff/uboot-efi-mmc`, SHA-256
+`88c6aa8a2e466dd153c0fc19b0f2d17c5ddcdda5d1cd415bc3a166e0d681d5f4`.
+Its cross build, all firmware host checks, write-API absence checks and
+carrier validation passed. `handoff/uboot-efi-mmc-preflight-01` passed the
+read-only live-device admission checks. Trial `handoff/uboot-efi-mmc-01` reached healthy EFI Linux boot
+`cef5ad27-29fb-434f-8632-01ba7d1c90e4`. Native reads took 4,378 ms,
+with eight-bit legacy mode, 25 MHz requested clock and zero error. All five
+hashes matched, including the complete running carrier. Display/GOP passed,
+1,402 real keyboard matrix scans completed without error, and EFI Linux
+passed full health, both A72 starts, its complete RAM map and LK reservations.
+The Fn implementation is included in this hardware boot; no physical key
+press was required or observed. Automatic rescue restored fully healthy M69 boot
+`992b64b9-c885-4b69-a071-462272ab3b4d`. Both writes, complete image readbacks and
+reboot acknowledgements passed; final GPT/p22/p30/p31 guards passed. The
+fresh retained phase was ExitBootServices (`0x474d10ee`), with 221.771 seconds
+from candidate preloader departure to rescue entry. The EFI map contained
+43 descriptors spanning all 4 GiB. No physical intervention was needed.
+
+This proves native PIO eMMC identification and block/ext4 reads. EFI Block
+I/O and Simple File System reads by an EFI application, then loading the
+distro manager, are the next boot-path milestones. U-Boot currently leaves
+its EFI read-only media flag at the default despite the absent MMC write
+API; that capability reporting should be corrected before the EFI storage
+trial. No filesystem migration or GPT change was performed. The accepted
+`mainlineNixosBundle` still evaluates to
+`/nix/store/92140xp096mcjqp6laid183r1cw2ky95-gemini-mainline-nixos-bundle`.
