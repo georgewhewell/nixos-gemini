@@ -63,10 +63,12 @@ console/GPU restoration.
 
 The accepted path uses the existing boot firmware, an Android-format Linux
 image, a watchdog-managed initramfs and NixOS stage 2. The Nix store squashfs
-on p29 is mounted read-only. U-Boot/UEFI, GOP and a boot manager are unfinished.
-The [U-Boot profiles](research/BOOT_HANDOFF.md) reach `board_init` and return
-automatically to rescue. The failure before `board_late_init` remains under
-investigation; Linux handoff and watchdog expiry are still unqualified.
+on p29 is mounted read-only. The [U-Boot profiles](research/BOOT_HANDOFF.md)
+now qualify software reset, watchdog expiry, repeated Linux FIT handoff,
+EFI application entry/return and full EFI Linux/ExitBootServices. The EFI
+Linux trial retained the full 4 GiB memory map, passed service health and
+automatically restored the accepted M69 image through mtkclient. GOP,
+keyboard, storage and a production boot manager remain unfinished.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797

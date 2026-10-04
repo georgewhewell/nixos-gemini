@@ -1,13 +1,18 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
-assert recoveryTest == 0 || !efiSmoke;
+assert recoveryTest == 0 || !(efiSmoke || efiLinux);
+assert !(efiSmoke && efiLinux);
+let
+  profile = if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
+  defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
+in
 crossPkgs.buildUBoot {
-  pname = "uboot-mt6797-gemini-${if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}";
+  pname = "uboot-mt6797-gemini-${profile}-${toString recoveryTest}";
   version = "2026.10-m69";
   src = source;
-  defconfig = if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
+  inherit defconfig;
   preConfigure = ''
-    echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig"}
+    echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${defconfig}
   '';
   SOURCE_DATE_EPOCH = 1788493603;
   filesToInstall = [
@@ -30,6 +35,7 @@ crossPkgs.buildUBoot {
       exit 1
     fi
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-lk-fdt-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-map-host.py
     grep -Fqx 'CONFIG_PRE_CON_BUF_SZ=65536' .config
     grep -Fqx '# CONFIG_ARCH_FIXUP_FDT_MEMORY is not set' .config
     ${crossPkgs.stdenv.cc.targetPrefix}strings u-boot > binary-strings.txt
@@ -44,11 +50,18 @@ crossPkgs.buildUBoot {
       grep -Fqx "CONFIG_$symbol=y" .config
     done
     ''}
-    ${buildPkgs.lib.optionalString (!efiSmoke) ''
+    ${buildPkgs.lib.optionalString (!(efiSmoke || efiLinux)) ''
     if grep -Eq '^CONFIG_(GEMINI_EFI_SMOKE|EFI_LOADER)=y$' .config; then
       echo 'plain handoff unexpectedly enables EFI' >&2
       exit 1
     fi
+    ''}
+    ${buildPkgs.lib.optionalString efiLinux ''
+    for symbol in GEMINI_EFI_LINUX EFI_LOADER EFI_BINARY_EXEC BOOTM_EFI EFI_VARIABLE_NO_STORE; do
+      grep -Fqx "CONFIG_$symbol=y" .config
+    done
+    grep -Fqx 'CONFIG_EFI_IMAGE_MIN_ALIGNMENT=0x200000' .config
+    grep -Fqx 'CONFIG_STACK_SIZE=0x400000' .config
     ''}
     for symbol in EFI_VARIABLE_FILE_STORE EFI_VARIABLE_SF_STORE EFI_MM_COMM_TEE EFI_BOOTMGR EFI_NET FAT_WRITE FAT_RENAME FASTBOOT_FLASH MMC MTD NVME SCSI USB_STORAGE; do
       if grep -Eq "^CONFIG_$symbol=y$" .config; then

@@ -12,6 +12,7 @@
   inputDiagnostics ? false,
   displayActivation ? false,
   provisionStore ? false,
+  stage1PersistentHostKey ? false,
   provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
   kernelLeaseSelfAcceptToken ? null,
@@ -160,7 +161,9 @@ let
       root/sys/fs/pstore
     cp "$busybox/bin/busybox" root/bin/busybox
     cp "$dropbear/bin/dropbear" root/bin/dropbear
-    cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey
+    cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey${buildPkgs.lib.optionalString stage1PersistentHostKey ''
+
+    cp "$dropbear/bin/dropbearconvert" root/bin/dropbearconvert''}
     cp ${bq2589xPreflight} root/bin/bq2589x-preflight
     cp ${./unattended-recovery-lease-record.sh} \
       root/bin/unattended-recovery-lease-record
@@ -289,7 +292,19 @@ let
     export PATH=/bin
     hostname gemini-mainline-stage1 2>/dev/null || true
     key=/run/dropbear-ed25519-host-key
-    dropbearkey -t ed25519 -f "$key" > /run/dropbear-keygen.log 2>&1 || exit 1
+    ${if stage1PersistentHostKey then ''
+    # Reuse the already trusted key without changing the on-disk original.
+    # The init process mounts p29 independently; wait for that exact mount.
+    attempt=0
+    while [ ! -r /mnt/gemian/etc/ssh/ssh_host_ed25519_key ]; do
+      attempt=$((attempt + 1))
+      [ "$attempt" -lt 60 ] || exit 1
+      sleep 1
+    done
+    umask 077
+    dropbearconvert openssh dropbear /mnt/gemian/etc/ssh/ssh_host_ed25519_key \
+      "$key" > /run/dropbear-keygen.log 2>&1 || exit 1
+    '' else ''dropbearkey -t ed25519 -f "$key" > /run/dropbear-keygen.log 2>&1 || exit 1''}
     exec dropbear \
       -F -E -s -j -k -m -K 30 -T 4 \
       -P /run/dropbear.pid -p 22 -r "$key" \

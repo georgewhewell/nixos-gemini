@@ -1,7 +1,8 @@
-{ buildPkgs, uboot, linuxBundle, efiSmoke ? false, recoveryTest ? 0 }:
+{ buildPkgs, uboot, linuxBundle, efiSmoke ? false, efiLinux ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
-assert recoveryTest == 0 || !efiSmoke;
-buildPkgs.runCommand "gemini-uboot-${if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}-carrier" {
+assert recoveryTest == 0 || !(efiSmoke || efiLinux);
+assert !(efiSmoke && efiLinux);
+buildPkgs.runCommand "gemini-uboot-${if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}-carrier" {
   nativeBuildInputs = [ buildPkgs.python3 buildPkgs.dtc buildPkgs.ubootTools ];
   SOURCE_DATE_EPOCH = 1788493603;
 } ''
@@ -20,7 +21,7 @@ buildPkgs.runCommand "gemini-uboot-${if efiSmoke then "efi-smoke" else "handoff"
     images {
       kernel {
         data = /incbin/("$kernel");
-        type = "kernel"; arch = "arm64"; os = "linux";
+        type = "kernel"; arch = "arm64"; os = "${if efiLinux then "efi" else "linux"}";
         compression = "gzip";
         load = <0x40200000>; entry = <0x40200000>;
         hash-1 { algo = "sha256"; };
@@ -85,12 +86,13 @@ buildPkgs.runCommand "gemini-uboot-${if efiSmoke then "efi-smoke" else "handoff"
   raw_kernel = gzip.decompress((linux/'kernel/Image.gz').read_bytes())
   assert raw_kernel[0x38:0x3c] == b'ARM\x64'
   assert 0x40200000 + len(raw_kernel) < 0x43000000
+  ${buildPkgs.lib.optionalString efiLinux "assert raw_kernel[:2] == b'MZ'"}
   manifest = {'status':'host-validated-not-booted', 'uboot':str(uboot),
-              'linux_payload':str(linux), 'profile':'${if efiSmoke then "efi-smoke" else "handoff"}',
+              'linux_payload':str(linux), 'profile':'${if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}',
               'recovery_test':${toString recoveryTest},
               'expected_outcome':'${if recoveryTest == 1 then "software-reset-to-rescue" else if recoveryTest == 2 then "watchdog-expiry-to-rescue" else "accepted-linux"}',
-              'uboot_evidence_required':${if recoveryTest == 0 then "'/chosen/gemini,uboot-handoff=fit'" else "None"},
-              'efi_evidence_required':${if efiSmoke then "'/chosen/gemini,uefi-hello-result=passed'" else "None"},
+              'uboot_evidence_required':${if recoveryTest == 0 then (if efiLinux then "'/chosen/gemini,uboot-handoff=efi'" else "'/chosen/gemini,uboot-handoff=fit'") else "None"},
+              'efi_evidence_required':${if efiLinux then "'Linux EFI system table and full EFI memory map'" else if efiSmoke then "'/chosen/gemini,uefi-hello-result=passed'" else "None"},
               'linux_image_bytes':len(raw_kernel),
               'payload_files':{}, 'files':{}}
   for name in ('kernel/Image.gz', 'initramfs.cpio.gz', 'gemini-usb11-host.dtb'):

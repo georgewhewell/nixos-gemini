@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, two M69 FIT handoff cycles and one EFI-application/FIT cycle pass; EFI Linux/ExitBootServices, GOP, input, storage and boot manager remain. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; GOP, input, storage, boot manager and retirement of early diagnostics remain. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -90,4 +90,17 @@ handoff markers and passed full M69 health and LK-memory checks. Its
 supervised rescue returned healthy direct M69 boot
 `7f567308-9b27-4719-af29-edf5c6f8496e`, with unchanged GPT and all boot
 partitions. This proves EFI application entry/return; M69's kernel still has
-EFI disabled, so EFI Linux and ExitBootServices remain separate work.
+EFI disabled, so the full EFI Linux trial uses a separate kernel and system.
+
+The full EFI profile subsequently passed in `handoff/uboot-efi-linux-04`.
+It required removing stale LK carrier initrd properties and rebinding the
+DT's CPU provenance to the actual EFI kernel. Linux verified its runtime
+identity, brought up both A72 cores, initialized EFI and its initrd table,
+retained all 4 GiB and LK reservations, and passed full service health.
+The matching content-addressed squashfs was installed separately on p29;
+the accepted M69 squashfs was verified before and after installation.
+Automatic mtkclient rescue restored healthy M69 boot
+`57d9effa-69ba-4f0f-bbc6-1c085f031b2b`, with unchanged GPT and boot partitions.
+The exact artifacts and failed-trial diagnoses are recorded in
+[BOOT_HANDOFF.md](BOOT_HANDOFF.md). This qualifies EFI Linux handoff, while
+the production EFI console, storage and boot-manager paths remain unfinished.

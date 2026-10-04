@@ -42,7 +42,7 @@
     };
     u-boot-gemini-src = {
       # Shared LK handoff and independently testable recovery/EFI profiles.
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=71c1f7044f20a60379c48dafcf8f5281c4bd8f0f&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=7f1d75237b1ac4e8fff042f6462447c0f09aee93&shallow=1";
       flake = false;
     };
     u-boot-src = {
@@ -134,12 +134,13 @@
         } // options);
         bundle = import ./nix/uboot-carrier.nix ({
           inherit buildPkgs uboot;
-          linuxBundle = mainlineNixos.bundle;
+          linuxBundle = if options.efiLinux or false then mainlineNixosEfi.bundle else mainlineNixos.bundle;
         } // options);
       };
     in {
       handoff = mkProfile {};
       efiSmoke = mkProfile {efiSmoke = true;};
+      efiLinux = mkProfile {efiLinux = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -817,6 +818,17 @@
       inherit spmFirmware;
     };
 
+    mainlineEfiKernel = import ./nix/mainline-efi-kernel.nix {
+      inherit buildPkgs;
+      kernel = mainlineP22Baseline.kernel;
+    };
+
+    mainlineEfiDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlineEfiKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
     # The accepted baseline plus MicroSD, and nothing else.
     #
     # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
@@ -1139,6 +1151,17 @@
       ];
     };
 
+    mainlineNixosEfiSystemCross = mainlineNixosSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkForce mainlineEfiKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkForce mainlineEfiKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkForce mainlineEfiKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkForce mainlineEfiKernel;
+        };
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1166,17 +1189,17 @@
 
     # Linux SquashFS names the zlib codec "gzip".  Keep this distinct from
     # the vendor-kernel XZ payload and install it under a new p29 filename.
-    mainlineNixosSquashfs = buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
+    mkMainlineSquashfs = system: buildPkgs.runCommand "mainline-nixos-zlib.squashfs" {
       nativeBuildInputs = [buildPkgs.squashfsTools];
     } ''
       mkdir -p store-contents
       closure=${buildPkgs.closureInfo {
-        rootPaths = [mainlineNixosSystemCross.config.system.build.toplevel];
+        rootPaths = [system];
       }}
       for path in $(cat "$closure/store-paths"); do
         cp -a "$path" store-contents/
       done
-      basename ${mainlineNixosSystemCross.config.system.build.toplevel} \
+      basename ${system} \
         > store-contents/.gemini-system
       # nix-store --load-db input for the persistent Nix database
       # (nixos/storage.nix): this image's paths live in the overlay's
@@ -1192,6 +1215,9 @@
       unsquashfs -s "$out" | grep -Fqx 'Compression gzip'
     '';
 
+    mainlineNixosSquashfs = mkMainlineSquashfs mainlineNixosSystemCross.config.system.build.toplevel;
+    mainlineNixosEfiSquashfs = mkMainlineSquashfs mainlineNixosEfiSystemCross.config.system.build.toplevel;
+
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
       grep -Fqx 'session required pam_unix.so' ${mainlineSshdPam}
@@ -1199,7 +1225,7 @@
       touch "$out"
     '';
 
-    mainlineNixos = import ./nix/mainline-nixos.nix {
+    mainlineNixosArgs = {
       inherit buildPkgs crossPkgs ixoo-kernel;
       # Cycle 18's full Stage-2/eMMC substrate with explicit active display,
       # NT36772 and FGADC components. The profile cannot pull MicroSD from the
@@ -1236,6 +1262,16 @@
         then {inherit (storage) dataLabel;}
         else null;
     };
+
+    mainlineNixos = import ./nix/mainline-nixos.nix mainlineNixosArgs;
+    mainlineNixosEfi = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlineEfiKernel;
+      serviceabilityDtb = mainlineEfiDtb;
+      squashfs = mainlineNixosEfiSquashfs;
+      nixosToplevel = mainlineNixosEfiSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosEfiSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
 
     # Same Stage-2 userspace and store as mainlineNixos -- only the kernel and
     # its composed DTB differ -- so this candidate reuses the p29 payload that
@@ -1700,6 +1736,8 @@
       mtkclient = import ./nix/mtkclient.nix {inherit buildPkgs;};
       ubootHandoff = ubootProfiles.handoff.uboot;
       ubootHandoffBundle = ubootProfiles.handoff.bundle;
+      ubootEfiLinux = ubootProfiles.efiLinux.uboot;
+      ubootEfiLinuxBundle = ubootProfiles.efiLinux.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;
@@ -1721,6 +1759,9 @@
       mainlineRootfsProbeInitramfs = mainlineRootfsProbe.probeInitramfs;
       mainlineRootfsProbeBundle = mainlineRootfsProbe.bundle;
       mainlineNixosKernel = mainlineP22Baseline.kernel;
+      mainlineNixosEfiKernel = mainlineEfiKernel;
+      mainlineNixosEfiBundle = mainlineNixosEfi.bundle;
+
       mainlineNixosDtb = mainlineP22Baseline.serviceabilityDtb;
       mainlineNixosSquashfs = mainlineNixosSquashfs;
       mainlineSshPamSessionCheck = mainlineSshPamSessionCheck;

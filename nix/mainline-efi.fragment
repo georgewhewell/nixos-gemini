@@ -1,0 +1,8 @@
+# A separate kernel/profile: the accepted direct-Linux baseline stays intact.
+CONFIG_EFI=y
+CONFIG_EFI_STUB=y
+CONFIG_EFI_GENERIC_STUB=y
+# Keep the checked gzip FIT payload; U-Boot decompresses before EFI LoadImage.
+# CONFIG_EFI_ZBOOT is not set
+# The board supplies the validated LK tree and EFI LoadFile2 initramfs.
+# CONFIG_EFI_ARMSTUB_DTB_LOADER is not set

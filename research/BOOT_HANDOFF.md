@@ -3,8 +3,10 @@
 Status: software reset and 31-second watchdog expiry are hardware-qualified
 after removing an unmapped framebuffer probe. Both automatically recovered
 fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles and
-one corrected EFI-application/FIT handoff cycle also passed. EFI Linux boot
-and ExitBootServices remain unqualified.
+one corrected EFI-application/FIT handoff cycle also passed. The corrected
+EFI Linux profile passed full service health, ExitBootServices, the full
+4 GiB EFI memory map and automatic M69 rescue in trial 04. GOP, keyboard,
+storage and a boot manager remain unfinished.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -12,7 +14,7 @@ worktree, not the September 4 WIP branch.
 
 Build from this flake with `nix build .#ubootHandoffBundle`,
 `.#ubootEfiSmokeBundle`, `.#ubootResetBundle`, or `.#ubootWatchdogBundle`.
-Each carrier embeds the same M69 kernel, initramfs and DTB as
+Those four carriers embed the same M69 kernel, initramfs and DTB as
 `mainlineNixosBundle`, with the same existing squashfs. The full artifact
 manifest records payload and carrier hashes.
 
@@ -23,6 +25,14 @@ manifest records payload and carrier hashes.
 - Reset: invoke the generic reset dispatch before EFI or FIT processing.
 - Watchdog: stop at WFI after arming the watchdog; there are no software kicks.
   A physical reset during this test does not prove watchdog expiry works.
+- EFI Linux (`ubootEfiLinuxBundle`): a separate EFI-enabled kernel, matching
+  modules/userspace, and the accepted LK carrier DT with CPU provenance
+  rebound to the EFI kernel. It uses `os = "efi"`
+  in the checked FIT and U-Boot's existing EFI LoadImage/LoadFile2 path.
+  It requires a new, content-addressed squashfs; it cannot reuse M69's
+  non-EFI kernel modules. `/chosen/gemini,uboot-handoff = "efi"` alone is
+  insufficient: the runner checks Linux's EFI system table and full memory
+  map as well as ordinary service health and LK reservations.
 
 All profiles use TOPRGU for generic reset. LK handoff validation is independent
 of EFI. The FIT source window now accepts up to 16 MiB at 0x45000000, within the
@@ -44,8 +54,8 @@ First qualify software reset and watchdog expiry with a supervised rescue
 transaction and a person at the device. Then boot M69 through the plain
 handoff, verify both new boot identity and the Linux-visible marker, LK RAM and
 modem reservations, and full M69 health. Repeat boots before adding the EFI
-smoke test. A completed EFI path still needs EFI Linux/ExitBootServices,
-GOP, keyboard, storage and a boot manager.
+smoke test. EFI Linux/ExitBootServices now has a separate qualification below;
+GOP, keyboard, storage and a boot manager remain.
 
 The mtkclient candidate/rescue supervisor now has a hardware-qualified M69
 baseline (`handoff/mtkclient-supervisor-baseline-02`); both writes, readbacks,
@@ -251,3 +261,127 @@ recovery was needed. The retained `os_jump` phase was `0x474d10e9`.
 The trial reports `profile_qualified=true`. This is one EFI-application
 smoke pass, not EFI Linux/ExitBootServices, GOP, input, storage or boot-manager
 qualification.
+
+## EFI Linux profile and first trial
+
+U-Boot source `a7dc70fbae4b854d9a6135f24260894e8d5ae5cc` adds a separate
+EFI Linux profile after `EVT_LAST_STAGE_INIT`. The board validates every
+static LK reservation before changing the EFI map. It preserves the existing
+low-bank EFI allocations and runtime descriptors, and reports RAM outside
+`0x40001000..0x43fff000` as boot-services data. EFI cannot allocate that
+unmapped upper RAM; Linux reclaims it after exit and applies the DT reserves.
+No-map regions remain EFI reserved memory. Malformed, overflowing and
+firmware-overlapping ranges fail closed. Dynamic size-only reservations
+remain Linux's responsibility.
+
+A configurable minimum PE allocation alignment supplies the kernel's 2 MiB
+alignment, avoiding a second kernel relocation in the small firmware bank.
+The EFI profile reserves a 4 MiB stack. The exit event only kicks TOPRGU and
+records phase `0x474d10ee`; it neither allocates nor changes the memory map.
+That phase proves the callback ran, not that the entire exit or Linux boot
+completed.
+
+The new kernel fragment enables EFI/EFI_STUB separately from M69 and binds
+the changed config to its module provenance. `efi=debug` records the actual
+EFI map. The default `mainlineNixosBundle` still evaluates to
+`/nix/store/92140xp096mcjqp6laid183r1cw2ky95-gemini-mainline-nixos-bundle`.
+Stage 1 can convert the existing persistent OpenSSH host key into a private
+RAM-only Dropbear key. Conversion was checked on M69; the provisioning SSH
+retains strict host-key checking. The unique-file upload requires the exact
+candidate boot/GPT, EFI handoff, journal-enabled p29 mount, SHA-256 and size;
+it preserves and verifies the accepted M69 squashfs.
+
+Host validation includes the production EFI map code against libfdt and the
+captured LK reservations, injected map/event failures, low firmware bank
+preservation, every reg tuple, and the exit callback. The archived Linux DT
+contains one later bootm initrd memreserve; the test identifies that exact
+addition and removes it before testing the pre-boot LK contract. All five
+profiles cross-built. Plain handoff, reset and watchdog carriers remain
+byte-identical to their qualified artifacts. The rebuilt EFI-smoke carrier
+has a different hash and is not newly qualified; its runner still pins the
+previous qualified artifact.
+
+Trial `handoff/uboot-efi-linux-01` used carrier SHA-256
+`9a2c6bc2142831dfb348a6b20d7c6ebd354a557547215318bed69260288681ff`.
+It reached fresh phase `0x474d10ee`, exposed a Linux USB gadget, and returned
+to preloader after 63.408 seconds without reachable Stage 1. No userspace
+file was uploaded. Automatic candidate/rescue writes and full readbacks
+passed, restoring healthy M69 boot
+`1b8ceb4c-91a9-4981-9154-ef2d4d33c9e2` with unchanged GPT/p22/p30/p31.
+The EFI Linux profile did not qualify. No physical recovery was needed.
+
+M69's subsequent pstore was empty and reported invalid retained buffers.
+The EFI pstore backend registers after ramoops, so registration order does
+not explain the loss. A separate read-only DA trial,
+`handoff/mtkclient-ramoops-read-01`, captured the fixed 896 KiB region before
+flash access and recovered a valid console ring including M69's shutdown.
+It returned healthy M69 in 195.1 seconds, boot ID
+`de63a924-392f-45ab-8a25-51e2a35fc4e0`, without eMMC writes. The runner now
+captures that region before flash reads/writes; `tools/parse-gemini-ramoops.py`
+decodes its checked record/console rings. Recovery after flashing cannot be
+relied on to retain that diagnostic RAM.
+
+The identical candidate repeated in `handoff/uboot-efi-linux-02` with the
+qualified RAM capture ahead of flash access. Its console proves Linux ran
+through device initialization and panicked at 48.280 seconds with
+`VFS: Unable to mount root fs on unknown-block(0,0)`. It rebooted after its
+five-second panic timeout; preloader elapsed time was 63.452 seconds.
+Automatic rescue returned healthy M69 boot
+`983b67c5-066d-486b-bb9a-4947d3ce9bd4`; all partition guards passed.
+
+Source inspection identified inherited LK `/chosen/linux,initrd-start/end`
+as an initrd-authority bug. LK points these at the Android ramdisk, which is
+now the outer FIT. The native Linux bootm prep replaces them, whereas EFI
+calls `image_setup_libfdt` with empty image metadata and retains them. This
+Linux EFI stub supplies its initrd through a configuration table, which the
+kernel only consumes if DT has not already supplied a nonzero initrd size.
+U-Boot fix `7f1d75237b1ac4e8fff042f6462447c0f09aee93` removes those two
+carrier properties only in the EFI profile. The production libfdt regression
+covers both stale properties and their absence.
+
+Trial `handoff/uboot-efi-linux-03`, carrier SHA-256
+`21f241cad055439b7a3715d654a9ffa9bc3accf78177d588906c122f3f93c6fb`,
+confirmed the initrd correction: trusted Stage 1 SSH returned, the unique
+426,971,136-byte EFI squashfs was installed and verified, and Stage 2 booted.
+The accepted M69 squashfs was verified before and after the upload. Linux
+reported the EFI INITRD configuration table without the stale DT properties,
+the complete 4 GiB EFI map, preserved LK reservations, and 3,783,752 KiB
+usable RAM. `stage1-evidence/` contains that proof.
+
+This trial failed service-health qualification because its composed DT still
+carried M69's old kernel identity. Linux rejected the config/build-ID/command
+line binding and CPU8 admission returned EAGAIN before a power transaction.
+The A72 health gate was retained. The runner restored healthy M69 boot
+`29374ab3-2f9d-4e7c-b385-932a9084f179`; GPT/p22/p30/p31 all matched.
+
+`nix/mainline-efi-dtb.nix` regenerates only the provenance leaf using the
+existing package-owned generator and the actual EFI kernel. Build assertions
+require all three runtime identities to change and every other DT property,
+node and header reservation to remain identical. The kernel, initramfs and
+userspace are unchanged. The corrected carrier at
+`handoff/uboot-efi-provenance-fix` has SHA-256
+`c00f0a9dcc0f776184e4c34678e9de54a1619bbe5ede12db71a6ff9c1891c0bc`.
+The EFI runner additionally requires the kernel's runtime-binding and
+late-CPU readiness messages, alongside normal service health.
+
+## Healthy EFI Linux and automatic rescue
+
+Trial `handoff/uboot-efi-linux-04` booted the corrected carrier into healthy
+EFI Linux, boot ID `10e17099-fe8d-4f60-9409-c280f6c956b6`. The kernel verified
+its runtime identity and readiness before A72 admission. CPU8 and CPU9 both
+started under the existing power checks, and all ten CPUs were online. The
+normal desktop, GPU, JPEG, Wi-Fi and audio health checks passed with no failed
+units. No additional userspace upload was necessary.
+
+Linux initialized U-Boot EFI v2.11 and its INITRD table, and published all
+40 EFI descriptors covering exactly 4,294,967,296 bytes. It retained the
+complete LK modem table and reservations, reported 3,783,752 KiB usable RAM,
+and lacked both stale LK initrd properties. The runtime-binding and EFI
+evidence, complete dmesg and raw FDT are retained in the trial directory.
+
+The runner then requested rescue. Preloader returned 202.105 seconds after
+the candidate's initial boot departure, and the DA captured fresh exit-event
+phase `0x474d10ee`. Automatic rescue restored healthy direct M69 boot
+`57d9effa-69ba-4f0f-bbc6-1c085f031b2b`. Both full image readbacks and all
+GPT/p22/p30/p31 guards passed. The result is `profile_qualified=true`;
+M69 remains the persistent boot image.
