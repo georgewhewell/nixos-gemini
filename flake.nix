@@ -42,7 +42,7 @@
     };
     u-boot-gemini-src = {
       # Shared LK handoff and independently testable recovery/EFI profiles.
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=e3ed105e8cac9e75d0ae3eb6125ba5be93b52199&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=25c2c55ad640da04d8bae7792de0f25b49600eef&shallow=1";
       flake = false;
     };
     u-boot-src = {
@@ -142,6 +142,7 @@
       efiSmoke = mkProfile {efiSmoke = true;};
       efiLinux = mkProfile {efiLinux = true;};
       efiConsole = mkProfile {efiLinux = true; efiConsole = true;};
+      efiKeyboard = mkProfile {efiLinux = true; efiConsole = true; efiKeyboard = true;};
       reset = mkProfile {recoveryTest = 1;};
       watchdog = mkProfile {recoveryTest = 2;};
     };
@@ -1740,6 +1741,7 @@
       ubootEfiLinux = ubootProfiles.efiLinux.uboot;
       ubootEfiLinuxBundle = ubootProfiles.efiLinux.bundle;
       ubootEfiConsoleBundle = ubootProfiles.efiConsole.bundle;
+      ubootEfiKeyboardBundle = ubootProfiles.efiKeyboard.bundle;
       ubootEfiSmoke = ubootProfiles.efiSmoke.uboot;
       ubootEfiSmokeBundle = ubootProfiles.efiSmoke.bundle;
       ubootResetBundle = ubootProfiles.reset.bundle;

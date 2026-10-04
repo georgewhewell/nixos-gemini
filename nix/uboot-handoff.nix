@@ -1,10 +1,11 @@
-{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, recoveryTest ? 0 }:
+{ buildPkgs, crossPkgs, source, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, recoveryTest ? 0 }:
 assert builtins.elem recoveryTest [0 1 2];
 assert recoveryTest == 0 || !(efiSmoke || efiLinux);
 assert !(efiSmoke && efiLinux);
 assert !efiConsole || efiLinux;
+assert !efiKeyboard || efiConsole;
 let
-  profile = if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
+  profile = if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff";
   defconfig = if efiLinux then "mt6797_gemini_efi_linux_defconfig" else if efiSmoke then "mt6797_gemini_efi_smoke_defconfig" else "mt6797_gemini_handoff_defconfig";
 in
 crossPkgs.buildUBoot {
@@ -16,7 +17,8 @@ crossPkgs.buildUBoot {
     echo 'CONFIG_GEMINI_RECOVERY_TEST=${toString recoveryTest}' >> configs/${defconfig}
     ${buildPkgs.lib.optionalString efiConsole ''
     echo 'CONFIG_GEMINI_EFI_CONSOLE=y' >> configs/${defconfig}
-    echo 'CONFIG_DEFAULT_DEVICE_TREE="mt6797-gemini-pda-console"' >> configs/${defconfig}
+    ${buildPkgs.lib.optionalString efiKeyboard "echo CONFIG_GEMINI_EFI_KEYBOARD=y >> configs/${defconfig}"}
+    echo 'CONFIG_DEFAULT_DEVICE_TREE="${if efiKeyboard then "mt6797-gemini-pda-keyboard" else "mt6797-gemini-pda-console"}"' >> configs/${defconfig}
     ''}
   '';
   SOURCE_DATE_EPOCH = 1788493603;
@@ -30,6 +32,7 @@ crossPkgs.buildUBoot {
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-watchdog-readback-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-boot-flow-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-gop-stride-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-keyboard-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-console-fdt-host.py
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
     grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
@@ -77,6 +80,12 @@ crossPkgs.buildUBoot {
     done
     grep -Fqx 'CONFIG_EFI_IMAGE_MIN_ALIGNMENT=0x200000' .config
     grep -Fqx 'CONFIG_STACK_SIZE=0x400000' .config
+    ''}
+    ${buildPkgs.lib.optionalString efiKeyboard ''
+    for symbol in GEMINI_EFI_KEYBOARD DM_I2C SYS_I2C_MT6797_FIFO DM_KEYBOARD GEMINI_AW9523_KEYBOARD; do
+      grep -Fqx "CONFIG_$symbol=y" .config
+    done
+    test "$(fdtget u-boot.dtb /i2c@1101c000/keyboard@5b compatible)" = planet,gemini-aw9523-keyboard
     ''}
     for symbol in EFI_VARIABLE_FILE_STORE EFI_VARIABLE_SF_STORE EFI_MM_COMM_TEE EFI_BOOTMGR EFI_NET FAT_WRITE FAT_RENAME FASTBOOT_FLASH MMC MTD NVME SCSI USB_STORAGE; do
       if grep -Eq "^CONFIG_$symbol=y$" .config; then

@@ -26,6 +26,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'efi-keyboard': (WORKSPACE / 'handoff/uboot-efi-keyboard/boot-padded-p22.img',
+                     '2b66cccaba6e4fe52e2f172af09896c91ec7ad0fa4b34d79a195482e17e2e9d5'),
     'efi-console': (WORKSPACE / 'handoff/uboot-efi-console/boot-padded-p22.img',
                     '0b104d094c012a8c5c00e4284368c153a831b94a7e39fc4e55f50ce0fe762f3a'),
     'efi-linux': (WORKSPACE / 'handoff/uboot-no-debug/boot-padded-p22.img',
@@ -40,7 +42,7 @@ PROFILES = {
     'efi-smoke': (WORKSPACE / 'handoff/uboot-m69-efi-order-1/boot-padded-p22.img',
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
-EFI_LINUX_PROFILES = ('efi-linux', 'efi-console')
+EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard')
 LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 P30_SHA = '122c0f461e94d3439016e80339c7ee96f865e3591a3e2fbd163a7769dc0ac159'
@@ -56,6 +58,7 @@ PHASES = {'0x474d10e0': 'entry', '0x474d10e1': 'lowlevel_init',
           '0x474d10f1': 'watchdog_setup_failure', '0x474d10f2': 'fit_failure',
           '0x474d10f3': 'efi_fdt_failure', '0x474d10f4': 'lk_fdt_failure',
           '0x474d10f5': 'handoff_failure', '0x474d10f7': 'console_framebuffer_failure',
+          '0x474d10f8': 'keyboard_resource_failure',
           '0x474d1e01': 'efi_command_failure'}
 HANDOFF_TREE = r'''set -eu
 dt=/sys/firmware/devicetree/base
@@ -71,7 +74,7 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
-for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result; do
+for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
 awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
@@ -79,6 +82,10 @@ awk '/^MemTotal:/ {print "memtotal_kib=" $2}' /proc/meminfo
 HANDOFF_MARKER = 'chosen/gemini,uboot-handoff'
 EFI_MARKER = 'chosen/gemini,uefi-hello-result'
 CONSOLE_MARKER = 'chosen/gemini,uefi-console-result'
+KEYBOARD_MARKER = 'chosen/gemini,uefi-keyboard-result'
+KEYBOARD_SCANS = 'chosen/gemini,uefi-keyboard-scans'
+KEYBOARD_ERROR = 'chosen/gemini,uefi-keyboard-error'
+MARKERS = (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER, KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)
 
 
 def handoff_tree(ssh):
@@ -97,7 +104,7 @@ def handoff_tree(ssh):
 
 
 def verify_handoff_tree(before, after, profile):
-    if any(key in before for key in (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER)):
+    if any(key in before for key in MARKERS):
         raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
     for key, value in before.items():
         if key == 'reserved-memory/reserve-memory-dram_r0_dummy_read/alloc-ranges':
@@ -116,9 +123,19 @@ def verify_handoff_tree(before, after, profile):
     expected_efi = b'passed\0'.hex() if profile == 'efi-smoke' else None
     if after.get(EFI_MARKER) != expected_efi:
         raise RuntimeError('Linux EFI marker does not match the requested profile')
-    expected_console = b'passed\0'.hex() if profile == 'efi-console' else None
+    expected_console = b'passed\0'.hex() if profile in ('efi-console', 'efi-keyboard') else None
     if after.get(CONSOLE_MARKER) != expected_console:
         raise RuntimeError('EFI graphics/text application did not pass for the requested profile')
+    if profile == 'efi-keyboard':
+        scans = bytes.fromhex(after.get(KEYBOARD_SCANS, ''))
+        if (after.get(KEYBOARD_MARKER) != b'scanned\0'.hex() or
+                after.get(KEYBOARD_ERROR) != '00000000' or
+                len(scans) != 4 or int.from_bytes(scans, 'big') < 20):
+            raise RuntimeError('Native EFI keyboard polling failed: ' + repr(
+                {key: after.get(key) for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)}))
+    elif any(key in after for key in (KEYBOARD_MARKER, KEYBOARD_SCANS, KEYBOARD_ERROR)):
+        raise RuntimeError('Unexpected EFI keyboard evidence in another profile')
+
 
 
 def module(name, path):
@@ -447,7 +464,7 @@ def main():
         qualify.check_host_idle()
         before = snapshot(ssh)
         tree = handoff_tree(ssh) if args.profile in LINUX_PROFILES else None
-        if tree is not None and any(key in tree for key in (HANDOFF_MARKER, EFI_MARKER, CONSOLE_MARKER)):
+        if tree is not None and any(key in tree for key in MARKERS):
             raise RuntimeError('Baseline contains a stale U-Boot/EFI marker')
         candidate, sha = PROFILES[args.profile]
         backend.checked_image(candidate.resolve(strict=True), sha)

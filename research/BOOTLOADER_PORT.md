@@ -5,6 +5,21 @@ carries a `file:line` citation that was re-checked against the trees named in
 section 0 on 2026-09-02. No device was touched for this study. A stage-0 U-Boot
 tree exists locally (section 4) but has never been written to the device.
 
+## Current implementation, 2026-10-04
+
+The feasibility study below is historical. Current qualification is recorded
+in [BOOT_HANDOFF.md](BOOT_HANDOFF.md): software/watchdog recovery, repeated
+full EFI Linux boots and inherited GOP/text output now pass, including owner
+confirmation of visible EFI text. Native keyboard initialization and polling through EFI also pass, using
+the working Linux matrix. Physical presses remain unverified. Read-only eMMC and the distro boot manager
+remain next boot-path work; complete hardware enablement remains the overall
+project objective in [HARDWARE_STATUS.md](HARDWARE_STATUS.md).
+
+The live LK framebuffer tag is `atag,videolfb`, a native little-endian
+structure emitted by `lk/platform/mt6797/atags.c:409`, rather than the three
+separate properties discussed in the original stage-4 proposal. The current
+implementation validates that structure against the framebuffer reservation.
+
 ## Verdict
 
 A 64-bit U-Boot, carried as the *kernel* field of an ordinary Android-v0 boot

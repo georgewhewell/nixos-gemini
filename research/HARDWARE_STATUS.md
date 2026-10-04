@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Input, storage and boot manager remain. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, Fn/modifiers, storage and boot manager remain. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -111,3 +111,13 @@ the inherited EFI console now also passes in `handoff/uboot-efi-console-01`,
 with owner visual confirmation. Keyboard, storage and boot-manager paths
 remain unfinished. The console trial automatically restored healthy M69
 boot `75f4fd80-c07f-4575-8949-55ec2a2a0a5d`.
+
+
+The native EFI keyboard trial `handoff/uboot-efi-keyboard-01` subsequently
+passed 1,402 real AW9523 matrix scans with zero errors, full EFI Linux health
+and automatic rescue to healthy M69 boot
+`8b6fd83e-f611-4545-a5eb-8c25c403c905`. Its compiled matrix matches live Linux
+byte-for-byte. Host simulations cover arrows/Enter, Shift/Ctrl, debounce,
+repeat and bus failures. Physical key presses and full Fn/Alt semantics are
+not yet qualified. Gemian's installed XKB definitions identify LWIN as its
+third-level/Fn modifier; implementation can proceed from that source.

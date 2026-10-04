@@ -437,3 +437,60 @@ fresh ExitBootServices phase, full RAM/LK reservations and all protected
 partition checks passed. No physical recovery was needed. This proves the
 inherited display/GOP/text path, not native display initialization, keyboard
 input or a distro picker. M69 remains the persistent boot image.
+
+
+## Native keyboard polling through EFI
+
+The opt-in `ubootEfiKeyboardBundle` / `efi-keyboard` profile extends the
+console profile with a native AW9523 matrix keyboard. U-Boot source
+`25c2c55a` includes a FIFO-only MT6797 I2C driver, the narrow I2C5 clock/pin
+lease, and a keyboard consumer. The driver reads chip ID 0x23 before
+configuration, resets and verifies the expander, then polls all seven
+columns and eight rows with two-scan debounce, ghost suppression and normal
+U-Boot repeat/key translation. It leaves columns inactive after each scan,
+including failed reads, and latches bus errors instead of spinning forever.
+The bus operates at 100 kHz with the inherited 156 MHz AXI clock divided by
+ten in hardware. Transfers have an eight-byte limit and a 10 ms timeout;
+no AP DMA, PMIC, I2C6 or keyboard IRQ path is touched.
+
+The compiled 52-entry keymap was compared byte-for-byte with the running
+M69 device's matrix map. Both hash to
+`c4704488ed3d4b617ea1476d42412575d83aa26efce539f14b0eacf39a88aaac`;
+comparison evidence is `handoff/uboot-efi-keyboard-map.json`.
+
+Host tests execute the production clock/pin lease, FIFO transactions,
+AW9523 scan/debounce code and U-Boot input translator. They cover register
+reads/writes, bounds, timeout/NACK/short-read failures, unrelated pin-bit
+preservation, key release/repeat, arrows/Enter, Shift/Ctrl and ghost
+suppression. These simulated presses do not establish physical actuation.
+The complete cross build also passed the existing EFI, memory, reset,
+watchdog, framebuffer and carrier checks.
+
+The EFI application polls Simple Text Input before Linux. Qualification
+requires at least 20 actual complete matrix scans and zero driver error,
+with `/chosen/gemini,uefi-keyboard-result = "scanned"`; it deliberately does
+not report a physical key-press test as passed. If keyboard discovery fails,
+stdin remains nulldev and Linux can retain the error for recovery. The
+physical Fn mapping, Alt/Meta semantics and real menu selection remain
+unqualified. No Fn map exists in the currently running Linux DT.
+
+The trial carrier at `handoff/uboot-efi-keyboard` has SHA-256
+`2b66cccaba6e4fe52e2f172af09896c91ec7ad0fa4b34d79a195482e17e2e9d5`.
+Trial `handoff/uboot-efi-keyboard-01` passed. Candidate EFI Linux boot
+`845347b2-c7f7-4749-ba37-938e9b3e86d4` retained 1,402 complete native matrix
+scans, zero keyboard errors and the successful GOP/text marker. Linux passed
+full health, both A72 starts, the 40-entry EFI map and all LK reservations.
+Automatic rescue restored healthy M69 boot
+`8b6fd83e-f611-4545-a5eb-8c25c403c905`. Candidate/rescue writes and full
+readbacks, fresh ExitBootServices phase and GPT/p22/p30/p31 guards all passed.
+No physical recovery or key press was needed. This qualifies hardware
+initialization and polling through EFI, not physical key actuation.
+
+Subsequent read-only inspection found Gemian's installed
+`/usr/share/X11/xkb/symbols/planet_vndr/gemini`: its `modifiers` section maps
+`LWIN` to `ISO_Level3_Shift`, and the `common_keys` section maps third-level
+arrows to PageUp/Home/PageDown/End. `keycodes/evdev` maps LWIN to X keycode
+133, corresponding to Linux KEY_LEFTMETA (125), which is already in the
+matrix at row 4, column 3. Thus the absent KEY_FN DT entry does not imply an
+absent physical modifier; the source supplies a mapping to implement and
+validate. Alt/Meta behavior and real menu selection are still unqualified.

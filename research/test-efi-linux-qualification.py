@@ -18,6 +18,17 @@ class EfiProof(unittest.TestCase):
             with self.assertRaises(RuntimeError): r.verify_handoff_tree({},tree,'efi-console')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree({},after,'efi-linux')
         with self.assertRaises(RuntimeError): r.verify_handoff_tree(after,after,'efi-console')
+    def test_keyboard_requires_real_scans_without_claiming_key_presses(self):
+        after={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex(),
+               r.KEYBOARD_MARKER:b'scanned\0'.hex(),r.KEYBOARD_SCANS:(200).to_bytes(4,'big').hex(),
+               r.KEYBOARD_ERROR:'00000000'}
+        r.verify_handoff_tree({},after,'efi-keyboard')
+        for key,value in ((r.KEYBOARD_MARKER,b'failed\0'.hex()),(r.KEYBOARD_ERROR,'fffffffb'),
+                          (r.KEYBOARD_SCANS,'00000013'),(r.KEYBOARD_SCANS,'')):
+            with self.assertRaises(RuntimeError):
+                r.verify_handoff_tree({},dict(after,**{key:value}),'efi-keyboard')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree({},after,'efi-console')
+        with self.assertRaises(RuntimeError): r.verify_handoff_tree(after,after,'efi-keyboard')
     def setUp(self):
         self.entries = [(0x40000000,0x40001000,'Reserved'),
                         (0x40001000,0x43fff000,'Conventional'),
