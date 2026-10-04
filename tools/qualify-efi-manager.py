@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Require the distro manager's own EFI evidence, beyond the launch marker."""
 import re
+import subprocess
 
 SHA='ed24e7e8b385f25f9df8812c899ecf581a6aa87368827b6a4a41fe4cb6f513cd'
 PREFIX='chosen/gemini,uefi-manager-'
@@ -8,6 +9,9 @@ MARKERS=tuple(PREFIX+key for key in ('result','stage','status','sha256'))
 VARIABLES=('LoaderInfo','LoaderEntrySelected','LoaderImageIdentifier','LoaderDevicePartUUID',
            'LoaderTimeMenuUSec','LoaderTimeExecUSec')
 GUID='4a67b082-0a4c-41cf-b6c7-440b29bb8c4f'
+# Matching EFI userspace closure: the default modprobe is BusyBox and /lib/modules is absent.
+KMOD='/nix/store/cpdb15nd870rimjyqwbf3f9iarhh2k4f-kmod-aarch64-unknown-linux-gnu-30/bin/modprobe'
+KERNEL='/nix/store/6463y1syk23clrh7qgl6mdmk1507m320-gemini-mainline-efi-kernel-7.1.3'
 
 
 def verify_tree(tree):
@@ -38,8 +42,11 @@ def verify_variables(rows,boot_id):
         raise RuntimeError('Unexpected distro manager: '+values['LoaderInfo'])
     if values['LoaderEntrySelected']!='gemini-efi-trial.conf':
         raise RuntimeError('The manager selected a different boot entry')
-    if values['LoaderImageIdentifier'].replace('\\','/').lower()!='/efi/systemd/systemd-bootaa64.efi':
+    # U-Boot's DevicePathToText prefixes every node with '/', including FilePath.
+    image=values['LoaderImageIdentifier'].replace('\\','/').lower()
+    if image not in ('/efi/systemd/systemd-bootaa64.efi','//efi/systemd/systemd-bootaa64.efi'):
         raise RuntimeError('The manager loaded from a different path')
+    values['LoaderDevicePartUUID']=values['LoaderDevicePartUUID'].lower()
     if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',values['LoaderDevicePartUUID']):
         raise RuntimeError('The manager did not report a GPT boot volume')
     for name in ('LoaderTimeMenuUSec','LoaderTimeExecUSec'):
@@ -56,19 +63,32 @@ def evidence(ssh,boot_id,directory,qualify,tree):
     command=f'''set -eu
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
 if ! awk '$2 == "/sys/firmware/efi/efivars" && $3 == "efivarfs" {{ found=1 }} END {{ exit !found }}' /proc/mounts; then
-    modprobe efivarfs
+    printf 'loader-evidence: loading efivarfs\\n' >&2
+    {KMOD} -d {KERNEL} efivarfs
     mkdir -p /sys/firmware/efi/efivars
+    printf 'loader-evidence: mounting efivarfs read-only\\n' >&2
     mount -t efivarfs -o ro,nosuid,nodev,noexec efivarfs /sys/firmware/efi/efivars
 fi
 for name in {' '.join(VARIABLES)}; do
     file=/sys/firmware/efi/efivars/$name-{GUID}
-    test -f "$file" && test "$(stat -c %s "$file")" -le 4096
+    if ! test -f "$file"; then
+        printf 'loader-evidence: missing %s\\n' "$name" >&2
+        exit 1
+    fi
+    test "$(stat -c %s "$file")" -le 4096
     printf '%s=' "$name"
     od -An -v -tx1 "$file" | tr -d ' \\n'
     printf '\\n'
 done
 '''
-    raw=qualify.run(ssh+[command])
+    try:
+        raw=qualify.run(ssh+[command])
+    except subprocess.CalledProcessError as error:
+        # Preserve partial reads and the failing stage before automatic rescue.
+        (directory/'manager-variables.txt').write_text(error.stdout or '')
+        (directory/'manager-variables-error.txt').write_text(error.stderr or '')
+        raise RuntimeError('Cannot read loader EFI variables: '+
+                           (error.stderr or f'exit {error.returncode}').strip()) from error
     (directory/'manager-variables.txt').write_text(raw)
     values=verify_variables(dict(row.split('=',1) for row in raw.splitlines()),boot_id)
     uuid=values['LoaderDevicePartUUID']

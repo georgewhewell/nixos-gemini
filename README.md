@@ -67,8 +67,11 @@ on p29 is mounted read-only. The [U-Boot profiles](research/BOOT_HANDOFF.md)
 now qualify software reset, watchdog expiry, repeated Linux FIT handoff,
 EFI application entry/return and full EFI Linux/ExitBootServices. The EFI
 Linux trial retained the full 4 GiB memory map, passed service health and
-automatically restored the accepted M69 image through mtkclient. GOP,
-keyboard, storage and a production boot manager remain unfinished.
+automatically restored the accepted M69 image through mtkclient. GOP/text,
+native keyboard polling and read-only native/EFI storage now pass. The distro
+systemd-boot manager also boots the installed Linux entry after its unattended
+menu timeout, with independent EFI-variable and file-hash evidence. Physical
+key selection and normal NixOS generation updates remain to be qualified.
 
 The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
 flake. Local patches expose `reset --bootmode reboot`, correct the MT6797
@@ -89,8 +92,8 @@ change during modem operation and must not be treated as immutable hashes.
 Current workspace observations are in `handoff/current-device.md`, alongside
 transaction-specific evidence. Historical flashing scripts, scatter files and
 health guards apply to their recorded image/layout and cannot establish the
-current device state. Physical recovery must be available for the pending
-boot/download-agent trials.
+current device state. Current U-Boot trials use the qualified mtkclient
+supervisor and restore the accepted M69 image automatically.
 
 The [vendor-era overview](research/VENDOR_README_LEGACY.md) retains historical
 Linux 3.18 build and deployment details. The legacy `deploy` output still

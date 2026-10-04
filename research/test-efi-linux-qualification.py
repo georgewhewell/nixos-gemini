@@ -10,6 +10,19 @@ r = importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
 e = r.efi_linux
 
 class EfiProof(unittest.TestCase):
+    def test_manager_exception_is_diagnostic_and_never_a_boot_pass(self):
+        for pc in (0x40200000,0x40212344,0x403ffffc):
+            record=0x80000000|(0x25<<25)|(0x21<<19)|((pc-0x40200000)>>2)
+            raw=f'{record:#010x}'
+            result=r.phase_evidence('0x00000000',raw,'efi-manager')
+            self.assertEqual(result['exception_pc'],hex(pc))
+            self.assertEqual(result['exception_class'],'0x25')
+            self.assertEqual(result['exception_iss_low6'],'0x21')
+            self.assertTrue(result['uboot_execution_proven'])
+            self.assertFalse(result['intended_test_branch_reached'])
+            self.assertFalse(r.profile_qualified('efi-manager',result,26,False))
+            self.assertFalse(r.phase_evidence(raw,raw,'efi-manager')['uboot_execution_proven'])
+            self.assertFalse(r.phase_evidence('0x00000000',raw,'efi-storage')['uboot_execution_proven'])
     def test_console_requires_its_own_successful_efi_application(self):
         after={r.HANDOFF_MARKER:b'efi\0'.hex(),r.CONSOLE_MARKER:b'passed\0'.hex()}
         r.verify_handoff_tree({},after,'efi-console')

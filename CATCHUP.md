@@ -1,5 +1,10 @@
 # Gemini mainline bring-up handoff
 
+This is the archived August 31 handoff. Its current-image statements, worker
+status and trial permissions describe that session. For the maintained state,
+see [HARDWARE_STATUS.md](research/HARDWARE_STATUS.md) and
+[BOOT_HANDOFF.md](research/BOOT_HANDOFF.md).
+
 Snapshot: 2026-08-31 09:15 CEST.  This is a live handoff to a Codex running
 on `trex`.  Three delegated workers are intentionally still running, so their
 branches and artifacts may advance after this snapshot.  Inspect the current

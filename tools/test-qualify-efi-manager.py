@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import Mock
 
@@ -32,8 +33,13 @@ class Manager(unittest.TestCase):
             with self.assertRaises(RuntimeError):m.verify_tree(missing)
     def test_loader_identity_entry_volume_path_and_timeout(self):
         self.assertEqual(m.verify_variables(self.rows,self.boot)['menu_to_exec_usec'],9_000_000)
+        uboot=dict(self.rows,LoaderImageIdentifier=encoded('/\\EFI\\systemd\\systemd-bootaa64.efi'))
+        self.assertEqual(m.verify_variables(uboot,self.boot)['menu_to_exec_usec'],9_000_000)
+        uppercase=dict(uboot,LoaderDevicePartUUID=encoded(self.values['LoaderDevicePartUUID'].upper()))
+        self.assertEqual(m.verify_variables(uppercase,self.boot)['LoaderDevicePartUUID'],self.values['LoaderDevicePartUUID'])
         for key,value in (('LoaderInfo','grub'),('LoaderEntrySelected','other.conf'),
-                          ('LoaderImageIdentifier','\\EFI\\other.efi'),('LoaderDevicePartUUID','$(false)'),
+                          ('LoaderImageIdentifier','\\EFI\\other.efi'),('LoaderImageIdentifier','///EFI/systemd/systemd-bootaa64.efi'),
+                          ('LoaderDevicePartUUID','$(false)'),
                           ('LoaderTimeMenuUSec','30000000'),('LoaderTimeExecUSec','22000000'),
                           ('LoaderTimeExecUSec','999999999'),('LoaderTimeExecUSec','-1')):
             with self.assertRaises(RuntimeError):m.verify_variables(dict(self.rows,**{key:encoded(value)}),self.boot)
@@ -52,9 +58,21 @@ class Manager(unittest.TestCase):
             m.evidence([],self.boot,Path(d),q,self.tree)
             self.assertFalse(q.save.call_args.args[2]['physical_key_press_observed'])
             self.assertIn('mount -t efivarfs -o ro,',q.run.call_args_list[0].args[0][0])
+            self.assertIn(m.KMOD+' -d '+m.KERNEL+' efivarfs',q.run.call_args_list[0].args[0][0])
             for wrong in ('/dev/mmcblk0p30',''):
                 q.run=Mock(side_effect=[raw,wrong]);q.save.reset_mock()
                 with self.assertRaises(RuntimeError):m.evidence([],self.boot,Path(d),q,self.tree)
                 q.save.assert_not_called()
+    def test_failed_read_retains_partial_evidence_before_rescue(self):
+        with tempfile.TemporaryDirectory() as d:
+            partial='boot_id='+self.boot+'\nLoaderInfo='+self.rows['LoaderInfo']+'\n'
+            error='loader-evidence: missing LoaderEntrySelected\n'
+            q=SimpleNamespace(run=Mock(side_effect=subprocess.CalledProcessError(
+                1,['ssh'],output=partial,stderr=error)),save=Mock())
+            with self.assertRaisesRegex(RuntimeError,'missing LoaderEntrySelected'):
+                m.evidence([],self.boot,Path(d),q,self.tree)
+            self.assertEqual((Path(d)/'manager-variables.txt').read_text(),partial)
+            self.assertEqual((Path(d)/'manager-variables-error.txt').read_text(),error)
+            q.save.assert_not_called()
 
 if __name__=='__main__':unittest.main()

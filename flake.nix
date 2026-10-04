@@ -42,7 +42,7 @@
     };
     u-boot-gemini-src = {
       # Shared LK handoff and independently testable recovery/EFI profiles.
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=0f373c8a81937a1c2179527b700910d150755131&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=3da3110deebdb351eff0cd48d76271596dfa407d&shallow=1";
       flake = false;
     };
     u-boot-src = {

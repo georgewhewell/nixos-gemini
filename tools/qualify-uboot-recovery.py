@@ -26,8 +26,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
-    'efi-manager': (WORKSPACE / 'handoff/uboot-efi-manager-file-stages/boot-padded-p22.img',
-                    '128bf5992f4f4c9d8af5612ef8c0829c9fd79c810323995c5b14d4de771cf4d0'),
+    'efi-manager': (WORKSPACE / 'handoff/uboot-efi-manager-partuuid/boot-padded-p22.img',
+                    'fd6e29e1727209d1445c85380417ed06470bfd61da429ff7e1cd0f7a1fe43a20'),
     'efi-provision': (WORKSPACE / 'handoff/uboot-efi-provision/boot-padded-p22.img',
                       'eabf8e42eeca5d08a7f7564dee82b44b44bb485235b74e1d6a81b08ba6dc97eb'),
     'efi-storage': (WORKSPACE / 'handoff/uboot-efi-storage-eof/boot-padded-p22.img',
@@ -350,6 +350,14 @@ def recovery_timing(directory, profile):
 
 def phase_evidence(before, after, profile):
     phase = PHASES.get(after)
+    fault = {}
+    if profile == 'efi-manager' and isinstance(after,str) and re.fullmatch(r'0x[89a-f][0-9a-f]{7}',after):
+        record=int(after,16)
+        pc=0x40200000+((record&0x7ffff)<<2)
+        ec=(record>>25)&0x3f
+        iss=(record>>19)&0x3f
+        fault=dict(exception_pc=hex(pc),exception_class=hex(ec),exception_iss_low6=hex(iss))
+        phase=f'uboot_exception_pc_{pc:#x}_ec_{ec:#x}_iss_low6_{iss:#x}'
     if isinstance(after, str) and re.fullmatch('0x474d30[0-9a-f]{2}', after):
         phase = 'mmc_resource_failure_errno_' + str(int(after[-2:], 16))
     known_before = isinstance(before, str) and bool(re.fullmatch(r'0x[0-9a-f]{8}', before))
@@ -357,7 +365,7 @@ def phase_evidence(before, after, profile):
     intended = {'reset': 'reset_test', 'watchdog': 'watchdog_expiry_test'}.get(profile)
     return dict(phase_before_candidate=before, phase_at_rescue=after,
                 uboot_phase=phase, uboot_execution_proven=fresh,
-                intended_test_branch_reached=(fresh and phase == intended))
+                intended_test_branch_reached=(fresh and phase == intended), **fault)
 
 
 def profile_qualified(profile, phase, elapsed, host_rescue_reboot_requested):

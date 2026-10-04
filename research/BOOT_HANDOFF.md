@@ -9,9 +9,10 @@ EFI Linux profile passed full service health, ExitBootServices, the full
 EFI console profile additionally passed GOP pixel/stride checks and visible
 text confirmed by the owner. Native keyboard initialization and polling
 also pass through EFI. Native eMMC reads now pass the full boot-partition
-and filesystem hash checks below. Physical key actuation, complete modifier
-support and a boot manager remain unfinished; EFI file access now passes
-the separate protocol qualification below.
+and filesystem hash checks below. EFI file access and a distro systemd-boot
+launch now pass separate qualifications below, including selected-entry,
+boot-volume and unattended menu timing evidence. Physical key actuation,
+complete modifier qualification and normal NixOS generation updates remain.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -59,13 +60,12 @@ isolation, and bootm-return resets. Cross builds check the AArch64 image/EFI
 headers, generic reset dispatch, watchdog WFI, config, and exact FIT extraction.
 These checks do not prove hardware watchdog recovery or Linux handoff.
 
-First qualify software reset and watchdog expiry with a supervised rescue
-transaction and a person at the device. Then boot M69 through the plain
-handoff, verify both new boot identity and the Linux-visible marker, LK RAM and
-modem reservations, and full M69 health. Repeat boots before adding the EFI
-smoke test. EFI Linux/ExitBootServices now has a separate qualification below;
-Keyboard polling, GOP and visible EFI text have separate qualifications
-below. Storage and a boot manager are subsequent milestones.
+Initial software-reset and watchdog-expiry trials used supervised rescue
+transactions with the owner available. Repeated plain handoffs then verified
+fresh boot identity, Linux-visible markers, LK RAM/modem reservations and full
+M69 health. EFI application, Linux/ExitBootServices, keyboard polling, GOP,
+visible text, storage and distro-manager qualifications are recorded below.
+The owner authorized subsequent unattended work using automatic recovery.
 
 The mtkclient candidate/rescue supervisor now has a hardware-qualified M69
 baseline (`handoff/mtkclient-supervisor-baseline-02`); both writes, readbacks,
@@ -790,9 +790,134 @@ file-path sizing, allocation, copy and encoding in retained phases
 `0x474d4040` through `0x474d4045`. Its cross build and all existing firmware
 checks passed. Carrier `handoff/uboot-efi-manager-file-stages` has SHA-256
 `128bf5992f4f4c9d8af5612ef8c0829c9fd79c810323995c5b14d4de771cf4d0` and
-is the current runner pin; it has not been booted yet. The accepted M69 bundle
-still evaluates to the exact original path. The flash lane was confirmed idle
-after trial 04 finished.
-Read-only admission for the next carrier passed in
-`handoff/uboot-efi-manager-preflight-05`, including fresh M69 health and all
-five installed-file hashes. No fifth manager trial has been started.
+passed read-only admission in `handoff/uboot-efi-manager-preflight-05` and
+`handoff/uboot-efi-manager-preflight-05b`, including fresh M69 health and all
+five installed-file hashes. Trial `handoff/uboot-efi-manager-05` retained
+`0x474d4041`: device-path and UTF-8 sizing completed, but `efi_alloc()` did
+not return. Automatic rescue restored healthy M69
+`61c994e0-b227-436a-85c7-b2383a6d90ab`; rescue entry took 26.341 seconds.
+
+Source `b1dddd4b3e82e362e43e5169ef679ddbebe51e1c` adds an opt-in exception
+record to the existing retained TOPRGU word. For a PC within the carrier's
+2 MiB U-Boot link window, it retains the unrelocated instruction address,
+ESR exception class and low six syndrome bits before normal exception/reset
+handling. It does not write RAM or storage. The decoder rejects stale records
+as execution proof and never accepts an exception as a successful boot.
+Firmware encoding tests and nine host EFI proof tests passed.
+
+Trial `handoff/uboot-efi-manager-06` used `handoff/uboot-efi-manager-fault`,
+SHA-256 `0b742593b485456fddc96d2dde8d3fec5cb627d39ac399b74aa5d155eb4495f7`.
+It retained `0xca20f4c6`: PC `0x4023d318`, exception class `0x25`, syndrome
+low six bits `0x04`. The exact unstripped firmware resolves that instruction
+to `efi_update_memory_map()`, `lib/efi_loader/efi_memory.c:361`, loading
+`evt->group` while traversing the EFI event list. Rescue entry took 26.355
+seconds and healthy M69 `fab3d42c-7ec8-4d96-a815-f4025dfd9540` returned.
+Both trials passed full candidate/rescue writes and readbacks, reboot
+acknowledgements and final protected-partition guards.
+
+This exposed a lifetime error in `efi_binary_run()`: a returning RAM-backed
+EFI application freed its temporary memory device path but left the same
+pointer in `bootefi_device_path`. A subsequent EFI event could reuse that
+pool page; `efi_set_bootdev()` then freed it through the stale pointer, and
+allocating a new partition path overwrote the still-linked event. The new
+host regression executes the production runner and cleanup with deterministic
+pool-page reuse. It fails on the old code when cleanup frees the replacement
+event. Source `0a4c160d21c906d83202615222d9050c2fbd8c4e` keeps the temporary
+path local and passes successful/error RAM-app returns, installation failure,
+replacement allocation survival and persistent disk-path ownership checks.
+
+The fixed cross build and all firmware checks passed. Carrier
+`handoff/uboot-efi-manager-owned-path` has SHA-256
+`d05f46b7e9b97381abfd03f59755742386ef1d9a5daab4a4c5411811b5b83750`.
+Read-only admission passed in `handoff/uboot-efi-manager-preflight-07`.
+Trial `handoff/uboot-efi-manager-07` reached fully healthy candidate Linux
+`03df6c05-a89b-4879-8dfe-9163a6b28d9e`, retaining the manager's `starting`
+marker and no return status. Console, 1,402 keyboard scans with zero error,
+native MMC, EFI storage, the full 48-descriptor EFI memory map, both A72s,
+initrd handoff and all LK reservations passed. This device result confirms
+the path-lifetime fix removes the crash.
+
+The overall manager profile still failed while reading the loader's EFI
+variables from Linux. The original collector discarded the failed command's
+partial output, so trial 07 does not establish which read failed. The host
+collector now preserves partial data and stderr before rescue, with a failure
+regression. Automatic recovery restored healthy M69
+`70abf7c4-9444-4777-938c-3ea39f5cb9e2`, both full writes/readbacks and final
+guards passed, and the retained phase was ExitBootServices. Rescue entry took
+231.25 seconds after candidate departure. The accepted M69 bundle still
+evaluates to `/nix/store/92140xp096mcjqp6laid183r1cw2ky95-gemini-mainline-nixos-bundle`.
+
+Trial `handoff/uboot-efi-manager-08` repeated the same firmware and reached
+healthy Linux `1b3554e9-65e3-4d84-9e05-1f51d9e8ab32`. Live diagnosis showed
+that default `modprobe` is BusyBox and fails because `/lib/modules` is absent.
+The matching kmod executable was invoked with `-d` pointing at the pinned EFI
+kernel in the Nix store, then efivarfs was mounted read-only. That operation
+is recorded in `efivar-mount.txt`; the host collector now performs it itself.
+No firmware/kernel/store replacement was needed to expose runtime variables.
+
+The manager's own variables now confirmed `systemd-boot 261.2` and selected
+entry `gemini-efi-trial.conf`. Its image identifier is
+`/\EFI\systemd\systemd-bootaa64.efi`; U-Boot's DevicePathToText prefixes nodes
+with `/`, so the verifier accepts that exact equivalent rendering as well as
+the ordinary EFI pathname. The remaining failure was a missing
+`LoaderDevicePartUUID`. Automatic recovery restored healthy M69
+`b7efb665-5b80-43fb-bb6c-b3675d3e176f`; full writes/readbacks and protected
+hashes passed, phase was ExitBootServices and rescue entry took 231.213 seconds.
+
+The captured factory GPT has a zero disk GUID and zero MBR signature, while
+p29 has the valid partition GUID `b72ccbe9-2055-46f4-a167-4a069c201738`.
+U-Boot chose the hard-drive device-path signature type from the disk signature,
+so it omitted the partition GUID. systemd-boot discovers its volume UUID from
+that device-path node and therefore could not report it. Source
+`3da3110deebdb351eff0cd48d76271596dfa407d` uses the partition GUID for GPT
+paths independently of the disk signature. A regression with the captured p29
+identity fails before the fix and passes afterward, including unchanged DOS
+signature behavior and failed partition lookup. No on-disk GPT change is made.
+
+The complete cross build passed with both new regressions included in the
+Nix build checks. Carrier `handoff/uboot-efi-manager-partuuid` has SHA-256
+`fd6e29e1727209d1445c85380417ed06470bfd61da429ff7e1cd0f7a1fe43a20`.
+Trial `handoff/uboot-efi-manager-09` reached healthy candidate Linux
+`39e5b43c-043a-43f9-9e47-374879408e92` with the corrected collector loading
+the module and mounting efivarfs itself. All six loader variables were read.
+The UUID was now present and matched p29, but the verifier incorrectly
+required lowercase while systemd-boot emitted uppercase hexadecimal.
+
+The verifier now normalizes UUID case before validation and device lookup;
+malformed identifiers still fail. Its five host tests pass, including the
+actual U-Boot path rendering and uppercase UUID. Offline revalidation of the
+original trial 09 variables confirms systemd-boot 261.2, the intended entry
+and manager path, p29 UUID and a menu-to-execution interval of 9,477,423 us.
+That separate evidence is `manager-variables-revalidated.json`; the original
+trial result remains unchanged, since it stopped before the final device-link
+and installed-file checks. A complete repeat is still required.
+Trial 09's automatic rescue restored healthy M69
+`23fa25d1-b82c-48d9-bb72-fc499508b84e`, with both full writes/readbacks,
+unchanged protected hashes and ExitBootServices phase; rescue entry took
+231.395 seconds.
+
+Trial `handoff/uboot-efi-manager-10` repeated the same partition-identity
+firmware with the corrected host verifier. Candidate Linux
+`e2dd69ab-00cf-4653-900d-1d8536c8312b` passed every candidate check. The
+manager's own EFI variables independently identify systemd-boot 261.2,
+`gemini-efi-trial.conf`, the pinned manager path, and p29's UUID, which resolves
+to `/dev/mmcblk0p29` in that same boot. Menu-to-execution time was 9,480,210 us
+with the configured eight-second menu. The host loaded the matching efivarfs
+module and mounted it read-only without manual assistance.
+
+All five installed boot-file sizes/hashes matched and p29 remained read-only.
+Console/GOP, native keyboard scans, raw MMC hashes, EFI file reads, the full
+EFI memory map, initrd handoff, late-CPU identity and LK reservations passed
+alongside full desktop/GPU/JPEG/Wi-Fi/audio health. No keypress was synthesized
+or observed, and there was no person watching this menu. This qualifies the
+unattended distro-manager boot path; physical menu input, persistent EFI
+settings and normal NixOS generation management remain separate work.
+
+The complete trial 10 finished with `profile_qualified=true` and
+`linux_handoff_proven=true`. Automatic rescue restored fully healthy M69
+`99e02757-9dfe-4e5b-8bb6-7b94d030ce17`. Both full p22 writes/readbacks and
+reboot acknowledgements passed, GPT/p30/p31 stayed exact, and the retained
+phase was ExitBootServices. Candidate departure to rescue entry took 233.556
+seconds. The trial handle is terminal and the flash lane is idle. The accepted
+installation remains direct M69; the qualified U-Boot manager is an opt-in
+candidate. No physical intervention was required.

@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry, repeated M69 FIT handoff, EFI application and full EFI Linux/ExitBootServices pass; Inherited GOP/text display now passes with owner confirmation; early diagnostics are removed and normal SError delivery restored. Native keyboard initialization/polling also passes through EFI; physical input, full modifier behavior and boot manager remain. Fn navigation passes host tests and is included in the successful native-MMC boot. Native eMMC now passes full GPT/p22/p30/p31 and p29 file hash checks; EFI block/file/directory reads now pass after correcting EOF and zero-length read handling; loading the distro manager remains. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. The real distro systemd-boot manager now boots the installed Linux entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Physical key selection, full modifier qualification, persistent EFI settings and normal NixOS generation management remain. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -40,19 +40,31 @@ The distro-manager files have now been installed additively on the existing
 p29 ext4 filesystem in `handoff/uboot-efi-provision-01`. All five hashes and
 both existing squashfs stores were checked, p29 was returned to read-only,
 candidate Linux passed full health and automatic rescue restored healthy
-M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. This prepares systemd-boot;
-launching the manager and normal NixOS generation updates remain unqualified.
+M69 `49655993-d7c5-42a1-adc7-9f12935076bc`. The later systemd-boot trial 10
+passed all candidate checks; normal NixOS generation updates remain unqualified.
 There was no formatting, GPT change or persistent writable-store enablement.
 
-Four subsequent systemd-boot launch trials failed before the manager started.
-Retained markers narrow the failure to EFI file-path construction after the
-manager file was read and its hash verified. An unaligned UTF-16 store was
-found and fixed with a failing-then-passing sanitizer regression, but trial 04
-still failed at the same boundary. Further stage markers are built and ready;
-the manager remains unqualified. Every trial automatically restored healthy
-M69 with protected hashes unchanged, most recently boot
-`8edbec93-5d47-44db-a48a-1d11eafa505c`. See BOOT_HANDOFF.md for artifacts and
-the next unbooted diagnostic carrier.
+The first six systemd-boot launch trials failed before the manager started.
+Trial 06 captured the exact U-Boot exception while traversing the EFI event
+list. A returning RAM application's temporary device path remained in global
+boot state after being freed; later cleanup could free a replacement event
+allocated at the same address. A regression reproduces that lifetime error
+and passes with the fix. Trials 07 and 08 then reached fully healthy Linux
+through the manager, with its own variables confirming systemd-boot 261.2 and
+the selected entry. The factory disk GUID is zero but p29's partition GUID
+is valid; U-Boot omitted that partition identity from the device path. A
+failing-then-passing regression supports the correction, and trials 09/10
+reported the correct p29 UUID. After correcting module lookup, device-path
+text rendering and UUID case handling in the host verifier, trial 10 passed
+the complete candidate profile, including a 9.48-second menu-to-launch interval
+and all five installed-file hashes.
+The earlier UTF-16 alignment fix also has a failing-then-passing sanitizer
+regression, but did not resolve the device failure. Every trial automatically
+restored healthy M69 with protected hashes unchanged. Trial 10 completed with
+the manager profile qualified and final M69 boot
+`99e02757-9dfe-4e5b-8bb6-7b94d030ce17`. Physical menu input was not observed;
+automatic selection and boot are now proven. Direct M69 remains installed.
+See BOOT_HANDOFF.md for artifacts and trial results.
 
 The September 29 note claiming p34 was provisioned is historical. Claude later
 restored the factory GPT after SP Flash Tool refused the modified layout with

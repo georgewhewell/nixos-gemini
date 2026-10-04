@@ -61,6 +61,8 @@ crossPkgs.buildUBoot {
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-console-fdt-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc GEMINI_HOST_DTC=${buildPkgs.dtc} ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-manager-host.py
     HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-path-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-bootbin-host.py
+    HOST_CC=${buildPkgs.stdenv.cc}/bin/cc ${buildPkgs.python3}/bin/python3 tools/gemini/test-efi-partition-path-host.py
     ${crossPkgs.stdenv.cc.targetPrefix}objdump -dr arch/arm/cpu/armv8/start.o > entry-disassembly.txt
     grep -Eiq 'msr[[:space:]]+daifclr, #0x4' entry-disassembly.txt
     ${crossPkgs.stdenv.cc.targetPrefix}nm u-boot > linked-symbols.txt
