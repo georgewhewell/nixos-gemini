@@ -28,6 +28,8 @@ WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
+    'desktop-keyboard': (WORKSPACE / 'handoff/desktop-keyboard-linux/boot-padded-p22.img',
+                         'ac9b5091f5410a9e988128197770922396dd27e8aec7fb06cd0149505d7cdf49'),
     'efi-nix-keys-manager': (WORKSPACE / 'handoff/efi-key-events-manager/boot-padded-p22.img',
                             '91384c8e6c6fb07b7afaa1ea14a04253be21a7cfe8e7264b5db8a54d09dbe963'),
     'efi-nix-dt-cross-manager': (WORKSPACE / 'handoff/efi-cross-entry-dt-manager/boot-padded-p22.img',
@@ -67,13 +69,15 @@ PROFILES = {
                   '3ab7a708611fa221e2f875b1d5a7a7f7041c2874e2ef6f4cca8e8714ac1d7e74'),
 }
 KEY_EVENT_PROFILES = ('efi-nix-keys-manager',)
+DESKTOP_PROFILES = ('desktop-keyboard',)
+DIRECT_NIX_PROFILES = ('persistent-nix',) + DESKTOP_PROFILES
 CROSS_DT_PROFILES = ('efi-nix-dt-cross-manager',) + KEY_EVENT_PROFILES
 ENTRY_DT_PROFILES = ('efi-nix-dt-provision', 'efi-nix-dt-manager') + CROSS_DT_PROFILES
 NIX_EFI_PROFILES = ('efi-nix-provision', 'efi-nix-manager') + ENTRY_DT_PROFILES
-NIX_PROFILES = ('persistent-nix',) + NIX_EFI_PROFILES
+NIX_PROFILES = DIRECT_NIX_PROFILES + NIX_EFI_PROFILES
 EFI_LINUX_PROFILES = ('efi-linux', 'efi-console', 'efi-keyboard', 'efi-mmc', 'efi-storage', 'efi-provision', 'efi-manager') + NIX_EFI_PROFILES
 UBOOT_LINUX_PROFILES = ('handoff', 'efi-smoke') + EFI_LINUX_PROFILES
-LINUX_PROFILES = UBOOT_LINUX_PROFILES + ('persistent-nix',)
+LINUX_PROFILES = UBOOT_LINUX_PROFILES + DIRECT_NIX_PROFILES
 SUCCESS = 'supervisor_rollback_succeeded_rescue_verified '
 MMC_GPT_SHA = '6addff62cc67f5b5fac9bd87194b6643f4029262251c51c1e43e1b5b64cb887d'
 MMC_FILE_SHA = 'fb9d072b57e41d245ace3e2256ac57ab4dfd42cf4c010993b4d6c3e67b44e16d'
@@ -191,7 +195,7 @@ def verify_handoff_tree(before, after, profile):
             continue
         if key != 'memtotal_kib' and after.get(key) != value:
             raise RuntimeError(f'Linux handoff changed LK property {key}')
-    if profile == 'persistent-nix':
+    if profile in DIRECT_NIX_PROFILES:
         if any(key in after for key in MARKERS):
             raise RuntimeError('Direct persistent-Nix profile contains a U-Boot marker')
         return
@@ -260,22 +264,33 @@ efi_manager = module('efi_manager', ROOT / 'tools/qualify-efi-manager.py')
 persistence = module('persistence', ROOT / 'tools/qualify-gemini-persistence.py')
 persistent_nix = module('persistent_nix', ROOT / 'tools/qualify-persistent-nix.py')
 entry_dt = module('entry_dt', ROOT / 'tools/qualify-efi-entry-dt.py')
+desktop_keyboard = module('desktop_keyboard', ROOT / 'tools/qualify-desktop-keyboard.py')
+
+
+def store_profile_for(profile):
+    if profile in DESKTOP_PROFILES:
+        return desktop_keyboard.store_profile(efi_linux)
+    if profile not in NIX_PROFILES:
+        raise ValueError('Not an ordinary-build profile')
+    return persistent_nix.store_profile(efi_linux, require_efi=profile in NIX_EFI_PROFILES)
 
 
 def files_profile_for(profile):
-    if profile in ENTRY_DT_PROFILES:
+    if profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
         return entry_dt.files_profile(efi_files)
     return persistent_nix.files_profile(efi_files) if profile in NIX_EFI_PROFILES else None
 
 
 def previous_files_evidence(ssh,boot_id,directory,profile,name):
     persistent_nix.activation_evidence(ssh,boot_id,directory,qualify,persistence,name=name)
-    if profile in ENTRY_DT_PROFILES:
+    if profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
         entry_dt.previous_files(ssh,boot_id,directory,qualify,persistence,
                                 persistent_nix,efi_files,name+'-nix')
 
 
 def candidate_system(before, profile):
+    if profile in DESKTOP_PROFILES:
+        return desktop_keyboard.SYSTEM
     if profile in NIX_PROFILES:
         return persistent_nix.SYSTEM
     return efi_linux.SYSTEM if profile in EFI_LINUX_PROFILES else before['system']
@@ -347,9 +362,15 @@ def candidate_return(ssh, before, directory, profile):
             if profile in CROSS_DT_PROFILES:
                 entry_dt.cross_evidence(directory,after['boot_id'],efi_files,qualify,*PROFILES[profile])
         if profile in NIX_PROFILES:
+            if profile in DESKTOP_PROFILES:
+                desktop_keyboard.evidence(ssh, after['boot_id'], directory, qualify,
+                                          persistence, persistent_nix)
+                efi_files.evidence(ssh, after['boot_id'], directory, qualify,
+                                  require_verified=False, profile=files)
             persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
-                                    require_efi=profile in NIX_EFI_PROFILES)
-            if profile in NIX_EFI_PROFILES:
+                                    require_efi=profile in NIX_EFI_PROFILES,
+                                    system=candidate_system(before, profile))
+            if profile in NIX_EFI_PROFILES + DESKTOP_PROFILES:
                 previous_files_evidence(ssh,after['boot_id'],directory,profile,'previous-efi-files')
             if candidate_snapshot(ssh, before, profile) != after:
                 raise RuntimeError('Candidate health or protected identity changed after Nix build')
@@ -449,7 +470,7 @@ def phase_evidence(before, after, profile):
     if isinstance(after, str) and re.fullmatch('0x474d30[0-9a-f]{2}', after):
         phase = 'mmc_resource_failure_errno_' + str(int(after[-2:], 16))
     known_before = isinstance(before, str) and bool(re.fullmatch(r'0x[0-9a-f]{8}', before))
-    fresh = profile not in ('baseline', 'persistent-nix') and known_before and before != after and phase is not None
+    fresh = profile not in ('baseline',) + DIRECT_NIX_PROFILES and known_before and before != after and phase is not None
     intended = {'reset': 'reset_test', 'watchdog': 'watchdog_expiry_test'}.get(profile)
     return dict(phase_before_candidate=before, phase_at_rescue=after,
                 uboot_phase=phase, uboot_execution_proven=fresh,
@@ -562,7 +583,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
             if profile in NIX_PROFILES:
                 efi_linux.provision(ssh, before, PROFILES[profile][1], directory, qualify,
                     lambda: read_state(directory / 'supervisor.state').startswith(SUCCESS),
-                    profile=persistent_nix.store_profile(efi_linux,require_efi=profile in NIX_EFI_PROFILES))
+                    profile=store_profile_for(profile))
             middle = candidate_return(ssh, before, directory, profile)
             # Require rescue to be a different boot from the observed candidate
             # as well as restoring the accepted direct-Linux image.
@@ -599,7 +620,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         try:
             if candidate_qualified:
                 persistent_nix.after_recovery(ssh, after['boot_id'], directory, qualify, persistence)
-                if profile in NIX_EFI_PROFILES:
+                if profile in NIX_EFI_PROFILES + DESKTOP_PROFILES:
                     efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False,
                         name='recovered-boot-files.json', profile=files_profile_for(profile))
                     previous_files_evidence(ssh,after['boot_id'],directory,profile,'recovered-previous-efi-files')
@@ -650,6 +671,8 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     if profile in KEY_EVENT_PROFILES:
         result.update(native_efi_input_polling_qualified=qualified,
                       physical_key_press_observed=False)
+    if profile in DESKTOP_PROFILES:
+        result.update(desktop_keymap_qualified=qualified, physical_key_press_observed=False)
     if verify_persistence:
         result['persistence_qualified'] = persistent_after is not None
     if profile == 'watchdog':
@@ -696,8 +719,8 @@ def main():
         if args.profile in EFI_LINUX_PROFILES and args.profile not in NIX_PROFILES:
             efi_linux.payload()
         if args.profile in NIX_PROFILES:
-            efi_linux.payload(persistent_nix.store_profile(efi_linux,require_efi=args.profile in NIX_EFI_PROFILES))
-        if profile_kind(args.profile) in ('efi-provision','efi-manager'):
+            efi_linux.payload(store_profile_for(args.profile))
+        if profile_kind(args.profile) in ('efi-provision','efi-manager') or args.profile in DESKTOP_PROFILES:
             efi_files.payload(files_profile_for(args.profile))
         if args.profile in CROSS_DT_PROFILES:
             _,manifest=efi_files.payload(files_profile_for(args.profile))
@@ -724,11 +747,11 @@ def main():
                 efi_files.evidence(ssh, before['boot_id'], directory, qualify, require_verified=False,
                     name='before-old-boot-files.json',
                     profile=persistent_nix.files_profile(efi_files) if args.profile in ENTRY_DT_PROFILES else None)
-        if profile_kind(args.profile) == 'efi-manager':
+        if profile_kind(args.profile) == 'efi-manager' or args.profile in DESKTOP_PROFILES:
             efi_files.evidence(ssh, before['boot_id'], directory, qualify,
                                require_verified=False, name='before-boot-files.json',
                                profile=files_profile_for(args.profile))
-            if args.profile in ENTRY_DT_PROFILES:
+            if args.profile in ENTRY_DT_PROFILES + DESKTOP_PROFILES:
                 previous_files_evidence(ssh,before['boot_id'],directory,args.profile,'before-previous-efi-files')
         if tree is not None:
             qualify.save(directory, 'before-tree.json', tree)
@@ -737,7 +760,7 @@ def main():
         source_hashes = {}
         for name in ('qualify-uboot-recovery.py', 'qualify-mtkclient.py', 'qualify-efi-linux.py',
                      'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-efi-entry-dt.py', 'qualify-gemini-persistence.py',
-                     'qualify-persistent-nix.py'):
+                     'qualify-persistent-nix.py', 'qualify-desktop-keyboard.py'):
             raw = (ROOT / 'tools' / name).read_bytes()
             (sources / name).write_bytes(raw)
             source_hashes[name] = backend.digest(raw)

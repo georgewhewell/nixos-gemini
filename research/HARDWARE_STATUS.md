@@ -23,8 +23,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after the native EFI key-event manager retry is
-`58169ffb-952a-478a-ad72-59595d939729`, with `/persist`,
+healthy M69 boot after the desktop candidate's automatic recovery is
+`67ed08d7-2e44-44ca-a561-8b7714b377a3`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed swap is still absent.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -49,6 +49,9 @@ poll-counter ceiling; the corrected retry used identical firmware. All 416
 compact-US key/Shift/Fn/Caps combinations match captured Gemian XKB in host
 tests. The final locked audit retained all eight ordinary outputs and their
 home GC roots/database identities, with free flash locks and no writer.
+The later desktop candidate also passed full Linux health, an ordinary build
+and automatic recovery in `handoff/desktop-keyboard-01`. Its final locked
+audit retained all nine ordinary outputs and their database/GC-root proofs.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -60,7 +63,8 @@ Direct M69 remains installed. See
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, desktop layout integration, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive supervised reboot with unchanged GPT. Ordinary unprivileged daemon builds pass both direct boot and the distro-manager path, retaining their outputs through M69 recovery. Normal generation updates and fixed-size swap remain. The owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
-| Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
+| Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding |
+| Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |
 | Media | JPEG was hardware-tested historically; video encode/decode remains unimplemented and requires further vendor investigation |

@@ -1,5 +1,5 @@
 # A local Wayland session, qualified before the guarded boot is accepted.
-{ pkgs, lib, geminiDesktop, ... }:
+{ pkgs, lib, geminiDesktop, geminiDesktopKeyboard, ... }:
 let
   inherit (geminiDesktop) weston mesa seatd presentationCheck;
   sessionEnvironment = {
@@ -18,6 +18,10 @@ let
     FONTCONFIG_FILE = fontConfig;
     XCURSOR_PATH = "${geminiDesktop.vanilla-dmz}/share/icons";
     XCURSOR_THEME = "DMZ-White";
+  } // lib.optionalAttrs (geminiDesktopKeyboard != null) {
+    XKB_CONFIG_ROOT = "${geminiDesktopKeyboard.data}/share/X11/xkb";
+    LANG = "C.UTF-8";
+    LC_CTYPE = "C.UTF-8";
   };
   fontConfig = pkgs.writeText "gemini-fonts.conf" ''
     <?xml version="1.0"?>
@@ -48,7 +52,7 @@ let
     scale=2
 
     [keyboard]
-    keymap_layout=us
+    keymap_layout=${if geminiDesktopKeyboard == null then "us" else "planet_vndr/gemini"}${lib.optionalString (geminiDesktopKeyboard != null) "\nkeymap_variant=us"}
 
     [shell]
     background-color=0xff18374b
@@ -101,7 +105,7 @@ let
     export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.systemd pkgs.busybox]}:$PATH
     export GEMINI_WESTON_TERMINAL=${weston}/bin/weston-terminal
     export GEMINI_GPU_LOG_CHECK=${../nix/gpu-kernel-log-check.sh}
-    ${builtins.readFile ../nix/desktop-qualify.sh}
+    ${lib.optionalString (geminiDesktopKeyboard != null) "test -s ${geminiDesktopKeyboard.protocolCheck}\n"}${builtins.readFile ../nix/desktop-qualify.sh}
   '';
 in {
   users.users.gemini = {
@@ -163,10 +167,14 @@ in {
     serviceConfig = {
       User = "gemini";
       Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "gemini-desktop-presentation" ''
+      ExecStart = if geminiDesktopKeyboard == null then pkgs.writeShellScript "gemini-desktop-presentation" ''
+        exec ${presentationCheck}/bin/gemini-desktop-presentation-check > /run/gemini-desktop/presentation.txt 2>&1
+      '' else pkgs.writeShellScript "gemini-desktop-presentation" ''
+        set -eu
+        ${geminiDesktopKeyboard.check}/bin/gemini-desktop-keyboard-check > /run/gemini-desktop/keyboard.txt 2>&1
         exec ${presentationCheck}/bin/gemini-desktop-presentation-check > /run/gemini-desktop/presentation.txt 2>&1
       '';
-      TimeoutStartSec = "20s";
+      TimeoutStartSec = if geminiDesktopKeyboard == null then "20s" else "35s";
       UMask = "0077";
     };
   };

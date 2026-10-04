@@ -67,13 +67,16 @@ def verify_builder(evidence, token, host_net, daemon_net):
         raise RuntimeError('Builder did not receive its own network namespace')
 
 
-def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False):
-    old_persistence(ssh,boot_id,directory,qualify,persistence,SYSTEM,'candidate-old-persistence')
-    config_sha=hashlib.sha256((KERNEL/'kernel.config').read_bytes()).hexdigest()
+def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False,
+             system=SYSTEM, kernel=KERNEL):
+    if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+',system):
+        raise ValueError('Ordinary-build system is not a pinned store path')
+    old_persistence(ssh,boot_id,directory,qualify,persistence,system,'candidate-old-persistence')
+    config_sha=hashlib.sha256((kernel/'kernel.config').read_bytes()).hexdigest()
     efi_guard='test "$(cat /sys/firmware/efi/fw_platform_size)" = 64' if require_efi else 'test ! -e /sys/firmware/efi'
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
-test "$(readlink /run/current-system)" = {SYSTEM}
+test "$(readlink /run/current-system)" = {system}
 test "$(zcat /proc/config.gz | sha256sum | cut -d' ' -f1)" = {config_sha}
 {efi_guard}
 test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1

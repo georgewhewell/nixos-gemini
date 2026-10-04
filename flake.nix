@@ -122,6 +122,33 @@
       mesa = null;
     };
 
+    desktopKeyboard = import ./nix/desktop-keyboard.nix {
+      inherit buildPkgs;
+      armPkgs = crossPkgs;
+      hostWeston = desktopHostUserspace.weston;
+    };
+    desktopHostKeyboard = import ./nix/desktop-keyboard.nix {
+      inherit buildPkgs;
+      armPkgs = buildPkgs;
+      hostWeston = desktopHostUserspace.weston;
+    };
+    desktopKeyboardProtocolCheck = buildPkgs.runCommand "gemini-desktop-keyboard-protocol-check" {
+      nativeBuildInputs = [buildPkgs.python3];
+    } ''
+      python3 ${./nix/keyboard}/generate-reference.py \
+        --library ${buildPkgs.libxkbcommon}/lib/libxkbcommon.so \
+        --include ${buildPkgs.xkeyboard_config}/share/X11/xkb \
+        --matrix ${u-boot-gemini-keys-src}/arch/arm/dts/mt6797-gemini-pda-keyboard.dts \
+        --input-header ${u-boot-gemini-keys-src}/include/linux/input.h \
+        --output reference.h
+      cmp reference.h ${./nix/keyboard/reference.h}
+      python3 ${./nix/keyboard/test-weston.py} \
+        ${desktopHostUserspace.weston}/bin/weston \
+        ${desktopHostKeyboard.check}/bin/gemini-desktop-keyboard-check \
+        ${desktopHostKeyboard.fixture}/lib/keyboard-fixture.so \
+        ${desktopKeyboard.data}/share/X11/xkb > "$out"
+    '';
+
     desktopProtocolCheck = buildPkgs.runCommand "gemini-desktop-protocol-check" {
       nativeBuildInputs = [buildPkgs.python3 buildPkgs.binutils];
     } ''
@@ -1180,6 +1207,7 @@
           _module.args.geminiSpmFirmware = spmFirmware;
           _module.args.geminiGpuSmoke = gpuUserspace.smoke;
           _module.args.geminiDesktop = desktopUserspace // { protocolCheck = desktopProtocolCheck; };
+          _module.args.geminiDesktopKeyboard = null;
         }
         {
           nixpkgs.hostPlatform = targetSystem;
@@ -1208,6 +1236,15 @@
           geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 40 mainlineNixKernel;
         };
       } ];
+    };
+
+    mainlineNixosKeysSystemCross = mainlineNixosNixSystemCross.extendModules {
+      modules = [{
+        _module.args.geminiDesktopKeyboard = nixpkgs-old.lib.mkForce {
+          inherit (desktopKeyboard) data check;
+          protocolCheck = desktopKeyboardProtocolCheck;
+        };
+      }];
     };
 
     #############################################
@@ -1266,6 +1303,7 @@
     mainlineNixosSquashfs = mkMainlineSquashfs mainlineNixosSystemCross.config.system.build.toplevel;
     mainlineNixosEfiSquashfs = mkMainlineSquashfs mainlineNixosEfiSystemCross.config.system.build.toplevel;
     mainlineNixosNixSquashfs = mkMainlineSquashfs mainlineNixosNixSystemCross.config.system.build.toplevel;
+    mainlineNixosKeysSquashfs = mkMainlineSquashfs mainlineNixosKeysSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1329,6 +1367,15 @@
       squashfs = mainlineNixosNixSquashfs;
       nixosToplevel = mainlineNixosNixSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosNixSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosKeys = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlineNixKernel;
+      serviceabilityDtb = mainlineNixDtb;
+      squashfs = mainlineNixosKeysSquashfs;
+      nixosToplevel = mainlineNixosKeysSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosKeysSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     efiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -1811,6 +1858,10 @@
   in {
     # Packages built on x86_64
     packages.${buildSystem} = {
+      geminiDesktopKeyboardData = desktopKeyboard.data;
+      geminiDesktopKeyboardCheck = desktopKeyboard.check;
+      geminiDesktopHostKeyboardCheck = desktopHostKeyboard.check;
+      geminiDesktopKeyboardProtocolCheck = desktopKeyboardProtocolCheck;
       geminiDesktopWeston = desktopUserspace.weston;
       geminiDesktopPresentationCheck = desktopUserspace.presentationCheck;
       geminiDesktopBufferCheck = desktopUserspace.bufferCheck;
@@ -1875,6 +1926,7 @@
       mainlineNixosEfiBundle = mainlineNixosEfi.bundle;
       mainlineNixosNixKernel = mainlineNixKernel;
       mainlineNixosNixBundle = mainlineNixosNix.bundle;
+      mainlineNixosKeysBundle = mainlineNixosKeys.bundle;
       geminiEfiBootFiles = efiBootFiles;
       geminiNixEfiBootFiles = nixEfiBootFiles;
       geminiNixEfiDtBootFiles = nixEfiDtBootFiles;
@@ -1968,6 +2020,7 @@
       # or nix copy + switch-to-configuration (handoff/power-policy.md).
       gemini-mainline = mainlineNixosSystemCross;
       gemini-mainline-nix = mainlineNixosNixSystemCross;
+      gemini-mainline-keys = mainlineNixosKeysSystemCross;
     };
 
     # Development shell
