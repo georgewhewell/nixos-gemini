@@ -2,8 +2,8 @@
 
 Status: software reset and 31-second watchdog expiry are hardware-qualified
 after removing an unmapped framebuffer probe. Both automatically recovered
-fully healthy M69 through mtkclient. The first plain Linux handoff also passed;
-repeat qualification is running. EFI smoke remains unqualified.
+fully healthy M69 through mtkclient. Two plain Linux handoff/rescue cycles also
+passed. EFI smoke remains unqualified.
 These profiles are based on the later U-Boot
 worktree, not the September 4 WIP branch.
 
@@ -171,7 +171,7 @@ identified candidate into the already waiting M69 rescue. These profiles do
 not permanently accept a carrier. The M69 kernel's forced command line
 retains its existing baseline health capability.
 
-## First Linux handoff
+## Repeated Linux handoff
 
 `handoff/uboot-handoff-fbfix-01` booted the exact handoff carrier into healthy
 M69, boot ID `2534bdc5-fdeb-41fa-aeb5-7cd234312097`. Linux exposed
@@ -187,3 +187,15 @@ GPT/p22/p30/p31. The rescue phase was `0x474d10e9`, written by
 `armv8_switch_to_el2_prep` immediately before Linux entry. The initial result's
 decoder did not yet name that value; the recorded Linux marker and full
 candidate health independently prove the handoff.
+
+The repeat (`handoff/uboot-handoff-fbfix-02`) independently reached healthy
+candidate boot `ae0f8752-733f-403c-8b92-2705f8f39ab3` with identical handoff
+and LK-tree checks, then restored healthy direct M69 boot
+`fdea5023-c884-46e8-af74-06d3574819cb`. GPT and all boot partitions matched.
+It also captured the raw Linux FDT and kernel log. Linux's watchdog probe
+recorded inherited length `0x0000f800` and a running 31-second watchdog, and
+the modem probe validated the LK descriptor and reserved regions.
+
+M69 currently has `CONFIG_EFI` disabled. The EFI smoke profile exercises an
+EFI application before the qualified FIT handoff; EFI Linux and
+ExitBootServices still require a separate kernel/profile qualification.

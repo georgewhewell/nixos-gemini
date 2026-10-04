@@ -25,7 +25,7 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue and watchdog rescue now pass; general harness migration and GPT-write qualification remain |
-| U-Boot / UEFI | Software reset, watchdog expiry and the first full M69 FIT handoff pass; repeat handoff and EFI/UEFI work remain. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Software reset, watchdog expiry and two full M69 FIT handoff/rescue cycles pass; EFI/UEFI work remains. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Working layout compatible with the recovery tool, writable home/Nix across reboot, active swap; owner requested fixed swap rather than a swap file |
 | Power | Qualify lid suspend/wake, deep idle, hibernation save/restore and 24-hour suspend-then-hibernate policy |
 | Cellular / eSIM | Resolve weak reception and registration; compare stock scan at same location; qualify applicable SIM/eSIM use |
@@ -78,7 +78,7 @@ unchanged. Evidence: `handoff/mtkclient-boot-write-20261004-01`.
 The durable candidate/rescue baseline subsequently passed, followed by
 hardware-qualified U-Boot software-reset and 31-second watchdog-expiry tests.
 Removing an unmapped post-MMU framebuffer probe resolved the early U-Boot
-failure. The first plain U-Boot FIT handoff then reached fully healthy M69
+failure. Two plain U-Boot FIT handoffs then reached fully healthy M69
 with its Linux-visible marker, full RAM bank and unchanged modem reservations.
 The supervised trial restored direct M69 afterward. Details and exact
 artifacts are in [BOOT_HANDOFF.md](BOOT_HANDOFF.md); these boot tests do not

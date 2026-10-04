@@ -1,7 +1,8 @@
 # Gemini mtkclient qualification
 
-Status, 2026-10-04: read/reboot and an accepted-image boot rewrite are working
-with the MT6797 packet-size fix.
+Status, 2026-10-04: read/reboot, boot-only writes and supervised U-Boot
+candidate/rescue cycles are working with the MT6797 packet-size fix. Software
+reset, watchdog expiry and two full M69 FIT handoffs have passed on hardware.
 Two corrected DA sessions read the primary GPT and complete boot partition,
 then returned automatically to healthy M69 with matching hashes. A subsequent
 boot-only write was acknowledged, read back in full and followed by another
