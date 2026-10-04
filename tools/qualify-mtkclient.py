@@ -27,6 +27,7 @@ WRITE_COMMANDS = ('printgpt;ro 0 0x8000 gpt-primary.bin;w boot accepted-boot.img
 ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote accepted-boot.img to sector 362496 with sector count 32768.'
 PHASE_READ = 'da peek 0x10007024 4 --filename boot-phase.bin'
+RAMOOPS_READ = 'da peek 0x44410000 0xe0000 --filename ramoops.bin'
 # M69 runs cellular, GPU, audio, connectivity and desktop checks before
 # self-acceptance. A successful DA reboot exceeded the original 180s window.
 HEALTH_TIMEOUT = 360
@@ -84,8 +85,10 @@ def accepted_boot_bytes(path):
     return data
 
 
-def commands_for(writing, capture_phase):
+def commands_for(writing, capture_phase, capture_ramoops=False):
     commands = WRITE_COMMANDS if writing else COMMANDS
+    if capture_ramoops:
+        commands = RAMOOPS_READ + ';' + commands
     return PHASE_READ + ';' + commands if capture_phase else commands
 
 
@@ -138,10 +141,11 @@ def check_host_idle():
 def trial(args, directory, before, ssh):
     writing = getattr(args, 'rewrite_accepted_boot', None) is not None
     capture_phase = getattr(args, 'capture_boot_phase', False)
+    capture_ramoops = getattr(args, 'capture_ramoops', False)
     if writing:
         # Verify the private staged copy immediately before starting the DA.
         accepted_boot_bytes(directory / 'accepted-boot.img')
-    commands = commands_for(writing, capture_phase)
+    commands = commands_for(writing, capture_phase, capture_ramoops)
     # A fresh working directory prevents accidental reuse of cached DA state.
     # The DA client runs as root and inherits umask 077. Create its readback
     # files as the invoking user so verification can read them afterwards.
@@ -149,6 +153,8 @@ def trial(args, directory, before, ssh):
     readbacks = ['gpt-primary.bin', 'boot-readback.img']
     if capture_phase:
         readbacks.append('boot-phase.bin')
+    if capture_ramoops:
+        readbacks.append('ramoops.bin')
     for name in readbacks:
         with (directory / name).open('xb'):
             pass
@@ -212,6 +218,8 @@ def trial(args, directory, before, ssh):
     verify_reads(directory, before)
     if capture_phase:
         save(directory, 'boot-phase.json', phase_readback(directory))
+    if capture_ramoops and (directory / 'ramoops.bin').stat().st_size != 0xe0000:
+        raise RuntimeError('Ramoops memory read is incomplete')
     save(directory, 'result.json', {'result': 'passed', 'writes_to_emmc': writing,
                                     'health_timeout_seconds': HEALTH_TIMEOUT,
                                     'seconds_to_healthy_linux': round(time.monotonic() - observation_start, 1)})
@@ -230,6 +238,8 @@ def main():
                         help='Additionally rewrite boot with this exact accepted M69 image')
     parser.add_argument('--capture-boot-phase', action='store_true',
                         help='Additionally read the four-byte TOPRGU non-reset phase register')
+    parser.add_argument('--capture-ramoops', action='store_true',
+                        help='Read the fixed 896 KiB ramoops RAM region before flash reads')
     parser.add_argument('--lock-dir', type=Path,
                         default=Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829'))
     parser.add_argument('--execute', action='store_true', help='Run the supervised read/reboot trial')
@@ -264,7 +274,8 @@ def main():
             staged.chmod(0o400)
         save(directory, 'before.json', before)
         save(directory, 'plan.json', {'mtk': str(args.mtk),
-                                      'commands': commands_for(payload is not None, args.capture_boot_phase),
+                                      'commands': commands_for(payload is not None, args.capture_boot_phase,
+                                                               args.capture_ramoops),
                                       'write_requested': payload is not None,
                                       'write_source': str(args.rewrite_accepted_boot) if payload is not None else None,
                                       'execute': args.execute, 'ssh_host': args.ssh_host,

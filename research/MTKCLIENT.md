@@ -284,3 +284,21 @@ reached the software-reset marker and returned after 9.064 seconds. Both
 restored fully healthy M69 with unchanged GPT and all boot partitions,
 without physical recovery. The same supervisor now supports observing
 Linux handoff before a deliberate reboot into rescue; see `BOOT_HANDOFF.md`.
+
+## Capturing a failure log before flash access
+
+`qualify-mtkclient.py --capture-ramoops` reads the fixed Gemini ramoops region
+at `0x44410000`, length `0xe0000`, before GPT/boot reads. The read-only hardware
+trial `handoff/mtkclient-ramoops-read-01` returned healthy M69 after 195.1 seconds
+with unchanged GPT/boot hashes and no eMMC writes. Its captured ring contains
+the preceding M69 shutdown. Reading pstore after a DA flash/reboot instead
+showed invalid buffers; that later view cannot recover this evidence.
+
+The boot-only candidate/rescue backend now saves the same bounded RAM read
+before its flash operations and requires the full byte count. Use
+`python3 tools/parse-gemini-ramoops.py RAMOOPS_BIN NEW_DIRECTORY` to decode the
+DT's fixed record and console rings. Header, extent and ring chronology
+checks reject invalid data; valid bytes alone do not establish which boot
+produced a log. The second EFI Linux trial's fresh phase and captured kernel
+panic together identify its failed initramfs handoff. Device-specific RAM
+capture remains separate from any GPT-write qualification.

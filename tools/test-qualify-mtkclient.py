@@ -74,6 +74,15 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(q.commands_for(False, False), q.COMMANDS)
         self.assertEqual(q.commands_for(True, False), q.WRITE_COMMANDS)
 
+    def test_ramoops_capture_precedes_flash_access_without_adding_writes(self):
+        for writing in (False, True):
+            for phase in (False, True):
+                commands = q.commands_for(writing, phase, True).split(';')
+                self.assertEqual(commands.count(q.RAMOOPS_READ), 1)
+                self.assertLess(commands.index(q.RAMOOPS_READ), commands.index('printgpt'))
+                self.assertEqual(any(c.startswith('w ') for c in commands), writing)
+                self.assertFalse(any(c.startswith('da poke') for c in commands))
+
     def test_phase_capture_requires_complete_little_endian_word(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)

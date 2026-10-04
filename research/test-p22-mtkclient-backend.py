@@ -241,6 +241,7 @@ class EvidenceTests(unittest.TestCase):
         (self.directory / 'boot-readback.img').write_bytes(self.image)
         (self.directory / 'gpt-primary.bin').write_bytes(self.gpt)
         (self.directory / 'boot-phase.bin').write_bytes(bytes.fromhex('ec104d47'))
+        (self.directory / 'ramoops.bin').write_bytes(bytes(0xe0000))
         self.log = backend.WRITE_ACK + '\n' + backend.ACK + '\n'
 
     def verify(self, rc=0, log=None):
@@ -272,7 +273,7 @@ class EvidenceTests(unittest.TestCase):
             self.verify()
 
     def test_short_read_or_different_gpt_fails(self):
-        for name in ('boot-readback.img', 'gpt-primary.bin'):
+        for name in ('boot-readback.img', 'gpt-primary.bin', 'ramoops.bin'):
             path = self.directory / name
             original = path.read_bytes()
             path.write_bytes(original[:-1])

@@ -21,6 +21,7 @@ SIZE = 16777216
 ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote boot.img to sector 362496 with sector count 32768.'
 COMMANDS = ('da peek 0x10007024 4 --filename boot-phase.bin;'
+            'da peek 0x44410000 0xe0000 --filename ramoops.bin;'
             'printgpt;ro 0 0x8000 gpt-primary.bin;w boot boot.img;'
             'r boot boot-readback.img;reset --bootmode reboot')
 KEYS = {'version', 'mtk', 'stage_image', 'candidate_state', 'rollback_state',
@@ -126,6 +127,8 @@ def verify_result(returncode, log, directory, expected, gpt_sha):
             raise RuntimeError(name + ': readback length or SHA-256 mismatch')
     if (directory / 'boot-phase.bin').stat().st_size != 4:
         raise RuntimeError('TOPRGU phase read must return exactly four bytes')
+    if (directory / 'ramoops.bin').stat().st_size != 0xe0000:
+        raise RuntimeError('Ramoops RAM capture is incomplete')
 
 
 def scan_missed(returncode, log, window):
@@ -140,7 +143,7 @@ def attempt(config, state, directory, expected):
     image = checked_image(Path(config['stage_image']), expected)
     (directory / 'boot.img').write_bytes(image)
     (directory / 'boot.img').chmod(0o400)
-    for name in ('gpt-primary.bin', 'boot-readback.img', 'boot-phase.bin'):
+    for name in ('gpt-primary.bin', 'boot-readback.img', 'boot-phase.bin', 'ramoops.bin'):
         (directory / name).touch(exist_ok=False)
     window = BootWindow()
     window.observe(usb_snapshot(config['usb_port']), time.monotonic())
