@@ -250,7 +250,7 @@ was needed. The new build output is
 Future power/swap trials retain it automatically. See `watchdog-trigger.json`,
 `watchdog-observation.json`, `watchdog-result.json` and `final-idle-check.json`.
 
-The next diagnostic stages are `pm_test=freezer` and `pm_test=devices`.
+The next diagnostic stages reviewed were `pm_test=freezer` and `pm_test=devices`.
 Source inspection of the selected derivation confirms that both return
 before `suspend_enter()` reaches device noirq callbacks; the watchdog stops
 only in its noirq callback, and its hibernation notifier ignores ordinary
@@ -259,3 +259,79 @@ default diagnostic delay is five seconds. Exact source hashes and derivation
 identity are retained in `linux-watchdog-qualification/pm-stage-source-audit.json`.
 This is preparation evidence, not a successful suspend test. Full s2idle and
 hibernation still enter intervals where the hardware watchdog is paused.
+
+## Bounded freezer and device diagnostics
+
+```sh
+python3 tools/test-pm-stages.py
+python3 tools/qualify-power-swap.py --pm-test devices --out NEW_DIRECTORY
+```
+
+This is read-only preflight unless `--execute` is supplied. The runner requires
+the selected kernel's prior successful watchdog-expiry/recovery evidence and
+the reviewed PM source identities. `--pm-test devices` runs freezer first,
+then devices; `--pm-test freezer` stops after the first diagnostic. Later
+noirq test stages are not accepted by this profile.
+
+Each stage uses a bounded target service, exact boot/kernel/watchdog-owner
+guards, at least 120 seconds remaining on the recovery lease and an exclusive
+PM-test lock. It selects the stage, writes `freeze` to `/sys/power/state`, and
+requires a 4.5–20-second elapsed interval, one new successful suspend count,
+no new failure counters and matching kernel entry/debug-delay/exit messages.
+The test and its stop callback restore `pm_test=none` only for the same boot
+and owned lock. Afterward, the same watchdog owner must remain active, a fresh
+Panfrost render must verify all 8,192 pixels, and full candidate health and
+protected storage must match the pre-test observation. The device stage is
+skipped if any freezer requirement fails. Automatic M69 recovery and complete
+data/source retention checks still conclude the trial.
+
+Nine host tests exercise the generated shell guards, both stage selections,
+failure cleanup, stale boot/lock ownership, counters, timing, kernel-message
+validation and stage ordering. A fresh GPU render on accepted M69 also passes.
+Evidence is under `handoff/pm-stages-qualification`. This prepares diagnostic
+execution; it does not establish full suspend, wake or hibernation.
+
+The first fresh-render command failed before running the GPU program because
+the SSH environment supplies BusyBox `timeout`, which rejects GNU long
+options. The corrected portable `timeout -s TERM -k 3` command passed on the
+device and is used by the diagnostic runner. Both observations are retained
+in `pm-stages-qualification/gpu-baseline` and `gpu-baseline-02`. All nine PM,
+eleven power/swap and eight watchdog host tests pass.
+
+## First PM diagnostic device result
+
+Trial `handoff/power-swap-03` booted candidate
+`b2513f24-327e-424b-96c7-95518a14f506` and passed its normal Linux, kernel,
+paging and ordinary Nix-build checks. Freezer then passed with a 5.2-second
+interval, success count 0 → 1, no failure-counter changes, restored
+`pm_test=none`, the same watchdog owner (PID 556, start time 7828), verified
+fresh rendering of all 8,192 pixels and unchanged candidate health/storage.
+Its separate evidence is `pm-freezer/result.json` and the associated raw
+service, kernel and GPU observations.
+
+The device stage did not pass. Its `/sys/power/state` write returned `EBUSY`;
+the kernel attributed the failure to `mtu3 11271000.usb`, whose suspend
+callback returned -16. The kernel unwound the attempted suspend and returned
+to userspace. The selected source's `ssusb_gadget_suspend()` explicitly returns
+`-EBUSY` while `mtu->connected` is true. The USB recovery network was still
+connected. This matches `nixos/power-policy.nix`, which intentionally inhibits
+normal sleep with an attached USB host. The verifier rejected the incomplete
+stage output; it did not turn the abort into a successful diagnostic.
+Scoped failure evidence is `pm-devices/failure-summary.json`.
+
+The identified candidate was rebooted into the existing rescue writer, which
+restored healthy M69 boot `c5520087-490c-4dc8-bb69-720870cae7b6`. The final audit
+held both flash locks, verified the exact fixed-swap layout and all thirteen
+ordinary build outputs, matched twenty-six executed sources and found no
+writer. All host trial units are inactive. The worker correctly exited with
+failure after recording recovery; `result.json` and `pm-result.json` retain
+the unqualified combined profile. The thirteenth retained build output is
+`/nix/store/hwmrxk99ypmllmyifdv1r8zdnj8sz1d8-gemini-daemon-6a5178fef56b405c96a11fe127957fde`.
+
+Before retrying the device stage, add and qualify a target-side guard which
+holds an independent logind sleep inhibitor, disconnects the exact MTU3 gadget,
+restores its connection/address, and requests bounded recovery if the host
+cannot confirm return. The inhibitor must cover the disconnected interval:
+otherwise removing USB can release the existing lid daemon's sleep condition.
+The kernel's connected-gadget veto and the normal USB sleep policy remain
+appropriate. Full suspend/wake and hibernation are still unqualified.
