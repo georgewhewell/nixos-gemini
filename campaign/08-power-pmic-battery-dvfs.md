@@ -581,6 +581,54 @@ regulator names. CCI voting and the fixed A72 contribution remain required
 before BUCKA constraints can be relaxed. No device voltages change from
 adding this planner.
 
+## CPU/SRAM regulator coupler (2026-10-08)
+
+Kernel commit `9421a191779447b89c1628949a3a126e39511cd4` installs the
+MT6797 CPU/SRAM regulator-framework adapter. It matches CPU SRAM and
+DA9214 BUCKA by OF identity and reciprocal coupling links, merges all
+consumer requests through the regulator core, and checks every planned
+intermediate step against machine constraints before writing. Each write
+uses the existing settling/readback providers and is followed by a read
+of both rails. No consumer vote retains the inherited CPU voltage; fixed
+voltage adoption needs no write permission. SRAM minimum requests can
+raise the selected CPU target within the aggregated CPU maximum so the
+nominal SRAM relationship is satisfied.
+
+After any write error or failed post-write verification, the coupler
+stops without a blind rollback, marks itself faulted, and permanently
+fences CSPM clock/I2C access. The new owner rail-fault entry works even
+while access is temporarily blocked, preventing resume from reopening a
+faulted owner. The existing owner fault-state and atomic permission
+implementations are exercised in the host test, including rejection of
+subsequent transitions and attempted permission reopening. Suspend-state
+voltage programming is explicitly unsupported by this coupler.
+
+Tests execute the production adapter, planner, regulator consumer/machine
+constraint helpers, and owner fault helpers: all 11,528 admitted paths and
+156,336 injected read/write failures pass under UBSan. Additional cases
+cover three concurrent A53/CCI requests, incompatible votes, SRAM votes,
+fixed-rail adoption, unavailable write permission, reciprocal OF matching,
+probe deferral, detach, and PM-blocked fault fencing. The existing SRAM
+provider suite still passes 81 pairs and 1,206 injected I/O failures. ARM64
+compilation caught and fixed a collision with the kernel's `current` macro
+in the previously pure planner; the host tests now also define that macro.
+Both ARM64 objects compile and checkpatch passes. The coupled DTB validates
+against the CPU SRAM, DA921x and base regulator schemas.
+
+The normal Gemini configuration builds the coupler, and the board DT links
+both regulators with the 300 mV maximum spread. BUCKA remains fixed at
+1.00 V: CCI voting, the fixed A72 contribution and physical voltage scaling
+are still unfinished. The normal and diagnostic bundles build successfully with the full kernel
+check suite passing. The coupler is enabled in the packaged kernel config,
+and the packaged DTB is byte-identical to the validated local DTB. The
+shared kernel is `/nix/store/hv72jnrj9bw51if9b67gd07xq66ik27k-linux-gemini-7.1.3`.
+The diagnostic candidate is
+`/nix/store/lr5bp3xaimyc0i99zc9ry9vddpl9vmhg-gemini-mainline-nixos-bundle`.
+The new coupled configuration has not yet had its hardware adoption trial.
+The device still reports healthy M69 boot
+`bd5a9a61-8f84-4c53-a7c8-924961042005`. Build logs, result metadata and
+GC roots are retained in `handoff/cpu-coupler-20261008/`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
