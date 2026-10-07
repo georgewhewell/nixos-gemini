@@ -68,6 +68,7 @@ in
         a72-vproc-votes a72-online-commit mt6797-cpuclk-boot-api \
         mt6797-cpuclk-fhctl-host mt6797-cpuclk-transition-host mt6797-topckgen-cpu-host \
         opp-of-sharing-cpus-host mt6797-spm-fw-host mt6351-fgadc-supplier-host \
+        mt6351-fgadc-conversion-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-station-host wifi-radio-tx-host \
         regulator-exclusive-state media-clock-bounds drm-synchronous-bind cellular-integration \
         fusb301-role-host mt6797-tphy-power-host mtu3-fallback-host; do

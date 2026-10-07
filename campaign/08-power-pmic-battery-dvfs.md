@@ -164,7 +164,7 @@ FGADC still exposes current and charge counter without capacity. Remaining
 work must establish voltage/temperature inputs, counter calibration and
 initial-state estimation before publishing a battery percentage.
 
-The current board uses a118 percent current/coulomb multiplier. The same
+Through Linux ae2f67c1f0182, the board used a118 percent current/coulomb multiplier. The same
 vendor header defaults to115 on the MT6351 configuration, but the vendor
 FG daemon can replace it with `FG_DAEMON_CMD_SET_CAR_TUNE_VALUE`
 (`battery_meter_fg_20.c:4706`). Therefore the header default alone does not
@@ -172,7 +172,10 @@ justify changing the native multiplier. Its per-device calibration provenance
 still needs checking. The original native overlay commit4cd4726d75b7c
 explicitly took118 from the generic vendor DTS; it did not cite a measured
 factory value. That DTS is not the selected vendor initializer described
-above, so118 must not be described as an established per-device calibration. Vendor `get_hw_chip_diff_trim_value()` also hardcodes
+above, so118 must not be described as an established per-device calibration.
+Linux d76b7e4eff9fb corrects the board default to115 to match the selected
+vendor header. This is a source-selection correction, not a new calibration
+measurement or proof of a factory override. Vendor `get_hw_chip_diff_trim_value()` also hardcodes
 trim index0, yielding1000 permille, in the selected source path.
 
 ## Battery measurement supplier integration
@@ -208,15 +211,53 @@ build/probe sources and calibration provenance are in
 
 This qualifies property routing and available readings under the diagnostic
 configuration. It does not calibrate the analog inputs or establish capacity.
-The separate native status read still follows instantaneous gauge-current
-sign: it toggled Charging/Discharging/Not charging while the charger remained
-online/Full. Those sequential readings are not atomic; stable charging-status
-integration remains work to do.
+In that build, the separate native status read still followed instantaneous
+gauge-current sign: it toggled Charging/Discharging/Not charging while the
+charger remained online/Full. Those sequential readings are not atomic.
+The subsequent charger-backed status change is described below.
 
 The diagnostic completed observation and failed the expected cgroup2 check.
 Automatic recovery returned healthy M69 boot
 `e5a684af-8877-4534-a5cf-34bcc64f0915`. The worker is terminal, with no writer,
 35 matching source hashes and26 retained outputs. No default was promoted.
+
+## Charger-backed battery status
+
+Linux a01c00222dfa8 also delegates battery status to the configured charger,
+which owns termination and input state. Gauge-current sign no longer turns
+Full into Charging/Discharging/Not charging near zero. Supplier errors are
+returned instead of silently reverting to the noisy current sign. Boards
+without the optional charger link retain the existing native status behavior.
+Host tests cover all five supplier states despite gauge sign changes and
+latch failures, error propagation, and the supplier-free path.
+
+The new conversion test exercises production current and counter decoding:
+37 coherent samples cover positive/negative values, both zero codes, reserved
+CAR bits,115/118/unity gain, board slope, trim, micro-unit scaling, and capture
+failures that must not publish partial results. Both tests are normal Nix
+kernel checks. ARM64 builds, binding validation and normal/diagnostic Nix
+builds pass; both bundles use the same kernel.
+
+Diagnostic boot `b1026674-79a7-4e5c-9e67-508f8327ba67` passes all12 battery/
+charger status comparisons over7.004 seconds. Both statuses remain Full while
+instantaneous gauge current ranges from-34.5 to+6.9 mA. The live DT reports
+115 percent and every current sample is a multiple of2300 uA, as expected
+from the existing conversion with the corrected multiplier. Voltage/rough
+temperature remain4.284 V/38.0 C and match the supplier. The probe ends
+inactive/MainPID0, system running, topology0,8–9, with no gauge timeout,
+BUG, Oops, WARNING or clock-fencing report in the captured log. Evidence:
+`handoff/battery-status-trial-01/{battery.json,summary.json,after-probe.txt,kernel-error-check.json}`.
+This validates status routing under the observed Full state and numerical
+configuration, not physical current calibration or unplugged/charging-cycle
+behavior. Capacity remains absent.
+
+The four active vendor battery curves each contain96 entries. Discharge
+percentage is nondecreasing, voltage is nonincreasing, and each curve spans
+0–100 percent discharge; the matching resistance tables also contain96
+entries at the same voltages. Repeated end-of-discharge entries require
+handling before conversion to an OCV lookup table. These are source-profile
+properties, not installed-battery capacity or calibration evidence. Shape
+analysis is in `handoff/battery-status-20261007/vendor-profile-shape.json`.
 
 ## Historical Cycle18 observations
 
