@@ -4,7 +4,7 @@
   nixpkgs-old,
   linux-gemini,
   ixoo-kernel,
-  u-boot-gemini-keys-src,
+  u-boot-gemini,
   ...
 }: let
   buildSystem = "x86_64-linux";
@@ -16,7 +16,7 @@
   oldPkgs = import nixpkgs-old {system = buildSystem;};
   crossPkgs = buildPkgs.pkgsCross.aarch64-multiplatform;
   mainlineNixosLeaseSelfAcceptToken = "gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052";
-  userspace = import ./userspace.nix {inherit buildPkgs crossPkgs u-boot-gemini-keys-src;};
+  userspace = import ./userspace.nix {inherit buildPkgs crossPkgs; ubootSource = u-boot-gemini;};
   inherit
     (userspace)
     gpuUserspace
@@ -120,19 +120,22 @@
     versionedEntry = true;
     entryDtb = true;
   };
-  uboot = import ./uboot-handoff.nix {
+  uboot = import ./uboot.nix {
     inherit buildPkgs crossPkgs;
-    source = u-boot-gemini-keys-src;
+    source = u-boot-gemini;
+  };
+  bootloader = import ./uboot-carrier.nix {
+    inherit buildPkgs uboot;
+    linuxBundle = image.bundle;
     efiLinux = true;
     efiConsole = true;
     efiKeyboard = true;
     efiMmc = true;
     efiStorage = true;
     efiManager = true;
-    efiDtFixup = true;
-    efiKeyEvents = true;
   };
+
 in {
-  inherit buildPkgs crossPkgs system kernel dtb squashfs image efiBootFiles uboot userspace;
+  inherit buildPkgs crossPkgs system kernel dtb squashfs image efiBootFiles uboot bootloader userspace;
   mtkclient = import ./mtkclient-rtc.nix {inherit buildPkgs;};
 }

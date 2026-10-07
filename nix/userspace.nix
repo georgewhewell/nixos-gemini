@@ -1,8 +1,17 @@
 {
   buildPkgs,
   crossPkgs,
-  u-boot-gemini-keys-src,
+  ubootSource,
 }: let
+  # Firmware changes outside the keymap do not rebuild the desktop or system.
+  keyboardMatrix = builtins.path {
+    path = "${ubootSource}/arch/arm/dts/mt6797-gemini-pda-keyboard.dts";
+    name = "gemini-keyboard.dts";
+  };
+  inputHeader = builtins.path {
+    path = "${ubootSource}/include/linux/input.h";
+    name = "input.h";
+  };
   gpuUserspace = import ./gpu-oneboot-userspace.nix {
     inherit buildPkgs;
     armPkgs = crossPkgs;
@@ -37,8 +46,8 @@
       python3 ${./keyboard}/generate-reference.py \
         --library ${buildPkgs.libxkbcommon}/lib/libxkbcommon.so \
         --include ${buildPkgs.xkeyboard_config}/share/X11/xkb \
-        --matrix ${u-boot-gemini-keys-src}/arch/arm/dts/mt6797-gemini-pda-keyboard.dts \
-        --input-header ${u-boot-gemini-keys-src}/include/linux/input.h \
+        --matrix ${keyboardMatrix} \
+        --input-header ${inputHeader} \
         --output reference.h
       cmp reference.h ${./keyboard/reference.h}
       python3 ${./keyboard/test-weston.py} \

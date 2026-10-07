@@ -28,6 +28,10 @@
       url = "github:ixoo/gemini-pda-mainline/a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
       flake = false;
     };
+    u-boot-gemini = {
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=a655c0035c8f789938fed4b5e2f9a25ee798a9d6&shallow=1";
+      flake = false;
+    };
     u-boot-gemini-src = {
       url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=3da3110deebdb351eff0cd48d76271596dfa407d&shallow=1";
       flake = false;
@@ -54,7 +58,7 @@
       (builtins.removeAttrs (inputs
         // {
           linux-gemini = inputs.linux-gemini-recovery;
-        }) ["linux-gemini-recovery"]);
+        }) ["linux-gemini-recovery" "u-boot-gemini"]);
   in {
     packages.${host} = {
       default = gemini.image.bundle;
@@ -67,6 +71,7 @@
       deploy = gemini.image.bundle;
       efiBootFiles = gemini.efiBootFiles;
       uboot = gemini.uboot;
+      bootloader = gemini.bootloader;
       mtkclient = gemini.mtkclient;
       recovery = historical.packages.${host}.mainlineNixosBundle;
       # Existing normal-build names remain aliases of the current system.

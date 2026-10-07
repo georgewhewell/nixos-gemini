@@ -129,11 +129,31 @@
         "linux-gemini-recovery": "linux-gemini-recovery",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",
+        "u-boot-gemini": "u-boot-gemini",
         "u-boot-gemini-dt-src": "u-boot-gemini-dt-src",
         "u-boot-gemini-keys-src": "u-boot-gemini-keys-src",
         "u-boot-gemini-src": "u-boot-gemini-src",
         "u-boot-src": "u-boot-src",
         "vendor-kernel": "vendor-kernel"
+      }
+    },
+    "u-boot-gemini": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791352770,
+        "narHash": "sha256-1RGSdLlEA7ZeJxCpwON1HkEzQ7l0V6YyZvy/kPjMG48=",
+        "ref": "gemini-boot-consolidation",
+        "rev": "a655c0035c8f789938fed4b5e2f9a25ee798a9d6",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
+      },
+      "original": {
+        "ref": "gemini-boot-consolidation",
+        "rev": "a655c0035c8f789938fed4b5e2f9a25ee798a9d6",
+        "shallow": true,
+        "type": "git",
+        "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
       }
     },
     "u-boot-gemini-dt-src": {
