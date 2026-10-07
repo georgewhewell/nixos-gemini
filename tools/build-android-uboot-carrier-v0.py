@@ -68,7 +68,9 @@ def canonical_v0_id(kernel: bytes, ramdisk: bytes) -> bytes:
 
 def build(uboot: bytes, ramdisk: bytes, dtb: bytes, cmdline: str = CMDLINE) -> tuple[bytes, bytes]:
     encoded_cmdline = cmdline.encode('ascii')
-    if len(encoded_cmdline) >= 1536 or b'\0' in encoded_cmdline or CMDLINE not in cmdline.split():
+    # Gemini's LK ignores extra_cmdline and reads past a full first field
+    # into the image ID. Keep a NUL terminator inside the first 512 bytes.
+    if len(encoded_cmdline) >= 512 or b'\0' in encoded_cmdline or CMDLINE not in cmdline.split():
         raise ValueError('Invalid Android boot command line')
     if not uboot:
         raise ValueError("U-Boot binary is empty")

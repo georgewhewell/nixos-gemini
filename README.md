@@ -74,6 +74,8 @@ After the initial installation, `nixos-rebuild boot` or `switch` installs the
 selected generation's kernel, DTB and generic initramfs, then selects its boot
 entry. Boot entries pass the standard `init=/nix/store/.../init` option; system
 updates use the registered store on p32 and do not create new squashfs images.
+The retained Android loader reads only the first 512-byte command-line field.
+Initial boot images keep their options short; Linux appends the board defaults.
 The installer retains entries for system profile generations and removes its
 obsolete entries and payloads after a successful update. Recovery files remain
 independently owned.

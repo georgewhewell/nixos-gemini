@@ -19,7 +19,6 @@ in {
     ln -s ${geminiBootKernel}/Image "$out/kernel"
     ln -s ${geminiBootInitrd} "$out/initrd"
     ln -s ${geminiBootDtb}/gemini.dtb "$out/gemini.dtb"
-    sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' ${geminiBootKernel}/kernel.config > "$out/kernel-params"
-    printf '%s\n' ${lib.escapeShellArg (lib.concatStringsSep " " config.boot.kernelParams)} >> "$out/kernel-params"
+    printf '%s\n' ${lib.escapeShellArg (lib.concatStringsSep " " config.boot.kernelParams)} > "$out/kernel-params"
   '';
 }

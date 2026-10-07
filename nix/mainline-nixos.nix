@@ -780,6 +780,12 @@ let
     nativeBuildInputs = [buildPkgs.python3];
   } ''
     python3 ${./check-service-milestone.py} ${kernel}/kernel.config ${nixosToplevel}
+    ${buildPkgs.lib.optionalString persistentStore ''
+      grep -Fqx CONFIG_CMDLINE_EXTEND=y ${kernel}/kernel.config
+      cmdline="bootopt=64S3,32N2,64N2 init=${nixosToplevel}/init $(cat ${nixosToplevel}/kernel-params)"
+      # Retained LK reads only the first 512-byte Android command-line field.
+      test "''${#cmdline}" -lt 512
+    ''}
     ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
       test "$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' ${kernel}/kernel.config \
         | tr ' ' '\n' \
@@ -796,9 +802,9 @@ let
       --ramdisk-addr 0x45000000 \
       --second-addr 0x40f00000 \
       --tags-addr 0x44000000 \
-      --cmdline ${if persistentStore then ''"bootopt=64S3,32N2,64N2 $(cat ${nixosToplevel}/kernel-params) init=${nixosToplevel}/init"'' else ''"bootopt=64S3,32N2,64N2${leaseSelfAcceptCmdline}"''} \
+      --cmdline ${if persistentStore then ''"$cmdline"'' else ''"bootopt=64S3,32N2,64N2${leaseSelfAcceptCmdline}"''} \
       --output "$out"
-    ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
+    ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null && !persistentStore) ''
       python3 - "$out" '${leaseSelfAcceptToken}' <<'PY'
     import sys
 
