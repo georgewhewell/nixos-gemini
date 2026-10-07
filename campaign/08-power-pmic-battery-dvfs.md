@@ -624,10 +624,36 @@ and the packaged DTB is byte-identical to the validated local DTB. The
 shared kernel is `/nix/store/hv72jnrj9bw51if9b67gd07xq66ik27k-linux-gemini-7.1.3`.
 The diagnostic candidate is
 `/nix/store/lr5bp3xaimyc0i99zc9ry9vddpl9vmhg-gemini-mainline-nixos-bundle`.
-The new coupled configuration has not yet had its hardware adoption trial.
-The device still reports healthy M69 boot
-`bd5a9a61-8f84-4c53-a7c8-924961042005`. Build logs, result metadata and
-GC roots are retained in `handoff/cpu-coupler-20261008/`.
+The subsequent hardware adoption trial is recorded below. Build logs,
+result metadata and GC roots are retained in `handoff/cpu-coupler-20261008/`.
+
+## Coupled regulator adoption trial (2026-10-08)
+
+`handoff/cpu-coupler-adoption-trial-01/` passes on candidate boot
+`b4766304-89f6-4573-9ea6-e3b89eadbc13`. CPU SRAM binds after the handoff
+supplier becomes ready, and CPUFreq then binds successfully. The live
+regulator OF nodes expose the reciprocal BUCKA/CPU-SRAM coupling links
+and the 300 mV maximum spread. All 98 ordered A53 frequency pairs pass at
+fixed 1.00 V CPU voltage, with 1,017 concurrent SRAM reads reporting the
+inherited 1.10 V across 23.824 seconds. The probe finishes in 24.283 seconds;
+sampled temperatures span 36.6–41.0 C. Both schedutil governors are restored,
+the probe's core-parking hold is removed, its service is inactive with
+PID zero, and the kernel error scan is empty. CCI remains 629999328 Hz and
+A72 remains 750 MHz. This proves coupled configuration adoption and the
+fixed-voltage frequency regression, not physical rail transitions or
+runtime fault injection.
+
+Observation completes in 91.516 seconds. The diagnostic profile fails the
+expected normal cgroup2 memory-controller qualification gate and is not
+promoted. The supervisor restores healthy M69 boot
+`446184d2-fe63-4ff2-be86-1da4f5d17ddf`. Its worker is inactive/dead with PID
+zero and exit status zero; the CLI returns one for the expected profile
+qualification failure. The final audit confirms no writer, both locks
+acquired, all 35 source hashes unchanged, and all 26 ordinary outputs
+retained. Build, probe and recovery metadata are consolidated in
+`handoff/cpu-coupler-20261008/completion.json`. Next work is CCI voltage
+voting, including the fixed A72 contribution, before relaxing BUCKA's
+fixed voltage and testing physical rail transitions.
 
 ## Historical Cycle18 observations
 
