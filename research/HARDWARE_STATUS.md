@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 4c2b238f72cfe, including the tested watchdog and RTC
+Linux branch `gemini` at ab00b6336ec4b, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
@@ -348,8 +348,8 @@ files and bootloader builds pass, including the packaged driver regressions.
 Neither SuperSpeed negotiation nor cable orientation has been tested. The normal
 boot runner now records actual USB speed from the device and the exact host
 network interface, with tests covering USB2/USB3 bus changes and mismatched
-speeds. The owner confirmed a known SuperSpeed cable and host port. Device
-trial awaits resolution of the allocator failure in the normal generation.
+speeds. The owner confirmed a known SuperSpeed cable and host port. Device trials now show the controller initializes for SuperSpeed but fails
+to attach. The normal cgroup-v2 generation still panics during systemd startup.
 
 The left FUSB301 now has a native sink/device-only connector node. With no
 verified IRQ assignment it polls attachment and orientation every 500 ms on
@@ -364,6 +364,19 @@ The normal boot runner also records Type-C orientation, roles and partner
 attachment with full controller paths, avoiding dependence on probe-order port
 numbers. Read-only capture on M69 shows the right controller in reverse
 orientation with a partner attached; M69 does not expose the new left port.
+
+A temporary cgroup-v1 diagnostic with the same USB kernel and redzone checks
+remained accessible over right-port Ethernet through 344 seconds. Left FUSB301
+reported reverse orientation, sink/device and 1.5 A. PHY calibration readback
+matched the vendor defaults (intr 45, RX 15, TX 16), but the UDC stayed
+unattached even after a standard gadget disconnect/reconnect. This isolates the
+USB failure from the early allocator crash; it does not qualify the normal
+generation, which remains cgroup v2. Other cable orientation is untested.
+Controller snapshots show USB3 enabled, LTSSM disabled, automatic USB2 switching
+enabled, both device ports powered, reference-clock control 0x1f and no VBUS
+override. A read-only powered-PHY register dump now exposes routing/reset and
+analog controls for further diagnosis. All supervised trials recovered M69
+with complete retention audits; no candidate was promoted.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
