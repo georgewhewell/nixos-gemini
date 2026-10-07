@@ -5,9 +5,11 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at fd1bd94a49b65, including the tested watchdog and RTC
-fixes, EFI/Nix support, desktop keyboard and zswap writeback. Historical profiles
-are isolated in `legacy.nix`; `recovery` retains the exact M69 bundle. This
+Linux branch `gemini` at dc57eeca141b4, including the tested watchdog and RTC
+fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
+FUSB301 role-switch support. Historical profiles are isolated in the frozen
+`recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains
+the exact M69 bundle. This
 packaging consolidation does not itself update the installed device. The full
 bundle and EFI files build successfully. Hardware settings live directly in
 the Linux board DTS; 48 obsolete overlays and their build targets are removed.
@@ -27,6 +29,18 @@ remain. The only additional config change removes the disabled P30 model
 option. U-Boot a655c003 accepts both native and historical DTs in host tests.
 Runtime driver startup services and other temporary diagnostics still need
 consolidation.
+
+Normal NixOS generation installation now uses a generic initramfs and the
+persistent store at `/persist/nixos/nix`, with standard system-profile retention
+and activation hooks. All 581 M69 paths were copied with Nix and all 26 ordinary
+outputs independently checked. Linux CMDLINE_EXTEND now honors the generation's
+init= path; test 12 passed all ten CPUs and desktop health after correcting stale
+A72 assumptions about a forced command line. Test 13 restored the intended
+cgroup-v2 default but panicked in allocator/object-cgroup code before healthy
+SSH. Cause is unresolved; this generation has not been published or promoted.
+Automatic rescue returned healthy M69 boot `1d3cfdd4-848c-4572-8da0-fe52a96d6f5f`,
+with all retained outputs, protected storage and source checks passing and all
+trial units stopped. The last complete passing EFI boot remains test 07.
 
 Workspace cleanup removed 82 obsolete, clean Linux worktrees without changing
 any branch or tag references. The remaining 41 include the maintained tree,
@@ -76,8 +90,9 @@ ordinary Nix, native RTC startup/UTC/awake alarms and automatic rescue passed.
 M69 returned as `62173393-15e9-4d9f-bfe5-eaa5315d5a54`; the audit retained all
 26 ordinary outputs, home, previous EFI entries and protected storage, with
 35 executed source files unchanged. Host coverage includes 45 boot/recovery,
-EFI, native DT and fallback-rejection tests. Permanent promotion and normal
-`nixos-rebuild` generation hooks remain unfinished.
+EFI, native DT and fallback-rejection tests. Permanent promotion remains
+unfinished; the normal generation hooks implemented since this trial still
+await a successful device test.
 
 The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
 scan after 120 seconds, leaving transfer time inside its existing 180-second
@@ -260,8 +275,31 @@ The clean Gemian vendor source at commit
 `8cfe6596a503612e3332d9c26e292a19525a7f07` enables `CONFIG_USB_MU3D_DRV` in
 `aeon6797_6m_n_defconfig`; its selected MU3D header defines `SUPPORT_U3`, and
 the gadget driver therefore advertises `USB_SPEED_SUPER`. The board DTS also
-describes FUSB340 switch and redriver controls. These are source clues, not
-retained proof of those components or SuperSpeed operation on this device.
+contains FUSB340 switch and redriver names, but these do not establish active
+Gemini wiring. In the pinned vendor source `51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c`,
+the FUSB340 enable pinctrl entries are empty/commented out: GPIO251 actually
+enables the display's negative-bias supply. GPIO252 and redriver GPIO196/197
+remain named in the DWS/DT, but the selected FUSB301 drivers do not consume
+those switch states. The GPIO70/71 switching in the other Type-C driver is
+the right port's HDMI path, not evidence of left-port SuperSpeed routing.
+
+The left controller at I2C1 address 0x25 also lacks a valid vendor interrupt
+assignment: the retained July 14 vendor capture reports IRQ 0 / -EINVAL,
+while the right controller at I2C0 address 0x25 uses GPIO64/EINT3. Linux still
+only enables the latter. The current host connection and device UDC both
+report high-speed (480 Mb/s); the host's paired SuperSpeed root hub is present,
+but cable lane capability and the Gemini's physical routing remain unverified.
+
+The maintained FUSB301 driver now consumes an optional connector-graph USB
+role switch, selects host/device on attach, and stops data plus source power
+on detach. Provider failures unwind the connection, and remove releases the
+threaded IRQ before destroying the port. ARM64 object builds pass with role
+support built in, modular and disabled. The full normal `nix build .#kernel`
+passes, including its new regression test for roles, orientations, detach,
+failure cleanup and IRQ teardown. The result is
+`/nix/store/zzpnw1x55rs7qm1w685vlr5dr7zjs2f5-linux-gemini-7.1.3`.
+This is driver support; the left connector/PHY remain unchanged and no 5 Gb/s
+link has been demonstrated. The new kernel has not been deployed.
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working

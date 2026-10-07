@@ -66,7 +66,8 @@ in
         a72-vproc-votes a72-online-commit mt6797-cpuclk-boot-api \
         mt6797-cpuclk-fhctl-host opp-of-sharing-cpus-host mt6797-spm-fw-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-tx-host \
-        regulator-exclusive-state media-clock-bounds drm-synchronous-bind cellular-integration; do
+        regulator-exclusive-state media-clock-bounds drm-synchronous-bind cellular-integration \
+        fusb301-role-host; do
         python3 "tools/gemini/test-$test.py"
       done
       for test in acquire integration provider registration pm; do
