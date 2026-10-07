@@ -121,7 +121,22 @@ faults fence further CPU clock changes and retain fallback rate protection.
 Production host models cover196 L pairs across four saved fallback settings,
 1040 postdivider failure cases and the original49 LL pairs/371 failures.
 This is bounded diagnostic hardware acceptance; normal cgroup2 qualification
-and cooling through the newly added L states still require validation.
+still requires validation.
+
+A follow-up with the same kernel, boot `6f8ffc4b-dffa-4be4-a580-c8b921c0b9ab`,
+also passes the expanded cooling path. Eight A53 workers completed1597 checked
+PBKDF2 batches in10 seconds. All10 load samples reached897/1209 MHz, with
+actual temperatures49.1–53.4 C. After workers stopped, synthetic86–98 C
+readings drove both clusters through cooling states1–6: LL806/715/624/481/
+338/221 MHz and L1092/962/832/650/468/325 MHz, with matching hardware reads.
+Clearing emulation returned both states to0 and actual clocks to897/1209 MHz.
+The rail stayed1.00 V; CCI/A72 initial/final clocks were unchanged. Both
+schedutil governors and idle topology0,8–9 were restored; the probe was
+inactive/MainPID0 and the system remained running. Captured kernel error
+scan is empty. Final actual temperature40.8 C; total probe15.242 seconds.
+Evidence: `handoff/dvfs-postdivider-thermal-trial-01/{dvfs.json,summary.json,after-probe.txt,kernel-error-check.json,parking-followup.txt}`.
+This covers short load and emulated cooling, not prolonged load, physical
+operation at98 C or temperature-sensor calibration.
 
 Remaining DVFS work includes CCI/shared-voltage and CPU LDO/Vsram coordination,
 A72 control and sustained
