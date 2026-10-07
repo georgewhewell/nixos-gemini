@@ -101,8 +101,30 @@ This establishes the emulated cooling control path and a short load test;
 it does not establish operation at a physical98 C, sensor accuracy or long-term
 thermal stability.
 
-Remaining DVFS work includes postdivider transitions, lower L points,
-CCI/shared-voltage and CPU LDO/Vsram coordination, A72 control and sustained
+The maintained kernel now also enables L325/468/650/832/962 MHz using a
+MAINPLL fallback for postdivider changes (Linux930feb4a2797c). Diagnostic boot
+`eb21aebb-28a1-4fb2-b434-67b095e99a67` passed all49 LL and49 L ordered pairs,
+including20 L transitions across the postdivider boundary. CPU and raw ARMPLL
+rates matched;325/468 MHz used raw650/936 MHz with CKDIV2. Every PBKDF2 digest
+passed and median CPU time decreased consistently as frequency increased.
+The98 samples completed in23.671 seconds at36.7–40.7 C and a fixed1.00 V;
+CCI remained629999328 Hz and A72 remained750 MHz. Both schedutil governors
+were restored and the owned core-parking hold was removed. Follow-up found the probe
+inactive/MainPID0 and system running; captured kernel logs had no fencing,
+BUG, Oops, WARNING or CPUCLK_OBSERVE reports. Evidence:
+`handoff/dvfs-postdivider-trial-01/{dvfs.json,summary.json,after-probe.txt,kernel-error-check.json}`.
+
+The transition owns the TOPCKGEN shared setting through its provider lock,
+prepares MAINPLL, protects/revalidates its rate, checks FHCTL ownership and
+uses temporary CKDIV4. A failed PLL retune cannot switch back to that PLL;
+faults fence further CPU clock changes and retain fallback rate protection.
+Production host models cover196 L pairs across four saved fallback settings,
+1040 postdivider failure cases and the original49 LL pairs/371 failures.
+This is bounded diagnostic hardware acceptance; normal cgroup2 qualification
+and cooling through the newly added L states still require validation.
+
+Remaining DVFS work includes CCI/shared-voltage and CPU LDO/Vsram coordination,
+A72 control and sustained
 load/physical thermal qualification. Battery capacity,
 calibration, charging, deep idle and suspend remain separate unfinished work.
 

@@ -66,7 +66,8 @@ in
         mt6797-a72-hotplug-attribute mt6797-cpuclk-observation mt6797-cpuclk-core-host \
         mt6797-a72-power-core-host mt6797-sram-core-host mt6797-sram-boot-api \
         a72-vproc-votes a72-online-commit mt6797-cpuclk-boot-api \
-        mt6797-cpuclk-fhctl-host mt6797-cpuclk-transition-host opp-of-sharing-cpus-host mt6797-spm-fw-host \
+        mt6797-cpuclk-fhctl-host mt6797-cpuclk-transition-host mt6797-topckgen-cpu-host \
+        opp-of-sharing-cpus-host mt6797-spm-fw-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-station-host wifi-radio-tx-host \
         regulator-exclusive-state media-clock-bounds drm-synchronous-bind cellular-integration \
         fusb301-role-host mt6797-tphy-power-host mtu3-fallback-host; do
