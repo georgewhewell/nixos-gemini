@@ -46,35 +46,65 @@ def evidence(directory,boot_id,files,qualify):
         entry=ENTRY,identity=IDENTITY,source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         fixup='lk-delta-v1',provenance=provenance))
 
-def cross_carrier(carrier,sha,source):
-    """Bind the older fallback kernel and both carrier DT copies to p22 bytes."""
+def subtree(path,node):
+    def get(*args):
+        return subprocess.check_output([FDTGET,*args,str(path),node],text=True).split()
+    result={node+'/'+name:bytes(int(x,16) for x in subprocess.check_output(
+        [FDTGET,'-t','bx',str(path),node,name],text=True).split()).hex() for name in get('-p')}
+    result[node]=None
+    for child in get('-l'):
+        result.update(subtree(path,node+'/'+child))
+    return result
+
+def verify_native(source,runtime,identity):
+    """Check selection and the native CPU tree without a generated build record."""
+    for path in (source,runtime):
+        children=subprocess.check_output([FDTGET,'-l',str(path),'/chosen'],text=True).split()
+        if 'gemini-late-cpu-provenance' in children:
+            raise RuntimeError('Native entry unexpectedly contains a legacy CPU record')
+        value=subprocess.check_output([FDTGET,'-t','s',str(path),'/chosen','gemini,efi-entry-id'],text=True).strip()
+        if value!=identity:raise RuntimeError('Selected entry DT identity differs')
+    fixup=subprocess.check_output([FDTGET,'-t','s',str(runtime),'/chosen','gemini,uefi-dt-fixup'],text=True).strip()
+    cpus=subtree(source,'/cpus')
+    if fixup!='lk-delta-v1' or not cpus or subtree(runtime,'/cpus')!=cpus:
+        raise RuntimeError('Selected native CPU tree or LK fixup differs')
+    return dict(identity=identity,fixup=fixup,cpu_properties=cpus)
+
+def verify_carrier(carrier,sha,bundle):
+    """Bind the fallback kernel, initramfs and both carrier DT copies to p22."""
     raw=carrier.read_bytes()
     if len(raw)!=16*1024*1024 or hashlib.sha256(raw).hexdigest()!=sha or raw[:8]!=b'ANDROID!':
-        raise RuntimeError('Cross-kernel carrier differs from its pinned image')
+        raise RuntimeError('Bootloader carrier differs from its selected image')
     kernel_size,kernel_addr,fit_size,fit_addr=struct.unpack_from('<4I',raw,8)
     page=struct.unpack_from('<I',raw,36)[0]
     if page!=2048 or kernel_addr!=0x40200000 or fit_addr!=0x45000000 or kernel_size%page:
-        raise RuntimeError('Unexpected cross-kernel carrier layout')
+        raise RuntimeError('Unexpected bootloader carrier layout')
     start=page+kernel_size
     if not 0x80000<=kernel_size<len(raw) or not 40<=fit_size<=len(raw)-start:
-        raise RuntimeError('Cross-kernel FIT is outside the image')
-    old=OLD_BUNDLE/'gemini-usb11-host.dtb'
+        raise RuntimeError('Fallback FIT is outside the image')
+    old=bundle/'gemini-usb11-host.dtb'
     old_raw=old.read_bytes()
     if raw[start-len(old_raw):start]!=old_raw:
-        raise RuntimeError('LK carrier DT differs from the older kernel DT')
-    with tempfile.TemporaryDirectory(prefix='gemini-cross-carrier-') as tmp:
+        raise RuntimeError('LK carrier DT differs from the selected bundle')
+    with tempfile.TemporaryDirectory(prefix='gemini-carrier-') as tmp:
         tmp=Path(tmp);fit=tmp/'carrier.itb';fit.write_bytes(raw[start:start+fit_size])
         for index,name in enumerate(('kernel/Image.gz','gemini-usb11-host.dtb','initramfs.cpio.gz')):
             output=tmp/str(index)
             subprocess.run([DUMPIMAGE,'-T','flat_dt','-p',str(index),'-o',str(output),str(fit)],
                            check=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
-            if output.read_bytes()!=(OLD_BUNDLE/name).read_bytes():
-                raise RuntimeError('Embedded fallback payload differs from the older kernel: '+name)
+            if output.read_bytes()!=(bundle/name).read_bytes():
+                raise RuntimeError('Embedded fallback payload differs from the selected bundle: '+name)
+    return dict(carrier_sha256=sha,carrier_device_tree_sha256=hashlib.sha256(old_raw).hexdigest())
+
+def cross_carrier(carrier,sha,source):
+    """Bind the older fallback kernel and both carrier DT copies to p22 bytes."""
+    proof=verify_carrier(carrier,sha,OLD_BUNDLE)
+    old=OLD_BUNDLE/'gemini-usb11-host.dtb'
     baseline=properties(old,LEAF);selected=properties(source,LEAF)
     changed=sorted(name for name in baseline.keys()|selected.keys() if baseline.get(name)!=selected.get(name))
     if not {'expected-ikconfig-identity','expected-gnu-build-id-identity'}<=set(changed):
         raise RuntimeError('Cross-kernel proof needs different kernel config and build identities')
-    return dict(carrier_sha256=sha,carrier_device_tree_sha256=hashlib.sha256(old_raw).hexdigest(),
+    return dict(**proof,
                 selected_device_tree_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                 changed_provenance_fields=changed,
                 carrier_provenance={name:value.hex() for name,value in baseline.items()})

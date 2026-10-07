@@ -4,9 +4,11 @@
 Read-only preflight unless --execute is given. The durable boot-only supervisor
 owns both flashes. RTC startup, UTC, alarms, paging and ordinary Nix builds are
 checked; --watchdog-expiry substitutes keepalive loss for the alarm sequence.
+--bootloader and --efi-files exercise an already installed boot-manager entry.
 """
 from contextlib import ExitStack
 import fcntl
+from functools import partial
 import importlib.util
 import json
 from pathlib import Path
@@ -27,6 +29,8 @@ startup = p.f.q.module('rtc_startup', ROOT/'tools/qualify-rtc-startup.py')
 installer = p.f.q.module('boot_installer', ROOT/'nix/gemini-boot-install.py')
 EFI_FILES = None
 EFI_MANIFEST = None
+BOOTLOADER = None
+INSTALL_EFI = False
 p.PROFILE = 'boot-test'
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
@@ -36,8 +40,10 @@ p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
 base_configure, base_preflight, base_finish = p.configure, p.preflight, p.finish
 
 
-def artifacts(bundle, reclaim_cache=None, install_efi=None):
-    global EFI_FILES, EFI_MANIFEST
+def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi_files=None):
+    global EFI_FILES, EFI_MANIFEST, BOOTLOADER, INSTALL_EFI
+    if bool(bootloader) != bool(efi_files) or (bootloader and (install_efi or reclaim_cache)):
+        raise ValueError('--bootloader requires --efi-files and an already installed generation')
     bundle = bundle.resolve(strict=True)
     fields = {}
     for row in (bundle/'MANIFEST').read_text().splitlines():
@@ -62,15 +68,26 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None):
     p.BOOT_SHA = cache.digest(bundle/'boot-padded-p22.img')
     p.NOTES_SHA = p.f.q.r.power_kernel.notes_sha(kernel)
     p.RECLAIM_CACHE = reclaim_cache.resolve(strict=True) if reclaim_cache else None
-    EFI_FILES, EFI_MANIFEST = None, None
-    if install_efi:
-        package = install_efi.resolve(strict=True)
+    EFI_FILES, EFI_MANIFEST, BOOTLOADER = None, None, None
+    INSTALL_EFI = bool(install_efi)
+    if install_efi or efi_files:
+        package = (install_efi or efi_files).resolve(strict=True)
         with tempfile.TemporaryDirectory() as staging:
             manifest = installer.prepare(package, Path(staging))
         expected = dict(file=fields['store-file'], sha256=sha, size=size, system=p.SYSTEM)
         if manifest['store'] != expected or Path(manifest['linux_payload']).resolve() != bundle:
             raise ValueError('EFI files do not belong to the selected system bundle')
         EFI_FILES, EFI_MANIFEST = package, manifest
+    if bootloader:
+        BOOTLOADER = bootloader.resolve(strict=True)
+        manifest = json.loads((BOOTLOADER/'manifest.json').read_text())
+        image = BOOTLOADER/'boot-padded-p22.img'
+        if (manifest['profile'] != 'efi-manager' or manifest['recovery_test'] != 0 or
+                Path(manifest['linux_payload']).resolve() != bundle or
+                not installer.matches(image, manifest['files']['boot-padded-p22.img'])):
+            raise ValueError('Bootloader does not contain the selected normal Linux fallback')
+        p.BOOT_SHA = cache.digest(image)
+        p.f.q.r.entry_dt.verify_carrier(image, p.BOOT_SHA, bundle)
 
 
 def verify_efi(runner, ssh, state, directory, name):
@@ -112,12 +129,54 @@ test "$(sha256sum {remote}/{name} | cut -d' ' -f1)" = {cache.digest(source)}
     runner.qualify.save(directory, 'efi-install-result.json', result)
 
 
+def verify_manager_handoff(runner, before, after, profile):
+    runner.verify_memory_handoff(before, after)
+    if after.get(runner.HANDOFF_MARKER) != b'efi\0'.hex():
+        raise RuntimeError('The normal bootloader did not hand off through EFI')
+    runner.efi_manager.verify_tree(after, EFI_MANIFEST['files'][installer.MANAGER]['sha256'])
+    obsolete = set(runner.MARKERS)-{runner.HANDOFF_MARKER,*runner.efi_manager.MARKERS}
+    if any(key in after for key in obsolete):
+        raise RuntimeError('The normal bootloader unexpectedly ran a historical diagnostic app')
+
+
+def manager_evidence(runner, ssh, state, directory):
+    tree = json.loads((directory/'candidate-tree.json').read_text())
+    runner.efi_manager.evidence(ssh, state['boot_id'], directory, runner.qualify, tree,
+        entry=EFI_MANIFEST['entry'], kernel=p.KERNEL, sha=EFI_MANIFEST['files'][installer.MANAGER]['sha256'])
+    source = EFI_FILES/'tree'/EFI_MANIFEST['entry_device_tree']
+    if not installer.matches(source, EFI_MANIFEST['files'][EFI_MANIFEST['entry_device_tree']]):
+        raise ValueError('Entry device tree differs from its EFI package')
+    proof = runner.entry_dt.verify_native(source, directory/'candidate-fdt.dtb', EFI_MANIFEST['payload_identity'])
+    runner.persistence.run(ssh, f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
+test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
+test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
+''', directory, 'efi-native-cpus')
+    runner.qualify.save(directory, 'entry-dt-evidence.json', dict(boot_id=state['boot_id'], **proof))
+    verify_efi(runner, ssh, state, directory, 'selected-efi-files.json')
+
+
 def configure(watchdog=False, pm_test=None, cycle=False):
     if pm_test or cycle:
         raise ValueError('Boot test supports alarms or watchdog expiry; PM/USB need separate recovery checks')
     runner = base_configure()
     runner.backend.MTK = runner.backend.MTK_RTC
-    if EFI_FILES is not None:
+    if BOOTLOADER is not None:
+        runner.PROFILES[p.PROFILE] = (BOOTLOADER/'boot-padded-p22.img', p.BOOT_SHA)
+        runner.DIRECT_NIX_PROFILES = tuple(v for v in runner.DIRECT_NIX_PROFILES if v != p.PROFILE)
+        for name in ('NIX_EFI_PROFILES', 'EFI_LINUX_PROFILES', 'UBOOT_LINUX_PROFILES'):
+            setattr(runner, name, getattr(runner, name)+(p.PROFILE,))
+        runner.verify_handoff_tree = partial(verify_manager_handoff, runner)
+        runner.power_kernel.evidence = partial(p.evidence, require_efi=True)
+        runner.power_kernel.store_profile = lambda provisioner: p.store_profile(provisioner)._replace(require_efi=True)
+        runner.efi_linux.evidence = partial(runner.efi_linux.evidence, legacy_cpu_identity=False)
+        candidate = runner.candidate_return
+        def booted_candidate(ssh, before, directory, profile):
+            state = candidate(ssh, before, directory, profile)
+            manager_evidence(runner, ssh, state, directory)
+            return state
+        runner.candidate_return = booted_candidate
+    elif INSTALL_EFI:
         candidate = runner.candidate_return
         def publish_candidate(ssh, before, directory, profile):
             state = candidate(ssh, before, directory, profile)
@@ -175,6 +234,8 @@ def preflight(runner, directory, execute):
         if p.f.snapshot('swap') != dict(before, layout='swap'):
             raise RuntimeError('Baseline changed before RTC startup preflight')
         startup.prepare(p, runner, calendar, directory, before)
+        if BOOTLOADER is not None:
+            verify_efi(runner, p.f.q.SSH, before, directory, 'before-selected-efi-files.json')
     startup.install_transition(p, runner, calendar, directory, before)
     if EFI_FILES is not None:
         runner.qualify.save(directory, 'efi-install-package.json', EFI_MANIFEST)
@@ -247,11 +308,20 @@ def finish(runner, directory, before, error=None):
         try:
             proof.update(startup.cleanup(p, runner, directory, before))
             if EFI_FILES is not None:
-                proof['efi_install_qualified'] = False
+                proof_key = 'efi_install_qualified' if INSTALL_EFI else 'efi_boot_qualified'
+                proof[proof_key] = False
                 if error is None or (directory/'efi-install-result.json').exists():
                     state = p.f.snapshot('swap')
                     verify_efi(runner, p.f.q.SSH, state, directory, 'recovered-installed-efi-files.json')
-                    proof['efi_install_qualified'] = True
+                    if BOOTLOADER is not None:
+                        candidate = json.loads((directory/'candidate-linux.json').read_text())
+                        manager = json.loads((directory/'manager-evidence.json').read_text())
+                        entry_dt = json.loads((directory/'entry-dt-evidence.json').read_text())
+                        if (manager['boot_id'] != candidate['boot_id'] or entry_dt['boot_id'] != candidate['boot_id'] or
+                                manager['efi_variables']['LoaderEntrySelected'] != EFI_MANIFEST['entry'] or
+                                entry_dt['identity'] != EFI_MANIFEST['payload_identity']):
+                            raise RuntimeError('Missing matching boot-manager and selected native DT evidence')
+                    proof[proof_key] = True
         except Exception as caught:
             error = caught
             raise

@@ -203,14 +203,12 @@ def canonical_reservations(tree):
     return result
 
 
-def verify_handoff_tree(before, after, profile):
+def verify_memory_handoff(before, after):
     before, after = canonical_reservations(before), canonical_reservations(after)
     def memory_keys(tree):
         return {key for key in tree if key.startswith('reserved-memory/')}
     if memory_keys(before) != memory_keys(after):
         raise RuntimeError('Linux handoff changed memory reservation properties')
-    kind = profile_kind(profile)
-    verify_native_keyboard(after, profile in KEY_EVENT_PROFILES)
     if any(key in before for key in MARKERS):
         raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
     for key, value in before.items():
@@ -224,6 +222,12 @@ def verify_handoff_tree(before, after, profile):
             continue
         if key != 'memtotal_kib' and after.get(key) != value:
             raise RuntimeError(f'Linux handoff changed LK property {key}')
+
+
+def verify_handoff_tree(before, after, profile):
+    verify_memory_handoff(before, after)
+    kind = profile_kind(profile)
+    verify_native_keyboard(after, profile in KEY_EVENT_PROFILES)
     if profile in DIRECT_NIX_PROFILES:
         if any(key in after for key in MARKERS):
             raise RuntimeError('Direct persistent-Nix profile contains a U-Boot marker')

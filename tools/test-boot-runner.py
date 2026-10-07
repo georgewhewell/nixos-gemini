@@ -50,7 +50,7 @@ class Profile(unittest.TestCase):
             setup=mock.Mock()
             with mock.patch.object(sys,'argv',argv),mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
                 m.p.main(setup)
-            setup.assert_called_once_with(bundle,cache,None)
+            setup.assert_called_once_with(bundle,cache,None,None,None)
             command=run.call_args.args[0]
             self.assertIn(str(m.p.ENTRYPOINT),command)
             self.assertIn('--worker',command)
@@ -67,9 +67,50 @@ class Profile(unittest.TestCase):
                     '--bundle',str(bundle),'--install-efi',str(efi)]), \
                     mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
                 m.p.main(setup)
-            setup.assert_called_once_with(bundle,None,efi)
+            setup.assert_called_once_with(bundle,None,efi,None,None)
             command=run.call_args.args[0]
             self.assertEqual(command[command.index('--install-efi')+1],str(efi))
+
+    def test_bootloader_worker_receives_both_packages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);bundle=root/'bundle';bundle.mkdir();efi=root/'efi';efi.mkdir();loader=root/'loader';loader.mkdir()
+            setup=mock.Mock()
+            with mock.patch.object(sys,'argv',['test-boot.py','--execute','--out',tmp+'/trial',
+                    '--bundle',str(bundle),'--bootloader',str(loader),'--efi-files',str(efi)]), \
+                    mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
+                m.p.main(setup)
+            setup.assert_called_once_with(bundle,None,None,loader,efi)
+            command=run.call_args.args[0]
+            self.assertEqual(command[command.index('--bootloader')+1],str(loader))
+            self.assertEqual(command[command.index('--efi-files')+1],str(efi))
+
+    def test_bootloader_requires_installed_entry_without_publication_or_pruning(self):
+        path=Path('/unused')
+        for kw in (dict(bootloader=path),dict(efi_files=path),
+                   dict(bootloader=path,efi_files=path,install_efi=path),
+                   dict(bootloader=path,efi_files=path,reclaim_cache=path)):
+            with self.subTest(kw=kw),self.assertRaisesRegex(ValueError,'already installed'):
+                m.artifacts(path,**kw)
+
+    def test_normal_efi_mode_checks_real_handoff_and_rejects_fallback(self):
+        sha='c'*64
+        with mock.patch.object(m,'BOOTLOADER',Path('/carrier')), \
+                mock.patch.object(m,'EFI_MANIFEST',{'files':{m.installer.MANAGER:{'sha256':sha}}}):
+            r=m.configure()
+            self.assertEqual(r.PROFILES[m.p.PROFILE][0],Path('/carrier/boot-padded-p22.img'))
+            self.assertNotIn(m.p.PROFILE,r.DIRECT_NIX_PROFILES)
+            self.assertIn(m.p.PROFILE,r.NIX_EFI_PROFILES)
+            self.assertTrue(r.store_profile_for(m.p.PROFILE).require_efi)
+            self.assertTrue(r.power_kernel.evidence.keywords['require_efi'])
+            before={'memory/reg':'same'}
+            after=dict(before,**{r.HANDOFF_MARKER:b'efi\0'.hex(),
+                r.efi_manager.PREFIX+'result':b'starting\0'.hex(),
+                r.efi_manager.PREFIX+'stage':b'start-image\0'.hex(),r.efi_manager.PREFIX+'sha256':sha})
+            r.verify_handoff_tree(before,after,m.p.PROFILE)
+            for key,value in ((r.HANDOFF_MARKER,b'fit\0'.hex()),('memory/reg','different'),
+                              (r.CONSOLE_MARKER,b'passed\0'.hex()),(r.efi_manager.PREFIX+'sha256','d'*64)):
+                with self.subTest(key=key),self.assertRaises(RuntimeError):
+                    r.verify_handoff_tree(before,dict(after,**{key:value}),m.p.PROFILE)
 
     def test_pm_requires_new_kernel_prerequisites(self):
         for args in (dict(pm_test='devices'),dict(pm_test='freezer'),dict(cycle=True)):

@@ -14,8 +14,10 @@ KMOD='/nix/store/cpdb15nd870rimjyqwbf3f9iarhh2k4f-kmod-aarch64-unknown-linux-gnu
 KERNEL='/nix/store/6463y1syk23clrh7qgl6mdmk1507m320-gemini-mainline-efi-kernel-7.1.3'
 
 
-def verify_tree(tree):
-    expected={'result':b'starting\0'.hex(),'stage':b'start-image\0'.hex(),'sha256':SHA}
+def verify_tree(tree,sha=SHA):
+    if not re.fullmatch('[0-9a-f]{64}',sha):
+        raise ValueError('Invalid manager image digest')
+    expected={'result':b'starting\0'.hex(),'stage':b'start-image\0'.hex(),'sha256':sha}
     if any(tree.get(PREFIX+key)!=value for key,value in expected.items()) or PREFIX+'status' in tree:
         raise RuntimeError('Distro manager was not started or returned to the FIT fallback: '+
                            repr({key:tree.get(key) for key in MARKERS}))
@@ -58,8 +60,8 @@ def verify_variables(rows,boot_id,entry='gemini-efi-trial.conf'):
     return dict(values,menu_to_exec_usec=elapsed)
 
 
-def evidence(ssh,boot_id,directory,qualify,tree,entry='gemini-efi-trial.conf',kernel=KERNEL):
-    verify_tree(tree)
+def evidence(ssh,boot_id,directory,qualify,tree,entry='gemini-efi-trial.conf',kernel=KERNEL,sha=SHA):
+    verify_tree(tree,sha)
     if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9._+-]+',str(kernel)):
         raise ValueError('Loader evidence requires a pinned kernel path')
     command=f'''set -eu
@@ -97,5 +99,5 @@ done
     path=qualify.run(ssh+[f'readlink -f /dev/disk/by-partuuid/{uuid}']).strip()
     if path!='/dev/mmcblk0p29':
         raise RuntimeError('The manager boot volume does not resolve to p29: '+path)
-    qualify.save(directory,'manager-evidence.json',dict(boot_id=boot_id,sha256=SHA,
+    qualify.save(directory,'manager-evidence.json',dict(boot_id=boot_id,sha256=sha,
                  boot_volume=path,efi_variables=values,physical_key_press_observed=False))

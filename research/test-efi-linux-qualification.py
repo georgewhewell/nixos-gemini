@@ -148,6 +148,13 @@ class EfiProof(unittest.TestCase):
                         [*self.entries[:3],(0x88000000,0x88600000,'Boot Data'),self.entries[4]]):
             with self.subTest(entries=entries), self.assertRaises(RuntimeError):
                 e.verify_evidence(self.log(entries),self.props,'64',self.tree)
+    def test_native_cpu_boot_requires_ready_and_the_same_complete_efi_map(self):
+        log=self.log().replace('[0.100000] arm64-late-cpu-profile: verified the pre-finalization runtime identity binding\n','').replace('mt6797-a53-a72-a41-v7 ready','mt6797-a53-a72 ready')
+        result=e.verify_evidence(log,self.props,'64',self.tree,legacy_cpu_identity=False)
+        self.assertTrue(result['late_cpu_ready']);self.assertFalse(result['late_cpu_identity_verified'])
+        with self.assertRaises(RuntimeError):e.verify_evidence(log,self.props,'64',self.tree)
+        for invalid in (log.replace('mt6797-a53-a72 ready','not ready'),log.replace('Boot Data','Conventional')):
+            with self.assertRaises(RuntimeError):e.verify_evidence(invalid,self.props,'64',self.tree,legacy_cpu_identity=False)
     def test_real_efi_and_bounded_tables_are_required(self):
         for log,platform in (('', '64'), (self.log(),'32'), (self.log().replace('Das U-Boot','other'),'64')):
             with self.assertRaises(RuntimeError): e.verify_evidence(log,self.props,platform,self.tree)

@@ -47,6 +47,11 @@ class Manager(unittest.TestCase):
             missing=dict(self.rows);del missing[key]
             with self.assertRaises(RuntimeError):m.verify_variables(missing,self.boot)
         with self.assertRaises(RuntimeError):m.verify_variables(self.rows,'other-boot')
+    def test_selected_manager_digest_is_explicit(self):
+        tree=dict(self.tree,**{m.PREFIX+'sha256':'a'*64})
+        m.verify_tree(tree,sha='a'*64)
+        with self.assertRaises(RuntimeError):m.verify_tree(tree)
+        with self.assertRaises(ValueError):m.verify_tree(tree,sha='invalid')
     def test_variable_binary_format_and_attributes(self):
         for raw in ('','xx',encoded('ok',attrs=7),encoded('ok')[:-4],encoded('x\0y'),encoded('x\ny'),
                     '0600000000d80000',encoded('x'*3000)):

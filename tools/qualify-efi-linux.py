@@ -128,9 +128,11 @@ def provision(ssh, before, boot_sha, directory, qualify, rescued, profile=None):
     raise RuntimeError('Linux Stage 1 did not expose provisioning within 150s')
 
 
-def verify_evidence(log, properties, platform_size, tree):
-    for message in ('verified the pre-finalization runtime identity binding',
-                    'mt6797-a53-a72-a41-v7 ready'):
+def verify_evidence(log, properties, platform_size, tree, legacy_cpu_identity=True):
+    messages = ['mt6797-a53-a72-a41-v7 ready' if legacy_cpu_identity else 'mt6797-a53-a72 ready']
+    if legacy_cpu_identity:
+        messages.append('verified the pre-finalization runtime identity binding')
+    for message in messages:
         if 'arm64-late-cpu-profile: ' + message not in log:
             raise RuntimeError('EFI kernel did not verify its late-CPU runtime binding: ' + message)
     if platform_size.strip() != '64' or not re.search(r'efi: EFI v[0-9.]+ by Das U-Boot', log):
@@ -192,11 +194,12 @@ def verify_evidence(log, properties, platform_size, tree):
                           if lo < end and hi > start and kind.split('|')[0].strip() == expected)
             if covered != end - start:
                 raise RuntimeError('EFI lost an LK reservation: ' + parent)
-    return dict(platform_size=64, handoff=values, memory_map=ordered, late_cpu_identity_verified=True,
+    return dict(platform_size=64, handoff=values, memory_map=ordered,
+                late_cpu_identity_verified=legacy_cpu_identity, late_cpu_ready=True,
                 exit_boot_services_proven=True)
 
 
-def evidence(ssh, directory, qualify, tree):
+def evidence(ssh, directory, qualify, tree, legacy_cpu_identity=True):
     log = qualify.run(ssh + ['dmesg'])
     (directory / 'candidate-dmesg.txt').write_text(log)
     command = '''set -eu
@@ -208,7 +211,8 @@ for name in linux,uefi-system-table linux,uefi-mmap-start linux,uefi-mmap-size l
  printf '\\n'
 done'''
     props = dict(line.split('=', 1) for line in qualify.run(ssh + [command]).splitlines())
-    result = verify_evidence(log, props, qualify.run(ssh + ['cat /sys/firmware/efi/fw_platform_size']), tree)
+    result = verify_evidence(log, props, qualify.run(ssh + ['cat /sys/firmware/efi/fw_platform_size']), tree,
+                             legacy_cpu_identity=legacy_cpu_identity)
     qualify.save(directory, 'candidate-efi.json', result)
     # Capture the complete tree without printing private modem properties.
     with (directory / 'candidate-fdt.dtb').open('wb') as out:

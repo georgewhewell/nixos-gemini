@@ -83,6 +83,11 @@ To exercise installation during the supervised boot test, add
 the installed command only after candidate Linux passes its health checks;
 it checks the new files and retained older entries again after M69 returns.
 
+Once installed, test that entry through U-Boot using the same command with
+`--bootloader /path/to/bootloader --efi-files /path/to/efiBootFiles`.
+It checks the actual EFI memory map, systemd-boot's selected entry and volume,
+the native CPU device tree, Linux health and automatic M69 recovery.
+
 ## Device status
 
 The maintained Linux kernel boots both A72s without a generated build record or

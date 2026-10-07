@@ -88,7 +88,9 @@ def verify_power_state(raw, boot_id):
     return state
 
 
-def evidence(ssh, boot_id, directory, qualify, persistence):
+def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False):
+    boot_guard = ('test "$(cat /sys/firmware/efi/fw_platform_size)" = 64'
+                  if require_efi else 'test ! -e /sys/firmware/efi')
     raw = persistence.run(ssh, f'''set -eu
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
 printf 'system='; readlink /run/current-system
@@ -99,7 +101,7 @@ printf 'hibernation='; sed -n 's/^AllowHibernation=//p' /etc/systemd/sleep.conf
 printf 'suspend_then_hibernate='; sed -n 's/^AllowSuspendThenHibernate=//p' /etc/systemd/sleep.conf
 printf 'zswap='; cat /sys/module/zswap/parameters/enabled
 printf 'shrinker='; cat /sys/module/zswap/parameters/shrinker_enabled
-test ! -e /sys/firmware/efi
+{boot_guard}
 grep -Eq ' [tT] mtk_wdt_pm_notify$' /proc/kallsyms
 test "$(cat /proc/sys/kernel/random/boot_id)" = {boot_id}
 ''', directory, 'power-swap-state')
@@ -341,16 +343,24 @@ def main(configure_artifacts=None):
                             help='Host copy of an unused squashfs to archive and remove if space is needed')
         parser.add_argument('--install-efi', type=Path,
                             help='Install matching efiBootFiles through the healthy candidate before recovery')
+        parser.add_argument('--bootloader', type=Path,
+                            help='Boot the installed EFI entry through this normal bootloader package')
+        parser.add_argument('--efi-files', type=Path,
+                            help='Matching installed efiBootFiles to verify with --bootloader')
     args = parser.parse_args(); directory = args.out.resolve()
     artifact_args = []
     if configure_artifacts is not None:
         args.bundle = args.bundle.resolve(strict=True)
         if args.reclaim_cache: args.reclaim_cache = args.reclaim_cache.resolve(strict=True)
         if args.install_efi: args.install_efi = args.install_efi.resolve(strict=True)
-        configure_artifacts(args.bundle, args.reclaim_cache, args.install_efi)
+        if args.bootloader: args.bootloader = args.bootloader.resolve(strict=True)
+        if args.efi_files: args.efi_files = args.efi_files.resolve(strict=True)
+        configure_artifacts(args.bundle, args.reclaim_cache, args.install_efi, args.bootloader, args.efi_files)
         artifact_args = ['--bundle', str(args.bundle)]
         if args.reclaim_cache: artifact_args += ['--reclaim-cache', str(args.reclaim_cache)]
         if args.install_efi: artifact_args += ['--install-efi', str(args.install_efi)]
+        if args.bootloader: artifact_args += ['--bootloader', str(args.bootloader)]
+        if args.efi_files: artifact_args += ['--efi-files', str(args.efi_files)]
     if args.execute and not args.worker:
         unit = PROFILE+'-'+str(int(time.time()))+'-'+str(os.getpid())
         print('Starting durable power/swap worker '+unit, flush=True)

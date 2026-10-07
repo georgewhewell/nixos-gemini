@@ -64,4 +64,19 @@ class EntryDT(unittest.TestCase):
         with patch.object(d,'cross_carrier') as check, self.assertRaises(RuntimeError):
             d.cross_evidence(self.runtime.parent,'boot',f,None,None,None)
         check.assert_not_called()
+    def test_native_entry_preserves_cpu_properties_and_has_no_legacy_record(self):
+        source=self.runtime.with_name('native.dtb');dts=self.runtime.with_suffix('.dts');identity='a'*64
+        dts.write_text('/dts-v1/; / { chosen { gemini,efi-entry-id = "'+identity+'"; }; '
+                       'cpus { #address-cells = <1>; #size-cells = <0>; '
+                       'cpu@8 { device_type = "cpu"; compatible = "arm,cortex-a72"; reg = <8>; }; }; };')
+        subprocess.run([str(FDT.with_name('dtc')),'-I','dts','-O','dtb','-o',str(source),str(dts)],check=True)
+        shutil.copyfile(source,self.runtime)
+        self.write('/chosen','gemini,uefi-dt-fixup','lk-delta-v1')
+        d.verify_native(source,self.runtime,identity)
+        with self.assertRaises(RuntimeError):d.verify_native(source,self.runtime,'b'*64)
+        self.write('/cpus/cpu@8','compatible','arm,cortex-a53')
+        with self.assertRaises(RuntimeError):d.verify_native(source,self.runtime,identity)
+        self.write('/cpus/cpu@8','compatible','arm,cortex-a72')
+        subprocess.run([str(FDT),'-c',str(self.runtime),d.LEAF],check=True)
+        with self.assertRaises(RuntimeError):d.verify_native(source,self.runtime,identity)
 if __name__=='__main__':unittest.main()
