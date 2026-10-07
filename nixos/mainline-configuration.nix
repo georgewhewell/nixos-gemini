@@ -8,7 +8,6 @@
   lib,
   geminiLeaseSelfAcceptToken ? null,
   geminiBootJournaled ? false,
-  geminiPersistentStore ? false,
   ...
 }: {
   _module.args.geminiBootJournaled = lib.mkDefault false;
@@ -340,7 +339,7 @@
     script = ''
       export GEMINI_BASELINE_ACCEPT_BUSYBOX=${pkgs.busybox}/bin/busybox
       export GEMINI_BASELINE_ACCEPT_TOKEN=${lib.escapeShellArg geminiLeaseSelfAcceptToken}
-      ${lib.optionalString geminiPersistentStore "export GEMINI_BASELINE_ACCEPT_STORE=persistent"}
+      export GEMINI_BASELINE_ACCEPT_STORE=persistent
       exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-baseline-self-accept.sh}
     '';
   };

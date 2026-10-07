@@ -88,6 +88,16 @@
       gemini-mainline = gemini.system;
     };
     checks.${host} = {
+      storage = gemini.buildPkgs.runCommand "gemini-storage-check" {
+        nativeBuildInputs = with gemini.buildPkgs; [bash coreutils gnugrep gnused gawk gptfdisk];
+      } ''
+        mkdir work
+        bash ${./nix/test-gemini-storage-provision.sh} ${gemini.buildPkgs.replaceVars ./nix/gemini-storage-provision.sh {
+          SWAP_PARTUUID = gemini.system.config.gemini.storage.swapPartUuid;
+          DATA_LABEL = gemini.system.config.gemini.storage.dataLabel;
+        }} "$PWD/work"
+        touch "$out"
+      '';
       boot-install = gemini.buildPkgs.runCommand "gemini-boot-install-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.dtc];
       } ''

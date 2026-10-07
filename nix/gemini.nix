@@ -57,7 +57,6 @@
         ...
       }: {
         _module.args.geminiBootJournaled = true;
-        _module.args.geminiPersistentStore = true;
         _module.args.geminiBootKernel = kernel;
         _module.args.geminiBootDtb = dtb;
         _module.args.geminiBootInitrd = image.initramfs;
@@ -99,13 +98,10 @@
       grep -Fqx 'EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}' "$out"
       chmod 0755 "$out"
     '';
-    journaledBoot = true;
     unattendedRecovery = true;
     inputDiagnostics = true;
     stage1PersistentHostKey = true;
     displayActivation = true;
-    persistentStore = true;
-    provisionWaitSeconds = 600;
     watchdogLeaseSeconds = 720;
     kernelLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     stage2BaselineAcceptScript = system.config.systemd.services.gemini-baseline-self-accept.script;

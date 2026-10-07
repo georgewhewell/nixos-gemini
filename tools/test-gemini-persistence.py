@@ -3,6 +3,10 @@
 import copy
 import importlib.util
 from pathlib import Path
+import re
+import shlex
+import subprocess
+import tempfile
 import unittest
 
 spec=importlib.util.spec_from_file_location('persistence',Path(__file__).with_name('qualify-gemini-persistence.py'))
@@ -15,6 +19,45 @@ MOUNTS='''21 1 179:32 / /persist rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
 '''
 
 class Persistence(unittest.TestCase):
+    def test_standard_and_recovery_store_roots(self):
+        system='/nix/store/'+'a'*32+'-nixos-system-gemini'
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            store=root/'nix/store';store.mkdir(parents=True)
+            state=root/'nix/var/nix';state.mkdir(parents=True)
+            roots=state/'gcroots';roots.mkdir()
+            persistent=root/'persist/nixos/nix/store'
+            persistent.parent.mkdir(parents=True);persistent.symlink_to(store)
+            standard=roots/'booted-system';standard.symlink_to('/run/booted-system')
+            paths=('/persist/nixos/nix/store','/nix/var/nix','/nix/store')
+            pattern='|'.join(re.escape(path) for path in paths)
+            command=re.sub(pattern,lambda m: shlex.quote(str(root/m[0].lstrip('/'))),
+                           p.store_state_check(system))
+            def run(service_exit=1):
+                return subprocess.run(['bash','-c',
+                    f'set -eu; systemctl() {{ return {service_exit}; }}\n'+command],
+                    capture_output=True,text=True).returncode
+            self.assertEqual(run(),0) # Normal store needs no seed service.
+            standard.unlink()
+            self.assertNotEqual(run(),0)
+            standard.symlink_to('/run/wrong-system')
+            self.assertNotEqual(run(),0)
+            standard.unlink();standard.symlink_to('/run/booted-system')
+            persistent.unlink();persistent.mkdir()
+            self.assertNotEqual(run(),0) # Unrelated store directory.
+
+            (store/'.gemini-system').write_text(Path(system).name)
+            (state/'gemini-seeded-system').write_text(Path(system).name)
+            legacy=roots/'gemini-booted-system';legacy.symlink_to('/run/booted-system')
+            standard.unlink()
+            self.assertEqual(run(service_exit=0),0)
+            self.assertNotEqual(run(service_exit=1),0)
+            (state/'gemini-seeded-system').write_text('wrong-system')
+            self.assertNotEqual(run(service_exit=0),0)
+            (state/'gemini-seeded-system').write_text(Path(system).name)
+            legacy.unlink()
+            self.assertNotEqual(run(service_exit=0),0)
+
     def test_registered_store_binds_and_readonly_protection(self):
         raw='''21 1 179:32 / /persist rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
 22 1 179:32 /home /home rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw

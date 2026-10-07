@@ -91,7 +91,7 @@ test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
 dmesg | grep -F 'arm64-late-cpu-profile: {profile} ready' >/dev/null
 grep -qx 'sandbox = true' /etc/nix/nix.conf
 grep -qx 'sandbox-fallback = false' /etc/nix/nix.conf
-systemctl is-active nix-daemon.socket gemini-nix-db-seed >/dev/null
+systemctl is-active nix-daemon.socket >/dev/null
 systemctl start nix-daemon.service
 systemctl is-active nix-daemon.service >/dev/null
 pid=$(systemctl show nix-daemon.service -p MainPID --value)

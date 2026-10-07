@@ -75,6 +75,17 @@ def run(ssh, command, directory, name, timeout=60):
     return result.stdout
 
 
+def store_state_check(system):
+    return f'''if test -f /nix/store/.gemini-system; then
+ systemctl is-active gemini-nix-db-seed >/dev/null
+ test "$(cat /nix/var/nix/gemini-seeded-system)" = {shlex.quote(Path(system).name)}
+ test "$(readlink /nix/var/nix/gcroots/gemini-booted-system)" = /run/booted-system
+else
+ test /nix/store -ef /persist/nixos/nix/store
+ test "$(readlink /nix/var/nix/gcroots/booted-system)" = /run/booted-system
+fi'''
+
+
 def evidence(ssh, boot_id, directory, qualify, previous=None, system=None):
     phase='persistence-after' if previous else 'persistence-before'
     system=system or qualify.ACCEPTED_SYSTEM
@@ -82,13 +93,7 @@ def evidence(ssh, boot_id, directory, qualify, previous=None, system=None):
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {system}
 test "$(dumpe2fs -h /dev/mmcblk0p32 2>/dev/null | sed -n 's/^Filesystem UUID: *//p')" = {FS_UUID}
-systemctl is-active gemini-nix-db-seed >/dev/null
-if test -f /nix/store/.gemini-system; then
- test "$(cat /nix/var/nix/gemini-seeded-system)" = {Path(system).name}
-else
- test /nix/store -ef /persist/nixos/nix/store
-fi
-test "$(readlink /nix/var/nix/gcroots/gemini-booted-system)" = /run/booted-system
+{store_state_check(system)}
 {NIX}/nix-store --check-validity {system} {BUSYBOX}
 printf 'device='; cat /sys/class/block/mmcblk0p32/dev
 cat /proc/self/mountinfo

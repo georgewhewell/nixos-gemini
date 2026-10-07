@@ -42,6 +42,19 @@ Automatic rescue returned healthy M69 boot `1d3cfdd4-848c-4572-8da0-fe52a96d6f5f
 with all retained outputs, protected storage and source checks passing and all
 trial units stopped. The last complete passing EFI boot remains test 07.
 
+The normal initramfs's unused squashfs, overlay and image-provisioning branches
+are removed; frozen recovery imports its own implementation. The generated
+boot commands are unchanged, and all other initramfs file bytes and permissions
+match the previous build. The custom Nix database-seeding service is removed
+in favor of the registered store and NixOS's existing booted-system GC root.
+The storage provisioner now creates the normal `/persist/nixos/nix` layout;
+host tests cover permissions, idempotence, retained data, symlink rejection and
+the existing GPT-preservation cases. The runner checks the standard root for
+the normal store and retains the original checks for M69. All 19 persistence/
+runner tests and the five flake checks pass; the complete system bundle, EFI
+files and U-Boot fallback package build successfully. These changes are not
+deployed.
+
 Workspace cleanup removed 82 obsolete, clean Linux worktrees without changing
 any branch or tag references. The remaining 41 include the maintained tree,
 the checkout holding the shared Git directory, detached heads, local edits and

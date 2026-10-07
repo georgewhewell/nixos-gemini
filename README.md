@@ -74,6 +74,11 @@ After the initial installation, `nixos-rebuild boot` or `switch` installs the
 selected generation's kernel, DTB and generic initramfs, then selects its boot
 entry. Boot entries pass the standard `init=/nix/store/.../init` option; system
 updates use the registered store on p32 and do not create new squashfs images.
+The normal initramfs has only this storage path; the frozen recovery input
+keeps its own image-based implementation. `gemini-storage-provision` prepares
+home and the normal Nix layout on p32. With p32 mounted at `/persist`, copy the
+system closure with Nix into `local?root=/persist/nixos` before booting it.
+NixOS maintains its usual booted-system GC root.
 The retained Android loader reads only the first 512-byte command-line field.
 Initial boot images keep their options short; Linux appends the board defaults.
 The installer retains entries for system profile generations and removes its
@@ -85,6 +90,8 @@ the ext4 journal enabled throughout. Recovery retains its original `noload`
 mount and cannot run this installer. `gemini-boot-install --system SYSTEM
 --check` verifies an installed default without writes. These generation changes
 have passed host builds/tests; the device migration is being tested.
+The latest device trial recovered automatically after an allocator panic;
+normal generation installation is not yet verified on hardware.
 
 To exercise installation during the supervised boot test, add
 `--install-efi /path/to/efiBootFiles`. For normal generations the runner invokes

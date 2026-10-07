@@ -4,30 +4,20 @@
   ixoo-kernel,
   kernel,
   serviceabilityDtb,
-  squashfs ? null,
   nixosToplevel,
   authorizedKeys,
   bq2589xPreflight,
   unattendedRecovery ? false,
   inputDiagnostics ? false,
   displayActivation ? false,
-  provisionStore ? false,
   stage1PersistentHostKey ? false,
-  provisionWaitSeconds ? 65,
   watchdogLeaseSeconds ? 90,
   kernelLeaseSelfAcceptToken ? null,
   stage2BaselineAcceptScript ? null,
   leaseSelfAcceptToken ? null,
-  # Persistent storage (nixos/storage.nix): null, or { dataLabel; } to
-  # resume from p34 "swap" and to mount p32 "userdata" (ext4 dataLabel) for
-  # /home, the /nix/store overlay upper layer and /nix/var.
-  persistentStorage ? null,
-  journaledBoot ? false,
-  # Normal installations use a registered store on p32. The squashfs layout
-  # remains available for the independently pinned recovery system.
-  persistentStore ? false,
+  # The registered store and home live on p32; p34 provides swap/resume.
+  persistentStorage,
 }:
-assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
 assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
@@ -40,28 +30,17 @@ assert leaseSelfAcceptToken == null || builtins.any
     line == "export GEMINI_BASELINE_ACCEPT_TOKEN=${leaseSelfAcceptToken}"
     || line == "export GEMINI_BASELINE_ACCEPT_TOKEN='${leaseSelfAcceptToken}'")
   (buildPkgs.lib.splitString "\n" stage2BaselineAcceptScript);
-assert provisionWaitSeconds >= 30;
-assert watchdogLeaseSeconds > provisionWaitSeconds;
+assert watchdogLeaseSeconds > 30;
 assert !displayActivation || unattendedRecovery;
-assert persistentStorage == null || builtins.match "[A-Za-z0-9_-]+" persistentStorage.dataLabel != null;
-assert !persistentStore || (persistentStorage != null && journaledBoot && !provisionStore);
+assert persistentStorage != null;
+assert builtins.match "[A-Za-z0-9_-]+" persistentStorage.dataLabel != null;
 let
-  # A p22 rollback is useful only while its exact userspace payload still
-  # exists. Name p29 payloads by their bytes: an input-addressed Nix output
-  # can be rebuilt with different squashfs bytes at the same store path.
-  # Compute this in both builders so the initramfs and bundle agree without
-  # evaluating the squashfs during Nix evaluation.
-  storeIdentity = buildPkgs.lib.optionalString (!persistentStore) ''
-    store_sha=$(sha256sum ${squashfs} | cut -d' ' -f1)
-    store_file="mainline-nixos-$store_sha.squashfs"
-  '';
-  storage = persistentStorage != null;
-  bootMountOptions = if journaledBoot then "ro,nosuid,nodev,noexec" else "ro,noload,nosuid,nodev,noexec";
-  bootMountPolicy = if journaledBoot then "ro" else "ro,noload";
+  bootMountOptions = "ro,nosuid,nodev,noexec";
+  bootMountPolicy = "ro";
   # Stage-1 shell, spliced into the INIT heredoc below.  Nix does not strip
   # indentation from interpolated text, so it is written at its final
-  # column.  Absent entirely without persistent storage.
-  storageFunctions = buildPkgs.lib.optionalString storage ''
+  # column.
+  storageFunctions = ''
     hibernate_resume() {
       # Runs before any filesystem on the eMMC is mounted.  Writing the
       # p34 "swap" device number to /sys/power/resume makes the kernel look
@@ -83,7 +62,6 @@ let
       fi
     }
 
-    ${if persistentStore then ''
     mount_persistent_storage() {
       node=/sys/class/block/''${emmc_device##*/}p32
       data=''${emmc_device}p32
@@ -106,81 +84,8 @@ let
       mount --bind "$persist/home" /mnt/nixos/home || fail "persist-home"
       log "persist=mounted device=$data fsck_rc=$rc store=persistent"
     }
-    '' else ''
-    mount_persistent_storage() {
-      # p32 is used only when it is "userdata", labelled ${persistentStorage.dataLabel}
-      # and laid out by gemini-storage-provision.  Any problem leaves the
-      # squashfs-only system exactly as without persistent storage.
-      node=/sys/class/block/''${emmc_device##*/}p32
-      data=''${emmc_device}p32
-      persist=/mnt/nixos/persist
-      if ! grep -Fqx 'PARTNAME=userdata' "$node/uevent" 2>/dev/null; then
-        log "persist=absent reason=no-p32-userdata"
-        return 0
-      fi
-      label=$(dumpe2fs -h "$data" 2>/dev/null | sed -n 's/^Filesystem volume name: *//p')
-      if [ "$label" != ${persistentStorage.dataLabel} ]; then
-        log "persist=absent reason=not-provisioned"
-        return 0
-      fi
-      e2fsck -p "$data" > /run/persist-fsck.log 2>&1
-      rc=$?
-      if [ "$rc" -ge 4 ]; then
-        log "persist=skipped reason=fsck rc=$rc"
-        return 0
-      fi
-      mkdir -p "$persist"
-      if ! mount -t ext4 -o rw,nosuid,nodev,noatime "$data" "$persist"; then
-        log "persist=skipped reason=mount"
-        return 0
-      fi
-      for dir in home nix/upper nix/work nix/var; do
-        if [ ! -d "$persist/$dir" ]; then
-          umount "$persist"
-          log "persist=skipped reason=layout missing=$dir"
-          return 0
-        fi
-      done
-
-      # The image is authoritative for its own closure: drop anything in
-      # the upper layer that would shadow or whiteout one of its paths
-      # (for example after a garbage collection under another image).
-      shadowed=0
-      for path in /mnt/nixos/nix/store/* /mnt/nixos/nix/store/.gemini-*; do
-        [ -e "$path" ] || continue
-        upper=$persist/nix/upper/''${path##*/}
-        if [ -e "$upper" ] || [ -L "$upper" ]; then
-          rm -rf "$upper"
-          shadowed=$((shadowed + 1))
-        fi
-      done
-      mkdir -p /mnt/nixos/nix/.ro-store
-      mount --move /mnt/nixos/nix/store /mnt/nixos/nix/.ro-store || fail "store-move"
-      if mount -t overlay overlay \
-          -o lowerdir=/mnt/nixos/nix/.ro-store,upperdir=$persist/nix/upper,workdir=$persist/nix/work \
-          /mnt/nixos/nix/store &&
-         [ -x "/mnt/nixos$nixos_init" ]; then
-        store=overlay
-      else
-        umount /mnt/nixos/nix/store 2>/dev/null || true
-        mount --move /mnt/nixos/nix/.ro-store /mnt/nixos/nix/store || fail "store-restore"
-        store=squashfs-only
-      fi
-      if [ "$store" = overlay ]; then
-        mount --bind "$persist/nix/var" /mnt/nixos/nix/var || store=overlay-without-db
-      fi
-      mkdir -p /mnt/nixos/home
-      mount --bind "$persist/home" /mnt/nixos/home || log "persist=home-bind-failed"
-      log "persist=mounted device=$data fsck_rc=$rc store=$store shadowed_removed=$shadowed"
-    }
-    ''}
 
   '';
-  leaseSelfAcceptCmdline =
-    if leaseSelfAcceptToken == null
-    then ""
-    else " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
-
   initramfs = buildPkgs.runCommand "gemini-mainline-nixos-initramfs.cpio.gz" {
     nativeBuildInputs = [buildPkgs.cpio buildPkgs.gzip];
     busybox = crossPkgs.pkgsStatic.busybox;
@@ -414,91 +319,6 @@ let
       printf '%s\n' "$found"
     }
 
-    ${buildPkgs.lib.optionalString (!persistentStore) ''
-    restore_store_readonly() {
-      sync
-      attempt=0
-      while awk '$2 == "/mnt/gemian" { found=1 } END { exit !found }' /proc/mounts; do
-        umount /mnt/gemian 2>/dev/null && break
-        attempt=$((attempt + 1))
-        [ "$attempt" -lt 10 ] || return 1
-        sleep 1
-      done
-      emmc_device=$(resolve_emmc_device) || return 1
-      p29="''${emmc_device}p29"
-      mount -t ext4 -o ${bootMountOptions} \
-        "$p29" /mnt/gemian || return 1
-      mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
-      case ",$mounted," in
-        *,''${p29}:ext4:ro,*) return 0 ;;
-        *) return 1 ;;
-      esac
-    }
-
-    provision_abort() {
-      reason=$1
-      if restore_store_readonly; then
-        fail "$reason p29=restored-${bootMountPolicy}"
-      fi
-      fail "$reason p29=readonly-restore-failed"
-    }
-
-    provision_store() {
-      store_temp=$store_image.provision.tmp
-
-      # The normal boot path never writes p29.  First provisioning must load
-      # ext4's journal, so unmount the read-only/noload view and mount it rw
-      # normally.  Never remount the noload superblock writable.
-      umount /mnt/gemian || fail "store-provision-ro-unmount"
-      emmc_device=$(resolve_emmc_device) || provision_abort "store-provision-emmc-missing"
-      p29="''${emmc_device}p29"
-      mount -t ext4 -o rw,nosuid,nodev,noexec \
-        "$p29" /mnt/gemian \
-        || provision_abort "store-provision-rw-mount"
-      mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
-      case ",$mounted," in
-        *,''${p29}:ext4:rw,*) ;;
-        *) provision_abort "store-provision-rw-contract observed=''${mounted:-unknown}" ;;
-      esac
-      case ",$mounted," in
-        *,noload,*|*,norecovery,*)
-          provision_abort "store-provision-journal-disabled observed=$mounted" ;;
-      esac
-      [ -d /mnt/gemian/nixos ] \
-        || provision_abort "store-provision-directory-missing"
-      [ ! -e "$store_image" ] \
-        || provision_abort "store-provision-target-exists"
-
-      required="store-provision=required target=$store_image temp=$store_temp sha256=$expected size=$expected_size"
-      printf '%s\n' "$required" > /run/store-provision.required
-      log "$required"
-      attempt=0
-      while [ "$attempt" -lt @PROVISION_WAIT_SECONDS@ ]; do
-        ready=$(cat /run/store-provision.ready 2>/dev/null || true)
-        [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] && break
-        attempt=$((attempt + 1))
-        sleep 1
-      done
-      [ "$ready" = "store-provision=ready sha256=$expected size=$expected_size" ] \
-        || provision_abort "store-provision-timeout"
-      [ -f "$store_image" ] \
-        || provision_abort "store-provision-target-missing"
-      [ ! -L "$store_image" ] \
-        || provision_abort "store-provision-target-symlink"
-      [ "$(stat -c %s "$store_image")" -eq "$expected_size" ] \
-        || provision_abort "store-provision-size"
-      actual=$(sha256sum "$store_image" | awk '{print $1}')
-      [ "$actual" = "$expected" ] \
-        || provision_abort "store-provision-hash actual=$actual"
-
-      # Dropbear children which delivered the marker may need a moment to
-      # leave the filesystem.  The watchdog remains the bounded fallback.
-      restore_store_readonly \
-        || fail "store-provision-ro-restore-failed"
-      log "store-provision=complete sha256=$actual p29=${bootMountPolicy}"
-    }
-    ''}
-
     start_watchdog_lease() {
       watchdog_device=
       attempt=0
@@ -531,7 +351,7 @@ let
 
       # Stage 2 reconstructs this enforcement loop from the monotonic
       # deadline after switch_root.  Keep a separate Stage-1 timer as well:
-      # provisioning may never reach Stage 2, and switch_root is observed to
+      # a failed early boot may never reach Stage 2, and switch_root can
       # terminate initramfs background jobs.
       (
         sleep @WATCHDOG_LEASE_SECONDS@
@@ -594,7 +414,7 @@ let
     /bin/usb-net &
     /bin/usb-host-net &
     /bin/ssh-server &
-    log "stage1=entered p29=${bootMountPolicy} store-compression=gzip"
+    log "stage1=entered p29=${bootMountPolicy} store=persistent"
 
     emmc_device=$(resolve_emmc_device 2>/dev/null || true)
     attempt=0
@@ -605,25 +425,13 @@ let
     done
     [ -n "$emmc_device" ] || fail "p29-missing"
     p29="''${emmc_device}p29"
-    [ -b "$p29" ] || fail "p29-missing"${buildPkgs.lib.optionalString storage "\nhibernate_resume"}
+    [ -b "$p29" ] || fail "p29-missing"
+    hibernate_resume
     mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
     log "p29=mounted observed=''${mounted:-unknown}"
 
-    ${buildPkgs.lib.optionalString (!persistentStore) ''
-    store_image=/mnt/gemian/nixos/@STORE_FILE@
-    expected=@STORE_SHA256@
-    expected_size=@STORE_SIZE@
-    if [ ! -f "$store_image" ]; then
-      @PROVISION_STORE@
-    fi
-    [ -f "$store_image" ] || fail "store-image-missing"
-    [ ! -L "$store_image" ] || fail "store-image-symlink"
-    actual=$(sha256sum "$store_image" | awk '{print $1}')
-    [ "$actual" = "$expected" ] || fail "store-image-hash expected=$expected actual=$actual"
-    log "store-image=verified sha256=$actual"
-    ''}
     [ -r /mnt/gemian/etc/ssh/ssh_host_ed25519_key ] || fail "persistent-host-key-missing"
 
     mount -t tmpfs -o mode=0755,size=768M tmpfs /mnt/nixos || fail "tmpfs-root"
@@ -632,7 +440,6 @@ let
       /mnt/nixos/nix/store /mnt/nixos/nix/var/nix/gcroots \
       /mnt/nixos/nix/var/nix/profiles /mnt/nixos/nix/var/nix/temproots \
       /mnt/nixos/proc /mnt/nixos/run /mnt/nixos/sys /mnt/nixos/tmp /mnt/nixos/var
-    ${if persistentStore then ''
     mount_persistent_storage
     # Use the standard NixOS init= boot option. Never evaluate command-line
     # text as shell, and reject ambiguous or non-store paths.
@@ -650,23 +457,6 @@ let
     nixos_system=''${nixos_init%/init}
     [ -x "/mnt/nixos$nixos_init" ] || fail "nixos-init-missing"
     log "store=mounted system=$nixos_system"
-    '' else ''
-    loopdev=$(losetup -f 2>/dev/null) || fail "loop-device-missing"
-    losetup "$loopdev" "$store_image" || fail "loop-attach"
-    mount -t squashfs -o ro,nodev "$loopdev" /mnt/nixos/nix/store \
-      || fail "squashfs-mount"
-
-    pointer=/mnt/nixos/nix/store/.gemini-system
-    [ -s "$pointer" ] || fail "system-pointer-missing"
-    system_basename=$(cat "$pointer")
-    [ "$system_basename" = "@SYSTEM_BASENAME@" ] \
-      || fail "system-pointer-mismatch observed=$system_basename"
-    nixos_system=/nix/store/$system_basename
-    nixos_init=$nixos_system/init
-    [ -x "/mnt/nixos$nixos_init" ] || fail "nixos-init-missing"
-    log "store=mounted system=$nixos_system"${buildPkgs.lib.optionalString storage "\nmount_persistent_storage"}
-    ''}
-
     mount --move /mnt/gemian /mnt/nixos/gemian || fail "move-gemian"
     mount --move /proc /mnt/nixos/proc || fail "move-proc"
     mount --move /sys /mnt/nixos/sys || fail "move-sys"
@@ -686,20 +476,6 @@ let
     exec switch_root /mnt/nixos "$nixos_init"
     INIT
 
-    ${buildPkgs.lib.optionalString (!persistentStore) ''
-    ${storeIdentity}
-    substituteInPlace root/init \
-      --replace-fail @STORE_FILE@ "$store_file" \
-      --replace-fail @STORE_SHA256@ "$store_sha" \
-      --replace-fail @STORE_SIZE@ "$(stat -c %s ${squashfs})" \
-      --replace-fail @PROVISION_WAIT_SECONDS@ ${toString provisionWaitSeconds} \
-      --replace-fail @PROVISION_STORE@ ${
-        if provisionStore
-        then ''"provision_store"''
-        else ''"fail \"store-image-missing\""''
-      } \
-      --replace-fail @SYSTEM_BASENAME@ "$(basename ${nixosToplevel})"
-    ''}
     substituteInPlace root/init \
       --replace-fail @WATCHDOG_LEASE_SECONDS@ ${toString watchdogLeaseSeconds} \
       --replace-fail @START_WATCHDOG@ ${
@@ -733,29 +509,16 @@ let
     '' else ''
       ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
     ''}
-    ${if storage then ''
-      cp "$e2fsprogs/bin/e2fsck" "$e2fsprogs/bin/dumpe2fs" root/bin/
-      # Resume runs before the first eMMC mount; p32 is mounted after the
-      # image store is verified and before switch_root.
-      resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
-      mount_line=$(grep -n -F 'mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
-      persist_line=$(grep -n -Fx 'mount_persistent_storage' root/init | tail -n 1 | cut -d: -f1)
-      switch_line=$(grep -n -F 'exec switch_root' root/init | tail -n 1 | cut -d: -f1)
-      test -n "$resume_line" && test -n "$mount_line" && test -n "$persist_line"
-      test "$resume_line" -lt "$mount_line"
-      test "$persist_line" -lt "$switch_line"
-    '' else ''
-      ! grep -Fq 'hibernate_resume' root/init
-      ! grep -Fq 'mount_persistent_storage' root/init
-    ''}
-    ${if provisionStore then ''
-      grep -Fq 'store-provision=required' root/init
-      grep -Fq 'mount -t ext4 -o rw,nosuid,nodev,noexec' root/init
-      grep -Fq 'restore_store_readonly' root/init
-      ! grep -Fq 'mount -o remount,rw' root/init
-    '' else ''
-      ! grep -Fq '^      provision_store$' root/init
-    ''}
+    cp "$e2fsprogs/bin/e2fsck" "$e2fsprogs/bin/dumpe2fs" root/bin/
+    # Resume runs before the first eMMC mount; the persistent store is
+    # mounted before selecting the generation and running switch_root.
+    resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
+    mount_line=$(grep -n -F 'mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
+    persist_line=$(grep -n -Fx 'mount_persistent_storage' root/init | tail -n 1 | cut -d: -f1)
+    switch_line=$(grep -n -F 'exec switch_root' root/init | tail -n 1 | cut -d: -f1)
+    test -n "$resume_line" && test -n "$mount_line" && test -n "$persist_line"
+    test "$resume_line" -lt "$mount_line"
+    test "$persist_line" -lt "$switch_line"
     bash -n root/init
     bash -n root/bin/usb-host-net root/bin/usb-host-net-udhcpc \
       root/bin/unattended-recovery-lease-record
@@ -780,12 +543,10 @@ let
     nativeBuildInputs = [buildPkgs.python3];
   } ''
     python3 ${./check-service-milestone.py} ${kernel}/kernel.config ${nixosToplevel}
-    ${buildPkgs.lib.optionalString persistentStore ''
-      grep -Fqx CONFIG_CMDLINE_EXTEND=y ${kernel}/kernel.config
-      cmdline="bootopt=64S3,32N2,64N2 init=${nixosToplevel}/init $(cat ${nixosToplevel}/kernel-params)"
-      # Retained LK reads only the first 512-byte Android command-line field.
-      test "''${#cmdline}" -lt 512
-    ''}
+    grep -Fqx CONFIG_CMDLINE_EXTEND=y ${kernel}/kernel.config
+    cmdline="bootopt=64S3,32N2,64N2 init=${nixosToplevel}/init $(cat ${nixosToplevel}/kernel-params)"
+    # Retained LK reads only the first 512-byte Android command-line field.
+    test "''${#cmdline}" -lt 512
     ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null) ''
       test "$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' ${kernel}/kernel.config \
         | tr ' ' '\n' \
@@ -802,24 +563,8 @@ let
       --ramdisk-addr 0x45000000 \
       --second-addr 0x40f00000 \
       --tags-addr 0x44000000 \
-      --cmdline ${if persistentStore then ''"$cmdline"'' else ''"bootopt=64S3,32N2,64N2${leaseSelfAcceptCmdline}"''} \
+      --cmdline "$cmdline" \
       --output "$out"
-    ${buildPkgs.lib.optionalString (leaseSelfAcceptToken != null && !persistentStore) ''
-      python3 - "$out" '${leaseSelfAcceptToken}' <<'PY'
-    import sys
-
-    image_path, token = sys.argv[1:]
-    with open(image_path, "rb") as image:
-        header = image.read(1632)
-    if header[:8] != b"ANDROID!":
-        raise SystemExit("Android boot magic mismatch")
-    cmdline = (header[64:576] + header[608:1632]).split(b"\0", 1)[0].decode("ascii")
-    words = cmdline.split()
-    expected = "gemini.baseline_lease_capability=" + token
-    if words.count(expected) != 1:
-        raise SystemExit("Android header baseline capability mismatch")
-    PY
-    ''}
     test "$(od -An -tx1 -N 8 "$out" | tr -d '[:space:]')" = 414e44524f494421
     test "$(stat -c %s "$out")" -le 16777216
   '';
@@ -834,30 +579,17 @@ let
     mkdir -p "$out"
     ln -s ${kernel} "$out/kernel"
     ln -s ${serviceabilityDtb}/gemini.dtb "$out/gemini-usb11-host.dtb"
-    ${storeIdentity}
-    ${if persistentStore then ''
-      ln -s ${nixosToplevel} "$out/system"
-    '' else ''
-      ln -s ${squashfs} "$out/$store_file"
-    ''}
+    ln -s ${nixosToplevel} "$out/system"
     ln -s ${initramfs} "$out/initramfs.cpio.gz"
     ln -s ${bootImg} "$out/boot-raw.img"
     ln -s ${paddedBootImg} "$out/boot-padded-p22.img"
     {
-      ${if persistentStore then ''
       echo "target=Gemini p22 bootloader, p29 EFI files, p32 Nix store"
       echo "store=persistent"
       echo "store-root=/persist/nixos"
-      '' else ''
-      echo "target=Gemini default p22 plus unique p29 /nixos/$store_file"
-      echo "store-file=$store_file"
-      echo "store-sha256=$(sha256sum ${squashfs} | cut -d' ' -f1)"
-      echo "store-size=$(stat -c %s ${squashfs})"
-      ''}
       echo "kernel=$(basename ${kernel})"
       echo "system=${nixosToplevel}"
       echo "p29=ext4 ${bootMountPolicy} after store installation"
-      ${buildPkgs.lib.optionalString (!persistentStore) ''echo "squashfs=compression gzip; mount read-only"''}
       echo "left-port=MTU3 gadget usb0 10.15.19.82/24"
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"
       echo "right-port-firmware=rtl_nic/rtl8156b-2.fw sha256=5a3b21e27305876af8eac4b9bd11a821487b338e4ac1b58b8be8d23467d3f91f"
@@ -875,18 +607,14 @@ let
         then "stage1-deadline-to-stage2-enforcer; lease=${toString watchdogLeaseSeconds}s; timeout=31s; acceptance=${if leaseSelfAcceptToken == null then "external-exact" else "baseline-self-accept-v1"}"
         else "none"
       }"
-      echo "store-provision=${
-        if provisionStore
-        then "stage1-journaled-unique-target; wait=${toString provisionWaitSeconds}s"
-        else "disabled"
-      }"
+      echo "store-provision=disabled"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg, no charger writes; watchdog lease unchanged"
-      echo "persistent-storage=${if persistentStore then "p32 ${persistentStorage.dataLabel} for /home and registered /nix; p34 swap" else if storage then "p34 swap resume before the first eMMC mount; p32 ${persistentStorage.dataLabel} for /home, /nix/store overlay, /nix/var when provisioned" else "none"}"
+      echo "persistent-storage=p32 ${persistentStorage.dataLabel} for /home and registered /nix; p34 swap"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \
         ${serviceabilityDtb}/gemini.dtb \
-        ${buildPkgs.lib.optionalString (!persistentStore) (toString squashfs)} ${initramfs} ${bootImg} ${paddedBootImg}
-      stat -c '%n size=%s' ${buildPkgs.lib.optionalString (!persistentStore) (toString squashfs)} ${initramfs} ${bootImg} ${paddedBootImg}
+        ${initramfs} ${bootImg} ${paddedBootImg}
+      stat -c '%n size=%s' ${initramfs} ${bootImg} ${paddedBootImg}
     } > "$out/MANIFEST"
   '';
 in {

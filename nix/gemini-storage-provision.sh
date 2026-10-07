@@ -6,7 +6,7 @@
 #
 #   p32 "userdata" keeps its start, name, type GUID, unique GUID and
 #       attributes and shrinks to 10.6 GiB; it becomes ext4 "gemini-data"
-#       (/home and the writable /nix layer).
+#       (/home and the registered Nix store under /persist/nixos/nix).
 #   p34 "swap"     is a new 5 GiB Linux swap partition, 1 MiB aligned,
 #       ending just before p33 "flashinfo" (which does not move).
 #
@@ -38,6 +38,19 @@ BACKUP_DIR=/run/gemini-gpt-backup
 
 die() { echo "gemini-storage-provision: $*" >&2; exit 1; }
 say() { echo "gemini-storage-provision: $*"; }
+
+prepare_data_layout() {
+  local data_root=$1 entry
+  for entry in home nixos nixos/nix nixos/nix/store nixos/nix/var; do
+    [ ! -L "$data_root/$entry" ] || die "symlink in data layout: $entry"
+    [ ! -e "$data_root/$entry" ] || [ -d "$data_root/$entry" ] ||
+      die "non-directory in data layout: $entry"
+  done
+  mkdir -p "$data_root/home" "$data_root/nixos/nix/store" "$data_root/nixos/nix/var"
+  chmod 0755 "$data_root/home" "$data_root/nixos" "$data_root/nixos/nix" "$data_root/nixos/nix/var"
+  chown root:30000 "$data_root/nixos/nix/store" # nixbld, as /nix/store
+  chmod 1775 "$data_root/nixos/nix/store"
+}
 
 mode=
 case "${1:-}" in
@@ -195,13 +208,11 @@ else
 fi
 mnt=$(mktemp -d /run/gemini-data.XXXXXX)
 mount -t ext4 "${dev}p32" "$mnt"
-# /home, and the writable Nix layer: store upper/work dirs and /nix/var.
-mkdir -p "$mnt/home" "$mnt/nix/upper" "$mnt/nix/work" "$mnt/nix/var"
-chmod 0755 "$mnt/home" "$mnt/nix" "$mnt/nix/var"
-chown root:30000 "$mnt/nix/upper"   # nixbld, as /nix/store
-chmod 1775 "$mnt/nix/upper"
+trap 'umount "$mnt"; rmdir "$mnt"' EXIT
+prepare_data_layout "$mnt"
 umount "$mnt"
 rmdir "$mnt"
+trap - EXIT
 
 if [ "$(blkid -o value -s TYPE "${dev}p34" 2>/dev/null)" = swap ]; then
   say "p34 already swap"
@@ -210,4 +221,4 @@ else
   mkswap -L "$SWAP_LABEL" "${dev}p34"
 fi
 sync
-say "done; reboot so Stage 1 mounts gemini-data and Stage 2 enables p34"
+say "layout ready; copy the NixOS closure into /persist/nixos before booting the normal system"
