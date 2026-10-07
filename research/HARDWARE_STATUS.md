@@ -5,9 +5,10 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at dc57eeca141b4, including the tested watchdog and RTC
+Linux branch `gemini` at 98ed7e2bacb7b, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
-FUSB301 role-switch support. Historical profiles are isolated in the frozen
+FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
+profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains
 the exact M69 bundle. This
 packaging consolidation does not itself update the installed device. The full
@@ -313,6 +314,28 @@ failure cleanup and IRQ teardown. The result is
 `/nix/store/zzpnw1x55rs7qm1w685vlr5dr7zjs2f5-linux-gemini-7.1.3`.
 This is driver support; the left connector/PHY remain unchanged and no 5 Gb/s
 link has been demonstrated. The new kernel has not been deployed.
+The [FUSB301 datasheet](https://www.onsemi.com/pdf/datasheet/fusb301-d.pdf)
+describes its autonomous SS_SW output for driving a SuperSpeed lane switch.
+Consequently, the missing processor GPIO/IRQ setup does not by itself rule out
+working lane selection. Whether Gemini connects SS_SW to its switch still
+needs a schematic or a successful test in both cable orientations.
+
+Further comparison with the pinned vendor MT6797 PHY implementation identified
+the missing `RG_SSUSB_VUSB10_ON` sequence: enable VA10 at 0.95 V, wait 50 us,
+then assert the bit; clear it and wait 10 us before removing the supply.
+The live M69 rail reports enabled at 950000 uV with no Linux consumer, so its
+state is inherited from firmware. Linux 98ed7e2 adds the USB3 power-ready
+sequence through the normal PHY power callbacks, restricted to MT6797.
+Its host regression runs the actual PHY core and driver callbacks and covers
+failed startup, nested power references, shared supply retention, repeated
+cycles, unrelated register bits and other PHY types. The ARM64 object and full
+normal kernel builds pass, including the driver checks. Output:
+`/nix/store/jxfll4n280y2nwgpssrl5lznqpvjz3cl-linux-gemini-7.1.3`.
+The DTB and configuration match the preceding kernel byte for byte; recovery
+is unchanged and nothing was deployed. Board supply ownership, remaining PHY
+tuning and SuperSpeed enablement are still pending; this change does not raise
+the current USB2 speed limit.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working

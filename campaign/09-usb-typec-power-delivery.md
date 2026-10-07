@@ -11,6 +11,14 @@ qualification. See [HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md) for
 source and live-speed evidence, and
 [POWER_QUALIFICATION.md](../research/POWER_QUALIFICATION.md) for the bounded trials.
 
+The current USB3 work is in the maintained Linux tree: FUSB301 role switching
+and MT6797 PHY power-ready sequencing are implemented and host-tested.
+The controller can drive lane orientation autonomously through SS_SW; the
+absence of a processor GPIO assignment is not conclusive wiring evidence.
+Complete supply ownership and PHY tuning before enabling SuperSpeed, then
+measure the negotiated link and transfers in both cable orientations using
+the existing recovery runner. The selected board still runs at USB2 speed.
+
 ## Historical Cycle18 observations
 
 These observations describe the August probe configuration at `28c471502`.
@@ -28,7 +36,3 @@ supports_usb_power_delivery=no, PD revision 0.0. This is a role
 observation, not PD negotiation or charging evidence. The host overlay source
 is explicit and host-only (linux-gemini-platform@28c471502:
 arch/arm64/boot/dts/mediatek/mt6797-gemini-pda-usb11-host.dtso:5-34,91-129).
-
-Next gate: test one declared cable/role at a time while preserving the left
-gadget recovery path; retain Type-C state, VBUS, USB enumeration, and link
-evidence. Do not write charger or CC-controller registers.
