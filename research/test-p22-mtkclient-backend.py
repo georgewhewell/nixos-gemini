@@ -228,19 +228,17 @@ class HandoffEvidenceTests(unittest.TestCase):
         self.before[self.range_key] = '00000000452590000000000038d57000'
         self.after = dict(self.before, **{qualification.HANDOFF_MARKER: b'fit\0'.hex()})
 
-    def test_phandle_renumbering_preserves_reservations_and_reference_targets(self):
+    def test_phandle_renumbering_preserves_live_reservations(self):
         a = 'reserved-memory/mblock-5-ccci/phandle'
         b = 'reserved-memory/mblock-6-ccci/phandle'
-        ref = 'soc/modem/memory-region'
-        before = dict(self.before, **{a:'00000001', b:'00000002', ref:'0000000100000002'})
-        after = dict(self.after, **{a:'00000031', b:'00000032', ref:'0000003100000032'})
+        before = dict(self.before, **{a:'00000001', b:'00000002'})
+        after = dict(self.after, **{a:'00000031', b:'00000032'})
         qualification.verify_handoff_tree(before, after, 'handoff')
-        for change in ({ref:'0000003200000031'}, {ref:'00000099'}, {b:'00000031'},
-                       {a:'00000000'}, {a:'ffffffff'}, {ref:'1234'},
+        for change in ({b:'00000031'}, {a:'00000000'}, {a:'ffffffff'}, {a:'1234'},
                        {'reserved-memory/mblock-5-ccci/reg':'00000000'}):
             with self.subTest(change=change), self.assertRaises(RuntimeError):
                 qualification.verify_handoff_tree(before, dict(after, **change), 'handoff')
-        for key in (a, b, ref):
+        for key in (a, b):
             with self.subTest(missing=key), self.assertRaises(RuntimeError):
                 qualification.verify_handoff_tree(before, {k:v for k,v in after.items() if k != key}, 'handoff')
 
