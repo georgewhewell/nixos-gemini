@@ -40,10 +40,7 @@ in
       runHook preConfigure
       unset NIX_LDFLAGS
       kernelMakeFlags=(ARCH=arm64 CROSS_COMPILE=aarch64-unknown-linux-gnu-)
-      # The current A72 driver still checks this build identity at runtime.
-      python3 ${./a72-profile-build.py} inputs --fragments arch/arm64/configs/gemini_defconfig
       make "''${kernelMakeFlags[@]}" gemini_defconfig
-      python3 ${./a72-profile-build.py} bind --config .config
       runHook postConfigure
     '';
 
@@ -86,7 +83,6 @@ in
       cp arch/arm64/boot/Image arch/arm64/boot/Image.gz System.map vmlinux "$out/"
       cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb "$out/base.dtb"
       cp .config "$out/kernel.config"
-      cp a72-build-provenance.json "$out/"
       release=$(make -s "''${kernelMakeFlags[@]}" kernelrelease)
       make "''${kernelMakeFlags[@]}" INSTALL_MOD_PATH="$out" DEPMOD=true modules_install
       rm -f "$out/lib/modules/$release/build" "$out/lib/modules/$release/source"

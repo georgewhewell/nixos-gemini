@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=e6840a90de56de842552b872deedaf46796df02f";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=18db31826ba9985899b4f13d59f14d5201ec2fe7";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -37,7 +37,7 @@
       flake = false;
     };
     u-boot-gemini-keys-src = {
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=c04e060491543815fbb4eb25631155438c4e8758&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=1ff66d0a9749021124badd964b2cd2497cff6d21&shallow=1";
       flake = false;
     };
     u-boot-src = {

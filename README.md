@@ -32,7 +32,10 @@ The maintained Linux checkout is `../linux`, branch `gemini`, pinned by
 system; driver fixes belong in Linux, rather than new package variants.
 The hardware settings now live in Linux's board DTS and `gemini_defconfig`;
 the default build no longer applies hardware overlays or edits DT properties.
-Packaging still attaches the build identity required by the current A72 driver.
+A72 capability preparation now belongs entirely to Linux: native Kbuild uses
+the board register expectations and live system policy, and packaging copies
+the compiled DTB unchanged. U-Boot accepts this DTB as well as older kernels'
+DTs. Both changes build and pass host checks; their device tests are pending.
 The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
 requires those checkouts, or explicit `--override-input` paths.
 

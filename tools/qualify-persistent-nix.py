@@ -74,6 +74,12 @@ def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False,
     old_persistence(ssh,boot_id,directory,qualify,persistence,system,'candidate-old-persistence')
     config_sha=hashlib.sha256((kernel/'kernel.config').read_bytes()).hexdigest()
     efi_guard='test "$(cat /sys/firmware/efi/fw_platform_size)" = 64' if require_efi else 'test ! -e /sys/firmware/efi'
+    # Historical kernels also require their packaged build identity; current
+    # Linux owns A72 capability preparation without a generated DT record.
+    bound = 'CONFIG_ARM64_LATE_CPU_RUNTIME_IDENTITY=y\n' in (kernel/'kernel.config').read_text()
+    profile = 'mt6797-a53-a72-a41-v7' if bound else 'mt6797-a53-a72'
+    identity_check = ("dmesg | grep -F 'arm64-late-cpu-profile: verified the pre-finalization runtime identity binding' >/dev/null"
+                      if bound else 'test ! -e /sys/firmware/devicetree/base/chosen/gemini-late-cpu-provenance')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {system}
@@ -81,8 +87,8 @@ test "$(zcat /proc/config.gz | sha256sum | cut -d' ' -f1)" = {config_sha}
 {efi_guard}
 test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
 test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
-dmesg | grep -F 'arm64-late-cpu-profile: verified the pre-finalization runtime identity binding' >/dev/null
-dmesg | grep -F 'arm64-late-cpu-profile: mt6797-a53-a72-a41-v7 ready' >/dev/null
+{identity_check}
+dmesg | grep -F 'arm64-late-cpu-profile: {profile} ready' >/dev/null
 grep -qx 'sandbox = true' /etc/nix/nix.conf
 grep -qx 'sandbox-fallback = false' /etc/nix/nix.conf
 systemctl is-active nix-daemon.socket gemini-nix-db-seed >/dev/null

@@ -37,17 +37,17 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1791344067,
-        "narHash": "sha256-JTx8faKcxQBWW98LqaJqMEaOFdRPGeUjlUYIfizjVX4=",
+        "lastModified": 1791348943,
+        "narHash": "sha256-CeyhT5XgALOFbpb1UYI/+qP0uszUOPUv2OtP6LZHBkg=",
         "ref": "gemini",
-        "rev": "e6840a90de56de842552b872deedaf46796df02f",
-        "revCount": 743,
+        "rev": "18db31826ba9985899b4f13d59f14d5201ec2fe7",
+        "revCount": 744,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux"
       },
       "original": {
         "ref": "gemini",
-        "rev": "e6840a90de56de842552b872deedaf46796df02f",
+        "rev": "18db31826ba9985899b4f13d59f14d5201ec2fe7",
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/linux"
       }
@@ -158,17 +158,17 @@
     "u-boot-gemini-keys-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1791113591,
-        "narHash": "sha256-lvRELXd8siRAlrqq6l4u/mdIdHruveJaOK9uW/XcvOQ=",
+        "lastModified": 1791348943,
+        "narHash": "sha256-3isUqhg49cAzdetCmNf+pdDQVQg6ozyTu87M6TMMtgU=",
         "ref": "gemini-boot-consolidation",
-        "rev": "c04e060491543815fbb4eb25631155438c4e8758",
+        "rev": "1ff66d0a9749021124badd964b2cd2497cff6d21",
         "shallow": true,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"
       },
       "original": {
         "ref": "gemini-boot-consolidation",
-        "rev": "c04e060491543815fbb4eb25631155438c4e8758",
+        "rev": "1ff66d0a9749021124badd964b2cd2497cff6d21",
         "shallow": true,
         "type": "git",
         "url": "file:///mnt/Home/src/nixos-gemini/u-boot-consolidation"

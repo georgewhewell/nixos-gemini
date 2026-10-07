@@ -16,8 +16,8 @@ for name, data in [('Linux', image), ('systemd-boot', manager)]:
     assert struct.unpack_from('<H', data, pe+4)[0] == 0xaa64, name
     assert struct.unpack_from('<H', data, pe+24)[0] == 0x20b, name
     assert struct.unpack_from('<H', data, pe+24+68)[0] == 10, name
-# This first manager trial retains the hardware-qualified kernel command
-# line and CPU provenance. General NixOS generation updates remain separate.
+# Keep the kernel's configured command line. The entry DT belongs to this
+# kernel; U-Boot merges only the hardware data supplied by LK.
 config = (kernel/'kernel.config').read_text()
 assert 'CONFIG_CMDLINE_FORCE=y\n' in config
 payload = hashlib.sha256(image + initrd).hexdigest()
@@ -65,7 +65,7 @@ manifest = {'status': 'host-prepared-not-published-or-booted',
                       for name, data in files.items()}}
 if entry_dtb:
     manifest['entry_device_tree']=directory+'/gemini.dtb'
-    manifest['requires'].append('Gemini EFI DT fixup preserving LK delta and entry CPU provenance')
+    manifest['requires'].append('Gemini EFI DT fixup preserving the entry DT and LK hardware data')
 # Publish payloads first and menu configuration last.
 order = [name for name in files if not name.startswith('loader/')] + [
     'loader/entries/' + entry, 'loader/loader.conf']
