@@ -58,12 +58,13 @@ active loop device or installed EFI entry/initramfs uses it.
 
 ## Device status
 
-The installed recovery system remains M69. The consolidated default bundle and
-EFI boot files build successfully. Its resolved kernel configuration and DT
-hardware properties match the tested calendar kernel. DT reference numbers
-and build identities are regenerated. This consolidated image has not yet been booted on hardware.
-The latest RTC/watchdog trial returned automatically to healthy M69, retaining
-home, EFI files and all 21 ordinary Nix build outputs.
+The installed recovery system remains M69. The consolidated default bundle
+builds and boots to healthy Linux. Its first boot test stopped on a stale
+numeric phandle comparison, now corrected to compare referenced nodes.
+Recovery then exposed a scan timeout that interrupted download-agent setup;
+host intervention restored M69 without a physical reset. The final audit
+retained home, EFI files and all 21 ordinary Nix outputs. Separate connection
+and transfer time limits are needed before repeating the complete boot test.
 
 Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
 audio, USB host/gadget, eMMC, persistent home/Nix storage and fixed 5 GiB swap.

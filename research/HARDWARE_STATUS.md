@@ -19,6 +19,20 @@ kernel recipe replaces its historical profile builder. Native driver tests,
 the full system/EFI build and flake checks pass. A72 build-identity binding
 and runtime service setup still need consolidation.
 
+The consolidated default reached healthy Linux in `handoff/boot-test-01`
+(boot `bf573e63-746e-44d1-b304-22493bb1cba4`). Its test stopped before paging,
+Nix-build and RTC diagnostics because an old host check compared raw phandle
+numbers. The corrected check resolves memory-region references by node and
+still rejects changed reservations and reference targets. Recovery then hit
+the 180-second mtkclient timeout immediately after a late USB connection,
+interrupting DA extension setup before any rescue flash write. A bounded
+host reset completed the pending DA response and used its RTC-preserving
+reboot command; a fresh boot-only writer restored M69 with verified readback.
+No physical reset was needed. The trial remains failed, with manual recovery
+recorded separately. Its final audit retained all 21 ordinary outputs, original
+home/EFI data and protected storage, matched 33 executed sources and stopped
+all six host services. Split connection/transfer time limits before rerunning.
+
 ## Fresh device observations
 
 Initial read-only checks before the mtkclient trials are retained at workspace
@@ -36,8 +50,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after the calendar candidate's automatic recovery is
-`a528ba14-246c-425b-8bb4-f85241950818`, with `/persist`,
+healthy M69 boot after the consolidated candidate's host-assisted recovery is
+`f8de9423-36f2-400f-ae7b-7b8ad6366d17`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged

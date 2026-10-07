@@ -128,6 +128,10 @@ done
 find "$dt/reserved-memory" -type f | LC_ALL=C sort | while IFS= read -r property; do
     dump_property "$property"
 done
+find "$dt" -type f \( -name memory-region -o -name memory-region-names \) | LC_ALL=C sort | while IFS= read -r property; do
+    case "$property" in "$dt/reserved-memory/"*) continue ;; esac
+    dump_property "$property"
+done
 for marker in gemini,uboot-handoff gemini,uefi-hello-result gemini,uefi-console-result gemini,uefi-keyboard-result gemini,uefi-keyboard-scans gemini,uefi-keyboard-error gemini,uefi-keyboard-layout gemini,uefi-keyboard-native-polls gemini,uefi-mmc-result gemini,uefi-mmc-stage gemini,uefi-mmc-error gemini,uefi-mmc-elapsed-ms gemini,uefi-mmc-clock gemini,uefi-mmc-width gemini,uefi-mmc-gpt-sha256 gemini,uefi-mmc-boot-sha256 gemini,uefi-mmc-boot2-sha256 gemini,uefi-mmc-boot3-sha256 gemini,uefi-mmc-file-sha256 gemini,uefi-storage-result gemini,uefi-storage-status gemini,uefi-manager-result gemini,uefi-manager-stage gemini,uefi-manager-status gemini,uefi-manager-sha256; do
     if test -e "$dt/chosen/$marker"; then dump_property "$dt/chosen/$marker"; fi
 done
@@ -182,7 +186,37 @@ def verify_native_keyboard(tree, required):
         raise RuntimeError('Native EFI key-event polling or layout is not proven')
 
 
+def canonical_memory(tree):
+    """Resolve memory-region references; dtc may renumber phandles each build."""
+    result = dict(tree)
+    nodes, handles = {}, {}
+    for key, value in tree.items():
+        node, _, prop = key.rpartition('/')
+        if prop not in ('phandle', 'linux,phandle'): continue
+        if not re.fullmatch('[0-9a-f]{8}', value) or value in ('00000000', 'ffffffff'):
+            raise RuntimeError('Invalid memory phandle: '+key)
+        if (value in handles and handles[value] != node) or (node in nodes and nodes[node] != value):
+            raise RuntimeError('Ambiguous memory phandle: '+key)
+        handles[value], nodes[node] = node, value
+        result[key] = node
+    for key, value in tree.items():
+        if not key.endswith('/memory-region'): continue
+        if not re.fullmatch('(?:[0-9a-f]{8})+', value):
+            raise RuntimeError('Invalid memory-region reference: '+key)
+        try:
+            result[key] = tuple(handles[value[i:i+8]] for i in range(0, len(value), 8))
+        except KeyError:
+            raise RuntimeError('Unresolved memory-region reference: '+key) from None
+    return result
+
+
 def verify_handoff_tree(before, after, profile):
+    before, after = canonical_memory(before), canonical_memory(after)
+    def memory_keys(tree):
+        return {key for key in tree if key.startswith('reserved-memory/') or
+                key.endswith(('/memory-region', '/memory-region-names'))}
+    if memory_keys(before) != memory_keys(after):
+        raise RuntimeError('Linux handoff changed memory reservation or reference properties')
     kind = profile_kind(profile)
     verify_native_keyboard(after, profile in KEY_EVENT_PROFILES)
     if any(key in before for key in MARKERS):
