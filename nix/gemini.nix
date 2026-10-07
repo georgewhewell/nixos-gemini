@@ -4,7 +4,6 @@
   nixpkgs-old,
   linux-gemini,
   ixoo-kernel,
-  ixoo-candidate,
   u-boot-gemini-keys-src,
   ...
 }: let
@@ -28,55 +27,11 @@
     ;
   spmFirmware = import ./spm-firmware.nix {inherit buildPkgs;};
   cellularFsRegister = import ./cellular-helper.nix {inherit buildPkgs crossPkgs linux-gemini;};
-  board = import ./mainline.nix {
-    kernelName = "linux-gemini";
-    kernelPostBuild = ''
-      python3 tools/testing/selftests/watchdog/mtk-wdt-pm-host.py
-      python3 tools/testing/selftests/rtc/mt6397-alarm-host.py
-      python3 tools/testing/selftests/rtc/mt6351-calendar-host.py
-    '';
-    inherit
-      buildPkgs
-      oldPkgs
-      crossPkgs
-      ixoo-kernel
-      linux-gemini
-      ixoo-candidate
-      ;
-    kernelConfig = [./gemini.fragment];
-    kernelCommandLine = ["efi=debug"];
-    debugOverlay = true;
-    storageOverlay = true;
-    sshAccess = true;
-    usbHostOverlay = true;
-    platformEnablement = true;
-    displayOverlay = true;
-    audioOverlay = true;
-    powerObserveOverlay = true;
-    powerObservePreflight = true;
-    chargerActive = true;
-    hapticsOverlay = true;
-    cameraOverlay = true;
-    mediaOverlay = true;
-    unattendedRecovery = true;
-    inputObserveOverlay = true;
-    thermalHallObserveOverlay = true;
-    touchscreenActivationOverlay = true;
-    fgadcActivationOverlay = true;
-    leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
-    cellularOverlay = true;
-    a72Overlay = true;
-    gpuOwnerOverlay = true;
-    desktopScanout = true;
-    connectivityModules = true;
-    microsdOverlay = true;
-    rtcPowerKeyOverlay = true;
-    cpufreqOverlay = true;
-    spmOverlay = true;
-    inherit spmFirmware;
+  kernel = import ./kernel.nix {
+    inherit buildPkgs oldPkgs spmFirmware;
+    source = linux-gemini;
   };
-
-  kernel = board.kernel;
+  dtb = import ./dtb.nix {inherit buildPkgs kernel;};
   system = nixpkgs-old.lib.nixosSystem {
     system = buildSystem;
     modules = [
@@ -130,7 +85,7 @@
   };
   imageArgs = {
     inherit buildPkgs crossPkgs ixoo-kernel kernel squashfs;
-    serviceabilityDtb = board.serviceabilityDtb;
+    serviceabilityDtb = dtb;
     nixosToplevel = system.config.system.build.toplevel;
     authorizedKeys = ../nixos/authorized_keys;
     bq2589xPreflight = buildPkgs.runCommand "bq2589x-preflight-charger" {} ''
@@ -146,7 +101,7 @@
     provisionStore = true;
     provisionWaitSeconds = 600;
     watchdogLeaseSeconds = 720;
-    kernelLeaseSelfAcceptToken = board.leaseSelfAcceptToken;
+    kernelLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     stage2BaselineAcceptScript = system.config.systemd.services.gemini-baseline-self-accept.script;
     leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     persistentStorage = let
@@ -178,7 +133,6 @@
     efiKeyEvents = true;
   };
 in {
-  inherit buildPkgs crossPkgs system kernel squashfs image efiBootFiles uboot userspace;
-  dtb = board.serviceabilityDtb;
+  inherit buildPkgs crossPkgs system kernel dtb squashfs image efiBootFiles uboot userspace;
   mtkclient = import ./mtkclient-rtc.nix {inherit buildPkgs;};
 }

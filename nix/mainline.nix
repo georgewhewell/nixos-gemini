@@ -54,10 +54,6 @@
   connectivityModules ? false,
   rtcPowerKeyOverlay ? false,
   leaseSelfAcceptToken ? null,
-  kernelConfig ? [],
-  kernelCommandLine ? [],
-  kernelName ? null,
-  kernelPostBuild ? "",
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || unattendedRecovery;
@@ -119,8 +115,7 @@ let
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
     ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
     ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment]
-    ++ lib.optionals rtcPowerKeyOverlay [./mainline-rtc-power-key.fragment]
-    ++ kernelConfig;
+    ++ lib.optionals rtcPowerKeyOverlay [./mainline-rtc-power-key.fragment];
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -252,8 +247,7 @@ let
     + lib.optionalString gpuDeferredBind " initcall_blacklist=panfrost_driver_init"
     + lib.optionalString pdIgnoreUnused " pd_ignore_unused"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1"
-    + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}"
-    + lib.optionalString (kernelCommandLine != []) (" " + lib.concatStringsSep " " kernelCommandLine);
+    + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
@@ -410,8 +404,8 @@ let
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
 
-  kernel = buildPkgs.stdenv.mkDerivation ({
-    pname = if kernelName != null then kernelName else
+  kernel = buildPkgs.stdenv.mkDerivation {
+    pname =
       "linux-gemini-ixoo-lkro"
       + lib.optionalString (!debugOverlay) "-config-control"
       + lib.optionalString storageOverlay "-emmc-probe"
@@ -1112,7 +1106,7 @@ let
 
     dontStrip = true;
     dontPatchELF = true;
-  } // lib.optionalAttrs (kernelPostBuild != "") { postBuild = kernelPostBuild; });
+  };
 
   # Reuse ixoo's frozen candidate DT transformation, changing only its exact
   # input/output fingerprints for the reviewed disabled CONSYS inventory node.

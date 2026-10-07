@@ -5,13 +5,19 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 884ca61a371ba, including the tested watchdog and RTC
+Linux branch `gemini` at e6840a90de56d, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback. Historical profiles
 are isolated in `legacy.nix`; `recovery` retains the exact M69 bundle. This
 packaging consolidation does not itself update the installed device. The full
 bundle and EFI files build successfully; the resolved kernel configuration,
-417 DT nodes and memory reservations match the tested calendar artifacts,
-apart from the regenerated build identity. Driver tests and flake checks pass.
+416 hardware DT nodes, 332 reference properties and memory reservations match
+the previous packaged artifacts, allowing regenerated phandles and build
+identity. The hardware settings now live directly in the Linux board DTS;
+48 obsolete overlays and their build targets are removed. `gemini_defconfig`
+replaces the normal package's fragment assembly, and a small standalone Nix
+kernel recipe replaces its historical profile builder. Native driver tests,
+the full system/EFI build and flake checks pass. A72 build-identity binding
+and runtime service setup still need consolidation.
 
 ## Fresh device observations
 

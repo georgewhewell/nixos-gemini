@@ -30,7 +30,9 @@ nix build .#recovery       # Exact installed M69 recovery bundle
 The maintained Linux checkout is `../linux`, branch `gemini`, pinned by
 `flake.lock`. [nix/gemini.nix](nix/gemini.nix) composes one kernel and one NixOS
 system; driver fixes belong in Linux, rather than new package variants.
-The board's DT composition and CPU bring-up still use the existing helpers.
+The hardware settings now live in Linux's board DTS and `gemini_defconfig`;
+the default build no longer applies hardware overlays or edits DT properties.
+Packaging still attaches the build identity required by the current A72 driver.
 The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
 requires those checkouts, or explicit `--override-input` paths.
 
@@ -45,8 +47,8 @@ reproducing an old trial; new features belong in the default system.
 
 The installed recovery system remains M69. The consolidated default bundle and
 EFI boot files build successfully. Its resolved kernel configuration and DT
-hardware properties match the tested calendar kernel; only build identity
-metadata changes. This consolidated image has not yet been booted on hardware.
+hardware properties match the tested calendar kernel. DT reference numbers
+and build identities are regenerated. This consolidated image has not yet been booted on hardware.
 The latest RTC/watchdog trial returned automatically to healthy M69, retaining
 home, EFI files and all 21 ordinary Nix build outputs.
 
