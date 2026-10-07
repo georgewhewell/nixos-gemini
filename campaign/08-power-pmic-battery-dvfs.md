@@ -488,6 +488,27 @@ the complete normal kernel check phase passes. The shared kernel is
 Builds, checks and the bounded adoption/concurrent-read probe are retained
 in `handoff/cpu-sram-20261008/`. Physical SRAM transitions remain untested.
 
+The adoption trial `handoff/cpu-sram-adoption-trial-01/` subsequently passes
+on candidate boot `7ed34ff9-9e45-4e1c-ac7d-f3af57bab599`. The provider binds
+after the handoff supplier becomes ready. Its 1,003 concurrent voltage reads
+span 23.816 seconds and all report the inherited 1.10 V setting while all
+98 ordered A53 frequency pairs pass at fixed 1.00 V CPU voltage. The probe
+finishes in 24.223 seconds, restores both schedutil governors and removes
+its core-parking hold. Its service is inactive with PID zero; the kernel
+error scan is empty. CCI and A72 stay at their inherited frequencies. This
+proves configured-voltage readback and bounded concurrent access, not an
+analog voltage measurement, SRAM transitions or coupled voltage scaling.
+
+The diagnostic observation completes in 94.876 seconds and fails the
+expected normal cgroup2 memory-controller gate. No default is promoted.
+Automatic recovery returns healthy M69 boot
+`bd5a9a61-8f84-4c53-a7c8-924961042005`. The durable worker is terminal and
+the final audit confirms no writer, both locks acquired, all 35 source
+hashes unchanged and all 26 ordinary outputs retained. Full results are in
+`handoff/cpu-sram-20261008/completion.json`. Next voltage work needs the
+CPU/SRAM coupler, explicit DA9214 settling and a CCI voltage vote that
+accounts for the still-fixed A72 clock before relaxing BUCKA constraints.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
