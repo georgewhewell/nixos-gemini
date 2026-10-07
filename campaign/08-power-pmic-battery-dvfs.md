@@ -213,6 +213,11 @@ sign: it toggled Charging/Discharging/Not charging while the charger remained
 online/Full. Those sequential readings are not atomic; stable charging-status
 integration remains work to do.
 
+The diagnostic completed observation and failed the expected cgroup2 check.
+Automatic recovery returned healthy M69 boot
+`e5a684af-8877-4534-a5cf-34bcc64f0915`. The worker is terminal, with no writer,
+35 matching source hashes and26 retained outputs. No default was promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
