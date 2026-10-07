@@ -168,6 +168,15 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(backend.command_sequence(backend.MTK_RTC),backend.COMMANDS+' --preserve-rtc')
         with self.assertRaises(ValueError):backend.command_sequence('/usr/bin/mtk')
 
+    def test_idle_scan_leaves_transfer_time_inside_existing_outer_timeout(self):
+        command = backend.client_command(backend.MTK_RTC)
+        self.assertIn('180s',command)
+        self.assertEqual(command[command.index('--connect-timeout')+1], '120')
+        self.assertLess(command.index('--connect-timeout'),command.index('multi'))
+        self.assertEqual(backend.CLIENT_TIMEOUT-backend.CONNECT_TIMEOUT,60)
+        self.assertEqual(command[-1], backend.COMMANDS+' --preserve-rtc')
+        self.assertNotIn('--connect-timeout',backend.client_command(backend.MTK))
+
     def test_unqualified_tool_and_unknown_config_are_rejected(self):
         for key, value in (('mtk', '/usr/bin/mtk'), ('usb_port', '../3-2'),
                            ('rollback_sha256', ''), ('unexpected', 'yes'),

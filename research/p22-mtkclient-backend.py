@@ -18,7 +18,9 @@ import tempfile
 import time
 
 MTK = '/nix/store/vl6ynxsir46vp8w3445w342vdf0xm23b-mtkclient-gemini-2.1.4.1/bin/mtk'
-MTK_RTC = '/nix/store/siwn7pa37bxykp85jkvb0i9mqwjlzajw-mtkclient-gemini-rtc-2.1.4.1/bin/mtk'
+MTK_RTC = '/nix/store/rqh60ifskfzq42vc1n84w20a7hkc04m5-mtkclient-gemini-rtc-2.1.4.1/bin/mtk'
+CONNECT_TIMEOUT = 120
+CLIENT_TIMEOUT = 180
 SIZE = 16777216
 ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote boot.img to sector 362496 with sector count 32768.'
@@ -66,6 +68,16 @@ def command_sequence(tool):
     if tool == MTK:
         return COMMANDS
     raise ValueError('Unpinned mtkclient command sequence')
+
+
+def client_command(tool):
+    # Stop idle scans inside the client. A device arriving near that boundary
+    # still has time for DA setup, flash/readback and reboot before the outer
+    # watchdog expires. Legacy tools retain their recorded invocation.
+    options = ['--connect-timeout', str(CONNECT_TIMEOUT)] if tool == MTK_RTC else []
+    return ['sudo', '-n', 'env', 'PYTHONUNBUFFERED=1', 'timeout', '--foreground',
+            '--kill-after=5s', str(CLIENT_TIMEOUT)+'s', tool] + options + [
+            'multi', command_sequence(tool)]
 
 
 def checked_image(path, expected):
@@ -164,8 +176,7 @@ def attempt(config, state, directory, expected):
         if vendor.parent.name != config['usb_port'] and vendor.read_text().strip() == '0e8d':
             raise RuntimeError('A MediaTek device is exposed on another physical port')
     logpath = directory / 'mtk.log'
-    command = ['sudo', '-n', 'env', 'PYTHONUNBUFFERED=1', 'timeout', '--foreground',
-               '--kill-after=5s', '180s', config['mtk'], 'multi', command_sequence(config['mtk'])]
+    command = client_command(config['mtk'])
     save(directory / 'command.json', command)
     ready = False
     error = None

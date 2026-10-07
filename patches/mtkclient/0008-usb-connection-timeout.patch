@@ -1,0 +1,85 @@
+--- a/mtk.py
++++ b/mtk.py
+@@ -127,6 +127,16 @@
+     )
+ 
+ 
++def positive_seconds(value):
++    try:
++        seconds = int(value)
++        if seconds > 0:
++            return seconds
++    except ValueError:
++        pass
++    raise argparse.ArgumentTypeError("timeout must be a positive number of seconds")
++
++
+ def main():
+     base = create_base_parser()
+ 
+@@ -135,6 +145,10 @@
+         parents=[base],
+         formatter_class=argparse.RawDescriptionHelpFormatter
+     )
++
++    parser.add_argument('--connect-timeout', type=positive_seconds,
++                        help='Stop waiting for a USB device after this many seconds; '
++                             'does not limit an established connection')
+ 
+     subparsers = parser.add_subparsers(dest='cmd', required=True, metavar='command')
+ 
+@@ -331,6 +345,8 @@
+     # ─── Parse & Run ─────────────────────────────────────────────────────
+ 
+     args = parser.parse_args()
++    if args.connect_timeout is not None and args.serialport:
++        parser.error('--connect-timeout currently supports USB connections only')
+ 
+     if not args.cmd:
+         parser.print_help()
+--- a/mtkclient/Library/mtk_main.py
++++ b/mtkclient/Library/mtk_main.py
+@@ -48,6 +48,9 @@
+                 config.stock = args.stock
+         except AttributeError:
+             pass
++
++        if getattr(args, "connect_timeout", None) is not None:
++            config.connect_deadline = time.monotonic() + args.connect_timeout
+ 
+         config.reconnect = True
+         try:
+--- a/mtkclient/Library/Port.py
++++ b/mtkclient/Library/Port.py
+@@ -176,11 +176,20 @@
+         counter = 0
+ 
+         while not self.cdc.connected:
++            # Only an idle connection scan may expire here. Once a USB device
++            # is opened, handshaking and DA transfers belong to the session.
++            deadline = self.config.connect_deadline
++            if deadline is not None and time.monotonic() >= deadline:
++                self.info("USB connection scan timed out before connecting")
++                raise SystemExit(124)
+             try:
+                 if maxtries is not None and counter == maxtries:
+                     break
+                 counter += 1
+-                if self.cdc.connect() and self.run_handshake():
++                connected = self.cdc.connect()
++                if connected:
++                    self.config.connect_deadline = None
++                if connected and self.run_handshake():
+                     return True
+                 else:
+                     if loop == 5:
+--- a/mtkclient/config/mtk_config.py
++++ b/mtkclient/config/mtk_config.py
+@@ -76,6 +76,7 @@
+             self.__logger.setLevel(logging.DEBUG)
+         else:
+             self.__logger.setLevel(logging.INFO)
++        self.connect_deadline = None
+         self.reconnect = True
+         self.uartloglevel = 2
+         self.hwver = 0xca00
