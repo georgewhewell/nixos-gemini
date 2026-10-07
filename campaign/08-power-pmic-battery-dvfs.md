@@ -81,9 +81,29 @@ software sequencing; the device test above establishes bounded hardware
 acceptance. The diagnostic still fails the unchanged cgroup2 memory-controller
 qualification check and is not promoted.
 
+A second diagnostic boot, `fcc8068c-75da-4486-9eb5-2c60f99eefda`, verifies
+short load and the expanded cooling control path on the same kernel. Eight
+A53 workers completed1589 digest-checked PBKDF2 batches over10 seconds.
+All10 load samples read897/1209 MHz under schedutil. Actual temperature rose
+from42.0 C to a sampled peak53.7 C. Workers stopped before thermal emulation.
+
+Synthetic86/88/90/92/94/96/98 C readings then exercised LL cooling states
+1/2/3/4/5/6/6, capping and actually running the CPU at
+806/715/624/481/338/221/221 MHz. L remained capped at1092 MHz. Clearing emulation
+returned both cooling states to0 and limits/hardware frequencies to897/1209 MHz.
+The rail stayed at1.00 V and initial/final CCI/A72 reads were unchanged.
+Both schedutil governors and core parking were restored; the probe became
+inactive/MainPID0, the system stayed running, and the captured kernel log
+contained no clock-fencing, BUG, Oops, WARNING or CPUCLK_OBSERVE report.
+The final actual temperature was41.2 C. Evidence:
+`handoff/dvfs-thermal-trial-01/{dvfs.json,summary.json,after-probe.txt,kernel-error-check.json}`.
+This establishes the emulated cooling control path and a short load test;
+it does not establish operation at a physical98 C, sensor accuracy or long-term
+thermal stability.
+
 Remaining DVFS work includes postdivider transitions, lower L points,
-CCI/shared-voltage and CPU LDO/Vsram coordination, A72 control, sustained load
-and thermal cooling qualification across the expanded range. Battery capacity,
+CCI/shared-voltage and CPU LDO/Vsram coordination, A72 control and sustained
+load/physical thermal qualification. Battery capacity,
 calibration, charging, deep idle and suspend remain separate unfinished work.
 
 ## Historical Cycle18 observations
