@@ -353,10 +353,30 @@ production-function tests cover parser/allocation errors, battery matching,
 partial sensor reads, error propagation, stale data, notifications and
 start/stop/suspend/resume callbacks. ARM64 object/DT builds and binding/DT
 schema checks pass. Normal and diagnostic image builds and all packaged
-checks pass and use the same kernel. On-device validation is next; physical
+checks pass and use the same kernel. Diagnostic boot
+`b32cb972-2ec5-46ac-a8cf-62fc14187e74` passes 32 samples over 66.101 seconds,
+with the last sample after 63.981 seconds. Capacity remains 100 while battery
+and charger status remain Full. Estimated OCV ranges from 4.281317 to
+4.285338 V across 11 distinct values; terminal voltage remains 4.284 V and
+rough temperature 38.0 C. Instantaneous current spans -16.1 to +34.5 mA and
+the counter remains zero. The live model pairs and battery/charger phandles
+match the built data. The probe ends inactive/MainPID 0, system running,
+schedutil selected, with no captured gauge timeout, clock fence, BUG, Oops
+or WARNING. CPU topology at that snapshot is 0–1,8–9 under automatic core
+parking; the probe never overrides it.
+
+This verifies the new properties, continued estimate updates beyond the
+60-second stale-data limit, and the observed Full anchor. It does not verify
+discharge integration or physical percentage accuracy. The 90.504-second
+observation completes; the diagnostic still fails the normal cgroup2 memory
+controller gate as expected. Automatic recovery completes to healthy M69 boot
+`ed1feaea-5f15-4859-aa30-5e9216db5723`. The worker is terminal and the final
+audit confirms no writer, both locks acquired, all 35 source hashes unchanged
+and all 26 ordinary outputs retained. No default is promoted. Physical
 aging, current/temperature calibration and complete charging/discharging
-qualification remain outstanding. Artifacts and probe sources are recorded
-in `handoff/battery-estimator-20261007/`.
+qualification remain outstanding. Build/probe sources are recorded in
+`handoff/battery-estimator-20261007/`; on-device measurements and the kernel
+error check are in `handoff/battery-estimator-trial-01/`.
 
 ## Historical Cycle18 observations
 
