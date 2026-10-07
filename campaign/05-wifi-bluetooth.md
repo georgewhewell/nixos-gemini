@@ -1,24 +1,31 @@
-# Connectivity: CONSYS, BTIF, Bluetooth, GNSS, Wi-Fi and FM
+# Connectivity: Wi-Fi, Bluetooth and GNSS
 
-Status: SOURCE EXISTS; CONSYS and BTIF are INERT in the board DT; live
-transport, identity, firmware download and every radio client are UNKNOWN.
+Updated 2026-10-07. The earlier source-only CONSYS/BTIF notes described initial
+bring-up and no longer describe the maintained system. Use
+[HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md) for the overall completion
+status; a working radio transport is not proof of every radio feature.
 
-The base board describes the CONSYS resources and supplies but marks it
-disabled (`linux-gemini-platform@28c471502:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:229-247`). It also carries a disabled MT6797 BTIF transport
-description whose comment names pads, firmware and CONSYS ownership as unknown
-(`:261-282`). Stage-A hardware acceptance saw no WMT/BTIF/CONSYS device and no
-firmware request (`research/HARDWARE_TEST_LEDGER.md:297-301`).
+Wi-Fi is running on recovered M69 with a saved WPA2-PSK/CCMP profile. A bounded
+passive scan while associated on 2412 MHz returned 13 BSS records across
+2.4 and 5 GHz. The same BSSID, association and IP remained after the scan;
+all 30 gateway pings during the observation succeeded. Scan-time maximum
+latency was about 465 ms, so zero packet loss is not a latency qualification.
+The nl80211 event monitor retained scan start/finish without a disconnect.
+Evidence: `handoff/wifi-associated-scan-20261007/result.json`, `findings.md`
+and `final-health.txt` in the shared workspace.
 
-Later source work adds a dormant WMT patch controller which cannot acquire any
-power, reset, pad, BTIF DMA, STP ownership or endpoint itself and requires full
-STP before patch traffic (`linux-gemini-platform@28c471502:drivers/soc/mediatek/mt6797-consys-wmt-patch.c:11-42,398-464`). This work is
-after the Nix kernel pin (`flake.nix:23-28`); it is not proof that a Nix
-artefact contains it or that the device can exchange a byte.
-Vendor STP/WMT source can constrain a future protocol implementation, but it
-does not close pad, reset, DMA, transport ownership or recovery safety.
+Associated scanning is implemented by Linux commit `6edcccd5a1a4e`. The Wi-Fi
+source tree is identical between M69 (`c0dbf01b2bdaa`) and the maintained
+kernel (`d951c0cadafbb`); the bounded M69 observation does not qualify the newer
+kernel as a whole. An `iw link` station-information query still returns
+`-EOPNOTSUPP`; the association check uses the supplicant's existing control
+socket at `/run/gemini-wifi/ctrl`.
 
-The next implementation gate is full hardware-independent STP validation.
-The next hardware gate, only after a separate review, is a bounded resource or
-identity observation that keeps reset asserted. No firmware request, radio
-function, GNSS task, Bluetooth HCI, Wi-Fi or FM activation follows from the
-existing source.
+The September 30 M51 record separately reports WPA3-SAE/PMF data and three
+successful reconnects. Scanning while associated to a WPA3 or 5 GHz network,
+longer data/latency tests and sustained coexistence remain unqualified.
+
+Bluetooth LE discovery passed on M45. Pairing, supported profiles and sustained
+Wi-Fi/Bluetooth coexistence remain unqualified. GNSS has source and transport
+work but no retained successful location fix. No completed FM qualification
+is established here. These remain hardware requirements, not exclusions.

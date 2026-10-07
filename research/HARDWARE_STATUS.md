@@ -270,7 +270,7 @@ Direct M69 remains installed. See
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | USB speed and roles | The maintained left MTU3 DT enables both PHYs and SuperSpeed, with connector-driven peripheral VBUS. The maintained kernel now enumerates at 480 Mb/s without a diagnostic VBUS patch and passes connector-driver unbind/rebind. Recovery M69 remains capped to USB2. Board lane routing and a real 5 Gb/s connection remain unverified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
-| Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
+| Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. An October 7 M69 passive scan while associated with WPA2-PSK/CCMP returned 13 BSSs across both bands, retained the same association/IP and passed all 30 concurrent gateway pings; WPA3/5GHz-associated scans and sustained coexistence remain unqualified. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
 | Battery / DVFS | Fresh read-only M69 observations expose charger status/voltage, fuel-gauge current and CPUFreq policies 0/4 using cpufreq-dt/schedutil. The fuel gauge publishes no capacity attribute, and no cpuidle driver is present. Reconcile prior DVFS transition/load evidence; qualify battery calibration/capacity, charging behavior and remaining frequency/thermal cases. Status observations do not prove those behaviors; see campaign/08-power-pmic-battery-dvfs.md |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |
@@ -430,6 +430,14 @@ on PHYD_MON5 loopback bit positions. Earlier calibration/PLL interpretations are
 header-derived, not independently confirmed for this revision. Retain raw MON2
 and MON5 values; these do not establish a PHY clock fault. MAC traces and paired
 host/device negotiated speeds are unaffected by this header inconsistency.
+
+The vendor's `CONFIG_U3_PHY_SMT_LOOP_BACK_SUPPORT` is enabled in the retained
+config and exposes `smt_err_count` through MU3D debugfs. Its Kconfig describes
+checking connector mounting by sending a pattern on TX1/2 and receiving it on
+RX1/2. This is not evidence of a self-contained internal PHY test that can be
+interpreted with an ordinary host attached. The helper also changes shared
+power controls and VA10 selection. No loopback test has been transplanted or
+run; a failure in the current connection would not establish a PHY fault.
 
 The maintained MT6797 USB3 tuning was also compared with the vendor's active
 `usb_phy_recover()` writes, including absolute bank offsets and masks: RX/TX
