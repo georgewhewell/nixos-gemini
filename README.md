@@ -55,7 +55,9 @@ the firmware's MT6351 year encoding and passes native UTC write/read/ticking,
 awake alarms and retention through automatic recovery when mtkclient requests
 RTC preservation. Corrected-kernel startup from retained UTC now also passes,
 including the kernel's early clock initialization before any explicit clock
-write. All twenty ordinary build outputs survived. Legacy M69's incompatible
+write. Controlled watchdog expiry also passes on this kernel, resetting in
+31.8 seconds with automatic recovery and all twenty-one build outputs retained.
+Legacy M69's incompatible
 shutdown writer was temporarily skipped for that transition; normal promotion
 of the corrected kernel and clock policy remains. See the
 [power qualification report](research/POWER_QUALIFICATION.md).

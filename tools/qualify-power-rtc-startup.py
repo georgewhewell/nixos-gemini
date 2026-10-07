@@ -2,7 +2,9 @@
 """Qualify native RTC startup using retained UTC and a temporary M69 skip.
 
 Default preflight is read-only. Execution skips M69's incompatible shutdown
-clock writer for this boot, then uses the complete calendar/recovery trial.
+clock writer for this boot, then checks startup, UTC and awake alarms.
+--watchdog-expiry replaces the alarm sequence with controlled keepalive loss
+after all startup/clock checks, using the existing independent recovery path.
 """
 import importlib.util
 import json
@@ -21,15 +23,21 @@ p.EXTRA_EXECUTED_SOURCES += ('tools/qualify-power-rtc-startup.py', 'tools/qualif
 
 
 def configure(watchdog=False, pm_test=None, cycle=False):
-    if watchdog or pm_test or cycle:
-        raise ValueError('RTC startup profile requires the normal calendar sequence')
+    if pm_test or cycle:
+        raise ValueError('RTC startup profile supports alarms or watchdog expiry; PM/USB need prerequisites')
     runner = c.q.base_configure()
     runner.backend.MTK = runner.backend.MTK_RTC
     # Probe the native clock after health checks, before calendar.install's
     # explicit RTC_SET_TIME, followed by the original alarm sequence.
     startup.install_probe(p, runner, c.calendar)
     c.calendar.install(p, runner)
-    c.q.rtc.install(p, runner)
+    if watchdog:
+        # Compose expiry last: the base watchdog wrapper would otherwise reset
+        # Linux before startup/UTC evidence could be collected.
+        runner.watchdog_expiry_requested = True
+        p.watchdog_expiry.install(p, runner)
+    else:
+        c.q.rtc.install(p, runner)
     return runner
 p.configure = configure
 

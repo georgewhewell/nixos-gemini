@@ -5,9 +5,10 @@ swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
 `handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
 enabled from boot in the corrected candidate. Its latest automatic M69
-recovery and final audit retained all twenty Nix build outputs in
-`handoff/power-rtc-startup-01`. The complete trial also passed native RTC
-startup, UTC write/read and retention with RTC-preserving DA exits, recorded in
+recovery and final audit retained all twenty-one Nix build outputs in
+`handoff/power-rtc-startup-02`. The complete trial also passed native RTC
+startup, UTC write/read, controlled watchdog expiry and RTC-preserving
+recovery, recorded in
 [POWER_QUALIFICATION.md](POWER_QUALIFICATION.md). Freezer and disconnected
 device diagnostics passed earlier in `power-swap-06`. The
 guarded USB cycle had passed separately in `power-swap-05`. The earlier device-stage

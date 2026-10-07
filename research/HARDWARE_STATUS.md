@@ -24,7 +24,7 @@ Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
 healthy M69 boot after the calendar candidate's automatic recovery is
-`fd1a8110-b44a-4c43-b0e7-7abee14a53ea`, with `/persist`,
+`a528ba14-246c-425b-8bb4-f85241950818`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -138,6 +138,13 @@ clock write. UTC/alarm/recovery checks passed again; twenty ordinary outputs
 and 35 executed sources passed the final locked audit. The original shutdown
 policy is restored and all five trial services are inactive. Promotion of the
 corrected kernel and clock policy remains.
+The same calendar kernel then passed controlled watchdog expiry in
+`power-rtc-startup-02`: independent observers measured reset after 31.798 and
+31.803 s, before fallback. Automatic recovery retained twenty-one outputs,
+matched 35 sources, preserved RTC UTC and restored the original clock policy.
+A separate suspend-guard kernel now passes host/ARM64/full-build checks but
+has not been installed; its opt-in counter-preservation mode is intended to
+bound the next no-IRQ and RTC-wake trials.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -148,7 +155,7 @@ Direct M69 remains installed. See
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
-| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection and fresh GPU rendering. The successor RTC kernel fixes alarm cancellation and firmware calendar encoding; native UTC startup/write/read/ticking, awake delivery/cancellation/rearm and clock retention through RTC-preserving DA recovery pass. Kernel/clock-policy promotion, wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain; the new kernel needs its own watchdog/PM prerequisites |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |

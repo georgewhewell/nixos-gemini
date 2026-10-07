@@ -77,12 +77,36 @@ class Startup(unittest.TestCase):
         self.assertEqual(m.p.BUNDLE,old.p.BUNDLE)
         self.assertEqual(set(m.configure().PROFILES),{'power-rtc-startup'})
         self.assertEqual(set(old.configure().PROFILES),{'power-rtc-calendar'})
-        with self.assertRaises(ValueError): m.configure(watchdog=True)
+        self.assertTrue(m.configure(watchdog=True).watchdog_expiry_requested)
+        for args in (dict(pm_test='devices'),dict(cycle=True)):
+            with self.assertRaises(ValueError): m.configure(**args)
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(sys,'argv',['startup','--execute','--out',tmp+'/trial']), \
                 mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
             m.p.main()
             self.assertIn(str(m.p.ENTRYPOINT),run.call_args.args[0])
+
+    def test_watchdog_runs_after_startup_and_clock_checks_without_alarm_sequence(self):
+        for watchdog in (False,True):
+            events=[]
+            runner=SimpleNamespace(candidate_return=lambda *a:events.append('health') or {'boot_id':BOOT},
+                backend=SimpleNamespace(MTK='old',MTK_RTC='rtc'),watchdog_expiry_requested=False)
+            def wrap(label):
+                def install(context,r,*args):
+                    original=r.candidate_return
+                    def check(*a):
+                        state=original(*a);events.append(label);return state
+                    r.candidate_return=check
+                return install
+            with mock.patch.object(m.c.q,'base_configure',return_value=runner) as base, \
+                    mock.patch.object(s,'install_probe',side_effect=wrap('startup')), \
+                    mock.patch.object(m.c.calendar,'install',side_effect=wrap('clock')), \
+                    mock.patch.object(m.c.q.rtc,'install',side_effect=wrap('alarms')), \
+                    mock.patch.object(m.p.watchdog_expiry,'trigger',side_effect=lambda *a:events.append('watchdog')):
+                self.assertEqual(m.configure(watchdog=watchdog).candidate_return([],{},Path('/trial'),'profile'),{'boot_id':BOOT})
+                base.assert_called_once_with()
+            self.assertEqual(events,['health','startup','clock','watchdog' if watchdog else 'alarms'])
+            self.assertEqual(runner.watchdog_expiry_requested,watchdog)
 
     def save(self, directory, name, value):
         (directory/name).write_text(json.dumps(value))

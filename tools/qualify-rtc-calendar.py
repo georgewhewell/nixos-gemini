@@ -189,7 +189,7 @@ test ! -d /run/gemini-rtc-alarm.lock
             raise RuntimeError('Calendar source, candidate health or watchdog changed')
         proof.update(same_boot_health=True, watchdog_owner_unchanged=True)
         runner.qualify.save(out, 'result.json', proof)
-        print('RTC UTC write/read and ticking passed; alarm sequence follows', flush=True)
+        print('RTC UTC write/read and ticking passed', flush=True)
         return state
     runner.candidate_return = candidate_return
 

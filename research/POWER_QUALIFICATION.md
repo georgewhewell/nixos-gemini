@@ -832,3 +832,76 @@ and `core` PM tests are explicitly rejected for s2idle. These source facts do
 not qualify the physical wake path. Repeat the relevant watchdog/USB/PM
 prerequisites on the selected kernel and establish bounded recovery through
 no-IRQ before unattended full suspend/wake trials.
+
+### Watchdog recovery on the corrected calendar kernel
+
+The startup runner now accepts `--watchdog-expiry`. It completes native UTC
+startup and explicit clock write/read/ticking first, then uses the existing
+controlled keepalive-loss test instead of repeating the awake alarm sequence.
+The expiry wrapper is installed last: installing it inside the base return
+callback would reset Linux before startup/clock evidence could be collected.
+A regression checks both callback orders. All 41 relevant host tests pass.
+
+`power-rtc-startup-02` passed on candidate
+`8dfbb4c4-6158-4a7f-ad7f-86d99ed4906b`. After full health, real paging, an
+ordinary build and RTC checks, the exact watchdog owner was observed stopped.
+The two independent USB observers measured reset after 31.798 and 31.803 s,
+before the 55-second fallback. No software rescue reboot was requested.
+Automatic recovery returned healthy M69 boot
+`a528ba14-246c-425b-8bb4-f85241950818`. The RTC retained UTC and the original
+shutdown policy was restored. The final locked audit retained all twenty-one
+ordinary outputs and home/EFI proofs, matched 35 executed sources, preserved
+protected storage and found no writer. The worker exited zero; all five host
+units are inactive with PID zero. Evidence includes `watchdog-result.json`,
+`rtc-startup-result.json`, `rtc-calendar-reboot.json`, `final-idle-check.json`
+and `terminal-verification.json` in that trial directory.
+
+The exact selected PM source has also been reconstructed from the Nix
+derivation's immutable source and all three patches, including the watchdog
+hibernation notifier. Its hashes and observations are recorded in
+`power-rtc-watchdog-build/pm-stage-source-audit.json`; patch application and
+the original derivation JSON are retained alongside it. This is the complete
+build input for subsequent PM review; the earlier RTC-worktree inspection
+alone did not include the separately applied watchdog patch.
+
+### Prepared watchdog guard for short suspend tests
+
+Kernel commit `65877a32be641e452424b5fef14cf92838d17a8f` adds the opt-in
+`mtk_wdt.suspend_keep_running` boot/module parameter. Its default is false and
+its sysfs parameter is read-only. When enabled for system suspend, the no-IRQ
+callback reloads the running counter instead of disabling it. Resume keeps
+the existing restart/ping sequence. Inactive watchdogs remain inactive, and
+the separate hibernation PREPARE/POST pause still applies in either mode.
+
+The actual driver functions pass 32 host PM sequences across both parameter
+values, including active/core-owned/inactive watchdogs, hibernation, restore,
+abort and duplicate notifications. The guard check rejects a fixture where
+the new branch is disabled and detects even transient counter-stop writes.
+`watchdogSuspendCheck` builds actual ARM64 objects both with hibernation enabled
+and with suspend-only configuration. Both pass, as does the full
+`mainlineNixosPowerSuspendGuardBundle` build. Its inherited sixteen RTC
+register tests and 140,254 calendar roundtrips also pass.
+
+The dedicated image adds only `mtk_wdt.suspend_keep_running=1` to its kernel
+configuration's existing command line. Other configuration entries and the
+qualified calendar bundle/kernel identities are unchanged. It has not been
+installed on hardware. Build evidence and exact hashes are in
+`power-suspend-guard-build/artifacts.json`; the first build's script-interpreter
+failure is retained in `attempt-01.log`, and the corrected full build log is
+`power-suspend-guard-build.log`.
+
+| Suspend-guard candidate artifact | Identity |
+|---|---|
+| Bundle | `/nix/store/nj5qbyi9y0xmq8rhlkf8r0ph4yqsdj25-gemini-mainline-nixos-bundle` |
+| Kernel | `/nix/store/crkn49890wxl5p562b8aqg6rkj3nnwvs-gemini-mainline-power-suspend-guard-kernel-7.1.3` |
+| System | `/nix/store/0735pnjghzic4zlb3vj4vri5sij6ifyl-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade` |
+| p22 SHA-256 | `29c996b1488f7d2b1baaeaf33e9b78b8fbe090c1030163708a0b42200d006018` |
+| Kernel notes SHA-256 | `d15cff266ad5bc0d744da299d5f465c7086423b1c8e77bd27fc0092969abae1b` |
+| Squashfs | 427,048,960 bytes; `ceafd3a9f6b5a4f483c4e4f5d2c8df34a4fda3bcf66d51884b5d7fda76718dbe` |
+
+The next hardware steps must verify this image's normal operation and expiry,
+then its guarded USB/PM path. A platform diagnostic with a dwell longer than
+the watchdog timeout can establish reset coverage after device no-IRQ suspend,
+before relying on the guard for an RTC-wake trial. That diagnostic and full
+suspend/wake remain unqualified. The watchdog guard bounds short tests; it is
+not the production policy for long sleep or the 24-hour lid behavior.
