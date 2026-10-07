@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 18db31826ba99, including the tested watchdog and RTC
+Linux branch `gemini` at fd1bd94a49b65, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback. Historical profiles
 are isolated in `legacy.nix`; `recovery` retains the exact M69 bundle. This
 packaging consolidation does not itself update the installed device. The full
@@ -17,23 +17,27 @@ kernel recipe replaces its historical profile builder. Native driver tests,
 the full system/EFI/U-Boot builds and flake checks pass. A72 capability preparation
 now uses board register expectations and architecture-collected system policy
 without Nix rewriting source hashes or adding a DT record. The native DTB is
-copied unchanged, and the only configuration removals are the unused fixture
-option and runtime build-identity option. About 1,200 lines of identity and fixture
-code were removed; live CPU register, topology, capability, mitigation and HWCAP
-checks remain. U-Boot 1ff66d0a accepts both native and historical DTs in host tests.
-Runtime driver startup services and disabled CPU protocol models still need
+copied unchanged. The identity and fixture cleanup removed about 1,200 lines.
+The subsequent CPU cleanup removed 7,245 lines of unused startup protocol
+models, rollback hooks, temporary hotplug tracing and obsolete model metadata.
+Generic CPU hotplug and idle code now match upstream Linux; the duplicated
+readiness token is replaced by the existing capability receipt's ready state.
+Live CPU register, topology, capability, mitigation, HWCAP and power checks
+remain. The only additional config change removes the disabled P30 model
+option. U-Boot 1ff66d0a accepts both native and historical DTs in host tests.
+Runtime driver startup services and other temporary diagnostics still need
 consolidation.
 
-The consolidated default passed `handoff/boot-test-04` (candidate boot
-`0fc40c30-3503-4a32-8cb9-7efde81ed694`): both A72s came online without the old
-DT record, followed by full Linux health, real paging with the built-in zswap
-policy, an ordinary unprivileged Nix build, native RTC startup,
+The consolidated default passed `handoff/boot-test-05` (candidate boot
+`02bea5df-ea61-427f-96c6-02dafe13090e`): both A72s came online without the old
+DT record, startup models or M10 tracing, followed by full Linux health,
+real paging with the built-in zswap policy, an ordinary unprivileged Nix build, native RTC startup,
 UTC write/read/ticking, awake alarm delivery/cancellation/rearm and automatic
 M69 recovery. The decoded firmware clock retained UTC across both DA resets.
-The final locked audit retained all 23 ordinary outputs, original home/EFI data
+The final locked audit retained all 24 ordinary outputs, original home/EFI data
 and protected storage, matched 33 executed sources, and stopped all five host
 services. The worker exited zero, and M69 returned healthy as boot
-`3c043a1e-1d1b-4c01-8c70-6be64839f99e`. The previous unused candidate cache was
+`2710f4b7-7b93-4cc8-b33a-417e154a3cba`. The previous unused candidate cache was
 archived before replacement; installed EFI entries and the recovery cache were
 retained. This tests the direct boot bundle; the new default EFI bundle still
 needs its own boot-manager trial.
@@ -66,7 +70,7 @@ Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
 healthy M69 boot after the consolidated candidate's automatic recovery is
-`7ba1b770-660b-4d4d-8358-e4ec6b3174e3`, with `/persist`,
+`2710f4b7-7b93-4cc8-b33a-417e154a3cba`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged

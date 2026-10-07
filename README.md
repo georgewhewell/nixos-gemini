@@ -37,6 +37,9 @@ the board register expectations and live system policy, and packaging copies
 the compiled DTB unchanged. This passes the full device boot test. U-Boot's
 host tests cover this DTB format and older kernels' DTs; its updated EFI path
 still needs a device trial.
+Unused CPU startup models, rollback hooks and temporary hotplug tracing have
+been removed. Generic CPU hotplug and idle code now match upstream Linux;
+the working A72 power and capability checks remain in the board support.
 The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
 requires those checkouts, or explicit `--override-input` paths.
 
@@ -62,11 +65,12 @@ active loop device or installed EFI entry/initramfs uses it.
 
 ## Device status
 
-The consolidated default boots both A72s without a generated build record.
+The consolidated default boots both A72s without a generated build record or
+the retired CPU startup models and tracing.
 It passes the complete supervised test: healthy Linux,
 real swap paging, an unprivileged Nix build, native RTC startup, UTC write/read,
 alarm delivery/cancellation/rearm and automatic M69 recovery. The final audit
-retained home, EFI files and all 23 ordinary Nix outputs. The installed recovery
+retained home, EFI files and all 24 ordinary Nix outputs. The installed recovery
 system remains M69; the current default EFI bundle has not yet had its own
 boot-manager trial. mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
