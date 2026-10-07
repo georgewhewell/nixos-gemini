@@ -541,6 +541,46 @@ A72 contribution, before relaxing BUCKA's fixed 1.00 V constraint. The
 existing MediaTek GPU coupler is not applicable: it only registers on other
 SoCs and programs SRAM before the other rail in both directions.
 
+## Discrete CPU/SRAM transition planner (2026-10-08)
+
+Kernel commit `9e44cb208280aa0a3e1313748f157e10463e964b` adds
+`mt6797-cpu-rail-plan.h`, the sequencing arithmetic for the forthcoming
+CPU/SRAM coupler. It admits exact DA9214 selectors from 770 mV to 1.2 V
+in 10 mV steps and SRAM selectors from 1.0 V to 1.2 V in 25 mV steps.
+The target uses the nominal 100 mV offset, clamped to SRAM's range and
+rounded upward to an actual SRAM selector. Intermediate steps retain the
+vendor's 275 mV margin and nominal offset where the limits allow it.
+Each step changes one rail; higher CPU voltage first needs sufficient
+SRAM voltage, and lower SRAM voltage first needs sufficiently low CPU
+voltage. Valid inherited pairs need not start at the nominal offset.
+
+The host test executes the production header over all 11,528 admitted
+starting-pair/CPU-target combinations: 26,656 writes, at most six steps.
+It independently checks exact selectors, strict progress, no reversal,
+the final nominal target, and the electrical envelope along each write.
+Golden full-range cases check the 1.025 V initial SRAM step when raising
+770 mV CPU voltage and the 930 mV initial CPU step when lowering from
+1.2 V. Invalid input tests verify that the proposed output remains intact.
+UBSan and checkpatch pass. This test is part of the normal Nix check phase.
+The full normal kernel checks and deployment build pass. The kernel is
+`/nix/store/6k5xijrxa60f48bkd75v69cf8xpwyjmc-linux-gemini-7.1.3`; the bundle is
+`/nix/store/65ynmd90i2vx361ypqjn61pa7r0sqxqf-gemini-mainline-nixos-bundle`.
+Logs, result metadata and GC roots are retained in
+`handoff/cpu-rail-plan-20261008/`.
+
+This is the pure planner, not an installed regulator coupler. The next
+adapter must aggregate consumer votes, validate machine constraints and
+both final rails before writing, hold the regulator framework's coupled
+consumer locks, and execute each exact selector through the existing
+settling/readback providers. It must stop and fence subsequent clock
+access on uncertain writes or reads after a write; it must not blindly
+restore CPU voltage after a partial SRAM update. CSPM must not be held
+across the DA9214 I2C call, which acquires that gate itself. OF matching
+must identify CPU SRAM and DA9214 BUCKA, rather than matching arbitrary
+regulator names. CCI voting and the fixed A72 contribution remain required
+before BUCKA constraints can be relaxed. No device voltages change from
+adding this planner.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
