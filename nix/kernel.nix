@@ -67,6 +67,7 @@ in
         mt6797-a72-power-core-host mt6797-sram-core-host mt6797-sram-boot-api \
         a72-vproc-votes a72-online-commit mt6797-cpuclk-boot-api \
         mt6797-cpuclk-fhctl-host mt6797-cpuclk-transition-host mt6797-topckgen-cpu-host \
+        mt6797-cpuclk-registration-host \
         mt6797-cpu-rail-admission-host \
         opp-of-sharing-cpus-host mt6797-spm-fw-host mt6351-fgadc-supplier-host \
         mt6351-fgadc-conversion-host gemini-battery-profile-host \
