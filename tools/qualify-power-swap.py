@@ -212,6 +212,7 @@ def preflight(r, directory, execute):
             paging_probe_sha256=paging.PROBE_SHA, runtime_policy_writes=False,
             watchdog_expiry_requested=r.watchdog_expiry_requested, pm_test_last_stage=r.pm_test_last_stage,
             usb_cycle_requested=r.usb_cycle_requested)
+        plan['observe_seconds'] = r.OBSERVE_SECONDS
         r.qualify.save(directory, 'plan.json', plan)
         return before
 
@@ -328,6 +329,8 @@ def main(configure_artifacts=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--observe-seconds', type=int, default=0, metavar='0..90',
+                        help='Observe accepted candidate before strict checks; recovery deadlines stay unchanged')
     diagnostic = parser.add_mutually_exclusive_group()
     diagnostic.add_argument('--watchdog-expiry', action='store_true',
                         help='After full candidate checks, qualify keepalive loss and automatic recovery')
@@ -348,6 +351,8 @@ def main(configure_artifacts=None):
         parser.add_argument('--efi-files', type=Path,
                             help='Matching installed efiBootFiles to verify with --bootloader')
     args = parser.parse_args(); directory = args.out.resolve()
+    if not 0 <= args.observe_seconds <= 90:
+        parser.error('--observe-seconds must be between 0 and 90')
     artifact_args = []
     if configure_artifacts is not None:
         args.bundle = args.bundle.resolve(strict=True)
@@ -369,7 +374,8 @@ def main(configure_artifacts=None):
             sys.executable, str(ENTRYPOINT), '--worker', '--out', str(directory)] +
             (['--watchdog-expiry'] if args.watchdog_expiry else []) +
             (['--pm-test', args.pm_test] if args.pm_test else []) +
-            (['--usb-cycle'] if args.usb_cycle else []) + artifact_args)
+            (['--usb-cycle'] if args.usb_cycle else []) +
+            ['--observe-seconds', str(args.observe_seconds)] + artifact_args)
         if child.returncode: raise RuntimeError('Power/swap worker failed; inspect its retained trial and recovery evidence')
         return
     if args.worker:
@@ -378,7 +384,9 @@ def main(configure_artifacts=None):
                 f.q.r.qualify.run(['systemctl', '--user', 'show', unit, '-p', 'MainPID', '--value']).strip() != str(os.getpid())):
             raise RuntimeError('Candidate trial lacks its durable owner')
     os.umask(0o077)
-    r = configure(args.watchdog_expiry, args.pm_test, args.usb_cycle); before = preflight(r, directory, args.worker)
+    r = configure(args.watchdog_expiry, args.pm_test, args.usb_cycle)
+    r.OBSERVE_SECONDS = args.observe_seconds
+    before = preflight(r, directory, args.worker)
     if not args.worker:
         print('Power/swap preflight passed; no device writes or reboot'); return
     error = None

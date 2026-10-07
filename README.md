@@ -70,6 +70,12 @@ store before testing. From recovery, that store is accessible to Nix as
 `local?root=/persist/nixos`; its database and files are separate from recovery's
 overlay. Historical image trials still accept `--reclaim-cache`.
 
+For measurements that need services started after boot acceptance, add
+`--observe-seconds 90` (0–90 seconds, default 0). The runner records
+`candidate-observation.json` and repeatedly checks candidate health and identity
+during this window, then runs the same strict qualification. Recovery deadlines
+remain unchanged; completing the observation does not qualify the candidate.
+
 Normal builds install through NixOS's `system.build.installBootLoader` hook.
 After the initial installation, `nixos-rebuild boot` or `switch` installs the
 selected generation's kernel, DTB and generic initramfs, then selects its boot

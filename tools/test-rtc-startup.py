@@ -89,13 +89,14 @@ class Startup(unittest.TestCase):
                     r.candidate_return=check
                 return install
             with mock.patch.object(m,'base_configure',return_value=runner) as base, \
+                    mock.patch.object(m,'usb_link_evidence',side_effect=lambda *a:events.append('usb')), \
                     mock.patch.object(s,'install_probe',side_effect=wrap('startup')), \
                     mock.patch.object(m.calendar,'install',side_effect=wrap('clock')), \
                     mock.patch.object(m.rtc,'install',side_effect=wrap('alarms')), \
                     mock.patch.object(m.p.watchdog_expiry,'trigger',side_effect=lambda *a:events.append('watchdog')):
                 self.assertEqual(m.configure(watchdog=watchdog).candidate_return([],{},Path('/trial'),'profile'),{'boot_id':BOOT})
                 base.assert_called_once_with()
-            self.assertEqual(events,['health','startup','clock','watchdog' if watchdog else 'alarms'])
+            self.assertEqual(events,['health','usb','startup','clock','watchdog' if watchdog else 'alarms'])
             self.assertEqual(runner.watchdog_expiry_requested,watchdog)
 
     def save(self, directory, name, value):

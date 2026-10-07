@@ -2,6 +2,7 @@
 """Check bundle selection, durable worker routing and recovery on failed checks."""
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +17,57 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
+    def test_observation_is_bounded_and_keeps_strict_qualification(self):
+        r = m.configure()
+        state = {'boot_id': 'candidate'}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'before-tree.json').write_text('{}')
+            with mock.patch.object(r, 'OBSERVE_SECONDS', 5), \
+                    mock.patch.object(r, 'candidate_snapshot', return_value=state), \
+                    mock.patch.object(r, 'handoff_tree', return_value={}), \
+                    mock.patch.object(r, 'verify_handoff_tree'), \
+                    mock.patch.object(r, 'read_state', return_value='waiting'), \
+                    mock.patch.object(r.time, 'monotonic', side_effect=[0, 0, 0, 0, 5, 5]), \
+                    mock.patch.object(r.time, 'sleep') as sleep, \
+                    mock.patch.object(r.power_kernel, 'evidence', side_effect=RuntimeError('strict check failed')) as strict:
+                with self.assertRaisesRegex(RuntimeError, 'strict check failed'):
+                    r.candidate_return([], {}, root, m.p.PROFILE)
+                sleep.assert_called_once_with(5)
+                strict.assert_called_once()
+                record = json.loads((root/'candidate-observation.json').read_text())
+                self.assertTrue(record['completed'])
+                self.assertFalse(record['candidate_qualified'])
+
+    def test_default_observation_does_not_delay_or_probe(self):
+        r = m.configure()
+        with mock.patch.object(r, 'candidate_snapshot') as snapshot, \
+                mock.patch.object(r.time, 'sleep') as sleep:
+            r.observe_candidate([], {}, Path('/unused'), m.p.PROFILE, {})
+            snapshot.assert_not_called()
+            sleep.assert_not_called()
+
+    def test_observation_stops_on_changed_boot_or_recovery(self):
+        r = m.configure()
+        for recovered in (False, True):
+            with self.subTest(recovered=recovered), tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(r, 'OBSERVE_SECONDS', 90), \
+                    mock.patch.object(r, 'candidate_snapshot', return_value={'boot_id': 'other'}), \
+                    mock.patch.object(r, 'read_state', return_value=r.SUCCESS if recovered else 'waiting'), \
+                    mock.patch.object(r.time, 'sleep') as sleep:
+                with self.assertRaisesRegex(RuntimeError, 'rescue|identity'):
+                    r.observe_candidate([], {}, Path(tmp), m.p.PROFILE, {'boot_id': 'candidate'})
+                sleep.assert_not_called()
+
+    def test_observation_argument_rejects_unbounded_wait(self):
+        for seconds in ('-1', '91'):
+            with self.subTest(seconds=seconds), \
+                    mock.patch.object(sys, 'argv', ['test-boot.py', '--out', '/unused', '--observe-seconds', seconds]), \
+                    mock.patch.object(m.p, 'configure') as configure, \
+                    mock.patch.object(sys, 'stderr'):
+                with self.assertRaises(SystemExit): m.p.main()
+                configure.assert_not_called()
+
     def test_typec_capture_keeps_controller_identity_and_missing_attributes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -106,7 +158,7 @@ class Profile(unittest.TestCase):
             root=Path(tmp); bundle=root/'bundle'; bundle.mkdir()
             cache=root/'cache'; cache.touch(); alias=root/'result'; alias.symlink_to(bundle)
             argv=['test-boot.py','--execute','--out',tmp+'/trial','--bundle',str(alias),
-                  '--reclaim-cache',str(cache),'--watchdog-expiry']
+                  '--reclaim-cache',str(cache),'--watchdog-expiry','--observe-seconds','90']
             setup=mock.Mock()
             with mock.patch.object(sys,'argv',argv),mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
                 m.p.main(setup)
@@ -117,6 +169,7 @@ class Profile(unittest.TestCase):
             self.assertEqual(command[command.index('--bundle')+1],str(bundle))
             self.assertEqual(command[command.index('--reclaim-cache')+1],str(cache))
             self.assertIn('--watchdog-expiry',command)
+            self.assertEqual(command[command.index('--observe-seconds')+1], '90')
             self.assertTrue(any(v.startswith('--unit=boot-test-') for v in command))
 
     def test_durable_worker_receives_efi_package(self):

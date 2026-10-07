@@ -26,6 +26,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
+OBSERVE_SECONDS = 0
 ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
 PROFILES = {
     'power-kernel': (WORKSPACE / 'handoff/power-kernel-linux/boot-padded-p22.img', 'd2bb1ef41563db0bffaa64f5293f979aeae167b93ab85ea5db67c9fe7d1d1fbc'),
@@ -363,6 +364,30 @@ def candidate_snapshot(ssh, before, profile):
     return result
 
 
+def observe_candidate(ssh, before, directory, profile, state):
+    """Allow bounded measurements after acceptance, before strict qualification."""
+    if not 0 <= OBSERVE_SECONDS <= 90:
+        raise ValueError('Candidate observation must be between 0 and 90 seconds')
+    if not OBSERVE_SECONDS:
+        return
+    started = time.monotonic()
+    record = dict(boot_id=state['boot_id'], seconds=OBSERVE_SECONDS,
+                  completed=False, candidate_qualified=False)
+    qualify.save(directory, 'candidate-observation.json', record)
+    print(f'Candidate observation window: {OBSERVE_SECONDS}s; qualification pending', flush=True)
+    while True:
+        if read_state(directory / 'supervisor.state').startswith(SUCCESS):
+            raise RuntimeError('Automatic rescue ran during candidate observation')
+        if candidate_snapshot(ssh, before, profile) != state:
+            raise RuntimeError('Candidate health or identity changed during observation')
+        remaining = started + OBSERVE_SECONDS - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(5, remaining))
+    qualify.save(directory, 'candidate-observation.json',
+                 dict(record, completed=True, elapsed_seconds=time.monotonic()-started))
+
+
 def candidate_return(ssh, before, directory, profile):
     deadline = time.monotonic() + qualify.HEALTH_TIMEOUT
     while time.monotonic() < deadline:
@@ -378,6 +403,7 @@ def candidate_return(ssh, before, directory, profile):
         tree = handoff_tree(ssh)
         qualify.save(directory, 'candidate-tree.json', tree)
         verify_handoff_tree(json.loads((directory / 'before-tree.json').read_text()), tree, profile)
+        observe_candidate(ssh, before, directory, profile, after)
         if profile in KEY_EVENT_PROFILES:
             qualify.save(directory, 'native-keyboard-evidence.json', dict(
                 boot_id=after['boot_id'], layout='gemian-us-v1',
