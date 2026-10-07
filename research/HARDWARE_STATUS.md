@@ -5,29 +5,38 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at e6840a90de56d, including the tested watchdog and RTC
+Linux branch `gemini` at 18db31826ba99, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback. Historical profiles
 are isolated in `legacy.nix`; `recovery` retains the exact M69 bundle. This
 packaging consolidation does not itself update the installed device. The full
-bundle and EFI files build successfully; the resolved kernel configuration,
-416 hardware DT nodes, 332 reference properties and memory reservations match
-the previous packaged artifacts, allowing regenerated phandles and build
-identity. The hardware settings now live directly in the Linux board DTS;
-48 obsolete overlays and their build targets are removed. `gemini_defconfig`
+bundle and EFI files build successfully. Hardware settings live directly in
+the Linux board DTS; 48 obsolete overlays and their build targets are removed.
+`gemini_defconfig`
 replaces the normal package's fragment assembly, and a small standalone Nix
 kernel recipe replaces its historical profile builder. Native driver tests,
-the full system/EFI build and flake checks pass. A72 build-identity binding
-and runtime service setup still need consolidation.
+the full system/EFI/U-Boot builds and flake checks pass. A72 capability preparation
+now uses board register expectations and architecture-collected system policy
+without Nix rewriting source hashes or adding a DT record. The native DTB is
+copied unchanged, and the only configuration removals are the unused fixture
+option and runtime build-identity option. About 1,200 lines of identity and fixture
+code were removed; live CPU register, topology, capability, mitigation and HWCAP
+checks remain. U-Boot 1ff66d0a accepts both native and historical DTs in host tests.
+Runtime driver startup services and disabled CPU protocol models still need
+consolidation.
 
-The consolidated default passed `handoff/boot-test-03` (candidate boot
-`011ca981-aded-4ba5-b1c2-d91ac6da030b`): full Linux health, real paging with
-the built-in zswap policy, an ordinary unprivileged Nix build, native RTC startup,
+The consolidated default passed `handoff/boot-test-04` (candidate boot
+`0fc40c30-3503-4a32-8cb9-7efde81ed694`): both A72s came online without the old
+DT record, followed by full Linux health, real paging with the built-in zswap
+policy, an ordinary unprivileged Nix build, native RTC startup,
 UTC write/read/ticking, awake alarm delivery/cancellation/rearm and automatic
 M69 recovery. The decoded firmware clock retained UTC across both DA resets.
-The final locked audit retained all 22 ordinary outputs, original home/EFI data
+The final locked audit retained all 23 ordinary outputs, original home/EFI data
 and protected storage, matched 33 executed sources, and stopped all five host
-services. The worker exited zero. This tests the direct boot bundle; the new
-default EFI bundle still needs its own boot-manager trial.
+services. The worker exited zero, and M69 returned healthy as boot
+`3c043a1e-1d1b-4c01-8c70-6be64839f99e`. The previous unused candidate cache was
+archived before replacement; installed EFI entries and the recovery cache were
+retained. This tests the direct boot bundle; the new default EFI bundle still
+needs its own boot-manager trial.
 
 The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
 scan after 120 seconds, leaving transfer time inside its existing 180-second

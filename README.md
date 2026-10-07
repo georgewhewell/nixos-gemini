@@ -34,8 +34,9 @@ The hardware settings now live in Linux's board DTS and `gemini_defconfig`;
 the default build no longer applies hardware overlays or edits DT properties.
 A72 capability preparation now belongs entirely to Linux: native Kbuild uses
 the board register expectations and live system policy, and packaging copies
-the compiled DTB unchanged. U-Boot accepts this DTB as well as older kernels'
-DTs. Both changes build and pass host checks; their device tests are pending.
+the compiled DTB unchanged. This passes the full device boot test. U-Boot's
+host tests cover this DTB format and older kernels' DTs; its updated EFI path
+still needs a device trial.
 The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
 requires those checkouts, or explicit `--override-input` paths.
 
@@ -61,10 +62,11 @@ active loop device or installed EFI entry/initramfs uses it.
 
 ## Device status
 
-The consolidated default passes a complete supervised boot test: healthy Linux,
+The consolidated default boots both A72s without a generated build record.
+It passes the complete supervised test: healthy Linux,
 real swap paging, an unprivileged Nix build, native RTC startup, UTC write/read,
 alarm delivery/cancellation/rearm and automatic M69 recovery. The final audit
-retained home, EFI files and all 22 ordinary Nix outputs. The installed recovery
+retained home, EFI files and all 23 ordinary Nix outputs. The installed recovery
 system remains M69; the current default EFI bundle has not yet had its own
 boot-manager trial. mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
