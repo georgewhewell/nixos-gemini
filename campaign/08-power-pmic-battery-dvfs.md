@@ -19,6 +19,45 @@ The charger reported online/Full and 4.284 V; `mt6351-fgadc` reported battery
 current and Discharging, with no capacity attribute. No cpuidle driver was
 published. Evidence: `handoff/power-rtc-startup-build/recovered-power-observation.stdout`.
 
+## Fixed-voltage A53 DVFS evidence
+
+On October 7, recovered M69 boot
+`488faade-81bc-485e-b673-8a98c449739a` passed an ascending and descending
+walk of all six enabled frequencies (12 measurements). CPU0 ran at
+624/715/806/897 MHz and CPU4 at 1092/1209 MHz. Every hardware frequency
+read matched the request. A pinned PBKDF2 workload produced the expected
+digest at every step; mean CPU time fell from 2642 to 1805 ms on CPU0 and
+1444 to 1301 ms on CPU4, consistent with the frequency changes.
+
+The shared little/CCI rail remained at 1.00 V. CCI stayed at 629999328 Hz
+and A72 at 750 MHz. Measured temperatures ranged from 35.8 to 38.6 C.
+The probe used the existing core-parking hold to bring CPUs0–9 online,
+then restored both governors to schedutil and removed its own hold.
+Core parking returned to CPUs0,8–9 online, the system remained running,
+and the test unit ended inactive with MainPID=0. Policy4 returning EBUSY
+while CPUs4–7 are parked is not a frequency-transition failure.
+Evidence: `handoff/dvfs-current-20261007/{probe.py,result.json,analysis.json,final-health.txt,kernel-check.txt}`.
+
+Historical `handoff/m42c-test-dvfs.txt` also proves the six-frequency walk,
+schedutil reaching both policy maxima under load, emulated thermal cooling
+states and their release, hotplug, and the unchanged 1.00 V rail. Those
+thermal-emulation and load checks were not repeated in the October walk.
+The failed M41 test predates the M42 CPU8 OPP-sharing fix; it is not evidence
+of a current missing CPUFreq interface.
+
+The clock provider, core/header, cpufreq-dt/platform glue and OPP OF code
+are byte-identical between M69's `c0dbf01b2bdaa` and maintained Linux
+`d25a82d67956d` (`source-comparison.json` in the October evidence directory).
+That source comparison does not qualify the maintained kernel as a whole;
+normal cgroup2 allocator stability remains unresolved.
+
+Remaining DVFS work includes CKDIV transitions for the disabled low LL
+frequencies, postdivider transitions, CCI/shared-voltage and CPU LDO/Vsram
+coordination, A72 control, and thermal/load qualification of the expanded
+range. The 221/338/481 MHz LL points require coordinated PLL and path-divider
+changes, so enabling their DT entries alone is insufficient. Battery capacity,
+calibration, charging, deep idle and suspend remain separate unfinished work.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
