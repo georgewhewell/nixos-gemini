@@ -389,6 +389,15 @@ link. M69 recovery and final retention audit passed; no promotion. Evidence:
 `handoff/usb3-fallback-trial-02` and `handoff/usb3-link-diagnostic/fallback-ethernet-capture.txt`
 in the workspace. Grok's allocator instrumentation is unchanged.
 
+The following read-only monitor trial (Linux6615ac9fcf7f4) reports no receiver
+attempts in LTSSM_INFO, no PHY RXPLL lock or CDR/PLL calibration completion,
+and completed TX/RX impedance calibration without receiver detection. Controller
+IRQ count is zero. Clock framework reports enabled 26MHz reference, 124.8MHz
+system and 156MHz bus clocks; VA10 is 950mV. These software observations do not
+prove analog clock delivery, nor distinguish missing clock from a controller
+that never requests PHY startup. Evidence: `handoff/usb3-monitor-trial-01`.
+Candidate still did not enumerate; complete M69 recovery audit passed.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working
