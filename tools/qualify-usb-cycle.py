@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Qualify USB detach/reconnect with separate sleep and recovery guards."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,10 +12,29 @@ import time
 BUS = 'busctl --json=short call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager ListInhibitors'
 NONE = '[none] core processors platform devices freezer'
 WHY = 'Gemini USB diagnostic recovery guard'
+LIMITS = dict(RuntimeMaxUSec='30s', TimeoutStopUSec='3s', KillMode='control-group', RemainAfterExit='yes')
 
 
-def scripts(boot, system, notes, pid, stamp, remote, paths=None):
-    if (not re.fullmatch('[0-9a-f-]{36}', boot) or
+def prerequisites(p):
+    prior = p.ROOT.parent/'handoff/power-swap-05'
+    result = json.loads((prior/'result.json').read_text())
+    candidate = json.loads((prior/'candidate-linux.json').read_text())
+    power = json.loads((prior/'power-swap-evidence.json').read_text())
+    if (result.get('result') != 'passed' or any(result.get(k) is not True for k in
+            ('profile_qualified', 'usb_cycle_qualified', 'fixed_swap_preserved', 'no_writer')) or
+            candidate.get('system') != p.SYSTEM or candidate.get('boot_sha256') != p.BOOT_SHA or
+            power.get('notes_sha256') != p.NOTES_SHA):
+        raise RuntimeError('Selected kernel lacks qualified guarded USB recovery')
+    verify_final(prior)
+    plan = json.loads((prior/'plan.json').read_text())
+    for name, sha in plan['all_executed_sources_sha256'].items():
+        if hashlib.sha256((prior/'executed-sources'/Path(name).name).read_bytes()).hexdigest() != sha:
+            raise RuntimeError('Prior USB source archive changed')
+    return dict(usb_cycle_trial=str(prior), result_sha256=hashlib.sha256((prior/'result.json').read_bytes()).hexdigest())
+
+
+def scripts(boot, system, notes, pid, stamp, remote, paths=None, diagnostic=None):
+    if (diagnostic not in (None, 'devices') or not re.fullmatch('[0-9a-f-]{36}', boot) or
             not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', system) or
             not re.fullmatch('[0-9a-f]{64}', notes) or
             any(not str(v).isdecimal() or int(v) < 2 for v in (pid, stamp)) or
@@ -23,7 +43,8 @@ def scripts(boot, system, notes, pid, stamp, remote, paths=None):
     paths = paths or dict(proc='/proc', run='/run', sys='/sys', remote=remote)
     common = '#!/bin/sh\nset -eu\n' + '\n'.join(
         f'{k}={shlex.quote(str(v))}' for k, v in dict(paths, boot=boot, system=system,
-        notes=notes, owner=pid, stamp=stamp, token=Path(remote).name).items()) + '''
+        notes=notes, owner=pid, stamp=stamp, token=Path(remote).name,
+        diagnostic=diagnostic or 'none').items()) + '''
 udc="$sys/class/udc/11271000.usb"
 same_boot() {
  test "$(cat "$proc/sys/kernel/random/boot_id")" = "$boot" &&
@@ -46,12 +67,17 @@ reconnect() {
  test -f "$remote/armed" || return 0
  same_boot || return 1
  test "$(cat "$run/gemini-usb-cycle.lock/owner")" = "$token" || return 1
+ cleanup_rc=0
+ if test "$diagnostic" = devices; then
+  "$remote/pm-cleanup" || cleanup_rc=$?
+ fi
  if test ! -f "$remote/reconnected"; then
   printf connect > "$udc/soft_connect"
   ip address replace 10.15.19.82/24 dev usb0
   ip link set usb0 up
   touch "$remote/reconnected"
  fi
+ return "$cleanup_rc"
 }
 '''
     hold = common + '''
@@ -128,7 +154,13 @@ printf 'uptime_before='; cut -d' ' -f1 "$proc/uptime"
 printf disconnect > "$udc/soft_connect"
 ''' + BUS + ''' > "$remote/inhibitors-during.json"
 guard_alive
-sleep 5
+if test "$diagnostic" = devices; then
+ pm_status=0
+ "$remote/pm-test" > "$remote/pm-stdout" 2> "$remote/pm-stderr" || pm_status=$?
+ printf '%s\n' "$pm_status" > "$remote/pm-status"
+else
+ sleep 5
+fi
 reconnect
 attempt=0
 while test "$(cat "$udc/state")" != configured; do
@@ -147,14 +179,25 @@ touch "$remote/finished"
     return dict(hold=hold, rescue=rescue, deadline=deadline, cleanup=cleanup, action=action)
 
 
-def returned_command(boot, remote, proc='/proc'):
+def returned_command(boot, remote, proc='/proc', diagnostic=None):
     # Capture action output even when its completion predicate fails. Losing
     # these files on automatic recovery would hide the target's actual error.
+    if diagnostic not in (None, 'devices'): raise ValueError('Unsupported detached diagnostic')
+    capture = ''
+    if diagnostic:
+        capture = f'''for part in pm-stdout pm-stderr pm-status; do
+ if test -f {shlex.quote(remote)}/"$part"; then
+  printf '\\n%s\\n' "$part" >&2
+  cat {shlex.quote(remote)}/"$part" >&2
+ fi
+done
+if test ! -f {shlex.quote(remote)}/finished; then dmesg >&2; fi
+'''
     return f'''set -eu
 test "$(cat {shlex.quote(proc)}/sys/kernel/random/boot_id)" = {shlex.quote(boot)}
 cat {shlex.quote(remote)}/stdout
 cat {shlex.quote(remote)}/stderr >&2
-test ! -f {shlex.quote(remote)}/fallback || exit 4
+''' + capture + f'''test ! -f {shlex.quote(remote)}/fallback || exit 4
 test -f {shlex.quote(remote)}/finished || exit 3
 '''
 
@@ -169,7 +212,8 @@ def inhibitor(raw, who, pid, why=WHY):
     return wanted
 
 
-def verify(raw, boot, pid, stamp, events, initial):
+def verify(raw, boot, pid, stamp, events, initial, diagnostic=None):
+    if diagnostic not in (None, 'devices'): raise ValueError('Unsupported detached diagnostic')
     rows = raw.splitlines(); values = dict(row.split('=', 1) for row in rows)
     expected = dict(boot_id=boot, owner_pid=pid, owner_starttime=stamp, pm_test=NONE, udc_state='configured')
     keys = set(expected) | {'uptime_before', 'uptime_after', 'before_success', 'after_success', 'before_fail', 'after_fail'}
@@ -178,7 +222,9 @@ def verify(raw, boot, pid, stamp, events, initial):
     for k in ('uptime_before', 'uptime_after'):
         if not re.fullmatch('[0-9]+\\.[0-9]+', values[k]): raise RuntimeError('Invalid target clock')
     for name in ('success', 'fail'):
-        if not values['before_'+name].isdigit() or values['after_'+name] != values['before_'+name]:
+        delta = 1 if diagnostic == 'devices' and name == 'success' else 0
+        if (not values['before_'+name].isdigit() or not values['after_'+name].isdigit() or
+                int(values['after_'+name]) != int(values['before_'+name]) + delta):
             raise RuntimeError('Unexpected suspend request during USB cycle')
     elapsed = float(values['uptime_after']) - float(values['uptime_before'])
     if not 4.5 <= elapsed <= 20: raise RuntimeError('Invalid USB disconnect dwell')
@@ -191,11 +237,12 @@ def verify(raw, boot, pid, stamp, events, initial):
     if not 4 <= offline <= 20 or events[1]['monotonic'] <= events[0]['monotonic']:
         raise RuntimeError('Invalid independent USB outage timing')
     return dict(boot_id=boot, target_elapsed_seconds=round(elapsed, 3),
-                host_offline_seconds=round(offline, 3), sleep_requested=False)
+                host_offline_seconds=round(offline, 3), sleep_requested=diagnostic is not None)
 
 
-def run(p, r, ssh, directory, state):
-    out = directory/'usb-cycle'; out.mkdir(mode=0o700)
+def run(p, r, ssh, directory, state, pm=None):
+    diagnostic = 'devices' if pm is not None else None
+    out = directory/('usb-pm-devices' if diagnostic else 'usb-cycle'); out.mkdir(mode=0o700)
     units = json.loads((directory/'units.json').read_text())
     if not p.f.owner_alive(units['supervisor']): raise RuntimeError('USB cycle lacks independent rescue')
     r.wait_state(directory/'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
@@ -207,12 +254,18 @@ def run(p, r, ssh, directory, state):
     owner = p.paging.watchdog(out, state, 'watchdog-before'); pid = owner['owner_pid']
     stamp = r.persistence.run(ssh, f"sed 's/.*) //' /proc/{int(pid)}/stat | awk '{{print $20}}'", out, 'owner-starttime').strip()
     unit = 'gemini-usb-cycle-'+str(int(time.time()))+'-'+str(os.getpid()); remote = '/run/'+unit
-    source = scripts(state['boot_id'], p.SYSTEM, p.NOTES_SHA, pid, stamp, remote)
+    source = scripts(state['boot_id'], p.SYSTEM, p.NOTES_SHA, pid, stamp, remote, diagnostic=diagnostic)
     transfer = f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
 umask 077
 mkdir {remote}
 '''
+    if diagnostic:
+        pm_unit = unit.replace('usb-cycle', 'pm-devices')
+        pm_remote = '/run/'+pm_unit
+        source['pm-test'], source['pm-cleanup'] = pm.scripts(
+            'devices', state['boot_id'], p.SYSTEM, p.NOTES_SHA, pid, stamp, pm_remote)
+        transfer += f'mkdir {pm_remote}\n'
     for name, body in source.items():
         transfer += f"cat > {remote}/{name} <<'SCRIPT'\n{body}\nSCRIPT\nchmod 0500 {remote}/{name}\n"
     r.persistence.run(ssh, transfer, out, 'stage')
@@ -257,7 +310,7 @@ systemd-run --quiet --unit={unit}-action --setenv=PATH=/run/current-system/sw/bi
     until = time.monotonic()+25
     while True:
         try:
-            raw = r.persistence.run(ssh, returned_command(state['boot_id'], remote), out, 'returned', timeout=7)
+            raw = r.persistence.run(ssh, returned_command(state['boot_id'], remote, diagnostic=diagnostic), out, 'returned', timeout=7)
             break
         except (OSError, subprocess.SubprocessError) as error:
             if isinstance(error, subprocess.CalledProcessError) and error.returncode == 4:
@@ -265,12 +318,24 @@ systemd-run --quiet --unit={unit}-action --setenv=PATH=/run/current-system/sw/bi
             if time.monotonic() >= until:
                 raise RuntimeError('USB completion not verified; last SSH result: '+str(error)) from error
             time.sleep(0.5)
-    proof = verify(raw, state['boot_id'], pid, stamp, events, initial)
+    # Collect the PM attempt before verifying the surrounding USB cycle, so
+    # a real device-callback failure survives automatic rescue too.
+    if diagnostic:
+        pm_raw = r.persistence.run(ssh, f'cat {remote}/pm-stdout', out, 'pm-output')
+        r.persistence.run(ssh, f'cat {remote}/pm-stderr', out, 'pm-errors')
+        pm_status = r.persistence.run(ssh, f'cat {remote}/pm-status', out, 'pm-status').strip()
+        diagnostics = r.persistence.run(ssh, 'dmesg', out, 'pm-kernel')
+    service = r.persistence.run(ssh, f'systemctl show {unit}-action -p ActiveState -p SubState -p Result -p MainPID -p ExecMainCode -p ExecMainStatus -p RuntimeMaxUSec -p TimeoutStopUSec -p KillMode -p RemainAfterExit', out, 'action-state')
+    service = dict(row.split('=', 1) for row in service.splitlines())
+    r.qualify.save(out, 'action-state.json', service)
+    if service != dict(LIMITS, ActiveState='active', SubState='exited', Result='success', MainPID='0', ExecMainCode='1', ExecMainStatus='0'):
+        raise RuntimeError('USB action did not finish successfully within its bounds')
+    if diagnostic:
+        if pm_status != '0': raise RuntimeError('Detached device PM script failed; captured PM output and kernel diagnostics')
+        pm_result = pm.verify(pm_raw, service, 'devices', state['boot_id'], pid, stamp, diagnostics, pm_unit, limits=LIMITS)
+    proof = verify(raw, state['boot_id'], pid, stamp, events, initial, diagnostic=diagnostic)
     during = r.persistence.run(ssh, f'cat {remote}/inhibitors-during.json', out, 'inhibitors-during')
     inhibitor(during, unit, guard_pid)
-    service = r.persistence.run(ssh, f'systemctl show {unit}-action -p ActiveState -p SubState -p Result -p MainPID -p ExecMainStatus -p RuntimeMaxUSec -p KillMode', out, 'action-state')
-    if dict(row.split('=', 1) for row in service.splitlines()) != dict(ActiveState='active', SubState='exited', Result='success', MainPID='0', ExecMainStatus='0', RuntimeMaxUSec='30s', KillMode='control-group'):
-        raise RuntimeError('USB action did not finish successfully within its bounds')
     if p.paging.watchdog(out, state, 'watchdog-after') != owner:
         raise RuntimeError('Watchdog ownership changed during USB cycle')
     if r.candidate_snapshot(ssh, json.loads((directory/'before.json').read_text()), p.PROFILE) != state:
@@ -298,8 +363,10 @@ rmdir /run/gemini-usb-cycle.lock
     proof.update(usb_cycle_qualified=True, independent_sleep_inhibitor=True,
                  original_usb_inhibitor_restored=True, watchdog_owner_unchanged=True,
                  post_cycle_health=True, fallback_reboot_requested=False)
+    if diagnostic: proof['pm_diagnostic'] = pm_result
     r.qualify.save(out, 'result.json', proof)
     print('USB disconnected, re-enumerated and returned to full candidate health on the same boot', flush=True)
+    return proof
 
 
 def install(p, r):

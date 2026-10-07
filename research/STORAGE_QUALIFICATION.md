@@ -5,12 +5,13 @@ swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
 `handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
 enabled from boot in the corrected candidate. Its latest automatic M69
-recovery and final audit retained all fifteen Nix build outputs after the
-guarded USB cycle passed in `handoff/power-swap-05`. The earlier device-stage
+recovery and final audit retained all sixteen Nix build outputs after freezer
+and disconnected-device diagnostics passed in `handoff/power-swap-06`. The
+guarded USB cycle had passed separately in `power-swap-05`. The earlier device-stage
 diagnostic was rejected by the connected gadget in `power-swap-03`, and the
 first USB cycle was rejected by a host-verifier bug in `power-swap-04`.
 Both failed profiles recovered automatically and retained their build outputs;
-the successful retry also passed exact storage identity and data retention.
+the successful retries also passed exact storage identity and data retention.
 Promotion of that correction and hibernation remain unfinished.
 
 ## Filesystem and partition geometry

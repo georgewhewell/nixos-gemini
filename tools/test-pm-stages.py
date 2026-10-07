@@ -157,9 +157,21 @@ class Integration(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'candidate-linux.json').write_text(json.dumps({'boot_id':BOOT}))
             stages=[dict(stage=s,boot_id=BOOT,diagnostic_stage_qualified=True,fresh_gpu_render_qualified=True) for s in m.STAGES]
+            stages[-1].update(usb_disconnected=True,usb_guard_qualified=True)
+            usb=dict(boot_id=BOOT,sleep_requested=True,usb_cycle_qualified=True,independent_sleep_inhibitor=True,
+                     original_usb_inhibitor_restored=True,watchdog_owner_unchanged=True,post_cycle_health=True,
+                     fallback_reboot_requested=False)
+            (root/'usb-pm-devices').mkdir()
+            usb_dest=root/'usb-pm-devices/result.json';usb_dest.write_text(json.dumps(usb))
             proof=dict(boot_id=BOOT,pm_diagnostics_qualified=True,stages=stages)
             dest=root/'pm-stages.json';dest.write_text(json.dumps(proof))
             self.assertTrue(m.verify_final(root,'devices')['pm_diagnostics_qualified'])
+            for field in ('usb_cycle_qualified','original_usb_inhibitor_restored','watchdog_owner_unchanged','post_cycle_health'):
+                with self.subTest(field=field):
+                    usb[field]=False;usb_dest.write_text(json.dumps(usb))
+                    with self.assertRaises(RuntimeError):m.verify_final(root,'devices')
+                    usb[field]=True
+            usb_dest.write_text(json.dumps(usb))
             stages[1]['fresh_gpu_render_qualified']=False;dest.write_text(json.dumps(proof))
             with self.assertRaises(RuntimeError):m.verify_final(root,'devices')
             stages.pop();dest.write_text(json.dumps(proof))

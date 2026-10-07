@@ -414,3 +414,64 @@ the worker exited successfully. The new build output is
 The final `result.json` qualifies the USB cycle; `final-idle-check.json` records
 the complete recovery/data audit. The next step is to reuse this guard for
 device-stage diagnostics. Full suspend/wake and hibernation remain unqualified.
+
+## Device diagnostics with USB disconnected
+
+`--pm-test devices` now runs the freezer diagnostic and full post-freezer
+health check, then runs the device diagnostic inside the qualified USB guard.
+Admission requires the exact candidate's retained watchdog and guarded USB
+results, including the archived executed sources. The standalone `--usb-cycle`
+profile continues to request no sleep.
+
+The device script executes locally as a child of the bounded 30-second USB
+action while the gadget is disconnected. It retains the existing boot/kernel,
+watchdog descriptor/owner, PM selection, five-second delay and recovery-window
+checks. Its cleanup resets its own PM selection before USB reconnection. A
+child failure is recorded and USB reconnection still runs; a failed PM cleanup
+also permits a reconnection attempt without qualifying the test. The independent
+sleep inhibitor and 120-second reboot/watchdog fallback cover the whole action.
+Both action and child diagnostics are captured when SSH returns, including an
+incomplete parent's failure output.
+
+Qualification requires the expected single new successful suspend diagnostic,
+all failure counters unchanged, scoped kernel entry/delay/exit markers, the
+same watchdog owner, a real host-observed USB outage/new enumeration, restored
+normal USB inhibition, cleared PM/USB locks, fresh GPU rendering and full
+candidate health. The final profile also requires automatic M69 recovery and
+the complete storage/data/source audit. It does not exercise noirq callbacks,
+full suspend/wake or hibernation.
+
+All 42 host tests pass, including the actual generated USB and PM programs
+executed together with simulated hardware: successful order, failed-child
+reconnection, stop cleanup, foreign-lock preservation and incomplete-parent
+diagnostic capture. Read-only preflight passed in
+`handoff/pm-detached-preflight-01`; source/test hashes are in
+`handoff/pm-detached-qualification/host-tests.json`.
+
+Candidate boot `ddf45458-0a52-40fd-8af6-7f9900972e34` passed both stages in
+`handoff/power-swap-06`. Freezer took 5.25 seconds and device diagnostics took
+6.55 seconds. The success counter advanced 0 → 1 → 2, while every failure
+counter stayed zero. Each stage restored `pm_test=none`, retained watchdog
+owner PID 555/start time 7799 and passed a fresh 8,192-pixel Panfrost render.
+Candidate service health and protected-storage identities matched afterward.
+
+During the device stage, the host observed a 7.880-second USB outage and a
+new enumeration; the target's complete interval was 8.29 seconds. Logind
+retained diagnostic inhibitor PID 5591 throughout, while the normal USB
+inhibitor PID 578 disappeared and returned. The parent service completed
+within its 30-second bound, both diagnostic locks were removed, and the
+fallback did not run. Evidence is in `pm-stages.json`, `pm-freezer/`,
+`usb-pm-devices/` and `pm-devices/`. These results cover device suspend/resume
+callbacks before late/noirq; wake-source delivery and later PM stages still
+need separate qualification.
+
+Automatic recovery restored healthy M69 boot
+`f5c4018e-0cc1-4dda-9fd2-043e6adf258f`. The final audit held both flash locks,
+preserved the exact fixed-swap layout and original home/EFI proofs, retained
+all sixteen ordinary Nix outputs and matched all twenty-seven current and
+archived executed-source hashes. The final result qualifies both PM stages;
+all five host units are inactive with PID zero, and the durable worker exited
+successfully. See `result.json`, `final-idle-check.json` and
+`terminal-verification.json`. The sixteenth retained output is
+`/nix/store/lagdvw19i80rxhs33dznk92smj714r48-gemini-daemon-8d07305cb1974c06a2767f3168dd878b`.
+The candidate remains opt-in; M69 remains installed with its original policy.

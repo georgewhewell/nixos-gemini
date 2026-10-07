@@ -154,7 +154,8 @@ def configure(watchdog=False, pm_test=None, cycle=False):
     r.pm_test_last_stage = pm_test
     r.usb_cycle_requested = cycle
     context = SimpleNamespace(ROOT=ROOT, f=f, paging=paging, SYSTEM=SYSTEM,
-                              NOTES_SHA=NOTES_SHA, KERNEL=KERNEL, BOOT_SHA=BOOT_SHA, PROFILE=PROFILE)
+                              NOTES_SHA=NOTES_SHA, KERNEL=KERNEL, BOOT_SHA=BOOT_SHA, PROFILE=PROFILE,
+                              usb_cycle=usb_cycle)
     if watchdog:
         watchdog_expiry.install(context, r)
     if pm_test: pm_stages.install(context, r, pm_test)
@@ -183,6 +184,9 @@ def preflight(r, directory, execute):
         if r.pm_test_last_stage or r.usb_cycle_requested:
             r.qualify.save(directory, 'pm-prerequisites.json', pm_stages.prerequisites(
                 SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, KERNEL=KERNEL, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA)))
+        if r.pm_test_last_stage == 'devices':
+            r.qualify.save(directory, 'usb-prerequisites.json', usb_cycle.prerequisites(
+                SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA)))
         plan = json.loads((directory/'plan.json').read_text())
         names = {('nix/' if name == 'generate-late-cpu-provenance.py' else 'tools/') + name
                  for name in plan['executed_sources_sha256']}

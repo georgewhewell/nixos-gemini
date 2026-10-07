@@ -106,7 +106,13 @@ Automatic recovery and the final locked audit retained all fifteen Nix
 outputs, matched twenty-seven executed sources and found no writer. The first
 attempt (`power-swap-04`) was rejected by a reproduced host filename collision;
 it also recovered and retained its build output. The corrected retry completed
-automatically. Device diagnostics with the gadget disconnected are next.
+automatically. Trial `power-swap-06` then passed freezer and device diagnostics
+with the gadget disconnected, taking 5.25 and 6.55 seconds respectively. Both
+restored the PM selection, retained the same watchdog owner and passed fresh
+GPU rendering and candidate health. USB returned after 7.880 seconds under
+the separate sleep inhibitor. Automatic M69 recovery retained all sixteen
+Nix outputs, matched twenty-seven executed sources and found no writer;
+the worker exited successfully and all trial services are inactive.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -117,13 +123,34 @@ Direct M69 remains installed. See
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
-| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer diagnostics and guarded software USB detach/reconnect pass. The attached gadget intentionally vetoes device suspend; diagnostics with it disconnected are next. Full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection around the device stage and fresh GPU rendering afterward. Wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
+| USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |
 | Media | JPEG was hardware-tested historically; video encode/decode remains unimplemented and requires further vendor investigation |
 | Consolidation | Merge qualified work, reconcile stale docs and stranded branches, and preserve reproducible source/artifacts |
+
+### USB SuperSpeed evidence
+
+The selected `mt6797-gemini-pda.dts` uses only `u2port0` and explicitly sets
+`maximum-speed = "high-speed"` on the left MTU3 port. The SoC DT also describes
+`u3port0`, but its presence alone does not establish physical lane routing.
+The actual controller capability check logs `IP version 0x0(U3 IP)` followed
+by `max_speed: high-speed` in `power-swap-06/usb-pm-devices/pm-kernel.stdout`:
+USB3 controller capability is observed, while the configured link remains USB2.
+The clean Gemian vendor source at commit
+`8cfe6596a503612e3332d9c26e292a19525a7f07` enables `CONFIG_USB_MU3D_DRV` in
+`aeon6797_6m_n_defconfig`; its selected MU3D header defines `SUPPORT_U3`, and
+the gadget driver therefore advertises `USB_SPEED_SUPER`. The board DTS also
+describes FUSB340 switch and redriver controls. These are source clues, not
+retained proof of those components or SuperSpeed operation on this device.
+The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
+identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
+describes the ports' roles without data rates. Preserve the current working
+USB2 recovery path while establishing the board routing, orientation control
+and actual SuperSpeed link. Host USB bus numbering is not a speed measurement.
 
 ## Storage and recovery correction
 
