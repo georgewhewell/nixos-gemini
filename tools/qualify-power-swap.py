@@ -54,7 +54,7 @@ def store_profile(provisioner):
 def prior_outputs(root=ROOT.parent/'handoff', exclude=None):
     retained = {}
     for path in sorted(root.glob('power-*/nix-candidate.json')):
-        if path.parent == exclude or not re.fullmatch(r'power-(swap|rtc|rtc-calendar)-[0-9]+', path.parent.name): continue
+        if path.parent == exclude or not re.fullmatch(r'power-(swap|rtc|rtc-calendar|rtc-startup)-[0-9]+', path.parent.name): continue
         proof = json.loads(path.read_text()); token = proof.get('token', '')
         if (proof.get('ordinary_daemon_build_qualified') is not True or
                 not re.fullmatch('[0-9a-f]{32}', token) or

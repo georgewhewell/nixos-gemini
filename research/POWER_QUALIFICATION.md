@@ -762,3 +762,73 @@ retention do not prove suspend wake or RTC power-on.
 | p22 SHA-256 | `92528b092a5ef5caab863c353978da9866046db5d37ebcba824b070b3fd93a79` |
 | Kernel notes SHA-256 | `0de66a120a0d13afcd3f6177cd260daa1426b6d38dc6b738fc1316ae4260eb10` |
 | Squashfs | 427,040,768 bytes; `5377cc00ba1f7eb87d38ba552787362df1f5308daa3dbc0aaf14753785aa8938` |
+
+### Native RTC startup qualification
+
+`tools/qualify-power-rtc-startup.py` reuses the calendar candidate and pinned
+RTC-preserving mtkclient package. Its read-only preflight requires an already
+retained, firmware-decoded RTC value matching host UTC, unchanged healthy M69,
+the exact enabled shutdown unit and no existing runtime clock-policy drop-in.
+It retains the complete existing storage and ordinary-build inventory.
+
+Only after the original transaction owner, candidate writer, supervisor and
+network service are active does execution install a temporary systemd
+`ConditionPathExists` drop-in under `/run`. Its unique condition path is absent,
+so the incompatible legacy shutdown writer is skipped. The real unit is
+started to verify the failed condition, zero command PID/start timestamp and
+continued RTC agreement with the host before requesting the existing reboot.
+No RTC register or persistent service policy is written by this helper.
+Setup errors remove the owned drop-in; final cleanup checks the original
+policy on recovered M69, or removes the exact owned file if the initial boot
+never changed. The runtime drop-in disappears across reboot.
+
+After normal candidate health, paging and an ordinary build, but before the
+calendar helper's explicit `hwclock` write, the new check requires native RTC
+and system UTC to match the host. It also requires `rtc0/hctosys=1` and a unique
+kernel RTC initialization message whose date, epoch and monotonic timestamp
+agree with that retained value and current uptime. The candidate shutdown
+writer must still be unexecuted. This distinguishes correct startup from
+NTP correcting the system clock after an incorrectly decoded RTC. The full
+UTC write/read, alarm sequence, automatic recovery and final locked data/source
+audit follow. A failed startup or policy-cleanup check fails the whole profile.
+
+All 40 relevant host tests pass, including nine new tests for stale or
+misencoded RTC values, missing/duplicate kernel initialization evidence,
+uptime/time disagreement, runtime policy guard ordering, source-profile
+isolation, recovery after missing startup proof and cleanup failures. The
+actual generated cleanup shell is also exercised against an isolated
+filesystem: it removes the exact owned policy on the original boot, preserves
+foreign contents and refuses to remove a stale file from a different boot.
+The read-only preflight passed in `power-rtc-startup-preflight-01`.
+
+The complete hardware trial `power-rtc-startup-01` passed on candidate
+`fb08f986-7fdf-42c4-977b-9e79773b8caa`. The real legacy shutdown unit's condition
+was observed false, its command stayed unexecuted, and decoded RTC still
+matched UTC immediately before the initial reboot. The corrected kernel
+initialized the system clock to 2026-10-07 02:30:08 UTC at boot time 1.339061 s.
+At uptime 218.27 s, native RTC epoch 1791340425 matched the independent host
+observation 1791340424.980–1791340425.498. This evidence precedes the calendar
+write at epoch 1791340427; readback/ticking and all three awake alarm stages
+then passed (IRQ deltas 1/0/1 over 13.14/13.17/13.14 s).
+
+Automatic recovery restored healthy M69 boot
+`fd1a8110-b44a-4c43-b0e7-7abee14a53ea`. The firmware-decoded RTC was 1791340747,
+matching host UTC again. The runtime drop-in was absent and the exact original
+enabled shutdown unit was restored. The final audit acquired both locks,
+retained all twenty ordinary build outputs and original home/EFI proofs,
+matched 35 current/archived executed sources, preserved protected storage and
+found no writer. The worker exited zero; all five host units are inactive with
+PID zero. The final `result.json`, `rtc-startup-result.json`,
+`rtc-calendar-reboot.json`, `final-idle-check.json` and
+`terminal-verification.json` contain the complete result. This qualifies the
+corrected native startup path and temporary legacy transition; canonical
+kernel/clock-policy promotion remains separate.
+
+For subsequent sleep work, the selected source confirms that the RTC driver
+enables its child wake IRQ, the PMIC parent installs the wake mask and enables
+its upstream IRQ, and the watchdog stops in `suspend_noirq`. The `platform`
+PM test reaches that no-IRQ boundary; it is supported for s2idle. The `processors`
+and `core` PM tests are explicitly rejected for s2idle. These source facts do
+not qualify the physical wake path. Repeat the relevant watchdog/USB/PM
+prerequisites on the selected kernel and establish bounded recovery through
+no-IRQ before unattended full suspend/wake trials.

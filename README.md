@@ -53,9 +53,11 @@ cancellation and rearming, with automatic M69 recovery and all seventeen
 ordinary build outputs retained. A separate calendar correction now matches
 the firmware's MT6351 year encoding and passes native UTC write/read/ticking,
 awake alarms and retention through automatic recovery when mtkclient requests
-RTC preservation. All nineteen ordinary build outputs survived. Corrected
-kernel startup from retained UTC and legacy M69's shutdown clock-save policy
-still need qualification and consolidation; see the
+RTC preservation. Corrected-kernel startup from retained UTC now also passes,
+including the kernel's early clock initialization before any explicit clock
+write. All twenty ordinary build outputs survived. Legacy M69's incompatible
+shutdown writer was temporarily skipped for that transition; normal promotion
+of the corrected kernel and clock policy remains. See the
 [power qualification report](research/POWER_QUALIFICATION.md).
 See [power evidence](research/POWER_QUALIFICATION.md) and the
 [fixed-swap plan](research/STORAGE_QUALIFICATION.md).

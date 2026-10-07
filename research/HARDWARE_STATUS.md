@@ -24,7 +24,7 @@ Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
 healthy M69 boot after the calendar candidate's automatic recovery is
-`e402eccb-143e-49cb-afb6-d8a3fc5a7b49`, with `/persist`,
+`fd1a8110-b44a-4c43-b0e7-7abee14a53ea`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -131,8 +131,13 @@ wrong date; only the candidate has the calendar correction.
 Periodic kernel clock updates are disabled; NixOS's existing shutdown
 clock-save service is enabled and still writes the old encoding on M69.
 The preserved initial candidate clock read 2094 before its explicit UTC write,
-consistent with that old shutdown encoding. Corrected-kernel startup from
-retained UTC and shutdown-policy consolidation remain separate work.
+consistent with that old shutdown encoding. The subsequent
+`power-rtc-startup-01` temporarily skipped the legacy writer and proved native
+UTC startup, including the kernel's RTC_HCTOSYS timestamp before any explicit
+clock write. UTC/alarm/recovery checks passed again; twenty ordinary outputs
+and 35 executed sources passed the final locked audit. The original shutdown
+policy is restored and all five trial services are inactive. Promotion of the
+corrected kernel and clock policy remains.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -143,11 +148,12 @@ Direct M69 remains installed. See
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
-| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection and fresh GPU rendering. The successor RTC kernel fixes alarm cancellation and firmware calendar encoding; native UTC write/read/ticking, awake delivery/cancellation/rearm and clock retention through RTC-preserving DA recovery pass. Corrected-kernel startup and shutdown policy, wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain; the new kernel needs its own watchdog/PM prerequisites |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection and fresh GPU rendering. The successor RTC kernel fixes alarm cancellation and firmware calendar encoding; native UTC startup/write/read/ticking, awake delivery/cancellation/rearm and clock retention through RTC-preserving DA recovery pass. Kernel/clock-policy promotion, wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain; the new kernel needs its own watchdog/PM prerequisites |
 | USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
+| Battery / DVFS | Fresh read-only M69 observations expose charger status/voltage, fuel-gauge current and CPUFreq policies 0/4 using cpufreq-dt/schedutil. The fuel gauge publishes no capacity attribute, and no cpuidle driver is present. Reconcile prior DVFS transition/load evidence; qualify battery calibration/capacity, charging behavior and remaining frequency/thermal cases. Status observations do not prove those behaviors; see campaign/08-power-pmic-battery-dvfs.md |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |
 | Media | JPEG was hardware-tested historically; video encode/decode remains unimplemented and requires further vendor investigation |
 | Consolidation | Merge qualified work, reconcile stale docs and stranded branches, and preserve reproducible source/artifacts |
