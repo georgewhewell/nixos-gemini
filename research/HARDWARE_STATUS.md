@@ -398,6 +398,18 @@ prove analog clock delivery, nor distinguish missing clock from a controller
 that never requests PHY startup. Evidence: `handoff/usb3-monitor-trial-01`.
 Candidate still did not enumerate; complete M69 recovery audit passed.
 
+An export-only diagnostic forcing MAC VBUS sense (MISC_CTRL bits1:0) restores
+left USB enumeration: device configured/high-speed and host480Mb/s, with the
+same candidate verified over both left USB and right Ethernet. LTSSM_INFO changes
+to0x300 and SOFT_CONN becomes set. This establishes that the MAC sense override
+unblocks startup/fallback despite IPPC already indicating VBUS valid. It does
+not establish SuperSpeed. PHYD_MON2 remains0xb0 after fallback, so that final
+reading alone cannot diagnose absent clock delivery. A production policy must
+track real attachment; the unconditional override remains diagnostic-only.
+Evidence: `handoff/usb3-mac-vbus-trial-01`. Normal cgroup-v2 qualification rejected
+the temporary cgroup-v1 setup as expected; automatic M69 recovery and full audit
+passed. No promotion or allocator change.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working
