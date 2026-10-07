@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at ab00b6336ec4b, including the tested watchdog and RTC
+Linux branch `gemini` at 516b58a0a53eb, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
@@ -268,7 +268,7 @@ Direct M69 remains installed. See
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. Consolidated U-Boot boots the normal installed NixOS entry through systemd-boot, with real EFI variables, memory map, native CPU DT and boot-file readback verified. Native Unicode/modifier behavior passes host tests; actual EFI polling passed the earlier complete device trial. Physical key selection, the separate power/Escape input, persistent EFI settings, permanent promotion and normal NixOS generation management remain. Per-entry DT fixup preserves LK reservations and both native and historical CPU trees; an older carrier also boots a newer kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; installation of the consolidated default and normal generation updates remain |
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
-| USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
+| USB speed and roles | The maintained left MTU3 DT enables both PHYs and SuperSpeed; trials still negotiate only 480 Mb/s with the diagnostic MAC VBUS override. Recovery M69 remains capped to USB2. Board lane routing and a real 5 Gb/s connection remain unverified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
@@ -279,7 +279,7 @@ Direct M69 remains installed. See
 
 ### USB SuperSpeed evidence
 
-The selected `mt6797-gemini-pda.dts` uses only `u2port0` and explicitly sets
+The recovery M69 board configuration uses only `u2port0` and explicitly sets
 `maximum-speed = "high-speed"` on the left MTU3 port. The SoC DT also describes
 `u3port0`, but its presence alone does not establish physical lane routing.
 The actual controller capability check logs `IP version 0x0(U3 IP)` followed
@@ -430,6 +430,21 @@ on PHYD_MON5 loopback bit positions. Earlier calibration/PLL interpretations are
 header-derived, not independently confirmed for this revision. Retain raw MON2
 and MON5 values; these do not establish a PHY clock fault. MAC traces and paired
 host/device negotiated speeds are unaffected by this header inconsistency.
+
+The maintained MT6797 USB3 tuning was also compared with the vendor's active
+`usb_phy_recover()` writes, including absolute bank offsets and masks: RX/TX
+impedance, IEXT, 3.5 dB drive/de-emphasis, CDR, equalizer steps, XTAL and CHIP
+settings agree. Vendor comments contain different TX impedance and drive
+values from the executed code; the maintained driver follows the code. The
+vendor USB2 EOP adjustment at U2PHY+0x70 is separate and is not evidence of a
+SuperSpeed tuning mismatch.
+
+Linux 516b58a0a53eb extends the LTSSM event with raw status and interrupt-enable
+mask, preserving the handled-status field and existing acknowledgement and
+interrupt behavior. This can expose latched masked events at handler entry;
+it cannot timestamp every transition or make masked events trigger an IRQ.
+The real-function fake-MMIO test verifies raw/masked trace values and that
+masked status remains pending. The ARM64 MTU3 object build passes.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
