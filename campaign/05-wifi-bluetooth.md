@@ -39,7 +39,7 @@ WPA2 association also passed. Both trials received 7/8 gateway replies, with
 the first reply absent. Preserve those failed loss checks; these observations
 do not establish loss-free traffic. An earlier
 trial never exposed the supplicant socket during its 55-second probe, for an
-unknown reason. All three trials retained strict qualification, which rejected the
+unknown reason. All four trials retained strict qualification, which rejected the
 cgroup1 diagnostic. Neither qualifies the normal generation. Build artifacts
 and the next probe, which captures ARP/ICMP headers and subsequent traffic, are in
 `handoff/wifi-station-20261007`.
@@ -48,7 +48,19 @@ On recovered M69, `handoff/wifi-first-packet-20261007` recorded an initially
 empty neighbor cache, successful ARP resolution, all 8 initial ping replies and
 all 12 subsequent replies. Capture contains every request/reply; interface
 errors/drops stayed zero. This does not yet identify the candidate's lost first
-reply. Collect the matching candidate capture before attributing a regression.
+reply.
+
+The matching capture in `handoff/wifi-station-trial-04` records successful host
+ARP resolution and the first outgoing echo request. About 60 ms later the
+gateway asks for the Gemini's MAC; the Gemini responds, but the first echo reply
+is absent. The following 12 pings pass. TX diagnostics account for every queued
+packet as submitted, with no failures, credit waits or new interface drops.
+Deleting only the Gemini's gateway-neighbor entry and repeating then passes all
+8 pings, including the first. This points toward initial return-path neighbor
+resolution at the gateway, but does not prove its cause: host capture and HIF
+submission cannot establish airtime completion or gateway receipt. Preserve
+the failed initial check; no driver workaround was made. Station callbacks and
+fresh-signal reporting pass again. Normal cgroup2 stability remains separate.
 
 The September 30 M51 record separately reports WPA3-SAE/PMF data and three
 successful reconnects. Scanning while associated to a WPA3 or 5 GHz network,
