@@ -164,6 +164,55 @@ FGADC still exposes current and charge counter without capacity. Remaining
 work must establish voltage/temperature inputs, counter calibration and
 initial-state estimation before publishing a battery percentage.
 
+The current board uses a118 percent current/coulomb multiplier. The same
+vendor header defaults to115 on the MT6351 configuration, but the vendor
+FG daemon can replace it with `FG_DAEMON_CMD_SET_CAR_TUNE_VALUE`
+(`battery_meter_fg_20.c:4706`). Therefore the header default alone does not
+justify changing the native multiplier. Its per-device calibration provenance
+still needs checking. The original native overlay commit4cd4726d75b7c
+explicitly took118 from the generic vendor DTS; it did not cite a measured
+factory value. That DTS is not the selected vendor initializer described
+above, so118 must not be described as an established per-device calibration. Vendor `get_hw_chip_diff_trim_value()` also hardcodes
+trim index0, yielding1000 permille, in the selected source path.
+
+## Battery measurement supplier integration
+
+Linux ae2f67c1f0182 connects the native FGADC battery monitor to the board's
+BQ25896 power supply through `power-supplies`. The battery's voltage and
+temperature properties delegate to the charger; current and charge count
+continue to use the PMIC gauge. Missing suppliers defer before changing gauge
+hardware; malformed supplier lists reject. Boards without the optional link
+retain the original property set. Charger notifications now propagate to the
+battery device. The BQ25890 family driver publishes its firmware node so the
+power-supply core can resolve the supplier relationship.
+
+The voltage source is the charger's battery-terminal ADC; its temperature
+conversion is the existing rough10K NTC lookup, not a new calibration result.
+No capacity estimate or charging-policy changes are introduced. Host tests
+exercise native/supplier routing, read errors, signed temperatures, missing
+and malformed references, probe deferral, notifications and firmware-node
+registration in normal and read-only charger modes. ARM64 gauge/charger
+objects and Gemini DT compile; targeted binding validation passes. Both normal
+and diagnostic bundles build with the same kernel and all packaged tests pass.
+
+Diagnostic boot `ea2e7520-4e2a-4af3-b0aa-04f8833eaf24` verifies the actual
+supplier phandle and all12 sequential battery/charger comparisons match
+exactly:4.284 V and38.0 C over6.915 seconds. Battery uevents contain the new
+voltage and temperature properties. Native current samples range from
+-25.960 to-2.360 mA; charge counter remains0 during this short window.
+The probe ends inactive/MainPID0 and the system remains running. Captured
+kernel log has no gauge timeout, BUG, Oops, WARNING or clock-fencing report.
+Evidence: `handoff/battery-supplier-trial-01/{battery.json,summary.json,after-probe.txt,kernel-error-check.json}`;
+build/probe sources and calibration provenance are in
+`handoff/battery-supplier-20261007`.
+
+This qualifies property routing and available readings under the diagnostic
+configuration. It does not calibrate the analog inputs or establish capacity.
+The separate native status read still follows instantaneous gauge-current
+sign: it toggled Charging/Discharging/Not charging while the charger remained
+online/Full. Those sequential readings are not atomic; stable charging-status
+integration remains work to do.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
