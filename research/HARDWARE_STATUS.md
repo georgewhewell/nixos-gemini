@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 8482b753c5143, including the tested watchdog and RTC
+Linux branch `gemini` at 4c2b238f72cfe, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
@@ -299,10 +299,9 @@ the right port's HDMI path, not evidence of left-port SuperSpeed routing.
 
 The left controller at I2C1 address 0x25 also lacks a valid vendor interrupt
 assignment: the retained July 14 vendor capture reports IRQ 0 / -EINVAL,
-while the right controller at I2C0 address 0x25 uses GPIO64/EINT3. Linux still
-only enables the latter. The current host connection and device UDC both
-report high-speed (480 Mb/s); the host's paired SuperSpeed root hub is present,
-but cable lane capability and the Gemini's physical routing remain unverified.
+while the right controller at I2C0 address 0x25 uses GPIO64/EINT3. The recovered M69 kernel enables only the latter. Its host connection and
+device UDC report high-speed (480 Mb/s). The owner has confirmed a known
+SuperSpeed cable and host port; Gemini routing remains unverified.
 
 The maintained FUSB301 driver now consumes an optional connector-graph USB
 role switch, selects host/device on attach, and stops data plus source power
@@ -351,6 +350,14 @@ boot runner now records actual USB speed from the device and the exact host
 network interface, with tests covering USB2/USB3 bus changes and mismatched
 speeds. The owner confirmed a known SuperSpeed cable and host port. Device
 trial awaits resolution of the allocator failure in the normal generation.
+
+The left FUSB301 now has a native sink/device-only connector node. With no
+verified IRQ assignment it polls attachment and orientation every 500 ms on
+the freezable workqueue; source-capable polling is rejected. Removal waits for
+polling to stop before releasing the port. Linux commits 5d1512b3bc9fa,
+d9878cfd22dc6 and 4c2b238f72cfe include the binding, driver and board changes.
+Host regressions, ARM64 object/DTB build and targeted schema validation pass.
+Normal packaging pins these changes. Device validation remains outstanding.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
