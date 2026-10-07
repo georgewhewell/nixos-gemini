@@ -259,6 +259,14 @@ handling before conversion to an OCV lookup table. These are source-profile
 properties, not installed-battery capacity or calibration evidence. Shape
 analysis is in `handoff/battery-status-20261007/vendor-profile-shape.json`.
 
+The battery-status trial completed automatic recovery to healthy M69 boot
+`a8d32ece-2bd2-47a3-8cf5-fe9d92c18659`. The worker is terminal, and the
+final audit confirms no writer, both locks acquired, all 35 source hashes
+unchanged and all 26 ordinary outputs retained. The diagnostic remains
+unqualified for normal cgroup2 operation; no default was promoted. Final
+evidence: `handoff/battery-status-trial-01/final-idle-check.json` and
+`handoff/battery-status-20261007/completion.json`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
