@@ -5,8 +5,10 @@ swap partition is now installed and active, including after an ordinary reboot
 in `handoff/fixed-swap-02`. Restoration to the original GPT/header passed in
 `handoff/fixed-swap-01`. Paging under pressure now passes with zswap's shrinker
 enabled from boot in the corrected candidate. Its latest automatic M69
-recovery and final audit retained all seventeen Nix build outputs after the
-RTC alarm correction passed in `handoff/power-rtc-01`. Freezer and disconnected
+recovery and final audit retained all nineteen Nix build outputs in
+`handoff/power-rtc-calendar-04`. The complete calendar trial also passed
+UTC write/read and retention with RTC-preserving DA exits, recorded in
+[POWER_QUALIFICATION.md](POWER_QUALIFICATION.md). Freezer and disconnected
 device diagnostics passed earlier in `power-swap-06`. The
 guarded USB cycle had passed separately in `power-swap-05`. The earlier device-stage
 diagnostic was rejected by the connected gadget in `power-swap-03`, and the
@@ -14,6 +16,30 @@ first USB cycle was rejected by a host-verifier bug in `power-swap-04`.
 Both failed profiles recovered automatically and retained their build outputs;
 the successful retries also passed exact storage identity and data retention.
 Promotion of that correction and hibernation remain unfinished.
+
+## Capacity of the boot userspace cache
+
+The first calendar candidate reached Stage 1 but its userspace upload guard
+rejected insufficient p29 space: 104 cached test images left 173,860 KiB free
+against 418,056 KiB required. No RTC test or upload was performed in that
+attempt. Accepted boot payloads and persistent storage remained intact.
+
+The calendar runner now checks capacity before reboot. If needed, it archives
+the exact preceding opt-in RTC squashfs on the host, verifies its 427,040,768
+bytes and SHA-256, and confirms no active loop device or installed Gemini
+initrd/loader entry refers to it. Only then may the existing, identified
+Stage 1 provisioning transaction remove that cache copy, after its normal
+writable/journalled-mount guards. The host archive and original Nix bundle
+remain available. No active read-only/noload mount is remounted writable.
+
+This path passed in `power-rtc-calendar-03`: old cache
+`4bfae12544e2d4d885a1a11552ebc27ab0e24d945498d4a44317f497a3316ae5`
+was archived and pruned, and calendar cache
+`5377cc00ba1f7eb87d38ba552787362df1f5308daa3dbc0aaf14753785aa8938`
+was installed. The full retained-output, home, EFI, GPT, filesystem and swap
+checks passed after automatic recovery. The final archive was rehashed and
+the single expected prune marker verified. Later use of the old RTC profile
+can re-upload its preserved image. General cache consolidation remains open.
 
 ## Filesystem and partition geometry
 

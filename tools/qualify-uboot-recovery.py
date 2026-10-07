@@ -410,6 +410,24 @@ def read_state(path):
     return path.read_text() if path.exists() else ''
 
 
+def request_linux_rescue(ssh, before, directory, profile, wait_seconds=0):
+    # A host observer failure can follow a successful image write. Give that
+    # exact candidate time to expose SSH while the existing rescue scan runs.
+    # A recovered baseline or an unidentified instance must never be rebooted.
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        if read_state(directory / 'supervisor.state').startswith(SUCCESS):
+            return False
+        if candidate_needs_rescue_reboot(ssh, before, profile):
+            wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
+            print('Rebooting the identified candidate into the waiting rescue writer', flush=True)
+            reboot(ssh, directory, 'rescue-reboot-request.json')
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(3)
+
+
 def wait_state(path, prefix, seconds, terminal=True):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -605,10 +623,6 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
             (directory / 'candidate-linux-error.txt').write_text(str(error) + '\n')
             print(f'Candidate Linux NOT qualified: {error}', flush=True)
-        if candidate_needs_rescue_reboot(ssh, before, profile):
-            wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
-            print('Rebooting the identified candidate into the waiting rescue writer', flush=True)
-            reboot(ssh, directory, 'rescue-reboot-request.json')
     elif profile == 'baseline' and read_state(candidate_state).startswith('flash_rc=0 '):
         middle = healthy_return(ssh, before, directory, 'baseline-middle')
         if verify_persistence:
@@ -624,6 +638,9 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         recovery_before = middle
     else:
         recovery_before = before
+    if profile in LINUX_PROFILES:
+        request_linux_rescue(ssh, before, directory, profile,
+            wait_seconds=0 if read_state(candidate_state).startswith('flash_rc=0 ') else 150)
     wait_state(supervisor_state, SUCCESS, 680)
     print('Rescue write/readback and reboot verified; waiting for healthy M69', flush=True)
     after = healthy_return(ssh, recovery_before, directory, 'after')

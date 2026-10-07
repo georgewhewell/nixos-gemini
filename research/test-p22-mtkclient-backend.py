@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Host-only evidence and USB-ordering tests; never open a real USB device."""
 import importlib.util
+import errno
 from pathlib import Path
 import tempfile
 import unittest
@@ -18,6 +19,69 @@ GADGET = ('0525', 'a4a2', '6')
 DA = ('0e8d', '2000', '7')
 FIRST = ('0e8d', '2000', '8')
 SECOND = ('0e8d', '2000', '9')
+
+
+class SnapshotTests(unittest.TestCase):
+    def test_disappearing_sysfs_attributes_are_incomplete_until_directory_gone(self):
+        for error in (errno.ENOENT, errno.ENODEV):
+            for exists in (True, False):
+                with self.subTest(error=error, exists=exists), \
+                        patch.object(Path, 'read_text', side_effect=OSError(error, 'USB disconnected')), \
+                        patch.object(Path, 'exists', return_value=exists):
+                    self.assertEqual(backend.usb_snapshot('3-2'), backend.UNKNOWN if exists else None)
+
+    def test_unrelated_io_and_permission_errors_remain_fatal(self):
+        for error in (errno.EIO, errno.EACCES):
+            with patch.object(Path, 'read_text', side_effect=OSError(error, 'fault')), self.assertRaises(OSError):
+                backend.usb_snapshot('3-2')
+
+    def test_reenumeration_during_snapshot_does_not_prove_a_new_device(self):
+        with patch.object(Path, 'read_text', side_effect=['7','0e8d','2000','8']):
+            self.assertEqual(backend.usb_snapshot('3-2'), backend.UNKNOWN)
+        with patch.object(Path, 'read_text', side_effect=['7','0e8d','2000','7']):
+            self.assertEqual(backend.usb_snapshot('3-2'), DA)
+
+
+class RescueFlowTests(unittest.TestCase):
+    def test_failed_writer_still_rescues_only_an_identified_linux_candidate(self):
+        class ObservingSupervisor(Exception): pass
+        for verified in (False, True):
+            for identified in (False, True):
+                with self.subTest(verified=verified, identified=identified), tempfile.TemporaryDirectory() as tmp:
+                    directory=Path(tmp); before={'boot_id':'old'}
+                    for suffix in ('pid','pgid','sid'): (directory/('candidate.'+suffix)).write_text('1234')
+                    (directory/'candidate.state').write_text('flash_rc='+('0' if verified else '2')+' timestamp')
+                    def wait(path,prefix,*args,**kwargs):
+                        if prefix==qualification.SUCCESS: raise ObservingSupervisor()
+                        if prefix=='flash_rc=0 ' and not verified: raise RuntimeError('observer race')
+                        return prefix
+                    with patch.object(qualification,'unit'), patch.object(qualification,'stage'), \
+                            patch.object(qualification.time,'monotonic',side_effect=[0,151]), \
+                            patch.object(qualification,'snapshot',return_value=before), \
+                            patch.object(qualification,'wait_state',side_effect=wait), \
+                            patch.object(qualification,'candidate_return',side_effect=RuntimeError('userspace unavailable')), \
+                            patch.object(qualification,'candidate_needs_rescue_reboot',return_value=identified) as needs, \
+                            patch.object(qualification,'reboot') as reboot:
+                        with self.assertRaises(ObservingSupervisor): qualification.trial(directory,'handoff',before,[])
+                    needs.assert_called_once_with([],before,'handoff')
+                    self.assertEqual([call.args[2] for call in reboot.call_args_list],
+                        ['candidate-reboot-request.json']+(['rescue-reboot-request.json'] if identified else []))
+
+    def test_waits_for_identified_candidate_and_stops_when_rescue_already_won(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with patch.object(qualification,'candidate_needs_rescue_reboot',side_effect=[False,True]) as needs, \
+                    patch.object(qualification.time,'monotonic',side_effect=[0,1]), \
+                    patch.object(qualification.time,'sleep'),patch.object(qualification,'wait_state') as wait, \
+                    patch.object(qualification,'reboot') as reboot:
+                self.assertTrue(qualification.request_linux_rescue([],{},root,'handoff',150))
+            self.assertEqual(needs.call_count,2)
+            wait.assert_called_once_with(root/'supervisor-rollback.state','tool_started ',30,terminal=False)
+            reboot.assert_called_once_with([],root,'rescue-reboot-request.json')
+            (root/'supervisor.state').write_text(qualification.SUCCESS+'timestamp')
+            with patch.object(qualification,'candidate_needs_rescue_reboot') as needs,patch.object(qualification,'reboot') as reboot:
+                self.assertFalse(qualification.request_linux_rescue([],{},root,'handoff',150))
+            needs.assert_not_called();reboot.assert_not_called()
 
 
 class BootWindowTests(unittest.TestCase):
@@ -96,6 +160,13 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(backend.config_for_state(self.config, Path(self.config[role + '_state'])), expected * 64)
         with self.assertRaises(ValueError):
             backend.config_for_state(self.config, Path('/run/other/state'))
+
+    def test_explicit_rtc_tool_changes_only_reboot_preservation(self):
+        config=dict(self.config,mtk=backend.MTK_RTC)
+        self.assertEqual(backend.config_for_state(config,Path(config['candidate_state'])),'a'*64)
+        self.assertEqual(backend.command_sequence(backend.MTK),backend.COMMANDS)
+        self.assertEqual(backend.command_sequence(backend.MTK_RTC),backend.COMMANDS+' --preserve-rtc')
+        with self.assertRaises(ValueError):backend.command_sequence('/usr/bin/mtk')
 
     def test_unqualified_tool_and_unknown_config_are_rejected(self):
         for key, value in (('mtk', '/usr/bin/mtk'), ('usb_port', '../3-2'),

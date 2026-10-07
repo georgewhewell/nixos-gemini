@@ -567,3 +567,198 @@ cancellation defect. Its ordinary clock and sleep policies were not changed.
 | p22 SHA-256 | `18d709f77e7f25630491418b159896c5618160349f4f342ad08c52fc4170f7f3` |
 | Kernel notes SHA-256 | `af7979b3d4dee258d896645fead8c4e72356d9b305871c0992b6ce1ead8c5ddf` |
 | Squashfs | 427,040,768 bytes; `4bfae12544e2d4d885a1a11552ebc27ab0e24d945498d4a44317f497a3316ae5` |
+
+## MT6351 firmware calendar compatibility
+
+The separate `mainlineNixosPowerRtcCalendarBundle` applies kernel commit
+`827742e655b8f476bb8087b0f50eb836ac3eb5a9` after the qualified alarm callback.
+Only MT6351 uses the firmware's 1968 year origin. Both clock and alarm
+callbacks add/subtract the 68-year offset, and the driver describes the
+native 1968–2095 hardware range without RTC-core rotation. Other supported
+PMICs keep their previous encoding and range extension. Linux's normal
+calendar validation still governs which dates applications may set.
+
+`rtcCalendarCheck` compiles the actual ARM64 RTC driver and exercises its
+real time/alarm callbacks against latched fake registers. All 140,254 valid
+hardware dates across the three chip-data variants round-trip, including
+leap days, alarm metadata preservation, RTC-core offsets and range limits.
+The sixteen alarm register/error sequences also pass. The full bundle builds,
+the kernel configuration is unchanged, and the older power/swap and alarm-only
+bundle identities are unchanged. All 59 host runner tests pass. Build evidence
+is in `handoff/power-rtc-calendar-build`, with the build log alongside it.
+
+```sh
+python3 tools/qualify-power-rtc-calendar.py --out NEW_DIRECTORY
+```
+
+Default preflight is read-only. `--execute` uses the existing fixed-swap
+candidate/automatic-recovery runner. After normal boot, paging and an ordinary
+Nix build, a bounded target service checks its kernel, boot, watchdog owner,
+empty alarm and host UTC before writing the clock through `hwclock -w -u`.
+Readback and ticking must agree with independently sampled host UTC. The
+service is stopped and full same-boot health checked before running alarm
+delivery, cancellation and delivery again. Periodic kernel RTC updates remain off;
+no suspend is requested. The pre-existing NixOS shutdown clock-save unit
+remains enabled (see the policy correction below). Calendar trials join the retained ordinary-output
+inventory alongside previous power/swap and alarm trials.
+
+After automatic M69 recovery and the complete storage/source audit, the
+runner reads the RTC with both flash locks held. M69 still has the old epoch,
+so it explicitly reverses the RTC-core rotation and applies the firmware year
+origin to that readout. The resulting UTC must match the host. This proves
+retention through that recovery path; it does not claim M69 now reports a
+correct native date or that the corrected kernel has booted from the new date.
+A failed retention check marks the overall profile failed even if the earlier
+clock write and storage recovery succeeded.
+
+The first calendar trial (`power-rtc-calendar-01`) booted the expected kernel
+and read 2010-01-01, matching the vendor calendar. It stopped in Stage 1 before
+uploading userspace or writing the RTC: p29 contained 104 cached test images,
+with 173,860 KiB available against the upload guard's 418,056 KiB requirement.
+The original rescue discriminator required `/run/current-system`, so it did
+not recognize a candidate still in Stage 1. Its 660-second rescue scan window
+also preceded the 720-second Stage 1 watchdog lease plus reset latency.
+A separate host command checked the exact candidate boot/kernel/p22/GPT,
+requested a read-only remount and rebooted into the existing rescue writer.
+SSH observation timed out; the supervisor independently verified rescue
+write/readback and reboot. This is a failed trial with host intervention,
+not a qualified automatic failure path. M69 boot
+`3213b6e1-e46f-4386-a1b1-f8566deb5c4c` passed the final audit: seventeen outputs,
+31 current/archived executed sources, both locks and no writer. All five host
+units stopped. Supplemental request evidence is `stage1-rescue.json`.
+
+The revised calendar runner checks capacity before boot. If necessary it
+archives only the preceding opt-in RTC userspace image on the host, verifies
+all bytes and confirms it is absent from active loop devices and installed
+Gemini initrds/loader entries. Its original Nix bundle is retained too.
+Removal of that device cache copy occurs inside the existing, identified
+Stage 1 provisioning transaction, after its writable/journalled mount guards.
+No active read-only/noload mount is made writable. The archived image remains
+available for restoration; accepted boot images, EFI payloads and ordinary
+Nix outputs stay covered by their existing audits. Broad cache consolidation
+is still pending.
+
+The calendar profile now also recognizes its exact Stage 1 kernel/p22/GPT and
+store request. With the original owner, network service and rescue scanner
+still active, it can restore the mount read-only and request reboot. SSH output
+is retained even when the rebooted connection times out; a verified request
+is separate from the supervisor's actual reset/recovery proof. It does not
+create a second writer. Eight further tests cover archival/capacity, guard
+ordering, altered archives, Stage 1 identity and timed-out SSH observations;
+all 67 host runner tests pass. This recovery extension still needs its own
+end-to-end failure-path qualification.
+
+Trial `power-rtc-calendar-02` exposed a separate USB sysfs race. mtkclient
+returned zero and its 16 MiB readback matched the candidate, but the host
+observer raised `ENODEV` while a USB attribute disappeared during reboot.
+The trial correctly remained failed. Because the outer runner skipped Linux
+rescue identification after a failed writer observation, the new Stage 1
+helper was invoked explicitly against the already-owned trial. Its retained
+identity/read-only-mount marker passed, and the existing supervisor restored
+M69 boot `6ec8f8f8-6127-4f31-80d7-1025d5af0a3f`. The final audit retained all
+seventeen outputs, matched 33 executed sources, acquired both locks and found
+no writer; all five units stopped. Neither cache pruning nor the explicit
+calendar write was reached.
+
+The USB observer now treats `ENOENT` and `ENODEV` as an incomplete snapshot
+while the port directory still exists; only observed directory absence means
+departure. Other I/O errors remain fatal, and the existing DA acknowledgement,
+first-preloader ordering and complete image/GPT readback requirements remain.
+Linux rescue identification now also runs after a writer observation failure,
+with up to 150 seconds for the exact candidate to expose SSH. It stops if the
+supervisor has already restored M69. Regression tests reproduce both defects
+before correction and pass afterward, including the actual mocked trial flow.
+All 98 relevant host tests pass; logs are retained in the calendar build folder.
+
+RTC policy correction: `CONFIG_RTC_SYSTOHC` disables periodic kernel RTC
+updates, but does not disable NixOS's `save-hwclock.service`. Both installed
+M69 and the calendar candidate enable that unit through
+`shutdown.target.wants`; it runs `hwclock --systohc --utc` when `/dev/rtc`
+exists. The candidate's enabled unit and `/dev/rtc -> rtc0` alias were observed
+on hardware. Source and runtime evidence are
+`power-rtc-calendar-build/shutdown-clock-source-audit.json` and
+`power-rtc-calendar-03/rtc-shutdown-policy.stdout`. The original calendar
+helper's broad `automatic_rtc_updates=false` field must therefore be read as
+“periodic kernel updates disabled” only; the trial retains an explicit
+`rtc-clock-policy-correction.json` alongside the original results.
+
+Shutdown clock writes use the corrected encoding on this candidate and the
+old encoding on recovered M69. Thus preservation through candidate shutdown
+and M69 startup does not establish preservation through another M69 shutdown.
+Corrected-kernel startup from retained UTC and consolidation of the shutdown
+policy remain separate work. The firmware's handling of the year written by
+legacy M69 also needs evidence; a missing SYSTOHC option alone cannot explain
+or rule out RTC writes.
+
+Trial `power-rtc-calendar-03` passed native UTC write/read/ticking on candidate
+`fe63c100-2a12-4723-9e5f-adb88d0718e1`. The clock advanced from the firmware's
+2010 default to 2026-10-07 01:51:25 UTC, agreed with the independent host clock,
+and ticked normally. Alarm delivery, cancellation and rearming then passed
+with interrupt deltas 1, 0 and 1. Normal candidate health, real swap traffic
+and an ordinary Nix build also passed. The exact preceding RTC userspace
+cache was archived and verified before its device copy was removed; the
+calendar userspace was installed successfully.
+
+Automatic recovery restored healthy M69 boot
+`9c33eada-e721-43f7-bba0-8651ee17c9b0`. The final locked audit retained all
+eighteen ordinary outputs, matched 33 executed sources and found no writer;
+all five host units stopped. However, the final RTC read decoded back to
+2010-01-01, so the overall calendar profile correctly failed retention.
+An intermediate legacy runner's PASS line is not the complete result: use
+the wrapper's final `result.json` and `rtc-calendar-result.json`. The original
+clock-policy field is corrected in `result-annotated.json`, with the original
+result retained and explicitly referenced.
+
+The download-agent reboot packet previously set `dont_resetrtc=0`, explicitly
+requesting an RTC reset. The new opt-in `mtkclientRtc` package adds
+`reset --bootmode reboot --preserve-rtc`; the calendar profile selects its
+exact store path for both candidate and rescue DA exits. Other profiles keep
+their original package and reset behavior. This option sets the existing RTC
+word in the MT6797's seven-word packet, preserves mode and acknowledgement
+handling, and rejects unsupported DA protocols before sending a command.
+All 36 package tests and 99 host runner tests pass. Hardware retention with
+this option is recorded separately below.
+
+### Complete calendar and preservation trial
+
+`power-rtc-calendar-04` passed on candidate
+`41fde88d-db2c-458a-8bb5-49e6a830c51c`. Both candidate and rescue DA commands
+used the pinned RTC-preserving package. The previously installed calendar
+userspace was reused, with no further cache removal. Full normal health,
+real paging and an ordinary unprivileged Nix build passed. Native UTC was
+written/read as 2026-10-07 02:14:35, ticked normally and agreed with host UTC.
+Alarm delivery/cancellation/rearm produced interrupt deltas 1, 0 and 1 over
+13.14, 13.18 and 13.16 seconds; cleanup, unchanged watchdog ownership and
+same-boot health passed after every stage. No suspend was requested.
+
+Automatic recovery restored M69 boot
+`e402eccb-143e-49cb-afb6-d8a3fc5a7b49`. Its old RTC encoding read epoch
+3684709197; explicit legacy decoding yields 1791339597, or
+2026-10-07 02:19:57 UTC. The independent host observation was
+1791339597.574–1791339597.918. Thus the correctly encoded clock survived the
+candidate shutdown, download-agent rescue and M69 startup. The final wrapper
+result is passed, its worker exited zero and all five host units are inactive
+with PID zero. The final audit held both flash locks, retained nineteen
+ordinary outputs and original home/EFI proofs, matched 33 current/archived
+executed sources, preserved the fixed-swap layout and found no writer.
+See `result.json`, `rtc-calendar-reboot.json`, `final-idle-check.json` and
+`terminal-verification.json` in that trial's handoff directory.
+
+The first candidate RTC read was 2094-10-07, exactly the extra 68 years
+expected from M69's existing shutdown clock-save encoding. This is further
+evidence that DA preservation does not repair legacy Linux clock writes.
+M69 still reports an incorrect native date; the final UTC check explicitly
+decodes it. Next, qualify corrected-kernel startup from retained UTC while
+controlling the identified legacy shutdown writer, then consolidate the
+correct kernel and clock policy. Repeat watchdog/PM prerequisites on this
+kernel before advancing sleep tests. Awake alarm delivery and reboot clock
+retention do not prove suspend wake or RTC power-on.
+
+| Calendar candidate artifact | Identity |
+|---|---|
+| Bundle | `/nix/store/h06d3dmfs3j0kdy19j61x8aghcxp8qqr-gemini-mainline-nixos-bundle` |
+| Kernel | `/nix/store/x7pps048pisms3b1xpmfpa8khfmndkyq-gemini-mainline-power-rtc-calendar-kernel-7.1.3` |
+| System | `/nix/store/8zl369z86ddcqwybwi4b700afxw0n4xq-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade` |
+| p22 SHA-256 | `92528b092a5ef5caab863c353978da9866046db5d37ebcba824b070b3fd93a79` |
+| Kernel notes SHA-256 | `0de66a120a0d13afcd3f6177cd260daa1426b6d38dc6b738fc1316ae4260eb10` |
+| Squashfs | 427,040,768 bytes; `5377cc00ba1f7eb87d38ba552787362df1f5308daa3dbc0aaf14753785aa8938` |

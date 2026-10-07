@@ -23,8 +23,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after the power/swap candidate's automatic recovery is
-`1ba6746e-40e6-496d-be87-4e75ceba076f`, with `/persist`,
+healthy M69 boot after the calendar candidate's automatic recovery is
+`e402eccb-143e-49cb-afb6-d8a3fc5a7b49`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -118,8 +118,21 @@ alarm interrupt. The driver correction in `power-rtc-01` now passes delivery,
 cancellation and delivery again (interrupt deltas 1, 0, 1). Automatic M69
 recovery retained all seventeen ordinary build outputs, matched twenty-nine
 executed sources and completed without a remaining writer. The correction
-is opt-in. The separate RTC calendar conversion is incompatible with the
-vendor's year encoding and still needs correction before clock-sync policy.
+is opt-in. A separate MT6351 calendar correction now matches the firmware's
+1968 year origin and passes native UTC write/read/ticking plus the same awake
+alarm sequence. Trial `power-rtc-calendar-03` retained eighteen ordinary
+outputs after automatic M69 recovery, but failed RTC retention because the
+old download-agent exit explicitly requested RTC reset. With the opt-in
+`mtkclientRtc` preservation option, `power-rtc-calendar-04` passes the complete
+UTC/alarm/recovery sequence. The final firmware-decoded RTC agrees with host
+UTC, all nineteen ordinary outputs survive, 33 executed sources match and
+all five host units are inactive with no writer. Native M69 still reads the
+wrong date; only the candidate has the calendar correction.
+Periodic kernel clock updates are disabled; NixOS's existing shutdown
+clock-save service is enabled and still writes the old encoding on M69.
+The preserved initial candidate clock read 2094 before its explicit UTC write,
+consistent with that old shutdown encoding. Corrected-kernel startup from
+retained UTC and shutdown-policy consolidation remain separate work.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -130,7 +143,7 @@ Direct M69 remains installed. See
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
-| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection and fresh GPU rendering. The successor RTC kernel fixes a reproduced alarm-cancellation defect and passes delivery/cancellation/rearm while awake. RTC calendar compatibility, wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain; the new kernel needs its own watchdog/PM prerequisites |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer and device diagnostics pass, with guarded USB disconnection and fresh GPU rendering. The successor RTC kernel fixes alarm cancellation and firmware calendar encoding; native UTC write/read/ticking, awake delivery/cancellation/rearm and clock retention through RTC-preserving DA recovery pass. Corrected-kernel startup and shutdown policy, wake-source validation, later/noirq PM stages, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain; the new kernel needs its own watchdog/PM prerequisites |
 | USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |

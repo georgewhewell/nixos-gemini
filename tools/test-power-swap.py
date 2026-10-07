@@ -144,6 +144,9 @@ class Retention(unittest.TestCase):
             rtc=root/'power-rtc-01';rtc.mkdir();(rtc/'nix-candidate.json').write_text(json.dumps(proof))
             self.assertEqual(p.prior_outputs(root), {'power-rtc-01':proof,'power-swap-01':proof})
             self.assertEqual(p.prior_outputs(root, rtc), {'power-swap-01':proof})
+            calendar=root/'power-rtc-calendar-01';calendar.mkdir();(calendar/'nix-candidate.json').write_text(json.dumps(proof))
+            self.assertEqual(p.prior_outputs(root), {'power-rtc-01':proof,'power-swap-01':proof,'power-rtc-calendar-01':proof})
+            self.assertEqual(p.prior_outputs(root, calendar), {'power-rtc-01':proof,'power-swap-01':proof})
             path.write_text(json.dumps(dict(proof, output=proof['output']+'; unreviewed-command')))
             with self.assertRaises(RuntimeError): p.prior_outputs(root)
 

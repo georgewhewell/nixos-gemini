@@ -914,9 +914,19 @@
     mainlinePowerRtcKernel = import ./nix/mainline-rtc-kernel.nix {
       kernel = mainlinePowerSwapKernel;
     };
+
+    mainlinePowerRtcCalendarKernel = import ./nix/mainline-rtc-calendar-kernel.nix {
+      kernel = mainlinePowerRtcKernel;
+    };
     mainlinePowerRtcDtb = import ./nix/mainline-efi-dtb.nix {
       inherit buildPkgs;
       kernel = mainlinePowerRtcKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
+    mainlinePowerRtcCalendarDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlinePowerRtcCalendarKernel;
       baselineDtb = mainlineP22Baseline.serviceabilityDtb;
     };
 
@@ -1309,6 +1319,17 @@
       }];
     };
 
+    mainlineNixosPowerRtcCalendarSystemCross = mainlineNixosPowerRtcSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 5 mainlinePowerRtcCalendarKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 5 mainlinePowerRtcCalendarKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 5 mainlinePowerRtcCalendarKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 5 mainlinePowerRtcCalendarKernel;
+        };
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1370,6 +1391,8 @@
     mainlineNixosPowerSquashfs = mkMainlineSquashfs mainlineNixosPowerSystemCross.config.system.build.toplevel;
     mainlineNixosPowerSwapSquashfs = mkMainlineSquashfs mainlineNixosPowerSwapSystemCross.config.system.build.toplevel;
     mainlineNixosPowerRtcSquashfs = mkMainlineSquashfs mainlineNixosPowerRtcSystemCross.config.system.build.toplevel;
+
+    mainlineNixosPowerRtcCalendarSquashfs = mkMainlineSquashfs mainlineNixosPowerRtcCalendarSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1481,6 +1504,15 @@
       squashfs = mainlineNixosPowerRtcSquashfs;
       nixosToplevel = mainlineNixosPowerRtcSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosPowerRtcSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosPowerRtcCalendar = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlinePowerRtcCalendarKernel;
+      serviceabilityDtb = mainlinePowerRtcCalendarDtb;
+      squashfs = mainlineNixosPowerRtcCalendarSquashfs;
+      nixosToplevel = mainlineNixosPowerRtcCalendarSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosPowerRtcCalendarSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -1978,6 +2010,7 @@
       usbNcmProbeBootImg = usbNcmProbeBootImg;
       probeInitramfs = probeInitramfs;
       mtkclient = import ./nix/mtkclient.nix {inherit buildPkgs;};
+      mtkclientRtc = import ./nix/mtkclient-rtc.nix {inherit buildPkgs;};
       mtkclientGpt = import ./nix/mtkclient-gpt.nix {inherit buildPkgs;};
       mtkclientBackup = import ./nix/mtkclient-backup.nix {inherit buildPkgs;};
       mtkclientSwap = import ./nix/mtkclient-swap.nix {inherit buildPkgs;};
@@ -2030,6 +2063,13 @@
       mainlineNixosPowerSwapKernel = mainlinePowerSwapKernel;
       mainlineNixosPowerRtcBundle = mainlineNixosPowerRtc.bundle;
       mainlineNixosPowerRtcKernel = mainlinePowerRtcKernel;
+      mainlineNixosPowerRtcCalendarBundle = mainlineNixosPowerRtcCalendar.bundle;
+      mainlineNixosPowerRtcCalendarKernel = mainlinePowerRtcCalendarKernel;
+      rtcCalendarCheck = import ./nix/rtc-calendar-check.nix {
+        inherit buildPkgs crossPkgs;
+        source = linux-gemini;
+        baseKernel = mainlinePowerSwapKernel;
+      };
       rtcAlarmCheck = import ./nix/rtc-alarm-check.nix {
         inherit buildPkgs crossPkgs;
         source = linux-gemini;
@@ -2137,6 +2177,7 @@
       gemini-mainline-power = mainlineNixosPowerSystemCross;
       gemini-mainline-power-swap = mainlineNixosPowerSwapSystemCross;
       gemini-mainline-power-rtc = mainlineNixosPowerRtcSystemCross;
+      gemini-mainline-power-rtc-calendar = mainlineNixosPowerRtcCalendarSystemCross;
     };
 
     # Development shell

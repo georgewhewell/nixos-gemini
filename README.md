@@ -50,7 +50,13 @@ Hibernation, deep idle and the complete lid power policy are not qualified.
 RTC alarm testing exposed a cancellation defect: M69 still interrupted after
 an alarm was cancelled. The corrected opt-in kernel now passes delivery,
 cancellation and rearming, with automatic M69 recovery and all seventeen
-ordinary build outputs retained. RTC calendar compatibility remains unfinished.
+ordinary build outputs retained. A separate calendar correction now matches
+the firmware's MT6351 year encoding and passes native UTC write/read/ticking,
+awake alarms and retention through automatic recovery when mtkclient requests
+RTC preservation. All nineteen ordinary build outputs survived. Corrected
+kernel startup from retained UTC and legacy M69's shutdown clock-save policy
+still need qualification and consolidation; see the
+[power qualification report](research/POWER_QUALIFICATION.md).
 See [power evidence](research/POWER_QUALIFICATION.md) and the
 [fixed-swap plan](research/STORAGE_QUALIFICATION.md).
 Camera and vibrator are excluded from the owner's completion scope.

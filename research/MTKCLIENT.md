@@ -342,3 +342,42 @@ extent, with no ext4 resize. Paging under pressure and hibernation are separate.
 The older factory-only boot/power profiles need explicit adaptation before
 reuse. See [STORAGE_QUALIFICATION.md](STORAGE_QUALIFICATION.md) for the guarded
 command, independent rescue, exact package and complete evidence.
+
+## Preserving the RTC across a download-agent reboot
+
+The existing XFlash reset packet explicitly requests RTC reset. This became
+visible in `power-rtc-calendar-03`: native UTC write/read and awake alarms
+passed, but automatic recovery returned the clock to the firmware's 2010
+default. The separate `mtkclientRtc` package adds an explicit option:
+
+```sh
+nix build .#mtkclientRtc
+# In an already authorized XFlash session:
+mtk reset --bootmode reboot --preserve-rtc
+```
+
+The pinned package is
+`/nix/store/siwn7pa37bxykp85jkvb0i9mqwjlzajw-mtkclient-gemini-rtc-2.1.4.1`.
+It sets `dont_resetrtc=1` in the existing reset packet; MT6797 keeps its
+28-byte format. Without the option, existing behavior is unchanged.
+Unsupported DA protocols reject preservation before sending a shutdown.
+The calendar runner selects this package for both its candidate and rescue
+exits. Its boot-only writes, complete image/GPT readbacks, reboot ACK and
+independently observed preloader ordering remain mandatory.
+
+All 36 package tests pass, including CLI/multi dispatch, protocol selection,
+packet mode/length/RTC-word checks and negative acknowledgements. The host
+backend now also handles disappearing USB attributes without mistaking an
+incomplete snapshot for actual disconnection, and the supervisor attempts
+identified Linux rescue after a failed writer observation. Regression tests
+reproduce those defects before the fixes. See
+[POWER_QUALIFICATION.md](POWER_QUALIFICATION.md) for the calendar trials and
+the distinction between a verified reboot request and actual recovery.
+
+Hardware trial `power-rtc-calendar-04` passed both DA exits with preservation,
+complete candidate UTC/alarm checks and automatic healthy M69 recovery. The
+RTC retained 2026-10-07 02:19:57 UTC, decoded from the unchanged legacy M69
+driver, within one second of the independent host clock. All nineteen ordinary
+outputs and protected storage survived. This qualifies preservation on this
+MT6797 XFlash path; it does not fix M69's own incompatible calendar encoding
+or its enabled shutdown clock-save service.

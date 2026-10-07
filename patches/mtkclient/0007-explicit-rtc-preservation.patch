@@ -1,0 +1,65 @@
+--- a/mtk.py
++++ b/mtk.py
+@@ -204,6 +204,8 @@
+     cmd_fs.add_argument("--rw", action="store_true")
+ 
+     cmd_reset = subparsers.add_parser("reset", help="Exit the download agent", parents=[base])
++    cmd_reset.add_argument("--preserve-rtc", action="store_true",
++                           help="Keep RTC state when leaving an XFlash download agent")
+     cmd_reset.add_argument("--bootmode", choices=("shutdown", "reboot", "fastboot"),
+                            default="shutdown",
+                            help="DA boot mode: shutdown (default, unchanged), normal boot, or fastboot")
+--- a/mtkclient/Library/DA/mtk_da_handler.py
++++ b/mtkclient/Library/DA/mtk_da_handler.py
+@@ -1392,7 +1392,10 @@
+         elif cmd == "reset":
+             mode = getattr(args, "bootmode", "shutdown")
+             bootmode = {"shutdown": 0, "reboot": 1, "fastboot": 2}[mode]
+-            if not mtk.daloader.shutdown(bootmode=bootmode):
++            options = {"bootmode": bootmode}
++            if getattr(args, "preserve_rtc", False):
++                options["preserve_rtc"] = True
++            if not mtk.daloader.shutdown(**options):
+                 self.error(f"Download agent did not acknowledge {mode}; device state is unverified.")
+                 sys.exit(1)
+             statefile = os.path.join(self.mtk.config.hwparam_path, ".state")
+--- a/mtkclient/Library/DA/mtk_daloader.py
++++ b/mtkclient/Library/DA/mtk_daloader.py
+@@ -309,7 +309,13 @@
+         HOME_SCREEN = 1
+         FASTBOOT = 2
+ 
+-    def shutdown(self, bootmode=ShutDownModes.NORMAL):
++    def shutdown(self, bootmode=ShutDownModes.NORMAL, preserve_rtc=False):
++        if preserve_rtc:
++            if self.flashmode != DAmodes.XFLASH:
++                self.error("RTC preservation requires an XFlash download agent")
++                return False
++            return self.da.shutdown(async_mode=0, dl_bit=0, bootmode=bootmode,
++                                    preserve_rtc=True)
+         return self.da.shutdown(async_mode=0, dl_bit=0, bootmode=bootmode)
+ 
+     def upload_da(self, preloader=None):
+--- a/mtkclient/Library/DA/xflash/xflash_lib.py
++++ b/mtkclient/Library/DA/xflash/xflash_lib.py
+@@ -807,16 +807,17 @@
+         HOME_SCREEN = 1
+         FASTBOOT = 2
+ 
+-    def shutdown(self, async_mode: int = 0, dl_bit: int = 0, bootmode: ShutDownModes = ShutDownModes.NORMAL):
++    def shutdown(self, async_mode: int = 0, dl_bit: int = 0, bootmode: ShutDownModes = ShutDownModes.NORMAL,
++                 preserve_rtc: bool = False):
+         if self.xsend(self.cmd.SHUTDOWN):
+             status = self.status()
+             if status == 0:
+                 hasflags = 0
+                 # bootmode 0: shutdown 1: home screen, 2: fastboot
+-                if async_mode or dl_bit or bootmode != self.ShutDownModes.NORMAL:
++                if async_mode or dl_bit or preserve_rtc or bootmode != self.ShutDownModes.NORMAL:
+                     hasflags = 1
+                 enablewdt = 0
+-                dont_resetrtc = 0  # Reset RTC
++                dont_resetrtc = int(bool(preserve_rtc))
+                 leaveusb = 0  # Disconnect usb
+                 params = (hasflags, enablewdt, async_mode, bootmode, dl_bit,
+                           dont_resetrtc, leaveusb)

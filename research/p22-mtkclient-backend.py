@@ -6,6 +6,7 @@ selects one candidate or rescue SHA. Exit 1 means a *device-free* scan timeout;
 all connected failures are fatal (2), never a supervisor scan retry.
 """
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -17,6 +18,7 @@ import tempfile
 import time
 
 MTK = '/nix/store/vl6ynxsir46vp8w3445w342vdf0xm23b-mtkclient-gemini-2.1.4.1/bin/mtk'
+MTK_RTC = '/nix/store/siwn7pa37bxykp85jkvb0i9mqwjlzajw-mtkclient-gemini-rtc-2.1.4.1/bin/mtk'
 SIZE = 16777216
 ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote boot.img to sector 362496 with sector count 32768.'
@@ -40,7 +42,7 @@ def save(path, value):
 
 
 def config_for_state(config, state):
-    if set(config) != KEYS or config['version'] != 1 or config['mtk'] != MTK:
+    if set(config) != KEYS or config['version'] != 1 or config['mtk'] not in (MTK, MTK_RTC):
         raise ValueError('Unqualified mtkclient or invalid backend configuration')
     for key in ('candidate_sha256', 'rollback_sha256', 'gpt_sha256'):
         if not re.fullmatch(r'[0-9a-f]{64}', config[key]):
@@ -56,6 +58,14 @@ def config_for_state(config, state):
         if str(state) == config[role + '_state']:
             return config[role + '_sha256']
     raise ValueError('State does not identify this candidate or rollback attempt')
+
+
+def command_sequence(tool):
+    if tool == MTK_RTC:
+        return COMMANDS + ' --preserve-rtc'
+    if tool == MTK:
+        return COMMANDS
+    raise ValueError('Unpinned mtkclient command sequence')
 
 
 def checked_image(path, expected):
@@ -74,8 +84,11 @@ def usb_snapshot(port):
         state = ((path / 'idVendor').read_text().strip(),
                  (path / 'idProduct').read_text().strip(), number)
         return state if (path / 'devnum').read_text().strip() == number else UNKNOWN
-    except FileNotFoundError:
+    except OSError as error:
+        if error.errno not in (errno.ENOENT, errno.ENODEV):
+            raise
         # Incomplete sysfs publication is not proof of USB departure.
+        # A disappearing device can return ENODEV before its files vanish.
         return UNKNOWN if path.exists() else None
 
 
@@ -148,11 +161,11 @@ def attempt(config, state, directory, expected):
     window = BootWindow()
     window.observe(usb_snapshot(config['usb_port']), time.monotonic())
     for vendor in Path('/sys/bus/usb/devices').glob('*/idVendor'):
-        if vendor.read_text().strip() == '0e8d' and vendor.parent.name != config['usb_port']:
+        if vendor.parent.name != config['usb_port'] and vendor.read_text().strip() == '0e8d':
             raise RuntimeError('A MediaTek device is exposed on another physical port')
     logpath = directory / 'mtk.log'
     command = ['sudo', '-n', 'env', 'PYTHONUNBUFFERED=1', 'timeout', '--foreground',
-               '--kill-after=5s', '180s', config['mtk'], 'multi', COMMANDS]
+               '--kill-after=5s', '180s', config['mtk'], 'multi', command_sequence(config['mtk'])]
     save(directory / 'command.json', command)
     ready = False
     error = None
