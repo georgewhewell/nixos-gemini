@@ -446,6 +446,17 @@ it cannot timestamp every transition or make masked events trigger an IRQ.
 The real-function fake-MMIO test verifies raw/masked trace values and that
 masked status remains pending. The ARM64 MTU3 object build passes.
 
+The subsequent full build and `usb3-raw-trace-trial-01` capture verify this on
+hardware: three events retain raw=0x8002, enabled=0x2432 and handled=0x2. VBUS
+rise and SS disable are present; receiver-detection-success and U0 entry are
+not pending at these handler entries. The host and device still report
+480 Mb/s/high-speed. This focuses further investigation on receiver detection
+and the lane/PHY path, without distinguishing wiring from PHY setup. It does
+not rely on the disputed PHY monitor decoding. The diagnostic still fails
+the normal cgroup-v2 memory-controller check; it is not a qualified generation.
+Automatic recovery passed its complete health and retention audit: 35 source
+hashes matched, 26 ordinary outputs retained, both locks available, no writer.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working
