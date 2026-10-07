@@ -509,6 +509,38 @@ hashes unchanged and all 26 ordinary outputs retained. Full results are in
 CPU/SRAM coupler, explicit DA9214 settling and a CCI voltage vote that
 accounts for the still-fixed A72 clock before relaxing BUCKA constraints.
 
+## DA9214 settling before coupled voltage scaling (2026-10-08)
+
+Kernel commit `6c4fbe6238a22fb177e72a227230979bdcb9c56a` adds the
+vendor DA9214 delay inside the voltage transaction: one microsecond per
+10 mV selector step, with a 25 microsecond minimum. Both the forward write
+and rollback settle before readback, including writes that return an error
+but may have taken effect. The chip mutex covers the complete transaction.
+No-op requests and enable-register writes add no delay. DA9213 and DA9215
+keep their existing behavior because this timing comes from the MT6797
+DA9214 vendor policy.
+
+The production callbacks pass 98,304 selector pairs across both bucks and
+all three variants under UBSan. Fault cases cover failed reads, effective
+and ineffective failed writes, ignored writes, and uncertain rollback.
+Both the driver and existing transaction KUnit object compile for ARM64;
+checkpatch reports no errors or warnings. The host test is now part of the
+normal Nix kernel checks. The full normal kernel check phase and deployment
+bundle build pass. The resulting kernel is
+`/nix/store/xjgk8z2z5xxjrkp9994snwxfqh2gjw6k-linux-gemini-7.1.3`, and the
+bundle is `/nix/store/2cm02k7qnxyy945406b1r3b48wis6m2y-gemini-mainline-nixos-bundle`.
+Build logs and GC roots are retained under
+`handoff/da9214-settling-20261008/`; a new device voltage-transition trial has
+not yet run.
+
+Current A53 OPP entries already use voltage triplets with a 1.2 V maximum,
+so they can tolerate another shared-rail consumer requesting a higher
+voltage. They do not need conversion from scalar values. The remaining
+work is the CPU/SRAM coupler and CCI consumer policy, including the fixed
+A72 contribution, before relaxing BUCKA's fixed 1.00 V constraint. The
+existing MediaTek GPU coupler is not applicable: it only registers on other
+SoCs and programs SRAM before the other rail in both directions.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
