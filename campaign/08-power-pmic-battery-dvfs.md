@@ -51,11 +51,39 @@ are byte-identical between M69's `c0dbf01b2bdaa` and maintained Linux
 That source comparison does not qualify the maintained kernel as a whole;
 normal cgroup2 allocator stability remains unresolved.
 
-Remaining DVFS work includes CKDIV transitions for the disabled low LL
-frequencies, postdivider transitions, CCI/shared-voltage and CPU LDO/Vsram
-coordination, A72 control, and thermal/load qualification of the expanded
-range. The 221/338/481 MHz LL points require coordinated PLL and path-divider
-changes, so enabling their DT entries alone is insufficient. Battery capacity,
+## Low LL frequencies enabled and exercised
+
+Maintained Linux `cad55d85bcfe0` now coordinates ARMPLL and CKDIV as a single
+clock transaction and enables LL 221/338/481 MHz alongside 624–897 MHz.
+The raw PLL clocks remain read-only observation points; compound
+`mt6797_mp[01]_armpll_div` clocks own rate changes. DCM is lowered for the
+minimum intermediate CPU rate, division increases before the PLL hop and
+decreases afterward, and final DCM/readback completes the transaction.
+Failures after writes begin fence further changes. The shared rail remains
+fixed at 1.00 V; this adds frequency scaling, not voltage scaling.
+
+Diagnostic boot `e69c5c64-db70-4d28-9b2c-57053312ddb1` passed all49 ordered
+pairs among the seven LL frequencies plus all4 pairs among the two L
+frequencies in15.24 seconds. Each step checks the CPU rate, divided clock,
+raw PLL rate, fixed rail, unchanged CCI/A72 and a pinned PBKDF2 digest.
+The low points read PLL884/676/962 MHz for CPU221/338/481 MHz respectively.
+Temperatures were37.1–41.8 C. Both governors returned to schedutil, the owned
+parking hold was removed, and the probe unit became inactive/MainPID0.
+The collected kernel log contains no clock-fencing, BUG, Oops, WARNING or
+CPUCLK_OBSERVE report. Evidence:
+`handoff/dvfs-divider-trial-01/{dvfs.json,analysis.json,after-probe.txt,candidate-kernel.log,kernel-error-check.json}`.
+
+The normal kernel and both normal/diagnostic bundles build successfully and
+share the identical kernel. Host tests execute production planning/callback/
+transaction code:49 pairs, all32 initial DCM selectors,371 injected write
+failures, stale plans, readback errors and fenced retries. These models cover
+software sequencing; the device test above establishes bounded hardware
+acceptance. The diagnostic still fails the unchanged cgroup2 memory-controller
+qualification check and is not promoted.
+
+Remaining DVFS work includes postdivider transitions, lower L points,
+CCI/shared-voltage and CPU LDO/Vsram coordination, A72 control, sustained load
+and thermal cooling qualification across the expanded range. Battery capacity,
 calibration, charging, deep idle and suspend remain separate unfinished work.
 
 ## Historical Cycle18 observations
