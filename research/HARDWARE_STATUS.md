@@ -419,6 +419,18 @@ Available tracers on hardware include function/function_graph. Evidence:
 `handoff/usb3-ftrace-trial-01`. Full normal/diagnostic builds and complete recovery
 audit passed; normal cgroup-v2 stability and SuperSpeed remain unresolved.
 
+Repeating that same diagnostic with the paired host USB3 root hub held active
+(power/control=on, runtime_status=active) gives the same three SS.Disable events
+and480Mb/s link. Host autosuspend in this setup is therefore not the cause.
+Original auto policy was restored and recovery retention audit passed.
+Evidence: `handoff/usb3-host-awake-trial-01`.
+
+PHY-monitor decode caveat: vendor MT6797 u3_loop_back_test and its header disagree
+on PHYD_MON5 loopback bit positions. Earlier calibration/PLL interpretations are
+header-derived, not independently confirmed for this revision. Retain raw MON2
+and MON5 values; these do not establish a PHY clock fault. MAC traces and paired
+host/device negotiated speeds are unaffected by this header inconsistency.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working
