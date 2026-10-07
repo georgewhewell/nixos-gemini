@@ -2,6 +2,7 @@
 """Check bundle selection, durable worker routing and recovery on failed checks."""
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +16,29 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
+    def test_typec_capture_keeps_controller_identity_and_missing_attributes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ports = root/'class'; ports.mkdir()
+            controller = root/'11008000.i2c'/'1-0025'/'typec'/'port7'
+            controller.mkdir(parents=True)
+            (ports/'port7').symlink_to(controller)
+            (controller/'power_role').write_text('[sink]\n')
+            (controller/'data_role').write_text('[device]\n')
+            (controller/'orientation').write_text('reverse\n')
+            partner = controller/'port7-partner'; partner.mkdir()
+            (ports/'port7-partner').symlink_to(partner)
+            env = dict(os.environ, TYPEC_CLASS_ROOT=str(ports))
+            raw = subprocess.check_output(['sh', '-c', m.TYPEC_STATUS_SCRIPT], env=env, text=True)
+            self.assertEqual(raw.count('\nport='), 1)
+            self.assertIn('port='+str(controller), raw)
+            self.assertIn('orientation=reverse\n', raw)
+            self.assertIn('power_operation_mode=unavailable\n', raw)
+            self.assertIn('partner=present\n', raw)
+            partner.rmdir()
+            raw = subprocess.check_output(['sh', '-c', m.TYPEC_STATUS_SCRIPT], env=env, text=True)
+            self.assertIn('partner=absent\n', raw)
+
     def test_usb_link_follows_device_across_bus_numbers_and_checks_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

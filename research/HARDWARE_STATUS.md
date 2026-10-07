@@ -357,7 +357,13 @@ the freezable workqueue; source-capable polling is rejected. Removal waits for
 polling to stop before releasing the port. Linux commits 5d1512b3bc9fa,
 d9878cfd22dc6 and 4c2b238f72cfe include the binding, driver and board changes.
 Host regressions, ARM64 object/DTB build and targeted schema validation pass.
-Normal packaging pins these changes. Device validation remains outstanding.
+Normal packaging pins these changes. Full kernel/system/EFI/bootloader builds
+and packaged DTB schema validation pass. The system closure is copied to the
+persistent store without activation. Device validation remains outstanding.
+The normal boot runner also records Type-C orientation, roles and partner
+attachment with full controller paths, avoiding dependence on probe-order port
+numbers. Read-only capture on M69 shows the right controller in reverse
+orientation with a partner attached; M69 does not expose the new left port.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)

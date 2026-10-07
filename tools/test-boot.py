@@ -210,6 +210,24 @@ def host_usb_link(net_root=Path('/sys/class/net')):
     return matches[0]
 
 
+TYPEC_STATUS_SCRIPT = '''set -eu
+printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
+for port in "${TYPEC_CLASS_ROOT:-/sys/class/typec}"/port*; do
+    test -f "$port/power_role" || continue
+    printf 'port=%s\n' "$(readlink -f "$port")"
+    for attr in orientation data_role power_role power_operation_mode; do
+        printf '%s=' "$attr"
+        if test -r "$port/$attr"; then cat "$port/$attr"; else echo unavailable; fi
+    done
+    if test -d "$port/$(basename "$port")-partner"; then
+        echo partner=present
+    else
+        echo partner=absent
+    fi
+done
+'''
+
+
 def usb_link_evidence(runner, ssh, state, directory):
     raw = runner.persistence.run(ssh, '''set -eu
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
@@ -221,6 +239,10 @@ printf 'state='; cat /sys/class/udc/11271000.usb/state
     if device['boot_id'] != state['boot_id'] or device['state'] != 'configured':
         raise RuntimeError('Candidate USB identity or configuration changed')
     host = host_usb_link()
+    # Keep the full sysfs path: port numbering depends on probe order.
+    typec = runner.persistence.run(ssh, TYPEC_STATUS_SCRIPT, directory, 'usb-typec')
+    if typec.splitlines()[:1] != ['boot_id=' + state['boot_id']]:
+        raise RuntimeError('Candidate Type-C boot identity changed')
     # Record actual negotiation at both ends; capability alone is not proof.
     superspeed = (device['current_speed'] in ('super-speed', 'super-speed-plus')
                   and host['speed_mbps'] in ('5000', '10000', '20000'))
