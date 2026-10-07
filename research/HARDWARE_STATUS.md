@@ -28,6 +28,11 @@ option. U-Boot a655c003 accepts both native and historical DTs in host tests.
 Runtime driver startup services and other temporary diagnostics still need
 consolidation.
 
+Workspace cleanup removed 82 obsolete, clean Linux worktrees without changing
+any branch or tag references. The remaining 41 include the maintained tree,
+the checkout holding the shared Git directory, detached heads, local edits and
+ignored build artifacts; those were preserved.
+
 U-Boot now uses `mt6797_gemini_defconfig` through a normal standalone recipe.
 Startup initializes the real eMMC, console and keyboard drivers without the
 old fixed GPT/boot-partition hashes, Debian version check, or embedded EFI
@@ -38,23 +43,27 @@ test scripts and complete firmware/carrier builds pass. `bootloader` packages
 the flashable image with the normal Linux fallback. Historical inputs and the
 exact recovery bundle remain unchanged. This firmware has NOT been device-tested.
 
-The Linux bundle tested in `handoff/boot-test-05` passed (candidate boot
-`02bea5df-ea61-427f-96c6-02dafe13090e`): both A72s came online without the old
-DT record, startup models or M10 tracing, followed by full Linux health,
-real paging with the built-in zswap policy, an ordinary unprivileged Nix build, native RTC startup,
-UTC write/read/ticking, awake alarm delivery/cancellation/rearm and automatic
-M69 recovery. The decoded firmware clock retained UTC across both DA resets.
-The final locked audit retained all 24 ordinary outputs, original home/EFI data
-and protected storage, matched 33 executed sources, and stopped all five host
-services. The worker exited zero, and M69 returned healthy as boot
-`2710f4b7-7b93-4cc8-b33a-417e154a3cba`. The previous unused candidate cache was
-archived before replacement; installed EFI entries and the recovery cache were
-retained. This tests the direct boot bundle; the new default EFI bundle still
-needs its own boot-manager trial. Current packaging has the identical kernel
-and DTB; the only userspace closure changes are the desktop keyboard check and
-the service references that include it. That check now depends on the two
-keymap input files, and its derivation is identical across the old and new
-U-Boot revisions. The repackaged bundle itself has not been booted yet.
+The normal system passed `handoff/boot-test-06` (candidate boot
+`f8e3fb64-6a29-4fd6-b631-c223cbd64281`). It includes the unchanged Linux/DTB
+from the successful CPU cleanup trial, the narrowed keyboard build inputs,
+and a packaged `gemini-boot-install` command. The boot volume remains read-only
+with its journal enabled; the installer briefly remounts it writable, publishes
+immutable payloads, preserves the old loader default and selects the new entry
+last. Recovery retains its exact original `noload` mount and bundle.
+
+Runtime installation passed on hardware. Entry
+`gemini-efd567ef400adac86ff7b6eb0ed5af82e03adbb64794f477a332ff17fd7764c8.conf`
+and its matching store are installed and selected; independent readback passed
+after restoring read-only and again after M69 recovery. Full Linux health,
+real paging, an unprivileged Nix build, native RTC startup/UTC/awake alarms and
+RTC-preserving automatic rescue all passed. The final locked audit retained
+25 ordinary outputs, original home, previous EFI entries and protected storage,
+and matched all 35 executed source files. M69 returned healthy as boot
+`0b9f41cf-7477-4f68-9249-08f5d725405a`; the durable worker exited zero.
+The old unused candidate cache was archived before replacement. The new EFI
+entry still needs a boot-manager trial with the consolidated U-Boot, and normal
+`nixos-rebuild` generation hooks remain unfinished. All 25 installer/publisher
+tests, the normal system/EFI/bootloader builds and flake checks pass.
 
 The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
 scan after 120 seconds, leaving transfer time inside its existing 180-second
@@ -213,7 +222,7 @@ Direct M69 remains installed. See
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
-| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, installation of the consolidated default, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot loads the older versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. The consolidated system's EFI entry is installed and selected; its boot-manager trial, physical key selection, the separate power/Escape input, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; installation of the consolidated default and normal generation updates remain |
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |

@@ -87,12 +87,13 @@ it checks the new files and retained older entries again after M69 returns.
 
 The maintained Linux kernel boots both A72s without a generated build record or
 the retired CPU startup models and tracing.
-It passed the complete supervised test in `boot-test-05`: healthy Linux,
-real swap paging, an unprivileged Nix build, native RTC startup, UTC write/read,
-alarm delivery/cancellation/rearm and automatic M69 recovery. The final audit
-retained home, EFI files and all 24 ordinary Nix outputs. The installed recovery
-system remains M69. The current U-Boot, EFI files and repackaged userspace pass
-their host checks and builds but still need publication and a boot-manager trial.
+The normal system passed `boot-test-06`, including runtime EFI installation,
+healthy Linux, real swap paging, an unprivileged Nix build, native RTC startup,
+UTC write/read, awake alarms and automatic M69 recovery. Its versioned EFI entry
+is installed and selected. The final audit retained home, previous EFI entries
+and all 25 ordinary Nix outputs, and verified the new boot files after recovery.
+The installed recovery system remains M69. The current U-Boot passes its host
+checks and build; booting the new entry through it still needs a device trial.
 mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 
