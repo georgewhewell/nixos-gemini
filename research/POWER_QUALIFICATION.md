@@ -335,3 +335,82 @@ cannot confirm return. The inhibitor must cover the disconnected interval:
 otherwise removing USB can release the existing lid daemon's sleep condition.
 The kernel's connected-gadget veto and the normal USB sleep policy remain
 appropriate. Full suspend/wake and hibernation are still unqualified.
+
+## Guarded software USB cycle
+
+```sh
+python3 tools/test-usb-cycle.py
+python3 tools/qualify-power-swap.py --usb-cycle --out NEW_DIRECTORY
+```
+
+This profile is read-only unless `--execute` is supplied. It uses the same
+power/swap candidate, complete normal checks, paging and ordinary Nix build.
+It does not request sleep or change the kernel's connected-gadget veto.
+
+Three separate target services provide the sleep inhibitor, USB action and
+recovery deadline. The logind inhibitor's name, reason, mode, UID and PID
+must match the running guard; its PID/start time are rechecked by the action.
+The action verifies the exact kernel/boot, watchdog ownership and descriptor,
+normal PM selection, connected MTU3 gadget and remaining diagnostic window.
+It disconnects via the UDC's `soft_connect`, waits five seconds, reconnects,
+restores usb0's address/link and requires the gadget to become configured.
+Its stop callback reconnects only within the same boot and owned lock.
+
+The 30-second action cannot stop the independent sleep inhibitor. A separate
+120-second deadline requests reboot without waiting on the USB driver. If
+the same candidate remains alive, it rechecks the exact watchdog owner/start
+time/open descriptor and stops that keepalive process to force expiry. The
+ordinary boot lease is not sufficient here: successful acceptance disables
+its deadline. The independent inhibitor remains held for up to 900 seconds,
+well beyond the reboot/watchdog fallback. No manual cable action is required.
+
+Host qualification requires a real USB departure and a new enumeration,
+same-boot SSH return, unchanged suspend counters and watchdog ownership,
+candidate health/protected-storage checks, and logind evidence of both the
+diagnostic inhibitor and the restored normal USB inhibitor. Only then does
+the host acknowledge the cycle and stop all three target services. Automatic
+M69 recovery and the complete locked data/source audit still conclude the
+trial. The inhibitor mechanism was separately exercised on M69 and removed;
+evidence and selected USB-source hashes are in `usb-cycle-qualification`.
+
+The first trial, `handoff/power-swap-04`, observed USB re-enumeration after
+5.619 seconds, but its host verifier incorrectly treated the staged program
+named `fallback` as an execution marker with that same name. The trial remains
+failed; complete target/inhibitor evidence was not captured before rescue.
+The collision has a failing-then-passing generated-shell regression. The
+timer program is now named `deadline`, and target stdout/stderr are retained
+even when the completion check fails. All 38 USB, PM, power/swap and watchdog
+host tests pass. The corrected hardware retry uses a new trial directory.
+
+Trial 04 automatically restored healthy M69 boot
+`95b96efd-58c9-48e2-8562-9d22ae0e141f`. Its final audit retained all fourteen
+ordinary builds, matched twenty-seven executed sources and found no writer.
+The new retained build is
+`/nix/store/84xnmrljyk1srrz23w5cyfs61k89p75f-gemini-daemon-b053710af0584bac832ddcfd6fafa198`.
+See its `usb-cycle/host-verifier-collision.json`, `host-usb-events.json`,
+`result.json` and `final-idle-check.json`. This trial does not qualify suspend.
+
+The corrected cycle passed on candidate boot
+`2c737ee8-d164-492f-b53e-9c58db9eeac3` in `handoff/power-swap-05`.
+The host measured 5.622 seconds without the gadget; the target's complete
+disconnect/reconnect interval was 5.89 seconds. Both suspend counters remained
+zero, `pm_test` remained none, and the watchdog owner remained PID 551 with
+start time 7753. Logind showed diagnostic inhibitor PID 5191 before, during
+and after the outage. The ordinary USB inhibitor (PID 570) disappeared during
+detachment and returned afterward, proving the independent guard was needed.
+The action exited successfully within its 30-second service bound, and
+same-boot SSH, candidate services and protected storage passed before the
+host acknowledged and stopped all three target services. The 120-second
+fallback did not run. See `usb-cycle/result.json`, the three inhibitor
+observations, `host-usb-events.json` and `acknowledge.sh`/stdout/stderr.
+
+Automatic rescue restored healthy M69 boot
+`1ba6746e-40e6-496d-be87-4e75ceba076f`, retaining all fifteen ordinary build
+outputs and the original persistence/EFI proofs on the exact fixed-swap
+layout. The final audit acquired both flash locks, matched all twenty-seven
+executed sources and found no writer. All host trial services are terminal;
+the worker exited successfully. The new build output is
+`/nix/store/g9z1dbmjhhdgrci3l0fy37fjsb16kgni-gemini-daemon-0b5f176462bb4f849b870a6f075f7104`.
+The final `result.json` qualifies the USB cycle; `final-idle-check.json` records
+the complete recovery/data audit. The next step is to reuse this guard for
+device-stage diagnostics. Full suspend/wake and hibernation remain unqualified.

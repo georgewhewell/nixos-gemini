@@ -25,6 +25,7 @@ paging = importlib.util.module_from_spec(spec); spec.loader.exec_module(paging)
 f = paging.f
 watchdog_expiry = f.q.module('linux_watchdog', ROOT/'tools/qualify-linux-watchdog.py')
 pm_stages = f.q.module('pm_stages', ROOT/'tools/qualify-pm-stages.py')
+usb_cycle = f.q.module('usb_cycle', ROOT/'tools/qualify-usb-cycle.py')
 PROFILE = 'power-swap'
 BUNDLE = Path('/nix/store/mb5adwsfnri1jswcxhs6vl23hnj3jy5m-gemini-mainline-nixos-bundle')
 KERNEL = Path('/nix/store/b26xkc1n67c1xiz90fnzqg17w5dhvff3-gemini-mainline-power-swap-kernel-7.1.3')
@@ -122,8 +123,9 @@ test "$(sha256sum /sys/kernel/notes | cut -d' ' -f1)" = {NOTES_SHA}
     return state
 
 
-def configure(watchdog=False, pm_test=None):
-    if watchdog and pm_test: raise ValueError('Select watchdog expiry or PM diagnostics separately')
+def configure(watchdog=False, pm_test=None, cycle=False):
+    if sum((bool(watchdog), bool(pm_test), bool(cycle))) > 1:
+        raise ValueError('Select watchdog expiry, PM diagnostics or USB cycle separately')
     # A separate module instance keeps old factory-layout profiles unchanged.
     r = f.q.module('power_swap_recovery', ROOT/'tools/qualify-uboot-recovery.py')
     if r.power_kernel.notes_sha(KERNEL) != NOTES_SHA:
@@ -150,11 +152,13 @@ def configure(watchdog=False, pm_test=None):
     r.qualify.verify_return = verify_return
     r.watchdog_expiry_requested = watchdog
     r.pm_test_last_stage = pm_test
+    r.usb_cycle_requested = cycle
     context = SimpleNamespace(ROOT=ROOT, f=f, paging=paging, SYSTEM=SYSTEM,
-                              NOTES_SHA=NOTES_SHA, KERNEL=KERNEL, BOOT_SHA=BOOT_SHA)
+                              NOTES_SHA=NOTES_SHA, KERNEL=KERNEL, BOOT_SHA=BOOT_SHA, PROFILE=PROFILE)
     if watchdog:
         watchdog_expiry.install(context, r)
     if pm_test: pm_stages.install(context, r, pm_test)
+    if cycle: usb_cycle.install(context, r)
     return r
 
 
@@ -176,7 +180,7 @@ def preflight(r, directory, execute):
             raise RuntimeError('M69 recovery policy differs')
         old = directory/'before-all-data'; old.mkdir(mode=0o700)
         retained_all(old, current, directory)
-        if r.pm_test_last_stage:
+        if r.pm_test_last_stage or r.usb_cycle_requested:
             r.qualify.save(directory, 'pm-prerequisites.json', pm_stages.prerequisites(
                 SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, KERNEL=KERNEL, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA)))
         plan = json.loads((directory/'plan.json').read_text())
@@ -184,7 +188,8 @@ def preflight(r, directory, execute):
                  for name in plan['executed_sources_sha256']}
         names.update(json.loads((ROOT.parent/'handoff/fixed-swap-04/plan.json').read_text())['executed_sources_sha256'])
         names.update(('tools/qualify-power-swap.py', 'tools/qualify-swap-io.py',
-                      'tools/qualify-linux-watchdog.py', 'tools/qualify-pm-stages.py', 'nix/gemini-swap-probe.c'))
+                      'tools/qualify-linux-watchdog.py', 'tools/qualify-pm-stages.py',
+                      'tools/qualify-usb-cycle.py', 'nix/gemini-swap-probe.c'))
         names.update('research/'+name for name in ('p22-proof-supervisor.sh', 'p22-flash-wrapper.sh',
             'p22-mtkclient-backend.py', 'trex-gadget-net-watcher.sh', 'p22-trex-transaction-holder.sh'))
         hashes = {}
@@ -196,7 +201,8 @@ def preflight(r, directory, execute):
         plan.update(execute=execute, storage_layout='fixed-swap', storage_identity=STORAGE,
             all_executed_sources_sha256=hashes, default_zswap_shrinker=True,
             paging_probe_sha256=paging.PROBE_SHA, runtime_policy_writes=False,
-            watchdog_expiry_requested=r.watchdog_expiry_requested, pm_test_last_stage=r.pm_test_last_stage)
+            watchdog_expiry_requested=r.watchdog_expiry_requested, pm_test_last_stage=r.pm_test_last_stage,
+            usb_cycle_requested=r.usb_cycle_requested)
         r.qualify.save(directory, 'plan.json', plan)
         return before
 
@@ -288,6 +294,14 @@ def finish(r, directory, before, error=None):
                     passed = False; error = caught
             r.qualify.save(directory, 'pm-result.json', pm_result)
             result.update(pm_result)
+        if plan.get('usb_cycle_requested'):
+            cycle_result = dict(usb_cycle_qualified=False, sleep_requested=False)
+            if passed:
+                try: cycle_result = usb_cycle.verify_final(directory)
+                except (OSError, ValueError, RuntimeError, KeyError) as caught:
+                    passed = False; error = caught
+            r.qualify.save(directory, 'usb-cycle-result.json', cycle_result)
+            result.update(cycle_result)
         result.update(result='passed' if passed else 'failed',
             profile_qualified=passed,
             fixed_swap_preserved=True, default_policy_paging_qualified=passed,
@@ -310,6 +324,8 @@ def main():
                         help='After full candidate checks, qualify keepalive loss and automatic recovery')
     diagnostic.add_argument('--pm-test', choices=pm_stages.STAGES,
                             help='Run PM diagnostics through this stage, starting with freezer')
+    diagnostic.add_argument('--usb-cycle', action='store_true',
+                            help='Qualify guarded software USB detach/reconnect without requesting sleep')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args(); directory = args.out.resolve()
     if args.execute and not args.worker:
@@ -319,7 +335,8 @@ def main():
             '--property=RuntimeMaxSec=2400', '--setenv=PATH='+os.environ['PATH'], '--setenv=GEMINI_POWER_SWAP_UNIT='+unit,
             sys.executable, str(Path(__file__).resolve()), '--worker', '--out', str(directory)] +
             (['--watchdog-expiry'] if args.watchdog_expiry else []) +
-            (['--pm-test', args.pm_test] if args.pm_test else []))
+            (['--pm-test', args.pm_test] if args.pm_test else []) +
+            (['--usb-cycle'] if args.usb_cycle else []))
         if child.returncode: raise RuntimeError('Power/swap worker failed; inspect its retained trial and recovery evidence')
         return
     if args.worker:
@@ -328,7 +345,7 @@ def main():
                 f.q.r.qualify.run(['systemctl', '--user', 'show', unit, '-p', 'MainPID', '--value']).strip() != str(os.getpid())):
             raise RuntimeError('Candidate trial lacks its durable owner')
     os.umask(0o077)
-    r = configure(args.watchdog_expiry, args.pm_test); before = preflight(r, directory, args.worker)
+    r = configure(args.watchdog_expiry, args.pm_test, args.usb_cycle); before = preflight(r, directory, args.worker)
     if not args.worker:
         print('Power/swap preflight passed; no device writes or reboot'); return
     error = None

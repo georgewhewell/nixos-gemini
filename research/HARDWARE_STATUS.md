@@ -1,4 +1,4 @@
-# Gemini completion status, 2026-10-04
+# Gemini completion status, 2026-10-07
 
 The objective remains complete hardware enablement and consolidation. Camera
 and vibrator are excluded by the owner; hardware video is still unresolved,
@@ -24,7 +24,7 @@ Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
 healthy M69 boot after the power/swap candidate's automatic recovery is
-`c5520087-490c-4dc8-bb69-720870cae7b6`, with `/persist`,
+`1ba6746e-40e6-496d-be87-4e75ceba076f`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged
@@ -96,8 +96,17 @@ The device stage was rejected by the attached MTU3 recovery gadget with
 `-EBUSY`, matching the driver's connected-device check and existing sleep
 inhibitor policy. The combined profile remains failed. Automatic M69 recovery
 and the final locked audit preserved all thirteen Nix outputs and matched
-twenty-six executed sources. Testing the remaining device callbacks requires
-supervised USB detachment/reconnection while holding a separate sleep inhibitor.
+twenty-six executed sources. The subsequent guarded USB cycle passed in
+`handoff/power-swap-05`: the gadget disappeared for 5.622 seconds, re-enumerated,
+and returned to SSH and candidate health on the same boot. The independent
+logind sleep inhibitor remained observed while the normal USB inhibitor
+disappeared, and the latter returned before the guard was released. No sleep
+was requested; watchdog ownership and suspend counters remained unchanged.
+Automatic recovery and the final locked audit retained all fifteen Nix
+outputs, matched twenty-seven executed sources and found no writer. The first
+attempt (`power-swap-04`) was rejected by a reproduced host filename collision;
+it also recovered and retained its build output. The corrected retry completed
+automatically. Device diagnostics with the gadget disconnected are next.
 Direct M69 remains installed. See
 [PERSISTENCE.md](PERSISTENCE.md).
 
@@ -108,8 +117,8 @@ Direct M69 remains installed. See
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot now loads the versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. Physical key selection, the separate power/Escape input, promotion of the tested desktop layout, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup now preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; promotion and normal generation updates remain |
-| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry and the freezer diagnostic pass. Device diagnostics currently hit the attached USB gadget's intentional suspend veto; a guarded detach/reconnect trial is next. Full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
-| Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract. Confirm this device's provisioning path and the offered plan's services before activation; no new profile has been installed or tested |
+| Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Controlled Linux watchdog expiry, freezer diagnostics and guarded software USB detach/reconnect pass. The attached gadget intentionally vetoes device suspend; diagnostics with it disconnected are next. Full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
+| Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |

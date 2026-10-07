@@ -43,8 +43,10 @@ its keepalive process caused a reset in 25.3 seconds and automatic M69 recovery,
 with all twelve Nix build outputs retained.
 The freezer diagnostic also passes, including a fresh GPU render afterward.
 The device-suspend diagnostic currently stops at MTU3's deliberate refusal to
-suspend an attached USB gadget; testing beyond it needs supervised USB
-disconnection and restoration. Recovery retained all thirteen build outputs.
+suspend an attached USB gadget. Guarded software USB disconnection and
+restoration now pass, with an independent sleep inhibitor held through the
+outage and all fifteen build outputs retained after automatic M69 recovery.
+Device diagnostics with the gadget disconnected are next.
 Hibernation, deep idle and the complete lid power policy are not qualified.
 See [power evidence](research/POWER_QUALIFICATION.md) and the
 [fixed-swap plan](research/STORAGE_QUALIFICATION.md).
