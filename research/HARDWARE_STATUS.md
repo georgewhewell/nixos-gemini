@@ -19,19 +19,25 @@ kernel recipe replaces its historical profile builder. Native driver tests,
 the full system/EFI build and flake checks pass. A72 build-identity binding
 and runtime service setup still need consolidation.
 
-The consolidated default reached healthy Linux in `handoff/boot-test-01`
-(boot `bf573e63-746e-44d1-b304-22493bb1cba4`). Its test stopped before paging,
-Nix-build and RTC diagnostics because an old host check compared raw phandle
-numbers. The corrected check resolves memory-region references by node and
-still rejects changed reservations and reference targets. Recovery then hit
-the 180-second mtkclient timeout immediately after a late USB connection,
-interrupting DA extension setup before any rescue flash write. A bounded
-host reset completed the pending DA response and used its RTC-preserving
-reboot command; a fresh boot-only writer restored M69 with verified readback.
-No physical reset was needed. The trial remains failed, with manual recovery
-recorded separately. Its final audit retained all 21 ordinary outputs, original
-home/EFI data and protected storage, matched 33 executed sources and stopped
-all six host services. Split connection/transfer time limits before rerunning.
+The consolidated default passed `handoff/boot-test-03` (candidate boot
+`011ca981-aded-4ba5-b1c2-d91ac6da030b`): full Linux health, real paging with
+the built-in zswap policy, an ordinary unprivileged Nix build, native RTC startup,
+UTC write/read/ticking, awake alarm delivery/cancellation/rearm and automatic
+M69 recovery. The decoded firmware clock retained UTC across both DA resets.
+The final locked audit retained all 22 ordinary outputs, original home/EFI data
+and protected storage, matched 33 executed sources, and stopped all five host
+services. The worker exited zero. This tests the direct boot bundle; the new
+default EFI bundle still needs its own boot-manager trial.
+
+The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
+scan after 120 seconds, leaving transfer time inside its existing 180-second
+outer limit; all 43 package tests pass, including a late connection crossing
+the scan deadline. Hardware trials verified idle-scan retries and successful
+automatic rescue. Memory checks now compare LK's live reservation nodes and
+modem table while allowing regenerated phandle IDs. They follow the kernel
+handoff provider: LK removes static modem reservations, so their obsolete
+consumer phandles do not describe the live layout. Trial 01's host-assisted
+recovery and trial 02's failed diagnostic result remain recorded separately.
 
 ## Fresh device observations
 
@@ -50,8 +56,8 @@ Initial read-only checks before the mtkclient trials are retained at workspace
 Subsequent storage work initialized the existing empty p32 filesystem without
 changing GPT. Trial `handoff/data-persistence-02` then proved that home data and
 a local fixed-output Nix build/database survive supervised reboot. Current
-healthy M69 boot after the consolidated candidate's host-assisted recovery is
-`f8de9423-36f2-400f-ae7b-7b8ad6366d17`, with `/persist`,
+healthy M69 boot after the consolidated candidate's automatic recovery is
+`7ba1b770-660b-4d4d-8358-e4ec6b3174e3`, with `/persist`,
 `/home`, `/nix/var` and the store overlay mounted. Fixed 5 GiB p34 swap is active.
 Ordinary Nix builds revealed missing network namespaces and daemon units.
 The opt-in correction passed `handoff/persistent-nix-01`: an unprivileged

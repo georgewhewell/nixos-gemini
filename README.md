@@ -46,7 +46,7 @@ reproducing an old trial; new features belong in the default system.
 The existing device can test the normal bundle with automatic M69 recovery:
 
 ```sh
-python tools/test-boot.py --bundle result --out ../handoff/boot-test-01 --execute
+python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s) --execute
 ```
 
 Omit `--execute` for a read-only preflight, using a fresh output directory.
@@ -58,13 +58,13 @@ active loop device or installed EFI entry/initramfs uses it.
 
 ## Device status
 
-The installed recovery system remains M69. The consolidated default bundle
-builds and boots to healthy Linux. Its first boot test stopped on a stale
-numeric phandle comparison, now corrected to compare referenced nodes.
-Recovery then exposed a scan timeout that interrupted download-agent setup;
-host intervention restored M69 without a physical reset. The final audit
-retained home, EFI files and all 21 ordinary Nix outputs. Separate connection
-and transfer time limits are needed before repeating the complete boot test.
+The consolidated default passes a complete supervised boot test: healthy Linux,
+real swap paging, an unprivileged Nix build, native RTC startup, UTC write/read,
+alarm delivery/cancellation/rearm and automatic M69 recovery. The final audit
+retained home, EFI files and all 22 ordinary Nix outputs. The installed recovery
+system remains M69; the current default EFI bundle has not yet had its own
+boot-manager trial. mtkclient now ends idle USB scans before the outer transfer
+deadline, preserving time for a late-arriving device to finish.
 
 Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
 audio, USB host/gadget, eMMC, persistent home/Nix storage and fixed 5 GiB swap.
