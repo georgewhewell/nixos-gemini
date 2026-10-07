@@ -267,6 +267,48 @@ unqualified for normal cgroup2 operation; no default was promoted. Final
 evidence: `handoff/battery-status-trial-01/final-idle-check.json` and
 `handoff/battery-status-20261007/completion.json`.
 
+## Original-pack voltage profiles (October 7)
+
+Linux `eb2d529cd4684` adds the four original-pack zero-current voltage
+profiles through a standard `simple-battery` node referenced by FGADC's
+`monitored-battery`. The active HAFG_20 header initializer supplies these
+same arrays to the vendor fuel-gauge daemon; its voltage lookup calls them
+ZCV profiles. The vendor generic DTS and the inactive `battery_meter.c`
+algorithm are not the source of this data.
+
+The importer pins the SHA256 of `mt_battery_meter_table.h` from vendor
+revision `51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c`, converts mV to uV
+and depth of discharge to remaining percent, and removes only identical
+consecutive points. The four 96-entry arrays become 94, 87, 87 and 85
+strictly descending voltage tables at -10, 0, 25 and 50 degrees Celsius.
+The header's `TEMPERATURE_T0=110` is a selector, not 110 degrees Celsius.
+Different percentages at the same voltage, malformed input and nonmonotonic
+data are rejected. No Qmax value is relabelled as design capacity, and no
+charge limits or charger reference are added to this battery node.
+
+`tools/gemini/test-gemini-battery-profile-host.py` verifies original-data
+hashes and runs production Linux OCV lookup and fixed-point interpolation
+against 7,307 exact rational voltage cases, 161 temperature selections and
+missing-table behavior under undefined-behavior sanitization. Linux's helper
+selects the nearest temperature table, with the colder table winning ties;
+this is not a claim that the vendor daemon used that same selection policy.
+The importer regenerates the checked-in DTSI byte for byte. The ARM64 DTB
+build and battery/FGADC schema validation pass; the build still reports the
+existing MTU3 empty-ranges address/size-cell warnings.
+
+This supplies estimator inputs, not a complete estimator: `CAPACITY` remains
+absent. Load/temperature compensation, initial state, counter reset/wrap and
+suspend behavior, full/empty anchors, aging and charge/discharge validation
+still need implementation or qualification. In particular, the current
+vendor-compatible counter decoding discards portions of the CAR register;
+those ignored bits must not be assumed to prove the hardware's wrap modulus.
+The normal kernel and deployment bundle build and all packaged checks pass.
+The packaged DTB is byte-identical to the schema-validated DTB; its source
+manifest names the committed revision. Build artifacts, kernel check log and
+verification record are in `handoff/battery-profile-20261007/`. The profile
+change has not been booted on the device. M69 remains the recovered runtime,
+and the allocator files remain unchanged by this work.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
