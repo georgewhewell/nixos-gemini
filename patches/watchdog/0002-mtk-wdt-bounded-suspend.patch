@@ -1,0 +1,144 @@
+From 65877a32be641e452424b5fef14cf92838d17a8f Mon Sep 17 00:00:00 2001
+From: georgewhewell <georgerw@gmail.com>
+Date: Wed, 7 Oct 2026 04:53:16 +0200
+Subject: [PATCH] watchdog: mediatek: optionally keep counter running during
+ suspend
+
+---
+ drivers/watchdog/mtk_wdt.c                    | 18 ++++++--
+ .../selftests/watchdog/mtk-wdt-pm-host.py     | 42 ++++++++++++++-----
+ 2 files changed, 46 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/watchdog/mtk_wdt.c b/drivers/watchdog/mtk_wdt.c
+index 842f002ee63a3..85c315eae8795 100644
+--- a/drivers/watchdog/mtk_wdt.c
++++ b/drivers/watchdog/mtk_wdt.c
+@@ -76,6 +76,7 @@
+ 
+ static bool nowayout = WATCHDOG_NOWAYOUT;
+ static bool start_at_boot;
++static bool suspend_keep_running;
+ static unsigned int timeout;
+ 
+ struct mtk_wdt_dev {
+@@ -731,14 +732,21 @@ static bool mtk_wdt_is_running(struct watchdog_device *wdt_dev)
+  * Nothing can pet the watchdog while the system sleeps, so stop it.  Do that
+  * in the noirq phase, as late as possible, so that the watchdog still covers
+  * the rest of the suspend sequence and is running again as early as possible
+- * on resume.
++ * on resume. An explicit boot/module parameter instead keeps the counter
++ * running to bound a short system suspend. Kick it at the noirq boundary so
++ * that the remaining timeout covers the sleeping interval and early resume.
++ * Hibernation image I/O keeps its separate PREPARE/POST pause semantics.
+  */
+ static int mtk_wdt_suspend_noirq(struct device *dev)
+ {
+ 	struct mtk_wdt_dev *mtk_wdt = dev_get_drvdata(dev);
+ 
+-	if (!mtk_wdt->hibernation_paused && mtk_wdt_is_running(&mtk_wdt->wdt_dev))
+-		mtk_wdt_stop(&mtk_wdt->wdt_dev);
++	if (!mtk_wdt->hibernation_paused && mtk_wdt_is_running(&mtk_wdt->wdt_dev)) {
++		if (suspend_keep_running)
++			mtk_wdt_ping(&mtk_wdt->wdt_dev);
++		else
++			mtk_wdt_stop(&mtk_wdt->wdt_dev);
++	}
+ 
+ 	return 0;
+ }
+@@ -815,6 +823,10 @@ module_param(start_at_boot, bool, 0);
+ MODULE_PARM_DESC(start_at_boot,
+ 		 "Start the watchdog during probe so the core open timeout covers init");
+ 
++module_param(suspend_keep_running, bool, 0400);
++MODULE_PARM_DESC(suspend_keep_running,
++		 "Keep watchdog running during system suspend; sleep must end before timeout");
++
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Matthias Brugger <matthias.bgg@gmail.com>");
+ MODULE_DESCRIPTION("Mediatek WatchDog Timer Driver");
+diff --git a/tools/testing/selftests/watchdog/mtk-wdt-pm-host.py b/tools/testing/selftests/watchdog/mtk-wdt-pm-host.py
+index ca099f9735ba1..e29f05e08a712 100755
+--- a/tools/testing/selftests/watchdog/mtk-wdt-pm-host.py
++++ b/tools/testing/selftests/watchdog/mtk-wdt-pm-host.py
+@@ -53,7 +53,14 @@ struct device { void *priv; };
+ #define NOTIFY_OK 1
+ #define notifier_from_errno(err) ((err) ? 0x8000 | (NOTIFY_OK - (err)) : NOTIFY_OK)
+ static u32 readl(void *p) { return *(u32 *)p; }
+-static void iowrite32(u32 value, void *p) { *(u32 *)p = value; }
++static void *mode_addr;
++static unsigned int stop_writes;
++static void iowrite32(u32 value, void *p) {
++    /* WDT_MODE_EN is bit 0. Count even a transient disable followed by start. */
++    if (p == mode_addr && !(value & 1))
++        stop_writes++;
++    *(u32 *)p = value;
++}
+ #define ioread32 readl
+ #define pm_sleep_ptr(fn) (fn)
+ struct dev_pm_ops {
+@@ -74,6 +81,9 @@ functions = [
+ code = prefix + '\n'.join(re.findall(r'^#define WDT_.*$', source, re.M)) + '\n'
+ code += '\n'.join(re.findall(r'^#define PM_(?:POST|HIBERNATION|RESTORE|SUSPEND)_.*$', suspend, re.M)) + '\n'
+ code += extract(r'struct mtk_wdt_dev \{.*?^};') + '\n'
++code += extract(r'^static bool suspend_keep_running;') + '\n'
++# The mode is fixed at boot/module load, never changed during a PM transition.
++assert 'module_param(suspend_keep_running, bool, 0400);' in source
+ code += extract(r'^#define NOIRQ_SYSTEM_SLEEP_PM_OPS.*?\n\n', pm)
+ for name in functions:
+     code += extract(r'^static (?:int|bool) ' + name + r'\(.*?^}\n') + '\n'
+@@ -92,6 +102,8 @@ static void setup(unsigned int status, bool enabled)
+     w.wdt_dev.priv = &w;
+     w.wdt_dev.timeout = 31;
+     w.wdt_dev.status = status | 4; /* preserve a nowayout-like policy bit */
++    mode_addr = &regs[WDT_MODE / 4];
++    stop_writes = 0;
+     regs[WDT_MODE / 4] = enabled ? WDT_MODE_EN : 0;
+ }
+ static void notify(unsigned long action)
+@@ -115,7 +127,12 @@ static void test_suspend(unsigned int status, bool enabled)
+     notify(PM_SUSPEND_PREPARE);
+     assert(running() == enabled);
+     assert(!mtk_wdt_pm_ops.suspend_noirq(&d));
+-    assert(!running());
++    assert(running() == (enabled && suspend_keep_running));
++    if (suspend_keep_running) {
++        assert(stop_writes == 0);
++        if (enabled)
++            assert(regs[WDT_RST / 4] == WDT_RST_RELOAD);
++    }
+     assert(!mtk_wdt_pm_ops.resume_noirq(&d));
+     notify(PM_POST_SUSPEND);
+     assert(running() == enabled);
+@@ -203,16 +220,19 @@ static void test_duplicate_notifications(void)
+ }
+ int main(void)
+ {
+-    for (unsigned int status = 0; status < 4; status++) {
+-        test_suspend(status, status != 0);
+-        test_hibernation(status, status != 0);
+-        test_restore_failure(status, status != 0);
++    for (unsigned int keep_running = 0; keep_running < 2; keep_running++) {
++        suspend_keep_running = keep_running;
++        for (unsigned int status = 0; status < 4; status++) {
++            test_suspend(status, status != 0);
++            test_hibernation(status, status != 0);
++            test_restore_failure(status, status != 0);
++        }
++        test_abort_before_device_freeze();
++        test_start_stop_while_paused();
++        test_restored_snapshot();
++        test_duplicate_notifications();
+     }
+-    test_abort_before_device_freeze();
+-    test_start_stop_while_paused();
+-    test_restored_snapshot();
+-    test_duplicate_notifications();
+-    puts("mtk-wdt-pm-host: PASS (16 PM sequences, real driver functions)");
++    puts("mtk-wdt-pm-host: PASS (32 PM sequences, real driver functions)");
+     return 0;
+ }
+ '''
+-- 
+2.55.0
+

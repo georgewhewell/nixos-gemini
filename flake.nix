@@ -918,6 +918,14 @@
     mainlinePowerRtcCalendarKernel = import ./nix/mainline-rtc-calendar-kernel.nix {
       kernel = mainlinePowerRtcKernel;
     };
+    mainlinePowerSuspendGuardKernel = import ./nix/mainline-suspend-guard-kernel.nix {
+      kernel = mainlinePowerRtcCalendarKernel;
+    };
+    mainlinePowerSuspendGuardDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlinePowerSuspendGuardKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
     mainlinePowerRtcDtb = import ./nix/mainline-efi-dtb.nix {
       inherit buildPkgs;
       kernel = mainlinePowerRtcKernel;
@@ -1330,6 +1338,17 @@
       }];
     };
 
+    mainlineNixosPowerSuspendGuardSystemCross = mainlineNixosPowerRtcCalendarSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 4 mainlinePowerSuspendGuardKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 4 mainlinePowerSuspendGuardKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 4 mainlinePowerSuspendGuardKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 4 mainlinePowerSuspendGuardKernel;
+        };
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1393,6 +1412,7 @@
     mainlineNixosPowerRtcSquashfs = mkMainlineSquashfs mainlineNixosPowerRtcSystemCross.config.system.build.toplevel;
 
     mainlineNixosPowerRtcCalendarSquashfs = mkMainlineSquashfs mainlineNixosPowerRtcCalendarSystemCross.config.system.build.toplevel;
+    mainlineNixosPowerSuspendGuardSquashfs = mkMainlineSquashfs mainlineNixosPowerSuspendGuardSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1513,6 +1533,15 @@
       squashfs = mainlineNixosPowerRtcCalendarSquashfs;
       nixosToplevel = mainlineNixosPowerRtcCalendarSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosPowerRtcCalendarSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosPowerSuspendGuard = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlinePowerSuspendGuardKernel;
+      serviceabilityDtb = mainlinePowerSuspendGuardDtb;
+      squashfs = mainlineNixosPowerSuspendGuardSquashfs;
+      nixosToplevel = mainlineNixosPowerSuspendGuardSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosPowerSuspendGuardSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -2065,6 +2094,13 @@
       mainlineNixosPowerRtcKernel = mainlinePowerRtcKernel;
       mainlineNixosPowerRtcCalendarBundle = mainlineNixosPowerRtcCalendar.bundle;
       mainlineNixosPowerRtcCalendarKernel = mainlinePowerRtcCalendarKernel;
+      mainlineNixosPowerSuspendGuardKernel = mainlinePowerSuspendGuardKernel;
+      mainlineNixosPowerSuspendGuardBundle = mainlineNixosPowerSuspendGuard.bundle;
+      watchdogSuspendCheck = import ./nix/watchdog-suspend-check.nix {
+        inherit buildPkgs crossPkgs;
+        source = linux-gemini;
+        baseKernel = mainlinePowerRtcCalendarKernel;
+      };
       rtcCalendarCheck = import ./nix/rtc-calendar-check.nix {
         inherit buildPkgs crossPkgs;
         source = linux-gemini;
@@ -2178,6 +2214,7 @@
       gemini-mainline-power-swap = mainlineNixosPowerSwapSystemCross;
       gemini-mainline-power-rtc = mainlineNixosPowerRtcSystemCross;
       gemini-mainline-power-rtc-calendar = mainlineNixosPowerRtcCalendarSystemCross;
+      gemini-mainline-power-suspend-guard = mainlineNixosPowerSuspendGuardSystemCross;
     };
 
     # Development shell
