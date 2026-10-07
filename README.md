@@ -35,9 +35,8 @@ The hardware settings now live in Linux's board DTS and `gemini_defconfig`;
 the default build no longer applies hardware overlays or edits DT properties.
 A72 capability preparation now belongs entirely to Linux: native Kbuild uses
 the board register expectations and live system policy, and packaging copies
-the compiled DTB unchanged. This passes the full device boot test. U-Boot's
-host tests cover this DTB format and older kernels' DTs; its updated EFI path
-still needs a device trial.
+the compiled DTB unchanged. This passes both direct boot and the complete
+U-Boot/systemd-boot device test. U-Boot's host tests also cover older kernels' DTs.
 Unused CPU startup models, rollback hooks and temporary hotplug tracing have
 been removed. Generic CPU hotplug and idle code now match upstream Linux;
 the working A72 power and capability checks remain in the board support.
@@ -92,13 +91,15 @@ the native CPU device tree, Linux health and automatic M69 recovery.
 
 The maintained Linux kernel boots both A72s without a generated build record or
 the retired CPU startup models and tracing.
-The normal system passed `boot-test-06`, including runtime EFI installation,
-healthy Linux, real swap paging, an unprivileged Nix build, native RTC startup,
-UTC write/read, awake alarms and automatic M69 recovery. Its versioned EFI entry
-is installed and selected. The final audit retained home, previous EFI entries
-and all 25 ordinary Nix outputs, and verified the new boot files after recovery.
-The installed recovery system remains M69. The current U-Boot passes its host
-checks and build; booting the new entry through it still needs a device trial.
+The normal system passed runtime EFI installation in `boot-test-06`, followed
+by the complete consolidated U-Boot/systemd-boot test in `boot-test-07`.
+The manager selected the installed entry after its unattended menu timeout;
+Linux verified the native CPU tree, both A72s, the full 4 GiB EFI memory map
+and LK reservations. Linux health, real paging, an unprivileged Nix build,
+native RTC startup/UTC/awake alarms and automatic M69 recovery all passed.
+The final audit retained home, previous EFI entries and all 26 ordinary Nix
+outputs. The installed recovery system remains M69. Permanent promotion and
+normal `nixos-rebuild` generation installation remain unfinished.
 mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 

@@ -41,7 +41,8 @@ manager launcher now reads the installed systemd-boot image, bounds its size,
 records its actual digest and retains FIT fallback on failure. Its 18 host
 test scripts and complete firmware/carrier builds pass. `bootloader` packages
 the flashable image with the normal Linux fallback. Historical inputs and the
-exact recovery bundle remain unchanged. This firmware has NOT been device-tested.
+exact recovery bundle remain unchanged. This firmware passed the full device
+test in `handoff/boot-test-07` using the normal installed EFI entry.
 
 The normal system passed `handoff/boot-test-06` (candidate boot
 `f8e3fb64-6a29-4fd6-b631-c223cbd64281`). It includes the unchanged Linux/DTB
@@ -60,10 +61,23 @@ RTC-preserving automatic rescue all passed. The final locked audit retained
 25 ordinary outputs, original home, previous EFI entries and protected storage,
 and matched all 35 executed source files. M69 returned healthy as boot
 `0b9f41cf-7477-4f68-9249-08f5d725405a`; the durable worker exited zero.
-The old unused candidate cache was archived before replacement. The new EFI
-entry still needs a boot-manager trial with the consolidated U-Boot, and normal
-`nixos-rebuild` generation hooks remain unfinished. All 25 installer/publisher
-tests, the normal system/EFI/bootloader builds and flake checks pass.
+The old unused candidate cache was archived before replacement. All 25
+installer/publisher tests, the normal system/EFI/bootloader builds and flake
+checks pass.
+
+The subsequent `boot-test-07` booted that entry through consolidated U-Boot
+and systemd-boot 261.2 (candidate `df50df1b-c288-4266-a2b9-694c8cde44aa`).
+The manager's own EFI variables identify the expected entry and p29 volume,
+with 9.818488 seconds between menu and execution. Linux verified 50 EFI
+descriptors covering the full 4 GiB, LK reservations, native CPU readiness,
+the selected CPU device tree and both online A72s. The historical console/MMC
+test apps and generated CPU record were absent. Full Linux health, paging,
+ordinary Nix, native RTC startup/UTC/awake alarms and automatic rescue passed.
+M69 returned as `62173393-15e9-4d9f-bfe5-eaa5315d5a54`; the audit retained all
+26 ordinary outputs, home, previous EFI entries and protected storage, with
+35 executed source files unchanged. Host coverage includes 45 boot/recovery,
+EFI, native DT and fallback-rejection tests. Permanent promotion and normal
+`nixos-rebuild` generation hooks remain unfinished.
 
 The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
 scan after 120 seconds, leaving transfer time inside its existing 180-second
@@ -222,7 +236,7 @@ Direct M69 remains installed. See
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
-| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. systemd-boot loads the older versioned Nix-enabled entry after its unattended menu timeout, with its own EFI variables and exact boot-file hashes verified. Native Unicode/modifier behavior passes host tests and its actual EFI polling passes the complete device trial. The consolidated system's EFI entry is installed and selected; its boot-manager trial, physical key selection, the separate power/Escape input, persistent EFI settings and normal NixOS generation management remain. Per-entry DT fixup preserves selected CPU provenance and LK reservations on hardware; a newer kernel/DT also boots successfully from a carrier embedding the older kernel/DT. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. Consolidated U-Boot boots the normal installed NixOS entry through systemd-boot, with real EFI variables, memory map, native CPU DT and boot-file readback verified. Native Unicode/modifier behavior passes host tests; actual EFI polling passed the earlier complete device trial. Physical key selection, the separate power/Escape input, persistent EFI settings, permanent promotion and normal NixOS generation management remain. Per-entry DT fixup preserves LK reservations and both native and historical CPU trees; an older carrier also boots a newer kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; installation of the consolidated default and normal generation updates remain |
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | USB speed and roles | The left MTU3 port is capped to USB2/high-speed in the selected board DT; only 480 Mb/s enumeration has been qualified. Vendor SuperSpeed support suggests further enablement is possible, but board wiring and a real 5 Gb/s connection remain to be verified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |

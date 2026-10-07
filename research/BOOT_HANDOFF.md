@@ -14,11 +14,21 @@ records its digest, and falls back to the embedded Linux FIT if it returns or
 cannot be loaded. Updating the distro loader no longer needs its size/hash
 compiled into U-Boot. Native and historical kernel DTs remain supported.
 
-The 18 production-function host test scripts, firmware, carrier, EFI files
-and system bundle builds pass. These current artifacts are **not yet booted**:
-publication of the current EFI entry, its supervised manager trial, normal
-generation updates and permanent promotion remain. M69 is still installed.
-Workspace artifacts and logs: `handoff/efi-consolidation/`.
+The current artifacts pass the complete device tests: runtime publication in
+`handoff/boot-test-06`, then U-Boot/systemd-boot in `handoff/boot-test-07`.
+The manager selected the installed entry after its unattended timeout. Linux
+verified 50 EFI descriptors covering 4 GiB, LK reservations, the native entry
+CPU tree and both A72s. Linux health, real paging, an ordinary Nix build,
+native RTC startup/UTC/awake alarms and automatic M69 rescue passed. The final
+audit retained home, older entries and all 26 ordinary Nix outputs. The 18
+firmware host scripts and 45 relevant boot/recovery tests also pass.
+
+`tools/test-boot.py --bundle /path/to/bundle --bootloader /path/to/bootloader
+--efi-files /path/to/efiBootFiles --out /path/to/new-output --execute` uses
+the existing supervised rescue path. Omit `--execute` for a read-only preflight.
+The EFI files must already be installed through `gemini-boot-install`.
+Normal `nixos-rebuild` generation hooks and permanent promotion remain.
+M69 is still installed. Workspace artifacts and logs: `handoff/efi-consolidation/`.
 
 The sections below record earlier hardware trials and their historical
 profiles. Their original build commands refer to those revisions; those
