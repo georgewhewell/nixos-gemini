@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at d951c0cadafbb, including the tested watchdog and RTC
+Linux branch `gemini` at d25a82d67956d, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
