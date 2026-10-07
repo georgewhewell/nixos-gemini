@@ -133,12 +133,6 @@
   bootloader = import ./uboot-carrier.nix {
     inherit buildPkgs uboot;
     linuxBundle = image.bundle;
-    efiLinux = true;
-    efiConsole = true;
-    efiKeyboard = true;
-    efiMmc = true;
-    efiStorage = true;
-    efiManager = true;
   };
 
 in {

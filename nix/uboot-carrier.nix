@@ -1,14 +1,7 @@
-{ buildPkgs, uboot, linuxBundle, efiSmoke ? false, efiLinux ? false, efiConsole ? false, efiKeyboard ? false, efiMmc ? false, efiStorage ? false, efiProvision ? false, efiManager ? false, recoveryTest ? 0 }:
-assert builtins.elem recoveryTest [0 1 2];
-assert recoveryTest == 0 || !(efiSmoke || efiLinux);
-assert !(efiSmoke && efiLinux);
-assert !efiConsole || efiLinux;
-assert !efiKeyboard || efiConsole;
-assert !efiMmc || efiKeyboard;
-assert !efiStorage || efiMmc;
-assert !efiProvision || efiStorage;
-assert !efiManager || (efiStorage && !efiProvision);
-buildPkgs.runCommand "gemini-uboot-${if efiManager then "efi-manager" else if efiProvision then "efi-provision" else if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}-${toString recoveryTest}-carrier" {
+# Normal U-Boot firmware with systemd-boot and an embedded Linux fallback.
+# Historical experiments use the independently pinned packaging snapshot.
+{ buildPkgs, uboot, linuxBundle }:
+buildPkgs.runCommand "gemini-bootloader" {
   nativeBuildInputs = [ buildPkgs.python3 buildPkgs.dtc buildPkgs.ubootTools ];
   SOURCE_DATE_EPOCH = 1788493603;
 } ''
@@ -27,7 +20,7 @@ buildPkgs.runCommand "gemini-uboot-${if efiManager then "efi-manager" else if ef
     images {
       kernel {
         data = /incbin/("$kernel");
-        type = "kernel"; arch = "arm64"; os = "${if efiLinux then "efi" else "linux"}";
+        type = "kernel"; arch = "arm64"; os = "efi";
         compression = "gzip";
         load = <0x40200000>; entry = <0x40200000>;
         hash-1 { algo = "sha256"; };
@@ -62,10 +55,10 @@ buildPkgs.runCommand "gemini-uboot-${if efiManager then "efi-manager" else if ef
   cmp kernel-extracted "$kernel"
   cmp dtb-extracted "$dtb"
   cmp initramfs-extracted "$initramfs"
-  cmdline=bootopt=64S3,32N2,64N2
-  if [ -e ${linuxBundle}/system ]; then
-    cmdline="$cmdline init=$(readlink ${linuxBundle}/system)/init $(cat ${linuxBundle}/system/kernel-params)"
-  fi
+  system=$(readlink ${linuxBundle}/system)
+  test -x "$system/init"
+  ln -s "$system" "$out/fallback-system"
+  cmdline="bootopt=64S3,32N2,64N2 init=$system/init $(cat "$system/kernel-params")"
   python3 ${../tools/build-android-uboot-carrier-v0.py} --cmdline "$cmdline" \
     --uboot ${uboot}/u-boot.bin --ramdisk "$out/gemini.itb" \
     --dtb "$dtb" --output "$out/boot-raw.img" > "$out/build-metadata.txt"
@@ -96,13 +89,13 @@ buildPkgs.runCommand "gemini-uboot-${if efiManager then "efi-manager" else if ef
   raw_kernel = gzip.decompress((linux/'kernel/Image.gz').read_bytes())
   assert raw_kernel[0x38:0x3c] == b'ARM\x64'
   assert 0x40200000 + len(raw_kernel) < 0x43000000
-  ${buildPkgs.lib.optionalString efiLinux "assert raw_kernel[:2] == b'MZ'"}
+  assert raw_kernel[:2] == b'MZ'
   manifest = {'status':'host-validated-not-booted', 'uboot':str(uboot),
-              'linux_payload':str(linux), 'profile':'${if efiManager then "efi-manager" else if efiProvision then "efi-provision" else if efiStorage then "efi-storage" else if efiMmc then "efi-mmc" else if efiKeyboard then "efi-keyboard" else if efiConsole then "efi-console" else if efiLinux then "efi-linux" else if efiSmoke then "efi-smoke" else "handoff"}',
-              'recovery_test':${toString recoveryTest},
-              'expected_outcome':'${if recoveryTest == 1 then "software-reset-to-rescue" else if recoveryTest == 2 then "watchdog-expiry-to-rescue" else "accepted-linux"}',
-              'uboot_evidence_required':${if recoveryTest == 0 then (if efiLinux then "'/chosen/gemini,uboot-handoff=efi'" else "'/chosen/gemini,uboot-handoff=fit'") else "None"},
-              'efi_evidence_required':${if efiLinux then "'Linux EFI system table and full EFI memory map'" else if efiSmoke then "'/chosen/gemini,uefi-hello-result=passed'" else "None"},
+              'linux_payload':str(linux), 'fallback_system':str((linux/'system').resolve()),
+              'profile':'efi-manager', 'recovery_test':0,
+              'expected_outcome':'accepted-linux',
+              'uboot_evidence_required':'/chosen/gemini,uboot-handoff=efi',
+              'efi_evidence_required':'Linux EFI system table and full EFI memory map',
               'linux_image_bytes':len(raw_kernel),
               'payload_files':{}, 'files':{}}
   for name in ('kernel/Image.gz', 'initramfs.cpio.gz', 'gemini-usb11-host.dtb'):
