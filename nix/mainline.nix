@@ -54,6 +54,10 @@
   connectivityModules ? false,
   rtcPowerKeyOverlay ? false,
   leaseSelfAcceptToken ? null,
+  kernelConfig ? [],
+  kernelCommandLine ? [],
+  kernelName ? null,
+  kernelPostBuild ? "",
 }:
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || unattendedRecovery;
@@ -68,21 +72,6 @@ let
     if linux-gemini ? rev
     then linux-gemini.rev
     else "nar:${linux-gemini.narHash}";
-  # 28c47150 plus the commits that poll for MicroSD presence instead of
-  # trusting GPIO67, and then move the MicroSD hardware description
-  # (pinmux, mmc0/mmc1 aliases, &mmc1 bus-width/max-frequency/no-1-8-v/
-  # broken-cd/supplies) out of mt6797-gemini-pda-microsd-bringup.dtso and
-  # into the base mt6797-gemini-pda.dts, leaving that overlay as activation
-  # only (&mmc1 { status = "okay"; }).  This moves gemini-base.dtb itself, so
-  # the reviewed touchscreen/FGADC activation paths this pin guards are
-  # re-verified against the new base DT, not left untouched: the accepted
-  # baseline now produces
-  # 2ae4edd4be1d4484729c3b6fd4eba8dcb08d70527d8ee02275d6470f3e174958.
-  # M12 adds the proven polled MicroSD overlay to the ten-CPU image.
-  # Base board DT,
-  # input and PMIC drivers remain unchanged; the separate A72 overlay path
-  # verifies its complete property delta before publishing the candidate DT.
-  p22BaselinePlatformRevision = "c0dbf01b2bdaa9cc741582ae0c88df3daac74285";
   ixooRevision = "7199e8229c6a805a941e33a6862956949dfebd3a";
   candidateRevision = "a24b2d264844ee2bb50e77dc7aceaa6b902c7b6a";
   profile = "da921x-lk-clock-readonly-provider";
@@ -130,7 +119,8 @@ let
     ++ lib.optionals gpuOwnerOverlay [./mainline-gpu-owner.fragment]
     ++ lib.optionals desktopScanout [./mainline-desktop.fragment]
     ++ lib.optionals connectivityModules [./mainline-connectivity-modules.fragment]
-    ++ lib.optionals rtcPowerKeyOverlay [./mainline-rtc-power-key.fragment];
+    ++ lib.optionals rtcPowerKeyOverlay [./mainline-rtc-power-key.fragment]
+    ++ kernelConfig;
   overlayLabel =
     if debugOverlay
     then "ordinary-ramoops-framebuffer-v1"
@@ -262,7 +252,8 @@ let
     + lib.optionalString gpuDeferredBind " initcall_blacklist=panfrost_driver_init"
     + lib.optionalString pdIgnoreUnused " pd_ignore_unused"
     + lib.optionalString unattendedRecovery " mtk_wdt.start_at_boot=1"
-    + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}";
+    + lib.optionalString (leaseSelfAcceptToken != null) " gemini.baseline_lease_capability=${leaseSelfAcceptToken}"
+    + lib.optionalString (kernelCommandLine != []) (" " + lib.concatStringsSep " " kernelCommandLine);
   variantSuffix =
     lib.optionalString storageOverlay "-emmc-probe"
     + lib.optionalString sshAccess "-ssh"
@@ -397,9 +388,6 @@ let
       );
     assert
       !(touchscreenActivationOverlay || fgadcActivationOverlay)
-      || kernelRevision == p22BaselinePlatformRevision;
-    assert
-      !(touchscreenActivationOverlay || fgadcActivationOverlay)
       || !deviceActivationOverlay;
     assert
       !deviceActivationOverlay
@@ -422,8 +410,8 @@ let
   # compiler release while keeping the build inside Nix.
   gcc12Cross = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
 
-  kernel = buildPkgs.stdenv.mkDerivation {
-    pname =
+  kernel = buildPkgs.stdenv.mkDerivation ({
+    pname = if kernelName != null then kernelName else
       "linux-gemini-ixoo-lkro"
       + lib.optionalString (!debugOverlay) "-config-control"
       + lib.optionalString storageOverlay "-emmc-probe"
@@ -1124,7 +1112,7 @@ let
 
     dontStrip = true;
     dontPatchELF = true;
-  };
+  } // lib.optionalAttrs (kernelPostBuild != "") { postBuild = kernelPostBuild; });
 
   # Reuse ixoo's frozen candidate DT transformation, changing only its exact
   # input/output fingerprints for the reviewed disabled CONSYS inventory node.

@@ -1,149 +1,67 @@
 # NixOS on the Planet Computers Gemini PDA
 
-The accepted device baseline is **M69**, running Linux 7.1.3 and NixOS on the
-MT6797X Gemini. Hardware enablement is still in progress. The maintained kernel
-revision is `c0dbf01b2bdaa9cc741582ae0c88df3daac74285`; the accepted padded p22
-image has SHA-256
-`913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3`.
+This repository packages Linux 7.1.3 and NixOS for the MT6797X Gemini.
+The default build includes the tested EFI boot support, persistent Nix daemon,
+desktop keyboard layout, zswap writeback, watchdog and MT6351 RTC fixes.
+Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
+Camera and vibrator are outside the owner's completion scope.
 
-## Current state
+## Build
 
-The October 4 read-only checks found healthy M69, no failed units, all ten CPUs
-present, and active desktop, GPU, JPEG, Wi-Fi and audio services. CPU parking
-can offline cores at idle. These checks establish the current running state;
-they do not replace physical peripheral, audio or power qualification.
-
-The desktop uses Weston with Panfrost rendering and a terminal for `gemini`.
-Display scanout currently bypasses IOMMU translation because translated
-scanout stalled intermittently. JPEG encode/decode has prior hardware evidence;
-hardware video codecs remain unfinished. The retained M51 record has successful
-WPA3/PMF on-air data and reconnect tests; scanning while associated remains limited. Cellular registration/eSIM and weak
-reception remain open.
-
-Persistent home and the writable Nix layer survive supervised reboots, using
-the existing p32 filesystem. The fixed 5 GiB p34 swap partition is now active
-and survives an ordinary reboot. mtkclient installation and automatic factory
-layout restoration have both passed on hardware, preserving the filesystem,
-boot images and retained data. A candidate has passed
-ordinary sandboxed Nix builds through the daemon as the unprivileged `gemini` user, retaining the
-output through recovery. Installed M69 still lacks its network namespace and
-daemon-unit fixes; normal NixOS generation updates remain unfinished. See
-[storage evidence](research/PERSISTENCE.md).
-A complete offline backup of the persistent filesystem now passes journal
-recovery in a separate host copy, filesystem checks and retained-file proofs.
-Paging under a memory-cgroup limit now passes with zswap writeback enabled
-from boot in the corrected candidate. The trial verified a 128 MiB pattern
-under a 64 MiB memory limit, an ordinary Nix build and automatic M69 recovery.
-All eleven build outputs survived. Installed M69 retains its original policy;
-the tested correction still needs promotion. Hibernation remains unqualified.
-The hibernation-watchdog kernel correction has now passed a separate normal
-boot/recovery trial, including an ordinary Nix build and data retention.
-The successor candidate also passed controlled Linux watchdog expiry: stopping
-its keepalive process caused a reset in 25.3 seconds and automatic M69 recovery,
-with all twelve Nix build outputs retained.
-Freezer and device-suspend diagnostics now pass, including a fresh GPU render
-after each stage. The device stage runs with the MTU3 gadget disconnected,
-under an independent sleep inhibitor and bounded recovery guard. USB and
-candidate health return on the same boot. Automatic M69 recovery retained
-all sixteen build outputs. Wake-source validation and later PM stages remain.
-Hibernation, deep idle and the complete lid power policy are not qualified.
-RTC alarm testing exposed a cancellation defect: M69 still interrupted after
-an alarm was cancelled. The corrected opt-in kernel now passes delivery,
-cancellation and rearming, with automatic M69 recovery and all seventeen
-ordinary build outputs retained. A separate calendar correction now matches
-the firmware's MT6351 year encoding and passes native UTC write/read/ticking,
-awake alarms and retention through automatic recovery when mtkclient requests
-RTC preservation. Corrected-kernel startup from retained UTC now also passes,
-including the kernel's early clock initialization before any explicit clock
-write. Controlled watchdog expiry also passes on this kernel, resetting in
-31.8 seconds with automatic recovery and all twenty-one build outputs retained.
-Legacy M69's incompatible
-shutdown writer was temporarily skipped for that transition; normal promotion
-of the corrected kernel and clock policy remains. See the
-[power qualification report](research/POWER_QUALIFICATION.md).
-See [power evidence](research/POWER_QUALIFICATION.md) and the
-[fixed-swap plan](research/STORAGE_QUALIFICATION.md).
-Camera and vibrator are excluded from the owner's completion scope.
-
-See [the completion inventory](research/HARDWARE_STATUS.md) for current evidence
-and outstanding requirements. The [M37 desktop report](research/M37_DESKTOP.md)
-records earlier implementation and hardware results; it is historical.
-
-## Build the accepted Linux profile
-
-The build host is x86_64-linux; the target is aarch64-linux.
+On an x86_64-linux host, cross-compile the complete system with:
 
 ```sh
-nix build .#mainlineNixosBundle --out-link artifacts/mainline-nixos-bundle
-cat artifacts/mainline-nixos-bundle/MANIFEST
+nix build
+cat result/MANIFEST
 ```
 
-The bundle contains the padded 16 MiB p22 image, kernel, composed DTB,
-initramfs, and a uniquely named compressed Nix store image for p29. Builds do
-not flash the device. The `linux-gemini` input pins an exact local Git commit;
-reproducing this workspace requires the checkout paths declared in `flake.nix`.
-
-Useful component builds:
+`nixosConfigurations.gemini` is the same mainline system. The bundle contains
+the padded p22 boot image, kernel, DTB, initramfs and compressed Nix store.
+Building does not install or flash it.
 
 ```sh
-nix build .#mainlineNixosKernel
-nix build .#geminiDesktopWeston
-nix build .#geminiDesktopBufferCheck
-nix build .#geminiDesktopPresentationCheck
-nix build .#geminiDesktopProtocolCheck
-nix build .#mtkclient --out-link artifacts/mtkclient
+nix build .#kernel         # Linux, with fixes committed in its source tree
+nix build .#efiBootFiles   # Versioned systemd-boot entry, kernel, DTB and initramfs
+nix build .#uboot          # U-Boot with display, keyboard and EFI storage support
+nix build .#mtkclient      # Open-source flashing tool, including RTC preservation
+nix build .#recovery       # Exact installed M69 recovery bundle
 ```
 
-The desktop protocol check uses native Weston fixtures. Hardware acceptance
-also needs the real DSI output, input devices, presentation progress and
-console/GPU restoration.
+The maintained Linux checkout is `../linux`, branch `gemini`, pinned by
+`flake.lock`. [nix/gemini.nix](nix/gemini.nix) composes one kernel and one NixOS
+system; driver fixes belong in Linux, rather than new package variants.
+The board's DT composition and CPU bring-up still use the existing helpers.
+The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
+requires those checkouts, or explicit `--override-input` paths.
 
-## Boot, recovery and mtkclient
+The `mainlineNixosBundle` and component names remain aliases of the normal
+build. Historical experiments and the vendor 3.18 system are available under
+`legacyPackages.x86_64-linux` and `legacyConfigurations`, defined in
+[legacy.nix](legacy.nix). Their commands and device scripts describe their
+recorded images and layouts. Use the matching historical revision when
+reproducing an old trial; new features belong in the default system.
 
-The accepted path uses the existing boot firmware, an Android-format Linux
-image, a watchdog-managed initramfs and NixOS stage 2. The Nix store squashfs
-on p29 is mounted read-only. The [U-Boot profiles](research/BOOT_HANDOFF.md)
-now qualify software reset, watchdog expiry, repeated Linux FIT handoff,
-EFI application entry/return and full EFI Linux/ExitBootServices. The EFI
-Linux trial retained the full 4 GiB memory map, passed service health and
-automatically restored the accepted M69 image through mtkclient. GOP/text,
-native keyboard polling and read-only native/EFI storage now pass. The distro
-systemd-boot manager also boots the installed Linux entry after its unattended
-menu timeout, with independent EFI-variable and file-hash evidence. Its new
-versioned entry boots the Nix-enabled system and passes an ordinary sandboxed
-daemon build as an unprivileged user, retaining its output and database through
-automatic M69 recovery. Per-entry device trees now pass the same complete
-boot and recovery checks, preserving the selected kernel's CPU identity and
-LK's runtime reservations even when the carrier embeds an older kernel.
-A further opt-in keyboard profile preserves native EFI modifiers and Unicode;
-all 416 compact-US key/Shift/Fn/Caps combinations match the captured Gemian
-XKB map in host tests, and real controller polling passes the complete
-manager/boot/recovery trial. Physical menu selection, the separate power/Escape
-input, desktop layout integration and normal NixOS generation updates remain.
+## Device status
 
-The open-source [mtkclient workflow](research/MTKCLIENT.md) now builds from this
-flake. Local patches expose `reset --bootmode reboot`, correct the MT6797
-shutdown packet size, and propagate partition-write failures. Two corrected
-October 4 sessions read GPT and the full M69 boot image with matching hashes
-and returned automatically to healthy M69. A boot-only rewrite of the exact
-accepted image also passed write acknowledgement, full readback and a fresh
-healthy boot. The durable candidate/rescue supervisor has also passed a full
-M69 baseline trial and restored M69 after the U-Boot trials using mtkclient.
-The older general SP Flash Tool harness remains available; the new supervised
-bootloader runner selects mtkclient explicitly with no automatic fallback.
+The installed recovery system remains M69. The consolidated default bundle and
+EFI boot files build successfully. Its resolved kernel configuration and DT
+hardware properties match the tested calendar kernel; only build identity
+metadata changes. This consolidated image has not yet been booted on hardware.
+The latest RTC/watchdog trial returned automatically to healthy M69, retaining
+home, EFI files and all 21 ordinary Nix build outputs.
 
-Device trials need a fresh device/boot identity, the shared host locks, and
-verification of the resulting boot and health. The installed fixed-swap layout
-requires the dedicated two-layout recovery checks; historical factory-only
-boot/power profiles must be adapted before reuse. Modem NV partitions can legitimately
-change during modem operation and must not be treated as immutable hashes.
+Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
+audio, USB host/gadget, eMMC, persistent home/Nix storage and fixed 5 GiB swap.
+Native RTC startup, UTC write/read, awake alarms and hardware watchdog recovery
+pass. Display scanout still bypasses IOMMU translation. USB is currently
+configured and observed at USB2 speeds.
 
-Current workspace observations are in `handoff/current-device.md`, alongside
-transaction-specific evidence. Historical flashing scripts, scatter files and
-health guards apply to their recorded image/layout and cannot establish the
-current device state. Current U-Boot trials use the qualified mtkclient
-supervisor and restore the accepted M69 image automatically.
+Remaining work includes suspend/wake and hibernation, battery capacity and
+power policy, cellular/eSIM calls/SMS/data, GNSS, Bluetooth profiles, hardware
+video, USB3, and normal NixOS boot-generation updates. The separate suspend
+guard is an untested experiment and is excluded from the default kernel.
 
-The [vendor-era overview](research/VENDOR_README_LEGACY.md) retains historical
-Linux 3.18 build and deployment details. The legacy `deploy` output still
-belongs to that path; `mainlineNixosBundle` selects the mainline Linux profile.
+See [boot and UEFI](research/BOOT_HANDOFF.md),
+[storage](research/PERSISTENCE.md), [power](research/POWER_QUALIFICATION.md)
+and [mtkclient](research/MTKCLIENT.md) for implementation and hardware results.
+Current workspace state is recorded in `../handoff/current-device.md`.
