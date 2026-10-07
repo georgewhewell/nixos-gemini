@@ -41,6 +41,10 @@ in
       unset NIX_LDFLAGS
       kernelMakeFlags=(ARCH=arm64 CROSS_COMPILE=aarch64-unknown-linux-gnu-)
       make "''${kernelMakeFlags[@]}" gemini_defconfig
+      # Kconfig can silently drop a requested symbol when a dependency
+      # changes. Both parts are required before late A72 startup is usable.
+      grep -Fqx CONFIG_ARM64_MT6797_A72_CAPABILITY_PROFILE=y .config
+      grep -Fqx CONFIG_ARM64_LATE_CPU_PROFILE=y .config
       runHook postConfigure
     '';
 
