@@ -309,6 +309,55 @@ verification record are in `handoff/battery-profile-20261007/`. The profile
 change has not been booted on the device. M69 remains the recovered runtime,
 and the allocator files remain unchanged by this work.
 
+## Native percentage estimator (October 7)
+
+Linux `7e59616b85be4` implements optional software capacity and estimated OCV
+in the native FGADC supply. Gemini supplies the active vendor's four
+voltage-dependent resistance tables and temperature/Qmax pairs through the
+new documented model properties. Both source headers are hash-pinned by the
+importer. Qmax remains an internal model input; the driver does not expose it
+as measured aged capacity or design capacity, and makes no charger-policy
+writes.
+
+The estimator interpolates resistance, Qmax and OCV-derived remaining charge
+between the bracketing temperatures. It solves the loaded-voltage equation
+on the combined resistance-table segments, rejecting multiple electrical
+solutions or values outside the 2–5 V calculation range. Such ambiguity
+prevents a voltage anchor but does not discard an already established,
+continuous coulomb estimate. A charger Full indication anchors 100 percent;
+a compensated empty voltage anchors zero during discharge. Otherwise gauge
+counter differences update the accumulated charge. A temperature excursion
+cannot discard charge merely because the model Qmax temporarily decreases.
+
+A zeroed counter, a step larger than 5 percent of model Qmax, a backwards
+clock, a gap over 60 seconds or suspend loses continuity and requires a new
+voltage/full anchor. The implementation does not guess a CAR wrap modulus.
+A reset to a small nonzero value is not reliably distinguishable from a real
+charge delta; physical counter retention and discharge testing remain
+necessary. After 10 minutes below C/50 while neither Charging nor Full,
+compensated voltage can correct drift. These are explicit estimator rules,
+not a port of the vendor userspace daemon or a claim of calibrated accuracy.
+
+A freezable worker samples every 5 seconds, with a 1-second refresh request
+on supplier changes. Model locking serializes capture/publication and work
+scheduling; cancellation completes before supply removal or hardware restore.
+Suspend stops work and invalidates continuity. Getters reject sensor errors
+and readings older than 60 seconds. Older DTs without the optional model
+retain the existing properties and behavior.
+
+Production arithmetic tests cover full/empty/relaxed anchors, counter updates,
+resets, discontinuities, gaps, time reversal, temperature excursions and
+invalid inputs. The board sweep checks 23,935 usable roots and 1,040
+ambiguous/out-of-range cases with undefined-behavior sanitization. Separate
+production-function tests cover parser/allocation errors, battery matching,
+partial sensor reads, error propagation, stale data, notifications and
+start/stop/suspend/resume callbacks. ARM64 object/DT builds and binding/DT
+schema checks pass. Normal and diagnostic image builds and all packaged
+checks pass and use the same kernel. On-device validation is next; physical
+aging, current/temperature calibration and complete charging/discharging
+qualification remain outstanding. Artifacts and probe sources are recorded
+in `handoff/battery-estimator-20261007/`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
