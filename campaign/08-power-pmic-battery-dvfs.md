@@ -128,6 +128,27 @@ A72 control and sustained
 load/physical thermal qualification. Battery capacity,
 calibration, charging, deep idle and suspend remain separate unfinished work.
 
+## Battery profile source for the remaining capacity work
+
+The pinned vendor tree51e705e4 selects `CONFIG_MTK_HAFG_20=y` in its Gemini
+configuration. `drivers/power/mediatek/Makefile` therefore selects
+`battery_meter_fg_20.c`, whose `batt_meter_init_cust_data()` calls the header
+initializer; the DT initializer call is commented out. Do not use the generic
+`mt6797.dtsi` value `q_max_pos_25=2707` as the active Gemini capacity profile.
+
+The selected MT6797 `mach/mt_battery_meter.h` defines `Q_MAX_POS_25=4268`
+and high-current value4245, and leaves multi-battery-profile support disabled.
+`mach/mt_battery_meter_table.h` supplies temperature-specific battery and
+resistance tables copied by that initializer. Source is the pinned vendor
+input `/nix/store/0km8xgjj4mjjsi7cljjl0bkjmpr1lwfz-source`; the header paths
+are under `drivers/misc/mediatek/include/mt-plat/mt6797/include/`.
+
+This identifies the vendor algorithm's inputs, not a calibrated capacity
+measurement of the installed battery or a ready-to-use OCV table. The native
+FGADC still exposes current and charge counter without capacity. Remaining
+work must establish voltage/temperature inputs, counter calibration and
+initial-state estimation before publishing a battery percentage.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
