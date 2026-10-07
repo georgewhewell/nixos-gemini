@@ -28,9 +28,19 @@ only when observed within five seconds. Counters reset with each connection;
 other peers and stopped/cancelled connections are rejected. TX completion
 statistics and negotiated bitrate are not yet available. RX admission, beacon
 ownership/PM behavior, station query tests, the ARM64 object build and full
-normal kernel/system builds pass. Device validation is still pending; artifacts
-are in `handoff/wifi-station-20261007`. This adds reporting without changing the
-scan or join protocol.
+normal kernel/system builds pass. In `handoff/wifi-station-trial-02`, the same
+normal kernel running in the cgroup1 diagnostic joined WPA2 and returned real
+station get/dump/link data: the current peer, all three authorization flags,
+increasing connection age and receive counters. An unrelated peer returned
+ENOENT. The first query waited for DHCP and ran 12 seconds after association;
+no fresh signal was reported, so RSSI remains unqualified. The traffic check
+received 7/8 gateway replies, with the first reply absent. Preserve that failed
+loss check; these observations do not establish loss-free traffic. An earlier
+trial never exposed the supplicant socket during its 55-second probe, for an
+unknown reason. Both trials retained strict qualification, which rejected the
+cgroup1 diagnostic. Neither qualifies the normal generation. Build artifacts
+and the next probe, which samples before DHCP, are in
+`handoff/wifi-station-20261007`.
 
 The September 30 M51 record separately reports WPA3-SAE/PMF data and three
 successful reconnects. Scanning while associated to a WPA3 or 5 GHz network,
