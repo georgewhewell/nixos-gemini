@@ -15,14 +15,18 @@ def guard(context, before, boot=None):
         raise ValueError('Unpinned old boot')
     if boot is not None and not re.fullmatch('[0-9a-f-]{36}', boot):
         raise ValueError('Unpinned Stage 1 boot')
-    if (any(not re.fullmatch('[0-9a-f]{64}', value) for value in
-            (context.STORE_SHA, context.NOTES_SHA, context.BOOT_SHA, before['gpt_sha256'])) or
-            not isinstance(context.STORE_SIZE, int) or context.STORE_SIZE <= 0):
+    persistent = getattr(context, 'STORE_ROOT', None) == '/persist/nixos'
+    hashes = (context.NOTES_SHA, context.BOOT_SHA, before['gpt_sha256'])
+    if (any(not re.fullmatch('[0-9a-f]{64}', value) for value in hashes) or
+            (not persistent and (not re.fullmatch('[0-9a-f]{64}', context.STORE_SHA) or
+                                 not isinstance(context.STORE_SIZE, int) or context.STORE_SIZE <= 0))):
         raise ValueError('Unpinned Stage 1 image')
-    name = 'mainline-nixos-'+context.STORE_SHA+'.squashfs'
+    name = 'mainline-nixos-'+str(context.STORE_SHA)+'.squashfs'
     required = (f'store-provision=required target=/mnt/gemian/nixos/{name} '
                 f'temp=/mnt/gemian/nixos/{name}.provision.tmp '
                 f'sha256={context.STORE_SHA} size={context.STORE_SIZE}')
+    store_check = (f"tr ' ' '\\n' < /proc/cmdline | grep -Fx 'init={context.SYSTEM}/init' >/dev/null" if persistent else
+                   f"test \"$(cat /run/store-provision.required)\" = '{required}'")
     return f'''set -eu
 boot=$(cat /proc/sys/kernel/random/boot_id)
 test "$boot" != {before['boot_id']}
@@ -32,7 +36,7 @@ test "$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)" = {context.BOOT_SHA}
 test "$(head -c 32768 /dev/mmcblk0 | sha256sum | cut -d' ' -f1)" = {before['gpt_sha256']}
 test ! -e /run/current-system
 test ! -e /run/store-provision.ready
-test "$(cat /run/store-provision.required)" = '{required}'
+{store_check}
 test -x /bin/busybox
 printf 'boot_id=%s\\n' "$boot"
 '''

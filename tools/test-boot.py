@@ -31,6 +31,7 @@ EFI_FILES = None
 EFI_MANIFEST = None
 BOOTLOADER = None
 INSTALL_EFI = False
+STORE_ROOT = None
 p.PROFILE = 'boot-test'
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
@@ -40,8 +41,13 @@ p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
 base_configure, base_preflight, base_finish = p.configure, p.preflight, p.finish
 
 
+def store_profile(provisioner):
+    return provisioner.StoreProfile(p.BUNDLE, p.SYSTEM, p.STORE_SHA, p.STORE_SIZE, False, STORE_ROOT)
+p.store_profile = store_profile
+
+
 def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi_files=None):
-    global EFI_FILES, EFI_MANIFEST, BOOTLOADER, INSTALL_EFI
+    global EFI_FILES, EFI_MANIFEST, BOOTLOADER, INSTALL_EFI, STORE_ROOT
     if bool(bootloader) != bool(efi_files) or (bootloader and (install_efi or reclaim_cache)):
         raise ValueError('--bootloader requires --efi-files and an already installed generation')
     bundle = bundle.resolve(strict=True)
@@ -51,18 +57,25 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
         key, value = row.split('=', 1)
         if key in fields: raise ValueError('Duplicate bundle manifest key: '+key)
         fields[key] = value
-    sha = fields['store-sha256']
-    if (not re.fullmatch('[0-9a-f]{64}', sha) or
-            fields['store-file'] != 'mainline-nixos-'+sha+'.squashfs' or
-            not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', fields['system'])):
+    STORE_ROOT = fields.get('store-root')
+    p.STORE_ROOT = STORE_ROOT
+    if not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', fields['system']):
         raise ValueError('Invalid bundle store identity')
     kernel = (bundle/'kernel').resolve(strict=True)
     if kernel.parent != Path('/nix/store') or fields['kernel'] != kernel.name:
         raise ValueError('Bundle kernel identity differs')
-    store = bundle/fields['store-file']
-    size = int(fields['store-size'])
-    if size <= 0 or store.stat().st_size != size or cache.digest(store) != sha:
-        raise ValueError('Bundle store content differs from manifest')
+    if STORE_ROOT is not None:
+        if (STORE_ROOT != '/persist/nixos' or fields.get('store') != 'persistent' or reclaim_cache or
+                str((bundle/'system').resolve(strict=True)) != fields['system']):
+            raise ValueError('Invalid persistent store bundle')
+        sha, size = None, 0
+    else:
+        sha, size = fields['store-sha256'], int(fields['store-size'])
+        if not re.fullmatch('[0-9a-f]{64}', sha) or fields['store-file'] != 'mainline-nixos-'+sha+'.squashfs':
+            raise ValueError('Invalid bundle store identity')
+        store = bundle/fields['store-file']
+        if size <= 0 or store.stat().st_size != size or cache.digest(store) != sha:
+            raise ValueError('Bundle store content differs from manifest')
     p.BUNDLE, p.KERNEL, p.SYSTEM = bundle, kernel, fields['system']
     p.STORE_SHA, p.STORE_SIZE = sha, size
     p.BOOT_SHA = cache.digest(bundle/'boot-padded-p22.img')
@@ -74,7 +87,8 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
         package = (install_efi or efi_files).resolve(strict=True)
         with tempfile.TemporaryDirectory() as staging:
             manifest = installer.prepare(package, Path(staging))
-        expected = dict(file=fields['store-file'], sha256=sha, size=size, system=p.SYSTEM)
+        expected = (dict(root=STORE_ROOT, system=p.SYSTEM) if STORE_ROOT else
+                    dict(file=fields['store-file'], sha256=sha, size=size, system=p.SYSTEM))
         if manifest['store'] != expected or Path(manifest['linux_payload']).resolve() != bundle:
             raise ValueError('EFI files do not belong to the selected system bundle')
         EFI_FILES, EFI_MANIFEST = package, manifest
@@ -95,14 +109,30 @@ def verify_efi(runner, ssh, state, directory, name):
                                             EFI_MANIFEST['archive']['size'], 6)
     runner.efi_files.evidence(ssh, state['boot_id'], directory, runner.qualify,
                              require_verified=False, name=name, profile=profile)
+    store_check = (f"nix-store --store 'local?root={STORE_ROOT}' --check-validity {p.SYSTEM}" if STORE_ROOT else
+                   f"test \"$(sha256sum /gemian/nixos/{EFI_MANIFEST['store']['file']} | cut -d' ' -f1)\" = {p.STORE_SHA}")
     runner.persistence.run(ssh, f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
-test "$(sha256sum /gemian/nixos/{EFI_MANIFEST['store']['file']} | cut -d' ' -f1)" = {p.STORE_SHA}
+{store_check}
 ''', directory, name.removesuffix('.json')+'-store')
 
 
 def install_efi(runner, ssh, state, directory):
     """Upload to RAM only; the installed product owns persistent publication."""
+    if STORE_ROOT:
+        raw = runner.persistence.run(ssh, f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
+test "$(readlink /run/current-system)" = {p.SYSTEM}
+nix-env --profile /nix/var/nix/profiles/system --set {p.SYSTEM}
+{p.SYSTEM}/bin/switch-to-configuration boot
+gemini-boot-install --system {p.SYSTEM} --check --json
+''', directory, 'efi-install', timeout=180)
+        result = json.loads(raw.splitlines()[-1])
+        if result['entry'] != EFI_MANIFEST['entry'] or result['system'] != p.SYSTEM or result['read_only'] is not True:
+            raise RuntimeError('NixOS activation selected another generation')
+        verify_efi(runner, ssh, state, directory, 'installed-efi-files.json')
+        runner.qualify.save(directory, 'efi-install-result.json', result)
+        return
     remote = '/run/gemini-boot-install-'+EFI_MANIFEST['payload_identity']
     guard = f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
@@ -218,8 +248,16 @@ test ! -d /run/gemini-rtc-alarm.lock
         if values['boot_id'] != before['boot_id']:
             raise RuntimeError('Calendar baseline boot changed')
         runner.qualify.save(directory, 'rtc-calendar-baseline.json', values)
-        cache.prepare(p, runner, directory, before)
-    cache.install(p, runner, directory)
+        if STORE_ROOT:
+            runner.persistence.run(p.f.q.SSH, f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {before['boot_id']}
+nix-store --store 'local?root={STORE_ROOT}' --check-validity {p.SYSTEM}
+test -x {STORE_ROOT}{p.SYSTEM}/init
+df -k /persist
+''', directory, 'persistent-store-installed')
+        else:
+            cache.prepare(p, runner, directory, before)
+    if not STORE_ROOT: cache.install(p, runner, directory)
     stage1.install(p, runner, directory)
     return before
 
@@ -273,7 +311,7 @@ def calendar_finish(runner, directory, before, error=None):
         # This always completes the original alarm proof, recovery and full
         # storage/source/ordinary-output audit, even if calendar checks fail.
         alarm_finish(runner, directory, before, error)
-        proof.update(cache.verify_final(runner, directory))
+        if not STORE_ROOT: proof.update(cache.verify_final(runner, directory))
         reboot = calendar.recovered(p, runner, directory)
         proof['rtc_reboot_persistence_qualified'] = reboot['rtc_reboot_persistence_qualified']
     except Exception as caught:

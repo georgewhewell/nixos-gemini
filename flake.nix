@@ -3,11 +3,15 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=fd1bd94a49b65e2693611748d3866e98db13a5ab";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=f8f4d8d08e3ed6e415cafdad7274785a36155306";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-old.url = "github:NixOS/nixpkgs/nixos-23.05";
+    recovery-packaging = {
+      url = "git+file:///mnt/Home/src/nixos-gemini/repo?rev=35130680e46a2b3f9c6694338fb880dc77d40fa4";
+      flake = false;
+    };
     vendor-kernel = {
       url = "github:gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c";
       flake = false;
@@ -29,7 +33,7 @@
       flake = false;
     };
     u-boot-gemini = {
-      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=a655c0035c8f789938fed4b5e2f9a25ee798a9d6&shallow=1";
+      url = "git+file:///mnt/Home/src/nixos-gemini/u-boot-consolidation?ref=gemini-boot-consolidation&rev=4ea946a87c5e8b625fea0e6b2fc9f454b26e1b0f&shallow=1";
       flake = false;
     };
     u-boot-gemini-src = {
@@ -54,11 +58,11 @@
     host = "x86_64-linux";
     gemini = import ./nix/gemini.nix inputs;
     historical =
-      (import ./legacy.nix)
+      (import "${inputs.recovery-packaging}/legacy.nix")
       (builtins.removeAttrs (inputs
         // {
           linux-gemini = inputs.linux-gemini-recovery;
-        }) ["linux-gemini-recovery" "u-boot-gemini"]);
+        }) ["linux-gemini-recovery" "u-boot-gemini" "recovery-packaging"]);
   in {
     packages.${host} = {
       default = gemini.image.bundle;
@@ -66,7 +70,6 @@
       dtb = gemini.dtb;
       bootImg = gemini.image.paddedBootImg;
       initramfs = gemini.image.initramfs;
-      squashfs = gemini.squashfs;
       toplevel = gemini.system.config.system.build.toplevel;
       deploy = gemini.image.bundle;
       efiBootFiles = gemini.efiBootFiles;
@@ -79,7 +82,6 @@
       mainlineNixosKernel = gemini.kernel;
       mainlineNixosDtb = gemini.dtb;
       mainlineNixosInitramfs = gemini.image.initramfs;
-      mainlineNixosSquashfs = gemini.squashfs;
     };
     nixosConfigurations = {
       gemini = gemini.system;
@@ -87,7 +89,7 @@
     };
     checks.${host} = {
       boot-install = gemini.buildPkgs.runCommand "gemini-boot-install-check" {
-        nativeBuildInputs = [gemini.buildPkgs.python3];
+        nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.dtc];
       } ''
         mkdir nix tools
         cp ${./nix/gemini-boot-install.py} nix/gemini-boot-install.py

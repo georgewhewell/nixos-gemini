@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
 """Build immutable systemd-boot trial files and their checked publication archive."""
-import gzip, hashlib, io, json, struct, subprocess, sys, tarfile, tempfile
+import gzip, hashlib, importlib.util, io, json, os, struct, subprocess, sys, tarfile, tempfile
 from pathlib import Path
 out, bootloader, linux, kernel = map(Path, sys.argv[1:5])
 assert sys.argv[5:] in ([], ['--versioned-entry'], ['--versioned-entry', '--entry-dtb'])
 versioned = bool(sys.argv[5:])
 entry_dtb = '--entry-dtb' in sys.argv[5:]
+store_fields = dict(line.split('=', 1) for line in (linux/'MANIFEST').read_text().splitlines()
+                    if '=' in line and not line.startswith('/'))
+if store_fields.get('store') == 'persistent':
+    spec = importlib.util.spec_from_file_location('installer', os.environ['GEMINI_BOOT_INSTALL'])
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    tree = out/'tree'
+    manifest = installer.prepare_generation(Path(store_fields['system']), tree,
+                                             bootloader/'lib/systemd/boot/efi/systemd-bootaa64.efi')
+    manifest.update(bootloader=str(bootloader), linux_payload=str(linux), kernel=str(kernel))
+    (out/'files.manifest').write_bytes((tree/'files.manifest').read_bytes())
+    with tarfile.open(out/'boot-files.tar', 'w', format=tarfile.USTAR_FORMAT) as archive:
+        for name, info in manifest['files'].items():
+            member = tarfile.TarInfo(name)
+            member.size = info['size']; member.mode = 0o644; member.mtime = 1788493603
+            with (tree/name).open('rb') as stream:
+                archive.addfile(member, stream)
+    manifest['archive'] = installer.file_info(out/'boot-files.tar')
+    (out/'archive.meta').write_text(f"{manifest['archive']['sha256']} {manifest['archive']['size']}\n")
+    (out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    sys.exit(0)
 image = gzip.decompress((linux/'kernel/Image.gz').read_bytes())
 initrd = (linux/'initramfs.cpio.gz').read_bytes()
 manager = (bootloader/'lib/systemd/boot/efi/systemd-bootaa64.efi').read_bytes()

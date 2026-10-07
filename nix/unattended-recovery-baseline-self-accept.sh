@@ -204,6 +204,18 @@ fi
 
 "$busybox" grep -Eq '^/dev/mmcblk[0-9]+p29 /gemian ext4 ro,' "$mounts_file" || \
   fail p29-not-readonly
+# Normal generations use a registered ext4 store protected by NixOS's
+# read-only bind mount. Recovery retains its image/overlay layout.
+if [ "${GEMINI_BASELINE_ACCEPT_STORE:-image}" = persistent ]; then
+  "$busybox" awk '
+    $4 == "/" && $5 == "/persist" { data=$3 }
+    $4 == "/nixos/nix/store" && $5 == "/nix/store" && $6 ~ /(^|,)ro(,|$)/ {
+      for (i=7; i<=NF; i++) if ($i == "-" && $(i+1) == "ext4") store=$3
+    }
+    $4 == "/nixos/nix/var" && $5 == "/nix/var" { state=$3 }
+    END { exit !(data != "" && store == data && state == data) }
+  ' "$proc_root/self/mountinfo" || fail persistent-store-mounts
+else
 # The image squashfs is /nix/store itself, or, with persistent storage
 # (nixos/storage.nix), the read-only lower layer of the /nix/store overlay.
 if ! "$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/store squashfs ro,' "$mounts_file"; then
@@ -211,6 +223,7 @@ if ! "$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/store squashfs ro,' "$mounts_fil
     fail store-not-readonly
   "$busybox" grep -Eq '^overlay /nix/store overlay [^ ]*lowerdir=[^ ,]*/nix/\.ro-store[, ]' "$mounts_file" || \
     fail store-not-readonly
+fi
 fi
 has_address '10.15.19.82/24' || fail gadget-address-missing
 has_address '192.168.23.70/' || fail right-nic-address-missing

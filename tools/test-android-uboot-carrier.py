@@ -15,6 +15,14 @@ def dtb(size=64):
 
 
 class Carrier(unittest.TestCase):
+    def test_generation_command_line_uses_both_android_fields(self):
+        command = api['CMDLINE']+' init=/nix/store/generation/init '+('x'*1000)
+        image, _ = api['build'](b'uboot', b'ramdisk', dtb(), command)
+        actual = (image[64:576]+image[608:1632]).split(b'\0', 1)[0].decode()
+        self.assertEqual(command, actual)
+        for command in ('missing-bootopt', api['CMDLINE']+'\0', api['CMDLINE']+' '*1536):
+            with self.assertRaises(ValueError): api['build'](b'u', b'r', dtb(), command)
+
     def test_small_payload_has_aligned_early_loader_window(self):
         image, compressed = api['build'](b'uboot', b'ramdisk', dtb())
         size, load = struct.unpack_from('<2I', image, 8)

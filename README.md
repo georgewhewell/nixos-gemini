@@ -16,7 +16,7 @@ cat result/MANIFEST
 ```
 
 `nixosConfigurations.gemini` is the same mainline system. The bundle contains
-the padded p22 boot image, kernel, DTB, initramfs and compressed Nix store.
+the padded p22 boot image, kernel, DTB, generic initramfs and system closure.
 Building does not install or flash it.
 
 ```sh
@@ -50,8 +50,8 @@ requires those checkouts, or explicit `--override-input` paths.
 
 The `mainlineNixosBundle` and component names remain aliases of the normal
 build. Historical experiments and the vendor 3.18 system are available under
-`legacyPackages.x86_64-linux` and `legacyConfigurations`, defined in
-[legacy.nix](legacy.nix). Their commands and device scripts describe their
+`legacyPackages.x86_64-linux` and `legacyConfigurations`, loaded from the pinned
+`recovery-packaging` input. Their commands and device scripts describe their
 recorded images and layouts. Use the matching historical revision when
 reproducing an old trial; new features belong in the default system.
 
@@ -64,22 +64,28 @@ python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s)
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The command checks RTC startup/alarms, paging, an ordinary Nix build and retained
 data before returning to recovery. It uses this device's fixed-swap layout and
-existing host USB/SSH setup. If p29 is full, `--reclaim-cache /host/old.squashfs`
-archives that image and removes its device cache only after checking that no
-active loop device or installed EFI entry/initramfs uses it.
+existing host USB/SSH setup. Copy the system closure into the installed Nix
+store before testing. From recovery, that store is accessible to Nix as
+`local?root=/persist/nixos`; its database and files are separate from recovery's
+overlay. Historical image trials still accept `--reclaim-cache`.
 
-The normal system includes `gemini-boot-install`. As root on the Gemini, pass
-it the built `efiBootFiles` directory and, when needed, `--store-image` with
-the bundle's matching squashfs. It installs the entry, kernel, DTB and initramfs,
-keeps previous entries and store images, and selects the new default last.
+Normal builds install through NixOS's `system.build.installBootLoader` hook.
+After the initial installation, `nixos-rebuild boot` or `switch` installs the
+selected generation's kernel, DTB and generic initramfs, then selects its boot
+entry. Boot entries pass the standard `init=/nix/store/.../init` option; system
+updates use the registered store on p32 and do not create new squashfs images.
+The installer retains entries for system profile generations and removes its
+obsolete entries and payloads after a successful update. Recovery files remain
+independently owned.
 It briefly remounts the boot volume writable and restores it read-only, with
 the ext4 journal enabled throughout. Recovery retains its original `noload`
-mount and cannot run this installer. `--check` verifies an installed default
-without writes. Automatic `nixos-rebuild` generation hooks remain unfinished.
+mount and cannot run this installer. `gemini-boot-install --system SYSTEM
+--check` verifies an installed default without writes. These generation changes
+have passed host builds/tests; the device migration is being tested.
 
 To exercise installation during the supervised boot test, add
-`--install-efi /path/to/efiBootFiles`. The runner uploads to RAM and invokes
-the installed command only after candidate Linux passes its health checks;
+`--install-efi /path/to/efiBootFiles`. For normal generations the runner invokes
+NixOS's `switch-to-configuration boot` after Linux passes its health checks;
 it checks the new files and retained older entries again after M69 returns.
 
 Once installed, test that entry through U-Boot using the same command with

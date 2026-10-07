@@ -62,7 +62,11 @@ buildPkgs.runCommand "gemini-uboot-${if efiManager then "efi-manager" else if ef
   cmp kernel-extracted "$kernel"
   cmp dtb-extracted "$dtb"
   cmp initramfs-extracted "$initramfs"
-  python3 ${../tools/build-android-uboot-carrier-v0.py} \
+  cmdline=bootopt=64S3,32N2,64N2
+  if [ -e ${linuxBundle}/system ]; then
+    cmdline="$cmdline init=$(readlink ${linuxBundle}/system)/init $(cat ${linuxBundle}/system/kernel-params)"
+  fi
+  python3 ${../tools/build-android-uboot-carrier-v0.py} --cmdline "$cmdline" \
     --uboot ${uboot}/u-boot.bin --ramdisk "$out/gemini.itb" \
     --dtb "$dtb" --output "$out/boot-raw.img" > "$out/build-metadata.txt"
   cp "$out/boot-raw.img" "$out/boot-padded-p22.img"

@@ -66,7 +66,10 @@ def canonical_v0_id(kernel: bytes, ramdisk: bytes) -> bytes:
     return digest.digest()
 
 
-def build(uboot: bytes, ramdisk: bytes, dtb: bytes) -> tuple[bytes, bytes]:
+def build(uboot: bytes, ramdisk: bytes, dtb: bytes, cmdline: str = CMDLINE) -> tuple[bytes, bytes]:
+    encoded_cmdline = cmdline.encode('ascii')
+    if len(encoded_cmdline) >= 1536 or b'\0' in encoded_cmdline or CMDLINE not in cmdline.split():
+        raise ValueError('Invalid Android boot command line')
     if not uboot:
         raise ValueError("U-Boot binary is empty")
     if len(uboot) > LK_DECOMPRESS_LIMIT:
@@ -125,7 +128,8 @@ def build(uboot: bytes, ramdisk: bytes, dtb: bytes) -> tuple[bytes, bytes]:
     )
     struct.pack_into("<8s10I", header, 0, ANDROID_MAGIC, *values)
     header[48:64] = b"gemini-uboot\0\0\0\0"
-    header[64:576] = CMDLINE.encode("ascii").ljust(512, b"\0")
+    header[64:576] = encoded_cmdline[:512].ljust(512, b"\0")
+    header[608:1632] = encoded_cmdline[512:].ljust(1024, b"\0")
     header[576:596] = digest
 
     image = bytearray(header)
@@ -145,6 +149,7 @@ def main() -> int:
     parser.add_argument("--ramdisk", type=pathlib.Path, required=True)
     parser.add_argument("--dtb", type=pathlib.Path, required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
+    parser.add_argument("--cmdline", default=CMDLINE)
     args = parser.parse_args()
 
     if args.output.exists():
@@ -154,7 +159,7 @@ def main() -> int:
         uboot = read(args.uboot)
         ramdisk = read(args.ramdisk)
         dtb = read(args.dtb)
-        image, compressed = build(uboot, ramdisk, dtb)
+        image, compressed = build(uboot, ramdisk, dtb, args.cmdline)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_bytes(image)
     except (OSError, ValueError) as exc:

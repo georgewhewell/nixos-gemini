@@ -1,23 +1,11 @@
-# Persistent storage on the eMMC user area (handoff/power-policy.md).
-#
-# / stays tmpfs, as before. The p32 layout can be initialized independently
-# on the existing empty gemini-data filesystem (research/PERSISTENCE.md).
-# gemini-storage-provision separately adds fixed swap by repartitioning:
-#
-#   p32 "userdata", ext4 "gemini-data":  /home, and a writable Nix layer:
-#       Stage 1 mounts an overlay on /nix/store (lower: this image's
-#       squashfs, upper: p32) and binds /nix/var (the Nix database) from p32.
-#   p34 "swap" (5 GiB):  swap behind zswap, and the hibernation image.
-#
-# Stage 1 owns every mount, because the store overlay must exist before
-# PID 1 runs.  It only uses p32 when the partition is named "userdata" and
-# carries the gemini-data label and layout; otherwise (not provisioned,
-# fsck failure, overlay failure) it boots from the squashfs alone, exactly as
-# before.  Nothing here gates the unattended-recovery acceptance.
+# Stage 1 mounts p32 (gemini-data) for /home and the registered Nix store
+# at /persist/nixos/nix. Root remains tmpfs; p34 supplies swap behind zswap.
+# Image-based recovery uses the older overlay layout and database seeding.
 {
   config,
   lib,
   pkgs,
+  geminiPersistentStore ? false,
   ...
 }: let
   cfg = config.gemini.storage;
@@ -63,6 +51,7 @@ in {
 
   config = lib.mkMerge [
   {
+    _module.args.geminiPersistentStore = lib.mkDefault false;
     # Nix is only useful with the writable store on p32.
     nix.enable = cfg.enable;
   }
@@ -110,6 +99,7 @@ in {
       script = ''
         mkdir -p /nix/var/nix/gcroots
         ln -sfn /run/booted-system /nix/var/nix/gcroots/gemini-booted-system
+        ${lib.optionalString (!geminiPersistentStore) ''
         system=$(cat /nix/store/.gemini-system)
         stamp=/nix/var/nix/gemini-seeded-system
         if [ "$(cat "$stamp" 2>/dev/null || true)" = "$system" ]; then
@@ -122,6 +112,7 @@ in {
         # Never fail the boot over database hygiene; log instead.
         nix-store --verify || echo "nix-store --verify reported problems" >&2
         echo "$system" > "$stamp"
+        ''}
       '';
     };
   })

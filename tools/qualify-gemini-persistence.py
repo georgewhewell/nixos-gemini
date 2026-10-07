@@ -38,12 +38,21 @@ def verify_mounts(raw, devno):
                 raise RuntimeError('Unexpected stacked persistence mount: '+target)
             base['bind']=m
         else:mounts[target]=m
-    if set(mounts)!=set(MOUNTS):raise RuntimeError('Missing persistence mount')
-    for target,root in (('/persist','/'),('/home','/home'),('/nix/var','/nix/var')):
+    persistent = mounts.get('/nix/store', {}).get('type') == 'ext4'
+    expected = set(MOUNTS) - ({'/nix/.ro-store'} if persistent else set())
+    if set(mounts)!=expected:raise RuntimeError('Missing persistence mount')
+    data_mounts = [('/persist','/'),('/home','/home'),
+                   ('/nix/var','/nixos/nix/var' if persistent else '/nix/var')]
+    if persistent: data_mounts.append(('/nix/store','/nixos/nix/store'))
+    for target,root in data_mounts:
         m=mounts[target]
         if (m['device']!=devno or m['root']!=root or m['type']!='ext4' or
                 m['source']!='/dev/mmcblk0p32' or 'rw' not in m['options']):
             raise RuntimeError('Persistence mount identity differs: '+target)
+    if persistent:
+        if 'ro' not in mounts['/nix/store'].get('bind', {}).get('options', []):
+            raise RuntimeError('NixOS did not protect the persistent store')
+        return mounts
     lower=mounts['/nix/.ro-store'];store=mounts['/nix/store']
     if lower['type']!='squashfs' or 'ro' not in lower['options']:
         raise RuntimeError('Store lower layer is not read-only squashfs')
@@ -74,7 +83,11 @@ test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {system}
 test "$(dumpe2fs -h /dev/mmcblk0p32 2>/dev/null | sed -n 's/^Filesystem UUID: *//p')" = {FS_UUID}
 systemctl is-active gemini-nix-db-seed >/dev/null
-test "$(cat /nix/var/nix/gemini-seeded-system)" = {Path(system).name}
+if test -f /nix/store/.gemini-system; then
+ test "$(cat /nix/var/nix/gemini-seeded-system)" = {Path(system).name}
+else
+ test /nix/store -ef /persist/nixos/nix/store
+fi
 test "$(readlink /nix/var/nix/gcroots/gemini-booted-system)" = /run/booted-system
 {NIX}/nix-store --check-validity {system} {BUSYBOX}
 printf 'device='; cat /sys/class/block/mmcblk0p32/dev

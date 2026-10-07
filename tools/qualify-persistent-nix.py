@@ -100,6 +100,7 @@ printf 'daemon_pid=%s\\n' "$pid"
 printf 'host_net='; readlink /proc/1/ns/net
 printf 'daemon_net='; readlink /proc/"$pid"/ns/net
 printf 'client_uid='; id -u gemini
+if test /nix/store -ef /persist/nixos/nix/store; then echo store_root=/persist/nixos; fi
 ''',directory,'nix-candidate-state')
     state=dict(line.split('=',1) for line in raw.splitlines())
     if not state['client_uid'].isdecimal() or int(state['client_uid'])==0:
@@ -143,19 +144,23 @@ cat {output}/proof
     result=dict(boot_id=boot_id,token=token,output=output,output_link=output_link,
                 builder=builder,state=state,proof_sha256=hashlib.sha256(raw.encode()).hexdigest(),
                 ordinary_daemon_build_qualified=True,unprivileged_client=True)
+    if state.get('store_root') == '/persist/nixos': result['store_root'] = '/persist/nixos'
     verify_retained(ssh,boot_id,directory,qualify,persistence,result,name='nix-build-before')
     qualify.save(directory,'nix-candidate.json',result)
     return result
 
 
 def verify_retained(ssh, boot_id, directory, qualify, persistence, previous, name='nix-build-after'):
+    root = previous.get('store_root', '')
+    if root not in ('', '/persist/nixos'): raise ValueError('Unknown retained Nix store root')
+    store_arg = " --store 'local?root=/persist/nixos'" if root else ''
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {previous['output_link']})" = {previous['output']}
-{persistence.NIX}/nix-store --check-validity {previous['output']}
-printf 'proof_sha256='; sha256sum {previous['output']}/proof | cut -d' ' -f1
-printf 'nix_hash='; {persistence.NIX}/nix-store --query --hash {previous['output']}
-printf 'deriver='; {persistence.NIX}/nix-store --query --deriver {previous['output']}
+{persistence.NIX}/nix-store{store_arg} --check-validity {previous['output']}
+printf 'proof_sha256='; sha256sum {root}{previous['output']}/proof | cut -d' ' -f1
+printf 'nix_hash='; {persistence.NIX}/nix-store{store_arg} --query --hash {previous['output']}
+printf 'deriver='; {persistence.NIX}/nix-store{store_arg} --query --deriver {previous['output']}
 sync
 ''',directory,name)
     observed=dict(line.split('=',1) for line in raw.splitlines())

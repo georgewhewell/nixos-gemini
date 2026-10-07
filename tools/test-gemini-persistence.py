@@ -15,6 +15,19 @@ MOUNTS='''21 1 179:32 / /persist rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
 '''
 
 class Persistence(unittest.TestCase):
+    def test_registered_store_binds_and_readonly_protection(self):
+        raw='''21 1 179:32 / /persist rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
+22 1 179:32 /home /home rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
+23 1 179:32 /nixos/nix/var /nix/var rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
+25 1 179:32 /nixos/nix/store /nix/store rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
+26 25 179:32 /nixos/nix/store /nix/store ro,nosuid,nodev - ext4 /dev/mmcblk0p32 rw
+'''
+        self.assertEqual(len(p.verify_mounts(raw,'179:32')),4)
+        for old,new in [('/nixos/nix/var','/nix/var'),('/nixos/nix/store','/nix/upper'),
+                        ('/nix/store ro,','/nix/store rw,'),('26 25 179:32','26 25 179:33')]:
+            with self.subTest(new=new),self.assertRaises(RuntimeError):
+                p.verify_mounts(raw.replace(old,new),'179:32')
+
     def test_actual_stage1_layout(self):
         self.assertEqual(len(p.verify_mounts(MOUNTS,'179:32')),5)
         p.verify_mounts(MOUNTS.replace('/mnt/nixos',''),'179:32')

@@ -7,6 +7,8 @@ import io
 import json
 import os
 from pathlib import Path
+import re
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -197,6 +199,90 @@ class MountRecovery(unittest.TestCase):
             with mock.patch.object(Path, 'read_text', return_value=f'/dev/mmcblk0p29 /gemian ext4 ro,{option} 0 0\n'), \
                     mock.patch.object(Path, 'is_symlink', return_value=False):
                 with self.assertRaisesRegex(RuntimeError, 'journal enabled'): m.BootVolume(Path('/gemian')).require()
+
+
+class Generations(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name)
+        self.target = self.base/'boot'; self.target.mkdir()
+        self.volume = Volume(self.target)
+        self.roots = self.base/'gcroots'
+        self.profiles = self.base/'profiles'; self.profiles.mkdir()
+        original_temporary = tempfile.TemporaryDirectory
+        patches = [
+            mock.patch.object(m, 'GENERATION_ROOTS', self.roots),
+            mock.patch.object(m, 'SYSTEM_PROFILES', self.profiles),
+            mock.patch.object(m, 'SYSTEM_PATH', re.escape(str(self.base))+r'/[0-9a-z]{32}-system'),
+            mock.patch.object(m.tempfile, 'TemporaryDirectory',
+                              side_effect=lambda **kw: original_temporary(**dict(kw, dir=self.base))),
+        ]
+        real_run = subprocess.run
+        self.validated = []
+        def run(command, **kw):
+            if command[:2] == ['nix-store', '--check-validity']:
+                self.validated.append(command[2]); return None
+            return real_run(command, **kw)
+        patches.append(mock.patch.object(m.subprocess, 'run', side_effect=run))
+        for patch in patches:
+            patch.start(); self.addCleanup(patch.stop)
+        pe = bytearray(256); pe[:2] = b'MZ'
+        struct.pack_into('<I', pe, 0x3c, 64); pe[64:68] = b'PE\0\0'
+        for offset, value in ((68, 0xaa64), (88, 0x20b), (156, 10)):
+            struct.pack_into('<H', pe, offset, value)
+        self.manager = self.base/'manager'; self.manager.write_bytes(pe)
+        self.systems = []
+        for index in (1, 2):
+            system = self.base/(str(index)*32+'-system'); system.mkdir()
+            (system/'kernel').write_bytes(pe)
+            (system/'initrd').write_bytes(b'shared generic initramfs')
+            (system/'init').write_text('init')
+            (system/'kernel-params').write_text('console=tty0 rdinit=/init\n')
+            subprocess.run(['dtc', '-I', 'dts', '-O', 'dtb', '-o', str(system/'gemini.dtb')],
+                           input='/dts-v1/; / { chosen {}; };', text=True, check=True)
+            (self.profiles/f'system-{index}-link').symlink_to(system)
+            self.systems.append(system)
+        recovery = self.target/'loader/entries/recovery.conf'
+        recovery.parent.mkdir(parents=True); recovery.write_text('title Recovery\n')
+
+    def install(self, index=0, **kw):
+        return m.install(self.systems[index], self.volume, system=True, manager=self.manager, **kw)
+
+    def test_update_and_rollback_use_the_selected_system_without_a_store_image(self):
+        old = self.install(); new = self.install(1)
+        self.assertNotEqual(old['entry'], new['entry'])
+        self.assertFalse((self.target/'nixos').exists())
+        for result in (old, new):
+            text = (self.target/'loader/entries'/result['entry']).read_text()
+            self.assertIn('init='+result['system']+'/init\n', text)
+            self.assertEqual(os.readlink(self.roots/result['entry']), result['system'])
+        self.assertEqual(self.validated, list(map(str, self.systems)))
+        rollback = self.install()
+        self.assertEqual(rollback['entry'], old['entry'])
+        self.assertFalse(self.install(check=True)['changed'])
+        self.assertFalse(self.volume.rw)
+
+    def test_removed_profile_collects_only_its_owned_entry_and_payload(self):
+        old = self.install(); new = self.install(1)
+        (self.profiles/'system-1-link').unlink()
+        self.install(1)
+        self.assertFalse((self.target/'loader/entries'/old['entry']).exists())
+        self.assertFalse((self.target/'EFI/Gemini'/old['payload_identity']).exists())
+        self.assertFalse((self.roots/old['entry']).exists())
+        self.assertTrue((self.roots/new['entry']).is_symlink())
+        self.assertTrue((self.target/'loader/entries/recovery.conf').exists())
+
+    def test_bad_image_or_conflicting_init_cannot_change_the_default(self):
+        self.install()
+        previous = (self.target/m.CONFIG).read_bytes()
+        (self.systems[1]/'kernel-params').write_text('init=/wrong/init\n')
+        with self.assertRaisesRegex(ValueError, 'override NixOS init'): self.install(1)
+        (self.systems[1]/'kernel-params').write_text('console=tty0\n')
+        (self.systems[1]/'kernel').write_bytes(b'not an EFI image')
+        with self.assertRaisesRegex(ValueError, 'not PE'): self.install(1)
+        self.assertEqual(previous, (self.target/m.CONFIG).read_bytes())
+        self.assertFalse(self.volume.rw)
 
 
 if __name__ == '__main__':

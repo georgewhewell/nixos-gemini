@@ -5,6 +5,6 @@ buildPkgs.runCommand "gemini-efi-boot-files" {
   nativeBuildInputs = [ buildPkgs.python3 ] ++ buildPkgs.lib.optional entryDtb buildPkgs.dtc;
 } ''
   mkdir -p "$out"
-  python3 ${../tools/build-gemini-efi-boot-files.py} \
+  GEMINI_BOOT_INSTALL=${./gemini-boot-install.py} python3 ${../tools/build-gemini-efi-boot-files.py} \
     "$out" ${bootloader} ${linuxBundle} ${kernel} ${buildPkgs.lib.optionalString versionedEntry "--versioned-entry"}${buildPkgs.lib.optionalString entryDtb " --entry-dtb"}
 ''

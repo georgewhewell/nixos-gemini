@@ -57,6 +57,13 @@
         ...
       }: {
         _module.args.geminiBootJournaled = true;
+        _module.args.geminiPersistentStore = true;
+        _module.args.geminiBootKernel = kernel;
+        _module.args.geminiBootDtb = dtb;
+        _module.args.geminiBootInitrd = image.initramfs;
+        _module.args.geminiBootManager = buildPkgs.runCommand "gemini-systemd-bootaa64.efi" {} ''
+          cp ${crossPkgs.systemd}/lib/systemd/boot/efi/systemd-bootaa64.efi "$out"
+        '';
         _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
         _module.args.geminiCellularHelper = cellularFsRegister;
         _module.args.geminiGpuKernel = kernel;
@@ -81,12 +88,8 @@
     ];
   };
 
-  squashfs = import ./squashfs.nix {
-    inherit buildPkgs;
-    system = system.config.system.build.toplevel;
-  };
   imageArgs = {
-    inherit buildPkgs crossPkgs ixoo-kernel kernel squashfs;
+    inherit buildPkgs crossPkgs ixoo-kernel kernel;
     serviceabilityDtb = dtb;
     nixosToplevel = system.config.system.build.toplevel;
     authorizedKeys = ../nixos/authorized_keys;
@@ -101,7 +104,7 @@
     inputDiagnostics = true;
     stage1PersistentHostKey = true;
     displayActivation = true;
-    provisionStore = true;
+    persistentStore = true;
     provisionWaitSeconds = 600;
     watchdogLeaseSeconds = 720;
     kernelLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
@@ -139,6 +142,6 @@
   };
 
 in {
-  inherit buildPkgs crossPkgs system kernel dtb squashfs image efiBootFiles uboot bootloader userspace;
+  inherit buildPkgs crossPkgs system kernel dtb image efiBootFiles uboot bootloader userspace;
   mtkclient = import ./mtkclient-rtc.nix {inherit buildPkgs;};
 }

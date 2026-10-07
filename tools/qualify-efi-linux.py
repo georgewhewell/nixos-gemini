@@ -26,6 +26,7 @@ class StoreProfile(NamedTuple):
     sha: str
     size: int
     require_efi: bool
+    root: str | None = None
 
 
 def efi_profile():
@@ -34,6 +35,13 @@ def efi_profile():
 
 def payload(profile=None):
     p = profile or efi_profile()
+    if p.root is not None:
+        manifest = (p.bundle/'MANIFEST').read_text().splitlines()
+        if (p.root != '/persist/nixos' or 'store=persistent' not in manifest or
+                'store-root='+p.root not in manifest or 'system='+p.system not in manifest or
+                str((p.bundle/'system').resolve(strict=True)) != p.system):
+            raise RuntimeError('Persistent system differs from its bundle')
+        return None, None
     if (not re.fullmatch('[0-9a-f]{64}', p.sha) or p.size <= 0 or
             not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', p.system)):
         raise RuntimeError('Linux profile has no pinned store/system')
@@ -102,6 +110,8 @@ printf '%s\\n' 'Linux store installed and accepted store retained'
 def provision(ssh, before, boot_sha, directory, qualify, rescued, profile=None):
     p = profile or efi_profile()
     source, name = payload(p)
+    if p.root is not None:
+        return  # Registered through nix copy before the boot transaction.
     deadline = time.monotonic() + 150
     while time.monotonic() < deadline:
         if rescued():

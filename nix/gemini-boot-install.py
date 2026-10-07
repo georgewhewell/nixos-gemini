@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -16,6 +17,63 @@ import tempfile
 PUBLISH = Path(os.environ.get('GEMINI_EFI_PUBLISH', Path(__file__).with_name('gemini-efi-publish.sh')))
 MANAGER = 'EFI/systemd/systemd-bootaa64.efi'
 CONFIG = 'loader/loader.conf'
+SYSTEM_PATH = r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+'
+GENERATION_ROOTS = Path('/nix/var/nix/gcroots/gemini-boot')
+SYSTEM_PROFILES = Path('/nix/var/nix/profiles')
+
+
+def file_info(path):
+    return dict(size=path.stat().st_size, sha256=digest(path))
+
+
+def prepare_generation(system, staging, manager):
+    """Prepare a standard NixOS toplevel, independent of installation images."""
+    if not re.fullmatch(SYSTEM_PATH, str(system)) or not (system/'init').is_file():
+        raise ValueError('Expected a NixOS system in /nix/store')
+    sources = {'linux.efi': system/'kernel', 'initrd.cpio.gz': system/'initrd',
+               'gemini.dtb': system/'gemini.dtb'}
+    params = (system/'kernel-params').read_text().split()
+    if any(p.startswith(('init=', 'rdinit=')) for p in params if p != 'rdinit=/init'):
+        raise ValueError('System kernel parameters override NixOS init')
+    options = ' '.join(params + ['init='+str(system)+'/init'])
+    identity = hashlib.sha256(b'gemini-nixos-generation-v1\0'+options.encode())
+    for path in sources.values():
+        identity.update(bytes.fromhex(digest(path)))
+    payload = identity.hexdigest()
+    entry = 'gemini-'+payload+'.conf'
+    directory = 'EFI/Gemini/'+payload
+    paths = [MANAGER, *(directory+'/'+name for name in sources), 'loader/entries/'+entry, CONFIG]
+    for name in paths:
+        (staging/name).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(manager, staging/MANAGER)
+    for name, source in sources.items():
+        shutil.copyfile(source, staging/directory/name)
+    for name in (MANAGER, directory+'/linux.efi'):
+        with (staging/name).open('rb') as stream:
+            header = stream.read(64)
+            if len(header) != 64 or header[:2] != b'MZ':
+                raise ValueError('Boot image is not PE: '+name)
+            stream.seek(struct.unpack_from('<I', header, 0x3c)[0])
+            pe = stream.read(94)
+        if (len(pe) != 94 or pe[:4] != b'PE\0\0' or
+                struct.unpack_from('<H', pe, 4)[0] != 0xaa64 or
+                struct.unpack_from('<H', pe, 24)[0] != 0x20b or
+                struct.unpack_from('<H', pe, 92)[0] != 10):
+            raise ValueError('Boot image is not an AArch64 EFI application: '+name)
+    subprocess.run(['fdtput', '-t', 's', str(staging/directory/'gemini.dtb'),
+                    '/chosen', 'gemini,efi-entry-id', payload], check=True)
+    (staging/paths[-2]).write_text(
+        'title NixOS Gemini\nsort-key gemini\nversion '+system.name[:32]+'\n'
+        'linux /'+directory+'/linux.efi\ninitrd /'+directory+'/initrd.cpio.gz\n'
+        'devicetree /'+directory+'/gemini.dtb\noptions '+options+'\n')
+    (staging/CONFIG).write_text('default '+entry+'\ntimeout 8\nconsole-mode keep\n'
+                              'editor no\nauto-entries no\nauto-firmware no\nrandom-seed-mode off\n')
+    files = {name: file_info(staging/name) for name in paths}
+    (staging/'files.manifest').write_text(''.join(
+        f"{info['sha256']} {info['size']} {name}\n" for name, info in files.items()))
+    return dict(payload_identity=payload, entry=entry, files=files,
+                store=dict(system=str(system), root='/persist/nixos'),
+                entry_device_tree=directory+'/gemini.dtb', menu_timeout_seconds=8)
 
 
 def digest(path):
@@ -57,13 +115,14 @@ def prepare(package, staging):
     files = manifest['files']
     if manifest['entry'] != entry or set(files) != set(names):
         raise ValueError('EFI generation has unexpected files')
-    for info in [*files.values(), manifest['archive'], manifest['store']]:
+    store = manifest['store']
+    persistent = store.get('root') == '/persist/nixos'
+    for info in [*files.values(), manifest['archive']] + ([] if persistent else [store]):
         if (type(info['size']) is not int or info['size'] <= 0 or
                 not re.fullmatch('[0-9a-f]{64}', info['sha256'])):
             raise ValueError('Invalid file size or digest')
-    store = manifest['store']
-    if (store['file'] != 'mainline-nixos-'+store['sha256']+'.squashfs' or
-            not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', store['system'])):
+    if (not re.fullmatch(SYSTEM_PATH, store['system']) or
+            (not persistent and store['file'] != 'mainline-nixos-'+store['sha256']+'.squashfs')):
         raise ValueError('Invalid store image identity')
     archive = regular(package/'boot-files.tar')
     if manifest['archive']['size'] > 64 * 1024 * 1024 or not matches(archive, manifest['archive']):
@@ -82,6 +141,10 @@ def prepare(package, staging):
             if not matches(target, files[member.name]):
                 raise ValueError('EFI archive member content differs: '+member.name)
     entry_text = (staging/names[-2]).read_text().splitlines()
+    if persistent:
+        options = [line.removeprefix('options ').split() for line in entry_text if line.startswith('options ')]
+        if len(options) != 1 or [p for p in options[0] if p.startswith('init=')] != ['init='+store['system']+'/init']:
+            raise ValueError('Boot entry does not select its NixOS system')
     for kind, suffix in [('linux', 'linux.efi'), ('initrd', 'initrd.cpio.gz'), ('devicetree', 'gemini.dtb')]:
         if [line for line in entry_text if line.startswith(kind+' ')] != [kind+' /'+directory+'/'+suffix]:
             raise ValueError('Boot entry does not select its own payload')
@@ -140,16 +203,67 @@ def publish(mode, root, staging, previous=None, manager=None):
     subprocess.run(command, check=True)
 
 
-def install(package, volume, store_image=None, check=False):
+def protect_generation(system, entry, check=False):
+    """Keep every installed entry bootable until profile cleanup removes it."""
+    path = GENERATION_ROOTS/entry
+    if path.is_symlink() and os.readlink(path) == system:
+        return
+    if path.exists() or path.is_symlink() or check:
+        raise RuntimeError('Boot generation GC root is missing or differs: '+str(path))
+    GENERATION_ROOTS.mkdir(parents=True, exist_ok=True)
+    path.symlink_to(system)
+
+
+def prune_generations(root, selected):
+    # Only collect entries this installer rooted, and only when the standard
+    # system profile exists. Recovery entries and manually installed files
+    # have independent owners.
+    profiles = list(SYSTEM_PROFILES.glob('system-*-link'))
+    if not profiles:
+        return
+    retained = {str(p.resolve()) for p in profiles} | {selected}
+    for link in GENERATION_ROOTS.iterdir():
+        if not re.fullmatch(r'gemini-[0-9a-f]{64}\.conf', link.name) or not link.is_symlink():
+            continue
+        system = os.readlink(link)
+        if system in retained:
+            continue
+        identity = link.name[7:-5]
+        directory = 'EFI/Gemini/'+identity
+        entry = checked_path(root, 'loader/entries/'+link.name)
+        if entry.exists():
+            options = [line.split()[1:] for line in regular(entry).read_text().splitlines()
+                       if line.startswith('options ')]
+            if len(options) != 1 or [p for p in options[0] if p.startswith('init=')] != ['init='+system+'/init']:
+                raise ValueError('Obsolete entry no longer belongs to its generation')
+            entry.unlink()
+        # Do not collect files another entry references, even if it was
+        # created outside this installer.
+        if any('/'+directory+'/' in p.read_text() for p in (root/'loader/entries').glob('*.conf')):
+            continue
+        for name in ('linux.efi', 'initrd.cpio.gz', 'gemini.dtb'):
+            path = checked_path(root, directory+'/'+name)
+            if path.exists():
+                regular(path).unlink()
+        directory_path = checked_path(root, directory)
+        if directory_path.is_dir() and not any(directory_path.iterdir()):
+            directory_path.rmdir()
+        link.unlink()
+
+
+def install(package, volume, store_image=None, check=False, system=False, manager=None):
     root = volume.path
     volume.require()
     with tempfile.TemporaryDirectory(prefix='gemini-boot-', dir='/run') as temporary:
         staging = Path(temporary)
-        manifest = prepare(package, staging)
+        manifest = prepare_generation(package, staging, manager) if system else prepare(package, staging)
         store = manifest['store']
-        destination = checked_path(root, 'nixos/'+store['file'])
-        missing_store = not destination.exists()
-        if not missing_store and not matches(destination, store):
+        persistent = store.get('root') == '/persist/nixos'
+        if persistent:
+            subprocess.run(['nix-store', '--check-validity', store['system']], check=True)
+        destination = None if persistent else checked_path(root, 'nixos/'+store['file'])
+        missing_store = destination is not None and not destination.exists()
+        if destination is not None and not missing_store and not matches(destination, store):
             raise ValueError('Existing store image differs; it will not be overwritten')
         if missing_store and (store_image is None or not matches(regular(store_image), store)):
             raise ValueError('The matching squashfs is missing; provide --store-image from the system bundle')
@@ -170,9 +284,13 @@ def install(package, volume, store_image=None, check=False):
         if check:
             if not complete:
                 raise RuntimeError('EFI generation is not installed and selected')
+            if persistent:
+                protect_generation(store['system'], manifest['entry'], check=True)
         elif not complete:
             if shutil.disk_usage(root).free < needed + 8 * 1024 * 1024:
                 raise RuntimeError('Not enough space on the boot volume; existing generations are preserved')
+            if persistent:
+                protect_generation(store['system'], manifest['entry'])
             with volume.writable():
                 if missing_store:
                     parent = checked_path(root, 'nixos')
@@ -192,14 +310,18 @@ def install(package, volume, store_image=None, check=False):
                         temporary_store.unlink()
                 publish('activate' if previous_sha else 'install', root, staging, previous_sha, manager_sha)
                 publish('verify', root, staging)
-                if not matches(destination, store):
+                if destination is not None and not matches(destination, store):
                     raise ValueError('Store image changed during installation')
             # Independent readback after restoring read-only.
             publish('verify', root, staging)
-            if not matches(destination, store):
+            if destination is not None and not matches(destination, store):
                 raise ValueError('Store image readback failed')
+        if persistent and not check:
+            protect_generation(store['system'], manifest['entry'])
+            with volume.writable():
+                prune_generations(root, store['system'])
         return dict(entry=manifest['entry'], payload_identity=manifest['payload_identity'],
-                    store_sha256=store['sha256'], system=store['system'],
+                    store_sha256=store.get('sha256'), system=store['system'],
                     previous_default_sha256=previous_sha, previous_manager_sha256=manager_sha,
                     changed=not complete and not check, read_only=True)
 
@@ -210,6 +332,7 @@ def main():
     parser.add_argument('--store-image', type=Path, help='Matching squashfs, if not already installed')
     parser.add_argument('--check', action='store_true', help='Verify the installed generation without writes')
     parser.add_argument('--json', action='store_true', help='Print the installation result as JSON')
+    parser.add_argument('--system', action='store_true', help='Install a NixOS system generation (used by activation)')
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise RuntimeError('Run gemini-boot-install as root')
@@ -217,7 +340,8 @@ def main():
     with open('/run/lock/gemini-boot-install.lock', 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         result = install(args.efi_files.resolve(strict=True), BootVolume(Path('/gemian')),
-                         args.store_image.resolve(strict=True) if args.store_image else None, args.check)
+                         args.store_image.resolve(strict=True) if args.store_image else None, args.check,
+                         args.system, Path(os.environ['GEMINI_BOOT_MANAGER']) if args.system else None)
     print(json.dumps(result) if args.json else ('Verified ' if args.check else 'Installed ')+result['entry'])
 
 

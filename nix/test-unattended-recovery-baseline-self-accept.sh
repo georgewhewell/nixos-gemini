@@ -94,6 +94,26 @@ printf '%s\n' \
 run_fixture "$overlay_store"
 grep -Fqx unattended_recovery=healthy "$overlay_store/run/unattended-recovery.accepted"
 
+for mode in valid wrong-device writable-store; do
+  persistent_store=$WORK/persistent-$mode
+  make_fixture "$persistent_store"
+  mkdir -p "$persistent_store/proc/self"
+  device=179:32; options=ro,nosuid,nodev
+  [ "$mode" != wrong-device ] || device=179:33
+  [ "$mode" != writable-store ] || options=rw,nosuid,nodev
+  printf '%s\n' \
+    '21 1 179:32 / /persist rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw' \
+    '23 1 179:32 /nixos/nix/var /nix/var rw,nosuid,nodev - ext4 /dev/mmcblk0p32 rw' \
+    "26 25 $device /nixos/nix/store /nix/store $options - ext4 /dev/mmcblk0p32 rw" \
+    > "$persistent_store/proc/self/mountinfo"
+  if GEMINI_BASELINE_ACCEPT_STORE=persistent run_fixture "$persistent_store"; then
+    [ "$mode" = valid ] || fail "accepted persistent store $mode"
+  else
+    [ "$mode" != valid ] || fail 'rejected the registered persistent store'
+    test ! -e "$persistent_store/run/unattended-recovery.accepted"
+  fi
+done
+
 for broken in no-lower foreign-lower; do
   bad_store=$WORK/store-$broken
   make_fixture "$bad_store"
