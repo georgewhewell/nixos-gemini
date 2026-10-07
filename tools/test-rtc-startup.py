@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-spec = importlib.util.spec_from_file_location('startup_profile', Path(__file__).with_name('qualify-power-rtc-startup.py'))
+spec = importlib.util.spec_from_file_location('startup_profile', Path(__file__).with_name('test-boot.py'))
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 s = m.startup
 BOOT = '11111111-1111-1111-1111-111111111111'
@@ -32,7 +32,7 @@ class Startup(unittest.TestCase):
 
     def check(self, values=None, kernel=None, **kwargs):
         args = dict(start=NOW+180, end=NOW+180.5, elapsed=.5); args.update(kwargs)
-        return s.verify_startup(m.c.calendar, raw(values or self.good()), kernel or self.kernel(), BOOT,
+        return s.verify_startup(m.calendar, raw(values or self.good()), kernel or self.kernel(), BOOT,
             dict(retained_utc_verified=True, host_start=NOW-50), **args)
 
     def test_native_and_early_kernel_clock_agree(self):
@@ -53,14 +53,14 @@ class Startup(unittest.TestCase):
         actual = datetime.fromtimestamp(NOW, timezone.utc)
         legacy = int(actual.replace(year=actual.year-68).timestamp())+4039286400
         values = dict(boot_id=BOOT, rtc=legacy, system=NOW)
-        proof=s.verify_baseline(m.c.calendar, raw(values), BOOT, NOW, NOW+.5, .5)
+        proof=s.verify_baseline(m.calendar, raw(values), BOOT, NOW, NOW+.5, .5)
         self.assertEqual(proof['firmware_decoded_utc'], NOW)
         for change in (dict(rtc=3155673600), dict(system=NOW+60), dict(boot_id='bad')):
             with self.assertRaises(RuntimeError):
-                s.verify_baseline(m.c.calendar, raw(dict(values, **change)), BOOT, NOW, NOW+.5, .5)
+                s.verify_baseline(m.calendar, raw(dict(values, **change)), BOOT, NOW, NOW+.5, .5)
 
     def test_runtime_condition_only_after_guards_and_real_skip_verified(self):
-        r=m.configure(); script=s.policy_script(r, dict(boot_id=BOOT), 'a'*64)
+        r=m.base_configure(); script=s.policy_script(r, dict(boot_id=BOOT), 'a'*64)
         subprocess.run(['sh','-n'],input=script,text=True,check=True)
         self.assertLess(script.index(r.qualify.ACCEPTED_BOOT), script.index('mkdir '+s.DROP_DIR))
         self.assertLess(script.index('systemctl daemon-reload'),script.index('systemctl start save-hwclock.service'))
@@ -72,19 +72,9 @@ class Startup(unittest.TestCase):
         self.assertIn('ConditionPathExists=/run/gemini-rtc-startup-'+BOOT+'/allow-save',script)
         with self.assertRaises(ValueError): s.policy('shell; text')
 
-    def test_profile_keeps_artifacts_and_old_calendar_isolated(self):
-        old=m.p.f.q.module('unchanged_calendar',m.ROOT/'tools/qualify-power-rtc-calendar.py')
-        self.assertEqual(m.p.BUNDLE,old.p.BUNDLE)
-        self.assertEqual(set(m.configure().PROFILES),{'power-rtc-startup'})
-        self.assertEqual(set(old.configure().PROFILES),{'power-rtc-calendar'})
-        self.assertTrue(m.configure(watchdog=True).watchdog_expiry_requested)
+    def test_only_implemented_diagnostics_are_available(self):
         for args in (dict(pm_test='devices'),dict(cycle=True)):
             with self.assertRaises(ValueError): m.configure(**args)
-        with tempfile.TemporaryDirectory() as tmp, \
-                mock.patch.object(sys,'argv',['startup','--execute','--out',tmp+'/trial']), \
-                mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
-            m.p.main()
-            self.assertIn(str(m.p.ENTRYPOINT),run.call_args.args[0])
 
     def test_watchdog_runs_after_startup_and_clock_checks_without_alarm_sequence(self):
         for watchdog in (False,True):
@@ -98,10 +88,10 @@ class Startup(unittest.TestCase):
                         state=original(*a);events.append(label);return state
                     r.candidate_return=check
                 return install
-            with mock.patch.object(m.c.q,'base_configure',return_value=runner) as base, \
+            with mock.patch.object(m,'base_configure',return_value=runner) as base, \
                     mock.patch.object(s,'install_probe',side_effect=wrap('startup')), \
-                    mock.patch.object(m.c.calendar,'install',side_effect=wrap('clock')), \
-                    mock.patch.object(m.c.q.rtc,'install',side_effect=wrap('alarms')), \
+                    mock.patch.object(m.calendar,'install',side_effect=wrap('clock')), \
+                    mock.patch.object(m.rtc,'install',side_effect=wrap('alarms')), \
                     mock.patch.object(m.p.watchdog_expiry,'trigger',side_effect=lambda *a:events.append('watchdog')):
                 self.assertEqual(m.configure(watchdog=watchdog).candidate_return([],{},Path('/trial'),'profile'),{'boot_id':BOOT})
                 base.assert_called_once_with()
@@ -115,7 +105,7 @@ class Startup(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); runner=SimpleNamespace(qualify=SimpleNamespace(save=self.save))
             self.save(root,'result.json',dict(result='passed',profile_qualified=True))
-            with mock.patch.object(m.c,'finish',side_effect=RuntimeError('recovery audited')) as finish, \
+            with mock.patch.object(m,'calendar_finish',side_effect=RuntimeError('recovery audited')) as finish, \
                     mock.patch.object(s,'cleanup',return_value=dict(runtime_clock_policy_restored=True)) as cleanup:
                 with self.assertRaisesRegex(RuntimeError,'recovery audited'): m.finish(runner,root,'before')
             self.assertIsInstance(finish.call_args.args[-1],FileNotFoundError)
@@ -128,7 +118,7 @@ class Startup(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); runner=SimpleNamespace(qualify=SimpleNamespace(save=self.save))
             self.save(root,'result.json',dict(result='passed',profile_qualified=True))
-            with mock.patch.object(s,'verify_final'), mock.patch.object(m.c,'finish'), \
+            with mock.patch.object(s,'verify_final'), mock.patch.object(m,'calendar_finish'), \
                     mock.patch.object(s,'cleanup',side_effect=RuntimeError('policy remains')):
                 with self.assertRaisesRegex(RuntimeError,'policy remains'): m.finish(runner,root,'before')
             self.assertFalse(json.loads((root/'result.json').read_text())['profile_qualified'])

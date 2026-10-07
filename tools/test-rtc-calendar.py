@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-spec = importlib.util.spec_from_file_location('calendar_profile', Path(__file__).with_name('qualify-power-rtc-calendar.py'))
+spec = importlib.util.spec_from_file_location('calendar_profile', Path(__file__).with_name('test-boot.py'))
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 c = m.calendar
 BOOT = '11111111-1111-1111-1111-111111111111'
@@ -59,26 +59,6 @@ class Calendar(unittest.TestCase):
         self.assertEqual(c.decode_m69(int(datetime(2069,12,31,tzinfo=timezone.utc).timestamp())),1262304000)
         with self.assertRaises(ValueError): c.decode_m69(0-10000000000)
 
-    def test_candidate_pins_and_config_preserve_older_variants(self):
-        old = m.p.f.q.module('old_rtc', m.ROOT/'tools/qualify-power-rtc.py')
-        self.assertNotEqual(m.p.NOTES_SHA, old.p.NOTES_SHA)
-        self.assertNotEqual(m.p.BUNDLE, old.p.BUNDLE)
-        self.assertEqual((m.p.KERNEL/'kernel.config').read_bytes(), (old.p.KERNEL/'kernel.config').read_bytes())
-        self.assertEqual(set(m.configure().PROFILES), {'power-rtc-calendar'})
-        self.assertEqual(m.configure().backend.MTK,m.configure().backend.MTK_RTC)
-        self.assertNotEqual(m.configure().backend.MTK,old.p.configure().backend.MTK)
-        for args in (dict(watchdog=True), dict(pm_test='devices'), dict(cycle=True)):
-            with self.assertRaises(ValueError): m.configure(**args)
-
-    def test_durable_worker_uses_calendar_entrypoint(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(sys, 'argv', ['calendar', '--execute', '--out', tmp+'/trial']), \
-                    mock.patch.object(m.p.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
-                m.p.main()
-            args = run.call_args.args[0]
-            self.assertIn(str(m.p.ENTRYPOINT), args)
-            self.assertTrue(any(v.startswith('--unit=power-rtc-calendar-') for v in args))
-
     def save(self, directory, name, value):
         (directory/name).write_text(json.dumps(value))
 
@@ -86,8 +66,8 @@ class Calendar(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); runner=SimpleNamespace(qualify=SimpleNamespace(save=self.save))
             self.save(root, 'result.json', dict(result='passed', profile_qualified=True))
-            with mock.patch.object(m.q, 'finish', side_effect=RuntimeError('failed after recovery')) as finish:
-                with self.assertRaisesRegex(RuntimeError, 'failed after recovery'): m.finish(runner, root, 'before')
+            with mock.patch.object(m, 'alarm_finish', side_effect=RuntimeError('failed after recovery')) as finish:
+                with self.assertRaisesRegex(RuntimeError, 'failed after recovery'): m.calendar_finish(runner, root, 'before')
             self.assertIsInstance(finish.call_args.args[-1], FileNotFoundError)
             result=json.loads((root/'result.json').read_text())
             self.assertFalse(result['profile_qualified'])
@@ -97,10 +77,10 @@ class Calendar(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); runner=SimpleNamespace(qualify=SimpleNamespace(save=self.save))
             self.save(root, 'result.json', dict(result='passed', profile_qualified=True))
-            with mock.patch.object(c, 'verify_candidate', return_value={}), mock.patch.object(m.q, 'finish'), \
+            with mock.patch.object(c, 'verify_candidate', return_value={}), mock.patch.object(m, 'alarm_finish'), \
                     mock.patch.object(m.cache, 'verify_final', return_value={}), \
                     mock.patch.object(c, 'recovered', side_effect=RuntimeError('RTC reset')):
-                with self.assertRaisesRegex(RuntimeError, 'RTC reset'): m.finish(runner, root, 'before')
+                with self.assertRaisesRegex(RuntimeError, 'RTC reset'): m.calendar_finish(runner, root, 'before')
             result=json.loads((root/'result.json').read_text())
             self.assertEqual(result['result'], 'failed')
             self.assertTrue(result['rtc_utc_write_read_qualified'])

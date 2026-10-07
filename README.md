@@ -43,6 +43,19 @@ build. Historical experiments and the vendor 3.18 system are available under
 recorded images and layouts. Use the matching historical revision when
 reproducing an old trial; new features belong in the default system.
 
+The existing device can test the normal bundle with automatic M69 recovery:
+
+```sh
+python tools/test-boot.py --bundle result --out ../handoff/boot-test-01 --execute
+```
+
+Omit `--execute` for a read-only preflight, using a fresh output directory.
+The command checks RTC startup/alarms, paging, an ordinary Nix build and retained
+data before returning to recovery. It uses this device's fixed-swap layout and
+existing host USB/SSH setup. If p29 is full, `--reclaim-cache /host/old.squashfs`
+archives that image and removes its device cache only after checking that no
+active loop device or installed EFI entry/initramfs uses it.
+
 ## Device status
 
 The installed recovery system remains M69. The consolidated default bundle and

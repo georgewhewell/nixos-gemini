@@ -14,7 +14,7 @@ from unittest import mock
 def module(name):
     spec=importlib.util.spec_from_file_location(name,Path(__file__).with_name('qualify-'+name+'.py'))
     m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
-c=module('rtc-store-cache');s=module('rtc-stage1-rescue');e=module('efi-linux')
+c=module('store-cache');s=module('rtc-stage1-rescue');e=module('efi-linux')
 OLD='11111111-1111-1111-1111-111111111111';BOOT='22222222-2222-2222-2222-222222222222'
 BEFORE=dict(boot_id=OLD,gpt_sha256='c'*64)
 CTX=SimpleNamespace(STORE_SHA='a'*64,STORE_SIZE=2048,NOTES_SHA='d'*64,BOOT_SHA='b'*64,PROFILE='calendar',f=SimpleNamespace(q=SimpleNamespace(SSH=['ssh'])))
@@ -33,18 +33,18 @@ class Cache(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp);r=self.runner(values);c.prepare(CTX,r,root,BEFORE)
                 proof=json.loads((root/'store-capacity.json').read_text())
-                self.assertFalse(proof['prune_previous_rtc_cache']);self.assertEqual(r.persistence.run.call_count,1)
+                self.assertFalse(proof['prune_unused_cache']);self.assertEqual(r.persistence.run.call_count,1)
 
     def test_insufficient_capacity_fails_before_boot(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(c,'SIZE',1024),self.assertRaisesRegex(RuntimeError,'enough capacity'):
+            with self.assertRaisesRegex(RuntimeError,'Insufficient store space'):
                 c.prepare(CTX,self.runner('available_kib=0\ninstalled=no\n'),Path(tmp),BEFORE)
 
     def test_archive_verified_before_prune_and_guards_precede_removal(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);source=root/'source';data=b'x'*4096;source.write_bytes(data)
             sha=hashlib.sha256(data).hexdigest();name='mainline-nixos-'+sha+'.squashfs'
-            with mock.patch.multiple(c,SOURCE=source,SIZE=len(data),SHA=sha,NAME=name):
+            with mock.patch.object(CTX,'RECLAIM_CACHE',source,create=True):
                 r=self.runner('available_kib=1023\ninstalled=no\n');c.prepare(CTX,r,root,BEFORE)
                 archive=root/name
                 self.assertEqual(archive.read_bytes(),data);self.assertEqual(archive.stat().st_mode&0o777,0o400)
@@ -58,8 +58,8 @@ class Cache(unittest.TestCase):
                 self.assertLess(prune,cmd.index('available=$(df'))
                 self.assertNotIn('remount',cmd)
                 subprocess.run(['sh','-n'],input=cmd,text=True,check=True)
-                (root/'store-upload.log').write_text('rtc-cache-pruned='+sha+'\n')
-                self.assertTrue(c.verify_final(r,root)['previous_rtc_cache_host_archive_verified'])
+                (root/'store-upload.log').write_text('store-cache-pruned='+sha+'\n')
+                self.assertTrue(c.verify_final(r,root)['unused_cache_host_archive_verified'])
                 (root/'store-upload.log').write_text('')
                 with self.assertRaises(RuntimeError): c.verify_final(r,root)
                 archive.chmod(0o600);archive.write_bytes(b'y'*4096)

@@ -53,8 +53,8 @@ def store_profile(provisioner):
 
 def prior_outputs(root=ROOT.parent/'handoff', exclude=None):
     retained = {}
-    for path in sorted(root.glob('power-*/nix-candidate.json')):
-        if path.parent == exclude or not re.fullmatch(r'power-(swap|rtc|rtc-calendar|rtc-startup)-[0-9]+', path.parent.name): continue
+    for path in sorted(root.glob('*/nix-candidate.json')):
+        if path.parent == exclude or not re.fullmatch(r'(power-(swap|rtc|rtc-calendar|rtc-startup)|boot-test)-[0-9]+', path.parent.name): continue
         proof = json.loads(path.read_text()); token = proof.get('token', '')
         if (proof.get('ordinary_daemon_build_qualified') is not True or
                 not re.fullmatch('[0-9a-f]{32}', token) or
@@ -322,7 +322,7 @@ def finish(r, directory, before, error=None):
         if not passed: raise RuntimeError('Power/swap candidate did not qualify; M69 recovery and retained evidence are recorded')
 
 
-def main():
+def main(configure_artifacts=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--execute', action='store_true')
@@ -334,7 +334,19 @@ def main():
     diagnostic.add_argument('--usb-cycle', action='store_true',
                             help='Qualify guarded software USB detach/reconnect without requesting sleep')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
+    if configure_artifacts is not None:
+        parser.description = 'Test the normal Gemini bundle with automatic M69 recovery'
+        parser.add_argument('--bundle', type=Path, default=ROOT/'result')
+        parser.add_argument('--reclaim-cache', type=Path,
+                            help='Host copy of an unused squashfs to archive and remove if space is needed')
     args = parser.parse_args(); directory = args.out.resolve()
+    artifact_args = []
+    if configure_artifacts is not None:
+        args.bundle = args.bundle.resolve(strict=True)
+        if args.reclaim_cache: args.reclaim_cache = args.reclaim_cache.resolve(strict=True)
+        configure_artifacts(args.bundle, args.reclaim_cache)
+        artifact_args = ['--bundle', str(args.bundle)]
+        if args.reclaim_cache: artifact_args += ['--reclaim-cache', str(args.reclaim_cache)]
     if args.execute and not args.worker:
         unit = PROFILE+'-'+str(int(time.time()))+'-'+str(os.getpid())
         print('Starting durable power/swap worker '+unit, flush=True)
@@ -343,7 +355,7 @@ def main():
             sys.executable, str(ENTRYPOINT), '--worker', '--out', str(directory)] +
             (['--watchdog-expiry'] if args.watchdog_expiry else []) +
             (['--pm-test', args.pm_test] if args.pm_test else []) +
-            (['--usb-cycle'] if args.usb_cycle else []))
+            (['--usb-cycle'] if args.usb_cycle else []) + artifact_args)
         if child.returncode: raise RuntimeError('Power/swap worker failed; inspect its retained trial and recovery evidence')
         return
     if args.worker:
