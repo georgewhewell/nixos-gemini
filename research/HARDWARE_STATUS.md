@@ -410,6 +410,15 @@ Evidence: `handoff/usb3-mac-vbus-trial-01`. Normal cgroup-v2 qualification rejec
 the temporary cgroup-v1 setup as expected; automatic M69 recovery and full audit
 passed. No promotion or allocator change.
 
+Ftrace is now enabled in the maintained Gemini configuration (Linux24f1216912361),
+including dynamic function, function-graph and event tracing. The diagnostic
+boots with the standard MTU3 LTSSM event enabled and records three SS.Disable
+interrupts at2.401188,2.567750,2.744113s, with3/3 retained events and USB2 fallback.
+The event reports masked interrupt status, not every hardware transition.
+Available tracers on hardware include function/function_graph. Evidence:
+`handoff/usb3-ftrace-trial-01`. Full normal/diagnostic builds and complete recovery
+audit passed; normal cgroup-v2 stability and SuperSpeed remain unresolved.
+
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
 describes the ports' roles without data rates. Preserve the current working
