@@ -86,6 +86,18 @@
       gemini-mainline = gemini.system;
     };
     checks.${host} = {
+      boot-install = gemini.buildPkgs.runCommand "gemini-boot-install-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3];
+      } ''
+        mkdir nix tools
+        cp ${./nix/gemini-boot-install.py} nix/gemini-boot-install.py
+        cp ${./nix/gemini-efi-publish.sh} nix/gemini-efi-publish.sh
+        cp ${./tools/test-gemini-boot-install.py} tools/test-gemini-boot-install.py
+        cp ${./tools/test-gemini-efi-publish.py} tools/test-gemini-efi-publish.py
+        python3 tools/test-gemini-boot-install.py
+        python3 tools/test-gemini-efi-publish.py
+        touch "$out"
+      '';
       desktop = gemini.userspace.desktopProtocolCheck;
       keyboard = gemini.userspace.desktopKeyboardProtocolCheck;
       ssh = gemini.buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''

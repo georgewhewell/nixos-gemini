@@ -7,11 +7,15 @@ root=$2
 source=$3
 manifest=$4
 previous_sha=${5:-}
+previous_manager_sha=${6:-}
 case "$mode" in verify|install|activate) ;; *) exit 2 ;; esac
 if [ "$mode" = activate ]; then
     [ "${#previous_sha}" -eq 64 ] || exit 1
     case "$previous_sha" in *[!0-9a-f]*) exit 1 ;; esac
-    backup=$root/loader/loader.conf.gemini-backup-$previous_sha
+    if [ -n "$previous_manager_sha" ]; then
+        [ "${#previous_manager_sha}" -eq 64 ] || exit 1
+        case "$previous_manager_sha" in *[!0-9a-f]*) exit 1 ;; esac
+    fi
 fi
 [ -d "$root" ] && [ ! -L "$root" ] || exit 1
 [ -f "$manifest" ] && [ ! -L "$manifest" ] || exit 1
@@ -50,9 +54,20 @@ match_file() {
     [ "$(stat -c %s "$file")" = "$bytes" ] || return 1
     [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$sha" ]
 }
+replacement() {
+    [ "$mode" = activate ] || return 1
+    case "$relative" in
+        loader/loader.conf) previous_expected=$previous_sha ;;
+        EFI/systemd/systemd-bootaa64.efi)
+            [ -n "$previous_manager_sha" ] || return 1
+            previous_expected=$previous_manager_sha ;;
+        *) return 1 ;;
+    esac
+    backup=$root/$relative.gemini-backup-$previous_expected
+}
 match_previous() {
     [ -f "$1" ] && [ ! -L "$1" ] || return 1
-    [ "$(sha256sum "$1" | cut -d' ' -f1)" = "$previous_sha" ]
+    [ "$(sha256sum "$1" | cut -d' ' -f1)" = "$previous_expected" ]
 }
 
 records=0
@@ -68,13 +83,16 @@ while read -r sha bytes relative; do
         [ "$relative" != loader/loader.conf ] || config_seen=yes
     fi
     parents "$root" "$relative" no || exit 1
+    if replacement; then
+        if [ -e "$backup" ] || [ -L "$backup" ]; then match_previous "$backup" || exit 1; fi
+    fi
     if [ "$mode" != verify ]; then
         parents "$source" "$relative" no || exit 1
         match_file "$source/$relative" || exit 1
     fi
     if [ "$mode" = verify ] || [ -e "$root/$relative" ] || [ -L "$root/$relative" ]; then
         if ! match_file "$root/$relative"; then
-            [ "$mode" = activate ] && [ "$relative" = loader/loader.conf ] || exit 1
+            replacement || exit 1
             match_previous "$root/$relative" || exit 1
         fi
     fi
@@ -83,7 +101,6 @@ done < "$manifest"
 if [ "$mode" = activate ]; then
     [ "$config_seen" = yes ] || exit 1
     [ -f "$root/loader/loader.conf" ] && [ ! -L "$root/loader/loader.conf" ] || exit 1
-    if [ -e "$backup" ] || [ -L "$backup" ]; then match_previous "$backup" || exit 1; fi
 fi
 [ "$mode" != verify ] || exit 0
 
@@ -95,7 +112,7 @@ trap 'exit 1' HUP INT TERM
 while read -r sha bytes relative; do
     if [ -e "$root/$relative" ]; then
         if match_file "$root/$relative"; then continue; fi
-        [ "$mode" = activate ] && [ "$relative" = loader/loader.conf ] || exit 1
+        replacement || exit 1
         match_previous "$root/$relative" || exit 1
     fi
     parents "$root" "$relative" yes || exit 1
@@ -107,9 +124,9 @@ while read -r sha bytes relative; do
     cat "$source/$relative" > "$temporary" || exit 1
     match_file "$temporary" || exit 1
     chmod 0644 "$temporary"
-    if [ "$mode" = activate ] && [ "$relative" = loader/loader.conf ]; then
-        # All payload and entry records precede this one. Keep the old default
-        # inode and sync both generations before atomically selecting the new.
+    if replacement && [ -e "$destination" ]; then
+        # Keep the old loader or default inode. The default record is last,
+        # after complete payloads and the entry, and only changes after sync.
         match_previous "$destination" || exit 1
         if [ ! -e "$backup" ] && [ ! -L "$backup" ]; then
             ln "$destination" "$backup" || exit 1

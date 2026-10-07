@@ -42,4 +42,15 @@ class Files(unittest.TestCase):
         for changed in (['boot_id='+self.before['boot_id']]+rows[1:],rows[:-1],rows[:-1]+['0'*64+rows[-1][64:]]):
             q.run.return_value='\n'.join(changed)
             with self.assertRaises(RuntimeError):f.evidence([],boot,Path('/unused'),q)
+    def test_preservation_accepts_exact_mutable_backups_but_active_readback_rejects_them(self):
+        _,manifest=f.payload();boot=self.before['boot_id']
+        rows=['boot_id='+boot]+[v['sha256']+'  /gemian/'+k+
+            ('.gemini-backup-'+v['sha256'] if k in ('loader/loader.conf','EFI/systemd/systemd-bootaa64.efi') else '')
+            for k,v in manifest['files'].items()]
+        q=SimpleNamespace(run=Mock(return_value='\n'.join(rows)),save=Mock())
+        f.evidence([],boot,Path('/unused'),q,require_verified=False,preserved=True)
+        with self.assertRaises(RuntimeError):f.evidence([],boot,Path('/unused'),q,require_verified=False)
+        with self.assertRaises(ValueError):f.evidence([],boot,Path('/unused'),q,preserved=True)
+        q.run.return_value='\n'.join(rows).replace('.gemini-backup-', '.gemini-backup-0')
+        with self.assertRaises(RuntimeError):f.evidence([],boot,Path('/unused'),q,require_verified=False,preserved=True)
 if __name__=='__main__':unittest.main()

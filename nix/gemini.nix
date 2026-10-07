@@ -44,6 +44,7 @@
       ../nixos/audio.nix
       ../nixos/power-policy.nix
       ../nixos/storage.nix
+      ../nixos/boot.nix
       ../nixos/desktop.nix
       ../nixos/m39.nix
       ../nixos/spm.nix
@@ -55,6 +56,7 @@
         pkgs,
         ...
       }: {
+        _module.args.geminiBootJournaled = true;
         _module.args.geminiLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
         _module.args.geminiCellularHelper = cellularFsRegister;
         _module.args.geminiGpuKernel = kernel;
@@ -94,6 +96,7 @@
       grep -Fqx 'EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}' "$out"
       chmod 0755 "$out"
     '';
+    journaledBoot = true;
     unattendedRecovery = true;
     inputDiagnostics = true;
     stage1PersistentHostKey = true;

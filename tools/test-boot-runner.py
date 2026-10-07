@@ -50,7 +50,7 @@ class Profile(unittest.TestCase):
             setup=mock.Mock()
             with mock.patch.object(sys,'argv',argv),mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
                 m.p.main(setup)
-            setup.assert_called_once_with(bundle,cache)
+            setup.assert_called_once_with(bundle,cache,None)
             command=run.call_args.args[0]
             self.assertIn(str(m.p.ENTRYPOINT),command)
             self.assertIn('--worker',command)
@@ -58,6 +58,18 @@ class Profile(unittest.TestCase):
             self.assertEqual(command[command.index('--reclaim-cache')+1],str(cache))
             self.assertIn('--watchdog-expiry',command)
             self.assertTrue(any(v.startswith('--unit=boot-test-') for v in command))
+
+    def test_durable_worker_receives_efi_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);bundle=root/'bundle';bundle.mkdir();efi=root/'efi';efi.mkdir()
+            setup=mock.Mock()
+            with mock.patch.object(sys,'argv',['test-boot.py','--execute','--out',tmp+'/trial',
+                    '--bundle',str(bundle),'--install-efi',str(efi)]), \
+                    mock.patch.object(m.p.subprocess,'run',return_value=SimpleNamespace(returncode=0)) as run:
+                m.p.main(setup)
+            setup.assert_called_once_with(bundle,None,efi)
+            command=run.call_args.args[0]
+            self.assertEqual(command[command.index('--install-efi')+1],str(efi))
 
     def test_pm_requires_new_kernel_prerequisites(self):
         for args in (dict(pm_test='devices'),dict(pm_test='freezer'),dict(cycle=True)):

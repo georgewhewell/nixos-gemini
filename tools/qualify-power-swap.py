@@ -339,14 +339,18 @@ def main(configure_artifacts=None):
         parser.add_argument('--bundle', type=Path, default=ROOT/'result')
         parser.add_argument('--reclaim-cache', type=Path,
                             help='Host copy of an unused squashfs to archive and remove if space is needed')
+        parser.add_argument('--install-efi', type=Path,
+                            help='Install matching efiBootFiles through the healthy candidate before recovery')
     args = parser.parse_args(); directory = args.out.resolve()
     artifact_args = []
     if configure_artifacts is not None:
         args.bundle = args.bundle.resolve(strict=True)
         if args.reclaim_cache: args.reclaim_cache = args.reclaim_cache.resolve(strict=True)
-        configure_artifacts(args.bundle, args.reclaim_cache)
+        if args.install_efi: args.install_efi = args.install_efi.resolve(strict=True)
+        configure_artifacts(args.bundle, args.reclaim_cache, args.install_efi)
         artifact_args = ['--bundle', str(args.bundle)]
         if args.reclaim_cache: artifact_args += ['--reclaim-cache', str(args.reclaim_cache)]
+        if args.install_efi: artifact_args += ['--install-efi', str(args.install_efi)]
     if args.execute and not args.worker:
         unit = PROFILE+'-'+str(int(time.time()))+'-'+str(os.getpid())
         print('Starting durable power/swap worker '+unit, flush=True)

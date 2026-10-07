@@ -1,14 +1,16 @@
 # Minimal NixOS stage 2 for the mainline MT6797 kernel.  Stage 1 supplies a
-# tmpfs root, a read-only SquashFS /nix/store, and p29 at /gemian with ext4
-# journal replay disabled.  Nothing in this configuration writes persistent
-# storage.
+# tmpfs root, a read-only SquashFS /nix/store, and p29 read-only at /gemian.
+# Recovery disables journal replay. The normal storage and boot modules add
+# persistent storage and enable the journal for boot-file installation.
 {
   config,
   pkgs,
   lib,
   geminiLeaseSelfAcceptToken ? null,
+  geminiBootJournaled ? false,
   ...
 }: {
+  _module.args.geminiBootJournaled = lib.mkDefault false;
   assertions = [
     {
       assertion = geminiLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" geminiLeaseSelfAcceptToken != null;
@@ -59,7 +61,7 @@
     # controller lineage before moving this already-mounted filesystem here.
     device = "/dev/disk/by-partlabel/linux";
     fsType = "ext4";
-    options = ["ro" "noload" "nosuid" "nodev" "noexec" "nofail"];
+    options = ["ro"] ++ lib.optional (!geminiBootJournaled) "noload" ++ ["nosuid" "nodev" "noexec" "nofail"];
     noCheck = true;
     neededForBoot = true;
   };

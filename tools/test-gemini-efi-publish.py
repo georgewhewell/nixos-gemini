@@ -23,9 +23,10 @@ class Publication(unittest.TestCase):
         for name,data in self.files.items():
             p=self.source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
         (self.dest/'nixos').mkdir();(self.dest/'nixos/store.squashfs').write_bytes(b'protected store')
-    def run_script(self,mode='install',env=None,previous=None):
+    def run_script(self,mode='install',env=None,previous=None,manager=None):
         args=['sh',str(SCRIPT),mode,str(self.dest),str(self.source),str(self.manifest)]
         if previous is not None:args.append(previous)
+        if manager is not None:args.append(manager)
         return subprocess.run(args,
                               capture_output=True,text=True,env=env).returncode
     def old_default(self):
@@ -115,6 +116,25 @@ class Publication(unittest.TestCase):
             self.manifest.write_text('\n'.join(bad)+'\n')
             self.assertNotEqual(self.run_script('activate',previous=sha),0)
             self.assertEqual(before,self.snapshot())
+    def test_manager_upgrade_preserves_old_binary_and_default_until_complete(self):
+        sha=self.old_default();path=self.dest/'EFI/systemd/systemd-bootaa64.efi'
+        path.parent.mkdir(parents=True);path.write_bytes(b'old manager')
+        manager=hashlib.sha256(path.read_bytes()).hexdigest();before=self.snapshot()
+        self.assertNotEqual(self.run_script('activate',previous=sha,manager='0'*64),0)
+        self.assertEqual(before,self.snapshot())
+        backup=path.with_name(path.name+'.gemini-backup-'+manager)
+        backup.write_bytes(b'foreign backup');before=self.snapshot()
+        self.assertNotEqual(self.run_script('activate',previous=sha,manager=manager),0)
+        self.assertEqual(before,self.snapshot());backup.unlink()
+        bindir=self.base/'bin';bindir.mkdir();cat=bindir/'cat'
+        cat.write_text('#!/bin/sh\ncase "$1" in */initrd.cpio.gz) exit 1;; esac\nexec '+self.real_cat+' "$@"\n')
+        cat.chmod(0o755);env=dict(os.environ,PATH=str(bindir)+':'+os.environ['PATH'])
+        self.assertNotEqual(self.run_script('activate',env=env,previous=sha,manager=manager),0)
+        self.assertEqual(backup.read_bytes(),b'old manager')
+        self.assertEqual(path.read_bytes(),b'manager')
+        self.assertEqual((self.dest/'loader/loader.conf').read_bytes(),b'old default')
+        self.assertEqual(self.run_script('activate',previous=sha,manager=manager),0)
+        self.assertEqual(self.run_script('verify'),0)
     def test_six_file_entry_publishes_device_tree_before_default(self):
         sha=self.old_default();relative='EFI/Gemini/abc/gemini.dtb';data=b'entry device tree'
         (self.source/relative).write_bytes(data)

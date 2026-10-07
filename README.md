@@ -69,6 +69,20 @@ existing host USB/SSH setup. If p29 is full, `--reclaim-cache /host/old.squashfs
 archives that image and removes its device cache only after checking that no
 active loop device or installed EFI entry/initramfs uses it.
 
+The normal system includes `gemini-boot-install`. As root on the Gemini, pass
+it the built `efiBootFiles` directory and, when needed, `--store-image` with
+the bundle's matching squashfs. It installs the entry, kernel, DTB and initramfs,
+keeps previous entries and store images, and selects the new default last.
+It briefly remounts the boot volume writable and restores it read-only, with
+the ext4 journal enabled throughout. Recovery retains its original `noload`
+mount and cannot run this installer. `--check` verifies an installed default
+without writes. Automatic `nixos-rebuild` generation hooks remain unfinished.
+
+To exercise installation during the supervised boot test, add
+`--install-efi /path/to/efiBootFiles`. The runner uploads to RAM and invokes
+the installed command only after candidate Linux passes its health checks;
+it checks the new files and retained older entries again after M69 returns.
+
 ## Device status
 
 The maintained Linux kernel boots both A72s without a generated build record or

@@ -11,8 +11,10 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('boot_recovery', ROOT/'tools/qualify-power-swap.py')
@@ -22,15 +24,20 @@ calendar = p.f.q.module('rtc_calendar', ROOT/'tools/qualify-rtc-calendar.py')
 cache = p.f.q.module('store_cache', ROOT/'tools/qualify-store-cache.py')
 stage1 = p.f.q.module('stage1_rescue', ROOT/'tools/qualify-rtc-stage1-rescue.py')
 startup = p.f.q.module('rtc_startup', ROOT/'tools/qualify-rtc-startup.py')
+installer = p.f.q.module('boot_installer', ROOT/'nix/gemini-boot-install.py')
+EFI_FILES = None
+EFI_MANIFEST = None
 p.PROFILE = 'boot-test'
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
     'test-boot.py', 'qualify-rtc-alarm.py', 'qualify-rtc-calendar.py',
-    'qualify-store-cache.py', 'qualify-rtc-stage1-rescue.py', 'qualify-rtc-startup.py'))
+    'qualify-store-cache.py', 'qualify-rtc-stage1-rescue.py', 'qualify-rtc-startup.py')) + (
+        'nix/gemini-boot-install.py', 'nix/gemini-efi-publish.sh')
 base_configure, base_preflight, base_finish = p.configure, p.preflight, p.finish
 
 
-def artifacts(bundle, reclaim_cache=None):
+def artifacts(bundle, reclaim_cache=None, install_efi=None):
+    global EFI_FILES, EFI_MANIFEST
     bundle = bundle.resolve(strict=True)
     fields = {}
     for row in (bundle/'MANIFEST').read_text().splitlines():
@@ -55,6 +62,54 @@ def artifacts(bundle, reclaim_cache=None):
     p.BOOT_SHA = cache.digest(bundle/'boot-padded-p22.img')
     p.NOTES_SHA = p.f.q.r.power_kernel.notes_sha(kernel)
     p.RECLAIM_CACHE = reclaim_cache.resolve(strict=True) if reclaim_cache else None
+    EFI_FILES, EFI_MANIFEST = None, None
+    if install_efi:
+        package = install_efi.resolve(strict=True)
+        with tempfile.TemporaryDirectory() as staging:
+            manifest = installer.prepare(package, Path(staging))
+        expected = dict(file=fields['store-file'], sha256=sha, size=size, system=p.SYSTEM)
+        if manifest['store'] != expected or Path(manifest['linux_payload']).resolve() != bundle:
+            raise ValueError('EFI files do not belong to the selected system bundle')
+        EFI_FILES, EFI_MANIFEST = package, manifest
+
+
+def verify_efi(runner, ssh, state, directory, name):
+    profile = runner.efi_files.FilesProfile(EFI_FILES, EFI_MANIFEST['archive']['sha256'],
+                                            EFI_MANIFEST['archive']['size'], 6)
+    runner.efi_files.evidence(ssh, state['boot_id'], directory, runner.qualify,
+                             require_verified=False, name=name, profile=profile)
+    runner.persistence.run(ssh, f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
+test "$(sha256sum /gemian/nixos/{EFI_MANIFEST['store']['file']} | cut -d' ' -f1)" = {p.STORE_SHA}
+''', directory, name.removesuffix('.json')+'-store')
+
+
+def install_efi(runner, ssh, state, directory):
+    """Upload to RAM only; the installed product owns persistent publication."""
+    remote = '/run/gemini-boot-install-'+EFI_MANIFEST['payload_identity']
+    guard = f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
+test "$(readlink /run/current-system)" = {shlex.quote(p.SYSTEM)}
+test "$(sha256sum /dev/mmcblk0p22 | cut -d' ' -f1)" = {p.BOOT_SHA}
+'''
+    runner.persistence.run(ssh, guard+f'umask 077\nmkdir {remote}\n', directory, 'efi-upload-directory')
+    for name in ('manifest.json', 'files.manifest', 'boot-files.tar'):
+        source = EFI_FILES/name
+        command = guard+f'''umask 077
+(set -C; cat > {remote}/{name})
+test "$(stat -c %s {remote}/{name})" = {source.stat().st_size}
+test "$(sha256sum {remote}/{name} | cut -d' ' -f1)" = {cache.digest(source)}
+'''
+        with source.open('rb') as src, (directory/('efi-upload-'+name+'.log')).open('w') as log:
+            subprocess.run(ssh+[command], stdin=src, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
+    raw = runner.persistence.run(ssh, guard+f'gemini-boot-install {remote} --json\n',
+                                 directory, 'efi-install', timeout=240)
+    result = json.loads(raw)
+    if any(result.get(k) != v for k,v in dict(entry=EFI_MANIFEST['entry'], system=p.SYSTEM,
+            store_sha256=p.STORE_SHA, read_only=True, payload_identity=EFI_MANIFEST['payload_identity']).items()):
+        raise RuntimeError('Installed EFI generation differs from the selected bundle')
+    verify_efi(runner, ssh, state, directory, 'installed-efi-files.json')
+    runner.qualify.save(directory, 'efi-install-result.json', result)
 
 
 def configure(watchdog=False, pm_test=None, cycle=False):
@@ -62,6 +117,13 @@ def configure(watchdog=False, pm_test=None, cycle=False):
         raise ValueError('Boot test supports alarms or watchdog expiry; PM/USB need separate recovery checks')
     runner = base_configure()
     runner.backend.MTK = runner.backend.MTK_RTC
+    if EFI_FILES is not None:
+        candidate = runner.candidate_return
+        def publish_candidate(ssh, before, directory, profile):
+            state = candidate(ssh, before, directory, profile)
+            install_efi(runner, ssh, state, directory)
+            return state
+        runner.candidate_return = publish_candidate
     # Probe the native clock after health checks, before calendar.install's
     # explicit RTC_SET_TIME, followed by the original alarm sequence.
     startup.install_probe(p, runner, calendar)
@@ -114,6 +176,8 @@ def preflight(runner, directory, execute):
             raise RuntimeError('Baseline changed before RTC startup preflight')
         startup.prepare(p, runner, calendar, directory, before)
     startup.install_transition(p, runner, calendar, directory, before)
+    if EFI_FILES is not None:
+        runner.qualify.save(directory, 'efi-install-package.json', EFI_MANIFEST)
     return before
 p.preflight = preflight
 
@@ -182,6 +246,12 @@ def finish(runner, directory, before, error=None):
     finally:
         try:
             proof.update(startup.cleanup(p, runner, directory, before))
+            if EFI_FILES is not None:
+                proof['efi_install_qualified'] = False
+                if error is None or (directory/'efi-install-result.json').exists():
+                    state = p.f.snapshot('swap')
+                    verify_efi(runner, p.f.q.SSH, state, directory, 'recovered-installed-efi-files.json')
+                    proof['efi_install_qualified'] = True
         except Exception as caught:
             error = caught
             raise

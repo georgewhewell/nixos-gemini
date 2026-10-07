@@ -22,6 +22,7 @@
   # resume from p34 "swap" and to mount p32 "userdata" (ext4 dataLabel) for
   # /home, the /nix/store overlay upper layer and /nix/var.
   persistentStorage ? null,
+  journaledBoot ? false,
 }:
 assert builtins.isInt provisionWaitSeconds;
 assert builtins.isInt watchdogLeaseSeconds;
@@ -51,6 +52,8 @@ let
     store_file="mainline-nixos-$store_sha.squashfs"
   '';
   storage = persistentStorage != null;
+  bootMountOptions = if journaledBoot then "ro,nosuid,nodev,noexec" else "ro,noload,nosuid,nodev,noexec";
+  bootMountPolicy = if journaledBoot then "ro" else "ro,noload";
   # Stage-1 shell, spliced into the INIT heredoc below.  Nix does not strip
   # indentation from interpolated text, so it is written at its final
   # column.  Absent entirely without persistent storage.
@@ -393,7 +396,7 @@ let
       done
       emmc_device=$(resolve_emmc_device) || return 1
       p29="''${emmc_device}p29"
-      mount -t ext4 -o ro,noload,nosuid,nodev,noexec \
+      mount -t ext4 -o ${bootMountOptions} \
         "$p29" /mnt/gemian || return 1
       mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
       case ",$mounted," in
@@ -405,7 +408,7 @@ let
     provision_abort() {
       reason=$1
       if restore_store_readonly; then
-        fail "$reason p29=restored-ro,noload"
+        fail "$reason p29=restored-${bootMountPolicy}"
       fi
       fail "$reason p29=readonly-restore-failed"
     }
@@ -462,7 +465,7 @@ let
       # leave the filesystem.  The watchdog remains the bounded fallback.
       restore_store_readonly \
         || fail "store-provision-ro-restore-failed"
-      log "store-provision=complete sha256=$actual p29=ro,noload"
+      log "store-provision=complete sha256=$actual p29=${bootMountPolicy}"
     }
 
     start_watchdog_lease() {
@@ -560,7 +563,7 @@ let
     /bin/usb-net &
     /bin/usb-host-net &
     /bin/ssh-server &
-    log "stage1=entered p29=ro,noload store-compression=gzip"
+    log "stage1=entered p29=${bootMountPolicy} store-compression=gzip"
 
     emmc_device=$(resolve_emmc_device 2>/dev/null || true)
     attempt=0
@@ -572,7 +575,7 @@ let
     [ -n "$emmc_device" ] || fail "p29-missing"
     p29="''${emmc_device}p29"
     [ -b "$p29" ] || fail "p29-missing"${buildPkgs.lib.optionalString storage "\nhibernate_resume"}
-    mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian \
+    mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
     log "p29=mounted observed=''${mounted:-unknown}"
@@ -679,7 +682,7 @@ let
       # Resume runs before the first eMMC mount; p32 is mounted after the
       # image store is verified and before switch_root.
       resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
-      mount_line=$(grep -n -F 'mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
+      mount_line=$(grep -n -F 'mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
       persist_line=$(grep -n -Fx 'mount_persistent_storage' root/init | tail -n 1 | cut -d: -f1)
       switch_line=$(grep -n -F 'exec switch_root' root/init | tail -n 1 | cut -d: -f1)
       test -n "$resume_line" && test -n "$mount_line" && test -n "$persist_line"
@@ -781,7 +784,7 @@ let
       echo "store-size=$(stat -c %s ${squashfs})"
       echo "kernel=$(basename ${kernel})"
       echo "system=${nixosToplevel}"
-      echo "p29=ext4 ro,noload after store installation"
+      echo "p29=ext4 ${bootMountPolicy} after store installation"
       echo "squashfs=compression gzip; mount read-only"
       echo "left-port=MTU3 gadget usb0 10.15.19.82/24"
       echo "right-port=USB11 MUSB multipoint host PIO; FUSB301 VBUS; r8152 built-in; DHCP in Stage1 and NixOS"

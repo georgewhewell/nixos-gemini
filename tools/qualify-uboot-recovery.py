@@ -403,7 +403,7 @@ def candidate_return(ssh, before, directory, profile):
                 power_kernel.evidence(ssh, after['boot_id'], directory, qualify, persistence)
             if profile in CURRENT_FILES_PROFILES:
                 efi_files.evidence(ssh, after['boot_id'], directory, qualify,
-                                  require_verified=False, profile=files)
+                                  require_verified=False, profile=files,preserved=True)
             persistent_nix.evidence(ssh, after['boot_id'], directory, qualify, persistence,
                                     require_efi=profile in NIX_EFI_PROFILES,
                                     system=candidate_system(before, profile),
@@ -677,7 +677,8 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
                 persistent_nix.after_recovery(ssh, after['boot_id'], directory, qualify, persistence)
                 if profile in NIX_EFI_PROFILES + CURRENT_FILES_PROFILES:
                     efi_files.evidence(ssh, after['boot_id'], directory, qualify, require_verified=False,
-                        name='recovered-boot-files.json', profile=files_profile_for(profile))
+                        name='recovered-boot-files.json', profile=files_profile_for(profile),
+                        preserved=profile in CURRENT_FILES_PROFILES)
                     previous_files_evidence(ssh,after['boot_id'],directory,profile,'recovered-previous-efi-files')
                 nix_retained = True
             else:
@@ -808,7 +809,7 @@ def main():
         if profile_kind(args.profile) == 'efi-manager' or args.profile in CURRENT_FILES_PROFILES:
             efi_files.evidence(ssh, before['boot_id'], directory, qualify,
                                require_verified=False, name='before-boot-files.json',
-                               profile=files_profile_for(args.profile))
+                               profile=files_profile_for(args.profile),preserved=args.profile in CURRENT_FILES_PROFILES)
             if args.profile in ENTRY_DT_PROFILES + CURRENT_FILES_PROFILES:
                 previous_files_evidence(ssh,before['boot_id'],directory,args.profile,'before-previous-efi-files')
         if tree is not None:

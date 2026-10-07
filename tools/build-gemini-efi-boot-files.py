@@ -76,6 +76,10 @@ with tarfile.open(out/'boot-files.tar', 'w', format=tarfile.USTAR_FORMAT) as arc
         entry=tarfile.TarInfo(name)
         entry.size=len(files[name]); entry.mode=0o644; entry.mtime=1788493603
         archive.addfile(entry, io.BytesIO(files[name]))
+store_fields = dict(line.split('=', 1) for line in (linux/'MANIFEST').read_text().splitlines()
+                    if '=' in line and not line.startswith('/'))
+manifest['store'] = dict(file=store_fields['store-file'], sha256=store_fields['store-sha256'],
+                         size=int(store_fields['store-size']), system=store_fields['system'])
 archive=(out/'boot-files.tar').read_bytes()
 manifest['archive']={'size':len(archive), 'sha256':hashlib.sha256(archive).hexdigest()}
 (out/'archive.meta').write_text(f"{manifest['archive']['sha256']} {len(archive)}\n")

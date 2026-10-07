@@ -104,13 +104,15 @@ def provision(ssh,before,boot_sha,directory,qualify,rescued,profile=None):
     raise RuntimeError('Stage 1 did not request the pinned boot files within 240s')
 
 
-def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-files.json',profile=None):
+def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-files.json',profile=None,preserved=False):
     p=profile or default_profile()
     _,manifest=payload(p)
     command=['set -eu',"printf 'boot_id='; cat /proc/sys/kernel/random/boot_id",
              '''opts=$(awk '$1 == "/dev/mmcblk0p29" && $2 == "/gemian" && $3 == "ext4" {print $4}' /proc/mounts)''',
              '''case ",$opts," in *,ro,*) ;; *) exit 1 ;; esac''']
     if require_verified:
+        if preserved:
+            raise ValueError('Active publication must be verified at its original paths')
         command.append(f'test "$(cat /run/efi-boot-files.verified)" = {shlex.quote(marker("verified",p))}')
     for relative,info in manifest['files'].items():
         path=Path('/gemian')/relative
@@ -118,13 +120,30 @@ def evidence(ssh,boot_id,directory,qualify,require_verified=True,name='boot-file
             if str(parent)=='/':continue
             command.append(f'test -d {shlex.quote(str(parent))} && test ! -L {shlex.quote(str(parent))}')
         quoted=shlex.quote(str(path))
-        command += [f'test -f {quoted} && test ! -L {quoted}',
-                    f'test "$(stat -c %s {quoted})" = {info["size"]}',f'sha256sum {quoted}']
+        command.append(f'file={quoted}')
+        if preserved and relative in ('loader/loader.conf', 'EFI/systemd/systemd-bootaa64.efi'):
+            backup=shlex.quote(str(path)+'.gemini-backup-'+info['sha256'])
+            command.append(f'if test -f "$file" && test ! -L "$file" && '
+                           f'test "$(sha256sum "$file" | cut -d\' \' -f1)" = {info["sha256"]}; '
+                           f'then :; else file={backup}; fi')
+        command += ['test -f "$file" && test ! -L "$file"',
+                    f'test "$(stat -c %s "$file")" = {info["size"]}', 'sha256sum "$file"']
     rows=qualify.run(ssh+['\n'.join(command)]).splitlines()
     if not rows or rows[0]!='boot_id='+boot_id:
         raise RuntimeError('Boot-file evidence is not from the candidate boot')
-    hashes={row.split()[1].removeprefix('/gemian/'):row.split()[0] for row in rows[1:]}
+    hashes={}
+    locations={}
+    for row in rows[1:]:
+        sha,relative=row.split();relative=relative.removeprefix('/gemian/')
+        original=relative
+        if preserved and '.gemini-backup-' in relative:
+            original,backup_sha=relative.rsplit('.gemini-backup-',1)
+            if original not in ('loader/loader.conf','EFI/systemd/systemd-bootaa64.efi') or backup_sha != sha:
+                raise RuntimeError('Unexpected boot-file backup')
+        if original in hashes:
+            raise RuntimeError('Duplicate boot-file evidence')
+        hashes[original]=sha;locations[original]=relative
     if hashes!={name:info['sha256'] for name,info in manifest['files'].items()}:
         raise RuntimeError('Published boot files failed independent Linux readback')
     qualify.save(directory,name,dict(boot_id=boot_id,archive_sha256=p.sha,
-                                                p29_read_only=True,files=manifest['files']))
+                                                p29_read_only=True,files=manifest['files'],locations=locations))

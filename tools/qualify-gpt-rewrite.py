@@ -59,7 +59,7 @@ sha256sum /dev/mmcblk0p33
 
 def preserved_files(boot_id,directory,name):
     r.efi_files.evidence(SSH,boot_id,directory,r.qualify,require_verified=False,
-                        name=name+'-boot-files.json',profile=r.entry_dt.files_profile(r.efi_files))
+                        name=name+'-boot-files.json',profile=r.entry_dt.files_profile(r.efi_files),preserved=True)
     r.previous_files_evidence(SSH,boot_id,directory,'power-kernel',name+'-previous-files')
 
 
