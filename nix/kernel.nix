@@ -71,6 +71,7 @@ in
         mt6797-cpu-rail-admission-host \
         mt6797-cpu-rail-plan-host \
         mt6797-cpu-coupler-host \
+        mt6797-cci-policy-host \
         mt6797-cpu-sram-host \
         da9214-settling-host \
         opp-of-sharing-cpus-host mt6797-spm-fw-host mt6351-fgadc-supplier-host \

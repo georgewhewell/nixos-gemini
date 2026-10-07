@@ -655,6 +655,49 @@ retained. Build, probe and recovery metadata are consolidated in
 voting, including the fixed A72 contribution, before relaxing BUCKA's
 fixed voltage and testing physical rail transitions.
 
+## CCI policy and ordered vote core (2026-10-08)
+
+Kernel commit `545ebf4313147e21cf4f97348ee16b7bcb158db9` adds the
+CCI policy/transaction core in `mt6797-cci-policy.h`. Its 16 frequency and
+voltage points come from the vendor CPU_LEVEL_1/SB table. The policy takes
+half the fastest available LL/L/A72 frequency, saturates at the highest
+CCI point, and then selects the highest CCI point supported by the maximum
+of that minimum CCI voltage and the two A53 voltage requirements. A72's
+separate rail voltage is excluded. At the lowest A53 rates, an available
+750 MHz A72 therefore requires 416 MHz CCI at 900 mV; without A72, the
+lowest case can use 169 MHz at 770 mV.
+
+The transaction core raises its own voltage vote and checks the actual
+shared voltage before raising CCI frequency. It lowers frequency and
+verifies it before reducing the voltage vote. Other consumers may retain
+a higher actual voltage. Write errors, mismatched readbacks and terminal
+read errors fence the transaction without a blind rollback. Firmware
+adoption holds the measured voltage, moves to a supported rate no higher
+than the inherited clock and supported by that voltage, then releases
+any excess vote. The inherited 629999328 Hz at 1.00 V maps to 611 MHz.
+
+The production header passes 5,376 CPU-policy combinations from the actual
+board A53 OPPs, all 512 ordered CCI paths with sole/shared votes, 6,388
+injected failures, and 704 inherited frequency/voltage combinations under
+UBSan. Golden cases cover the A72 floor, voltage-dominated selection,
+maximum-rate saturation and the off-table boot rate. ARM64 header
+compilation and checkpatch pass. The test is included in normal kernel
+checks. The complete normal kernel checks and deployment build pass.
+The kernel is `/nix/store/kb1vz3xgzns7jgwflggdxx2j2hnr2cvf-linux-gemini-7.1.3`, and
+the bundle is `/nix/store/fzyaciwbainfl3z4gwm9ff2dsml3rvw9-gemini-mainline-nixos-bundle`.
+Logs, result metadata and GC roots are retained in
+`handoff/cci-policy-20261008/`.
+
+This core is not yet connected to a runtime CCI consumer. The generic
+MediaTek CCI driver reparents the raw PLL and cannot directly drive the
+native compound clock provider. The generic CPUFreq passive governor also
+currently requires a CPUFreq policy for every possible CPU, including the
+still-unmanaged A72s. The vendor changes CPU frequency before CCI while
+holding sufficient voltage, so post-CPU-change CCI updates can retain
+that ordering; integration must handle unmanaged CPUs, hotplug, consumer
+lifetime and failure propagation. BUCKA remains fixed at 1.00 V and no
+new hardware clock or voltage transition has run for this core.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
