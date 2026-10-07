@@ -475,3 +475,95 @@ successfully. See `result.json`, `final-idle-check.json` and
 `terminal-verification.json`. The sixteenth retained output is
 `/nix/store/lagdvw19i80rxhs33dznk92smj714r48-gemini-daemon-8d07305cb1974c06a2767f3168dd878b`.
 The candidate remains opt-in; M69 remains installed with its original policy.
+
+## RTC alarm delivery and cancellation
+
+The awake RTC checks found a hardware cancellation defect on installed M69.
+`handoff/rtc-alarm-delivery-01` armed a ten-second alarm using the RTC's own
+clock: interrupt count advanced 0 → 1, the software alarm cleared, and the
+same boot/watchdog/health checks passed. In `rtc-alarm-cancel-01`, the alarm
+was cancelled eight seconds before its deadline, yet interrupt count still
+advanced 1 → 2. The software queue was empty. Neither test requested sleep,
+set the clock, disconnected USB or changed storage; the bounded target
+services stopped and M69 remained healthy.
+
+The selected `rtc-mt6397` driver provides `set_alarm` but lacks
+`alarm_irq_enable`. `rtc_timer_remove()` clears the software queue and uses
+that missing callback to disable the hardware source. It does not call the
+driver's disabled `set_alarm` branch. The same missing callback also makes
+the legacy `RTC_AIE_ON/OFF` ioctls return `EINVAL`; BusyBox 1.36.1's short
+`rtcwake` path uses those ioctls. The observed cancellation interrupt is an
+independent hardware check of this source finding.
+
+Kernel commit `2b142e490c34d` adds the callback, updates only the one-shot
+alarm-enable bits under the existing RTC register lock, latches the write
+through WRTGR and propagates update/trigger/poll failures. The patch is
+`patches/rtc/0001-mt6397-alarm-irq-enable.patch`. Its host check executes the
+actual callback and write-trigger functions with distinct pending/latched
+register state: 16 enable/disable, repeat and error sequences pass. A real
+ARM64 driver-object build and the complete opt-in power/RTC bundle pass.
+The complete kernel configuration matches the qualified power/swap kernel;
+RTC time-setting policy is unchanged. Build evidence is in `power-rtc-build`.
+
+```sh
+python3 tools/qualify-rtc-alarm.py --mode delivery --out NEW_DIRECTORY
+python3 tools/qualify-power-rtc.py --out NEW_DIRECTORY
+```
+
+Both default to read-only preflight; `--execute` is required for their device
+actions. The first runs an awake alarm check on M69, with `--mode cancel`
+selecting cancellation. The second uses the corrected pinned kernel, the
+fixed-swap boot-only writer and automatic M69 recovery. It repeats normal
+health/paging/ordinary-build checks, then alarm delivery, cancellation and
+delivery again. Every alarm stage requires the same boot/kernel/watchdog,
+unchanged suspend counters and full service/storage health afterward.
+Both power profiles retain ordinary builds from all numbered power/swap and
+power/RTC trials. The existing PM stages are not enabled on this new kernel
+until their prerequisites are qualified again. All 51 host runner tests pass.
+
+RTC readback on M69 is in 2069 while NTP corrects the system clock to 2026.
+`CONFIG_RTC_SYSTOHC` is explicitly disabled in the current configuration.
+The diagnostic uses RTC-relative deadlines, so the clock mismatch does not
+invalidate its interrupt evidence. Correct UTC initialization and persistence
+still need qualification. Awake alarm delivery does not prove wake from
+suspend or power-on from an off state.
+
+The calendar source audit found an additional compatibility issue: the
+vendor MT6351 driver treats the year register as an offset from 1968, while
+the current mainline driver treats it as an offset from 1900 and applies
+the RTC core's range extension. A vendor default of 2010-01-01 (raw year 42)
+therefore becomes 2069-12-31 in mainline, matching observed readback. This
+is recorded in `power-rtc-build/calendar-source-audit.json`. Correct and
+validate the MT6351 calendar conversion against firmware conventions before
+enabling automatic RTC updates; simply enabling SYSTOHC is insufficient.
+
+Candidate `08870804-1ab7-4e41-bb45-e62daa055a5b` passed delivery, cancellation
+and delivery again in `power-rtc-01`. The observed interrupt deltas were
+1, 0 and 1 over 13.15, 13.18 and 13.15 seconds. Each alarm was scheduled ten
+seconds ahead; cancellation occurred eight seconds before its deadline.
+The same kernel/boot/watchdog owner, normal service health and protected
+storage passed after each stage. The software alarm was empty, the diagnostic
+lock removed and the bounded service stopped after every check. Suspend
+counters stayed unchanged. This qualifies the cancellation correction and
+rearming while awake; it does not qualify suspend/wake or RTC power-on.
+
+Automatic recovery restored healthy M69 boot
+`3a618486-e533-4f69-84b8-b6ea0439e7bb`. The final audit held both flash locks,
+retained all seventeen ordinary build outputs and the original home/EFI
+proofs, preserved the exact fixed-swap layout, matched all twenty-nine
+current/archived executed sources and found no writer. All five host units
+are inactive with PID zero, and the worker exited successfully. The complete
+result and terminal audit are `power-rtc-01/result.json`,
+`final-idle-check.json` and `terminal-verification.json`. Its new output is
+`/nix/store/sblsi0r6jkqdxkximn94bljn1r08rmb4-gemini-daemon-7cf9376829654d22ac8c6fc7f9bb624f`.
+The RTC correction remains opt-in; installed M69 still has the original
+cancellation defect. Its ordinary clock and sleep policies were not changed.
+
+| RTC candidate artifact | Identity |
+|---|---|
+| Bundle | `/nix/store/7bh3lx2npyddffbyn41bcgrzaambv0qi-gemini-mainline-nixos-bundle` |
+| Kernel | `/nix/store/5nghlvadfma5lkqm7zcq1apiairg2i9y-gemini-mainline-power-rtc-kernel-7.1.3` |
+| System | `/nix/store/5ang3jm5vv0nz4aq0m89z2624vbg159p-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade` |
+| p22 SHA-256 | `18d709f77e7f25630491418b159896c5618160349f4f342ad08c52fc4170f7f3` |
+| Kernel notes SHA-256 | `af7979b3d4dee258d896645fead8c4e72356d9b305871c0992b6ce1ead8c5ddf` |
+| Squashfs | 427,040,768 bytes; `4bfae12544e2d4d885a1a11552ebc27ab0e24d945498d4a44317f497a3316ae5` |

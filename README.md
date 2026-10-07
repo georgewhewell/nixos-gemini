@@ -47,6 +47,10 @@ under an independent sleep inhibitor and bounded recovery guard. USB and
 candidate health return on the same boot. Automatic M69 recovery retained
 all sixteen build outputs. Wake-source validation and later PM stages remain.
 Hibernation, deep idle and the complete lid power policy are not qualified.
+RTC alarm testing exposed a cancellation defect: M69 still interrupted after
+an alarm was cancelled. The corrected opt-in kernel now passes delivery,
+cancellation and rearming, with automatic M69 recovery and all seventeen
+ordinary build outputs retained. RTC calendar compatibility remains unfinished.
 See [power evidence](research/POWER_QUALIFICATION.md) and the
 [fixed-swap plan](research/STORAGE_QUALIFICATION.md).
 Camera and vibrator are excluded from the owner's completion scope.

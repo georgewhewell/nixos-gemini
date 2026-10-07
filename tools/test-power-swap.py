@@ -141,6 +141,9 @@ class Retention(unittest.TestCase):
             path = old/'nix-candidate.json'; path.write_text(json.dumps(proof))
             self.assertEqual(p.prior_outputs(root), {'power-swap-01':proof})
             self.assertEqual(p.prior_outputs(root, old), {})
+            rtc=root/'power-rtc-01';rtc.mkdir();(rtc/'nix-candidate.json').write_text(json.dumps(proof))
+            self.assertEqual(p.prior_outputs(root), {'power-rtc-01':proof,'power-swap-01':proof})
+            self.assertEqual(p.prior_outputs(root, rtc), {'power-swap-01':proof})
             path.write_text(json.dumps(dict(proof, output=proof['output']+'; unreviewed-command')))
             with self.assertRaises(RuntimeError): p.prior_outputs(root)
 

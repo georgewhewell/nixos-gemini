@@ -911,6 +911,15 @@
       baselineDtb = mainlineP22Baseline.serviceabilityDtb;
     };
 
+    mainlinePowerRtcKernel = import ./nix/mainline-rtc-kernel.nix {
+      kernel = mainlinePowerSwapKernel;
+    };
+    mainlinePowerRtcDtb = import ./nix/mainline-efi-dtb.nix {
+      inherit buildPkgs;
+      kernel = mainlinePowerRtcKernel;
+      baselineDtb = mainlineP22Baseline.serviceabilityDtb;
+    };
+
     # The accepted baseline plus MicroSD, and nothing else.
     #
     # Unlike the GPU and Wi-Fi lanes this needs no new kernel work and no
@@ -1289,6 +1298,17 @@
       }];
     };
 
+    mainlineNixosPowerRtcSystemCross = mainlineNixosPowerSwapSystemCross.extendModules {
+      modules = [{
+        _module.args = {
+          geminiGpuKernel = nixpkgs-old.lib.mkOverride 10 mainlinePowerRtcKernel;
+          geminiConnectivityKernel = nixpkgs-old.lib.mkOverride 10 mainlinePowerRtcKernel;
+          geminiSpmKernel = nixpkgs-old.lib.mkOverride 10 mainlinePowerRtcKernel;
+          geminiCpufreqKernel = nixpkgs-old.lib.mkOverride 10 mainlinePowerRtcKernel;
+        };
+      }];
+    };
+
     #############################################
     # Squashfs builder
     #############################################
@@ -1349,6 +1369,7 @@
 
     mainlineNixosPowerSquashfs = mkMainlineSquashfs mainlineNixosPowerSystemCross.config.system.build.toplevel;
     mainlineNixosPowerSwapSquashfs = mkMainlineSquashfs mainlineNixosPowerSwapSystemCross.config.system.build.toplevel;
+    mainlineNixosPowerRtcSquashfs = mkMainlineSquashfs mainlineNixosPowerRtcSystemCross.config.system.build.toplevel;
 
     mainlineSshdPam = mainlineNixosSystemCross.config.environment.etc."pam.d/sshd".source;
     mainlineSshPamSessionCheck = buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
@@ -1451,6 +1472,15 @@
       squashfs = mainlineNixosPowerSwapSquashfs;
       nixosToplevel = mainlineNixosPowerSwapSystemCross.config.system.build.toplevel;
       stage2BaselineAcceptScript = mainlineNixosPowerSwapSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
+    });
+
+    mainlineNixosPowerRtc = import ./nix/mainline-nixos.nix (mainlineNixosArgs // {
+      stage1PersistentHostKey = true;
+      kernel = mainlinePowerRtcKernel;
+      serviceabilityDtb = mainlinePowerRtcDtb;
+      squashfs = mainlineNixosPowerRtcSquashfs;
+      nixosToplevel = mainlineNixosPowerRtcSystemCross.config.system.build.toplevel;
+      stage2BaselineAcceptScript = mainlineNixosPowerRtcSystemCross.config.systemd.services.gemini-baseline-self-accept.script;
     });
 
     nixEfiBootFiles = import ./nix/gemini-efi-boot-files.nix {
@@ -1998,6 +2028,13 @@
       mainlineNixosPowerKernel = mainlinePowerKernel;
       mainlineNixosPowerSwapBundle = mainlineNixosPowerSwap.bundle;
       mainlineNixosPowerSwapKernel = mainlinePowerSwapKernel;
+      mainlineNixosPowerRtcBundle = mainlineNixosPowerRtc.bundle;
+      mainlineNixosPowerRtcKernel = mainlinePowerRtcKernel;
+      rtcAlarmCheck = import ./nix/rtc-alarm-check.nix {
+        inherit buildPkgs crossPkgs;
+        source = linux-gemini;
+        baseKernel = mainlinePowerSwapKernel;
+      };
       watchdogHibernationCheck = import ./nix/watchdog-hibernation-check.nix {
         inherit buildPkgs crossPkgs;
         source = linux-gemini;
@@ -2099,6 +2136,7 @@
       gemini-mainline-keys = mainlineNixosKeysSystemCross;
       gemini-mainline-power = mainlineNixosPowerSystemCross;
       gemini-mainline-power-swap = mainlineNixosPowerSwapSystemCross;
+      gemini-mainline-power-rtc = mainlineNixosPowerRtcSystemCross;
     };
 
     # Development shell

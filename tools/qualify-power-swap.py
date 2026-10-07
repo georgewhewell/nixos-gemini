@@ -27,6 +27,8 @@ watchdog_expiry = f.q.module('linux_watchdog', ROOT/'tools/qualify-linux-watchdo
 pm_stages = f.q.module('pm_stages', ROOT/'tools/qualify-pm-stages.py')
 usb_cycle = f.q.module('usb_cycle', ROOT/'tools/qualify-usb-cycle.py')
 PROFILE = 'power-swap'
+ENTRYPOINT = Path(__file__).resolve()
+EXTRA_EXECUTED_SOURCES = ()
 BUNDLE = Path('/nix/store/mb5adwsfnri1jswcxhs6vl23hnj3jy5m-gemini-mainline-nixos-bundle')
 KERNEL = Path('/nix/store/b26xkc1n67c1xiz90fnzqg17w5dhvff3-gemini-mainline-power-swap-kernel-7.1.3')
 SYSTEM = '/nix/store/7vg1vqfn8v19px9k8bhcyi4yvndpszzb-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade'
@@ -51,8 +53,8 @@ def store_profile(provisioner):
 
 def prior_outputs(root=ROOT.parent/'handoff', exclude=None):
     retained = {}
-    for path in sorted(root.glob('power-swap-*/nix-candidate.json')):
-        if path.parent == exclude or not re.fullmatch(r'power-swap-[0-9]+', path.parent.name): continue
+    for path in sorted(root.glob('power-*/nix-candidate.json')):
+        if path.parent == exclude or not re.fullmatch(r'power-(swap|rtc)-[0-9]+', path.parent.name): continue
         proof = json.loads(path.read_text()); token = proof.get('token', '')
         if (proof.get('ordinary_daemon_build_qualified') is not True or
                 not re.fullmatch('[0-9a-f]{32}', token) or
@@ -194,6 +196,7 @@ def preflight(r, directory, execute):
         names.update(('tools/qualify-power-swap.py', 'tools/qualify-swap-io.py',
                       'tools/qualify-linux-watchdog.py', 'tools/qualify-pm-stages.py',
                       'tools/qualify-usb-cycle.py', 'nix/gemini-swap-probe.c'))
+        names.update(EXTRA_EXECUTED_SOURCES)
         names.update('research/'+name for name in ('p22-proof-supervisor.sh', 'p22-flash-wrapper.sh',
             'p22-mtkclient-backend.py', 'trex-gadget-net-watcher.sh', 'p22-trex-transaction-holder.sh'))
         hashes = {}
@@ -333,11 +336,11 @@ def main():
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args(); directory = args.out.resolve()
     if args.execute and not args.worker:
-        unit = 'power-swap-'+str(int(time.time()))+'-'+str(os.getpid())
+        unit = PROFILE+'-'+str(int(time.time()))+'-'+str(os.getpid())
         print('Starting durable power/swap worker '+unit, flush=True)
         child = subprocess.run(['systemd-run', '--user', '--collect', '--wait', '--pipe', '--quiet', '--unit='+unit,
             '--property=RuntimeMaxSec=2400', '--setenv=PATH='+os.environ['PATH'], '--setenv=GEMINI_POWER_SWAP_UNIT='+unit,
-            sys.executable, str(Path(__file__).resolve()), '--worker', '--out', str(directory)] +
+            sys.executable, str(ENTRYPOINT), '--worker', '--out', str(directory)] +
             (['--watchdog-expiry'] if args.watchdog_expiry else []) +
             (['--pm-test', args.pm_test] if args.pm_test else []) +
             (['--usb-cycle'] if args.usb_cycle else []))
@@ -345,7 +348,7 @@ def main():
         return
     if args.worker:
         unit = os.environ.get('GEMINI_POWER_SWAP_UNIT', '')
-        if (not re.fullmatch(r'power-swap-[0-9]+-[0-9]+', unit) or not os.environ.get('INVOCATION_ID') or
+        if (not re.fullmatch(re.escape(PROFILE)+r'-[0-9]+-[0-9]+', unit) or not os.environ.get('INVOCATION_ID') or
                 f.q.r.qualify.run(['systemctl', '--user', 'show', unit, '-p', 'MainPID', '--value']).strip() != str(os.getpid())):
             raise RuntimeError('Candidate trial lacks its durable owner')
     os.umask(0o077)
