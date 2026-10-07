@@ -233,7 +233,7 @@ class Generations(unittest.TestCase):
             struct.pack_into('<H', pe, offset, value)
         self.manager = self.base/'manager'; self.manager.write_bytes(pe)
         self.systems = []
-        for index in (1, 2):
+        for index in (1, 2, 3):
             system = self.base/(str(index)*32+'-system'); system.mkdir()
             (system/'kernel').write_bytes(pe)
             (system/'initrd').write_bytes(b'shared generic initramfs')
@@ -257,7 +257,7 @@ class Generations(unittest.TestCase):
             text = (self.target/'loader/entries'/result['entry']).read_text()
             self.assertIn('init='+result['system']+'/init\n', text)
             self.assertEqual(os.readlink(self.roots/result['entry']), result['system'])
-        self.assertEqual(self.validated, list(map(str, self.systems)))
+        self.assertEqual(self.validated, list(map(str, self.systems[:2])))
         rollback = self.install()
         self.assertEqual(rollback['entry'], old['entry'])
         self.assertFalse(self.install(check=True)['changed'])
@@ -282,6 +282,49 @@ class Generations(unittest.TestCase):
         (self.systems[1]/'kernel').write_bytes(b'not an EFI image')
         with self.assertRaisesRegex(ValueError, 'not PE'): self.install(1)
         self.assertEqual(previous, (self.target/m.CONFIG).read_bytes())
+        self.assertFalse(self.volume.rw)
+
+    def test_full_volume_reclaims_obsolete_payload_before_installation(self):
+        old = self.install(); current = self.install(1)
+        (self.profiles/'system-1-link').unlink()
+        old_payload = self.target/'EFI/Gemini'/old['payload_identity']
+        def available(_):
+            return SimpleNamespace(free=1 if old_payload.exists() else 64 * 1024 * 1024)
+        with mock.patch.object(m.shutil, 'disk_usage', side_effect=available):
+            new = self.install(2)
+        self.assertFalse(old_payload.exists())
+        self.assertFalse((self.roots/old['entry']).is_symlink())
+        self.assertTrue((self.target/'loader/entries'/current['entry']).is_file())
+        self.assertIn(new['entry'], (self.target/m.CONFIG).read_text())
+        self.assertFalse(self.volume.rw)
+
+    def test_full_volume_keeps_current_default_without_its_profile(self):
+        current = self.install()
+        (self.profiles/'system-1-link').unlink()
+        previous = (self.target/m.CONFIG).read_bytes()
+        with mock.patch.object(m.shutil, 'disk_usage', return_value=SimpleNamespace(free=1)):
+            with self.assertRaisesRegex(RuntimeError, 'space'): self.install(1)
+        self.assertEqual(previous, (self.target/m.CONFIG).read_bytes())
+        self.assertTrue((self.roots/current['entry']).is_symlink())
+        self.assertTrue((self.target/'EFI/Gemini'/current['payload_identity']/'linux.efi').is_file())
+        self.assertFalse(self.volume.rw)
+
+    def test_failed_publication_after_cleanup_preserves_current_default(self):
+        old = self.install(); current = self.install(1)
+        (self.profiles/'system-1-link').unlink()
+        (self.profiles/'system-2-link').unlink()
+        old_payload = self.target/'EFI/Gemini'/old['payload_identity']
+        previous = (self.target/m.CONFIG).read_bytes()
+        def available(_):
+            return SimpleNamespace(free=1 if old_payload.exists() else 64 * 1024 * 1024)
+        with mock.patch.object(m.shutil, 'disk_usage', side_effect=available), \
+                mock.patch.object(m, 'publish', side_effect=subprocess.CalledProcessError(1, 'publisher')):
+            with self.assertRaises(subprocess.CalledProcessError): self.install(2)
+        self.assertFalse(old_payload.exists())
+        self.assertEqual(previous, (self.target/m.CONFIG).read_bytes())
+        self.assertTrue((self.target/'loader/entries'/current['entry']).is_file())
+        self.assertTrue((self.roots/current['entry']).is_symlink())
+        self.assertTrue((self.target/'EFI/Gemini'/current['payload_identity']/'linux.efi').is_file())
         self.assertFalse(self.volume.rw)
 
 

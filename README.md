@@ -77,8 +77,9 @@ updates use the registered store on p32 and do not create new squashfs images.
 The retained Android loader reads only the first 512-byte command-line field.
 Initial boot images keep their options short; Linux appends the board defaults.
 The installer retains entries for system profile generations and removes its
-obsolete entries and payloads after a successful update. Recovery files remain
-independently owned.
+obsolete entries and payloads after a successful update. On a full boot volume
+it first reclaims obsolete generations, preserving the current default until
+the new entry is installed. Recovery files remain independently owned.
 It briefly remounts the boot volume writable and restores it read-only, with
 the ext4 journal enabled throughout. Recovery retains its original `noload`
 mount and cannot run this installer. `gemini-boot-install --system SYSTEM

@@ -3,6 +3,7 @@
 import argparse
 from contextlib import contextmanager
 import fcntl
+from fnmatch import fnmatchcase
 import hashlib
 import json
 import os
@@ -222,11 +223,18 @@ def prune_generations(root, selected):
     if not profiles:
         return
     retained = {str(p.resolve()) for p in profiles} | {selected}
+    # Keep the current default bootable even if its profile was removed.
+    # Once publication selects the new entry, the old one can be collected.
+    config = checked_path(root, CONFIG)
+    defaults = []
+    if config.exists():
+        defaults = [fields[1].lower() for line in regular(config).read_text().splitlines()
+                    if len(fields := line.split()) == 2 and fields[0] == 'default']
     for link in GENERATION_ROOTS.iterdir():
         if not re.fullmatch(r'gemini-[0-9a-f]{64}\.conf', link.name) or not link.is_symlink():
             continue
         system = os.readlink(link)
-        if system in retained:
+        if system in retained or any(fnmatchcase(link.name.lower(), pattern) for pattern in defaults):
             continue
         identity = link.name[7:-5]
         directory = 'EFI/Gemini/'+identity
@@ -287,8 +295,12 @@ def install(package, volume, store_image=None, check=False, system=False, manage
             if persistent:
                 protect_generation(store['system'], manifest['entry'], check=True)
         elif not complete:
+            if persistent and shutil.disk_usage(root).free < needed + 8 * 1024 * 1024:
+                protect_generation(store['system'], manifest['entry'])
+                with volume.writable():
+                    prune_generations(root, store['system'])
             if shutil.disk_usage(root).free < needed + 8 * 1024 * 1024:
-                raise RuntimeError('Not enough space on the boot volume; existing generations are preserved')
+                raise RuntimeError('Not enough space on the boot volume; retained generations are preserved')
             if persistent:
                 protect_generation(store['system'], manifest['entry'])
             with volume.writable():
