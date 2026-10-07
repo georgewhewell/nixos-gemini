@@ -15,6 +15,42 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
+    def test_usb_link_follows_device_across_bus_numbers_and_checks_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            net = root/'net'; net.mkdir()
+            interface = net/'enp167s0u2'; interface.mkdir()
+            (interface/'address').write_text('42:00:15:19:82:00\n')
+            for bus, speed in (('3-2', '480'), ('4-2', '5000')):
+                device = root/bus; device.mkdir()
+                child = device/(bus+':1.0'); child.mkdir()
+                for name, value in dict(idVendor='0525', idProduct='a4a2', speed=speed).items():
+                    (device/name).write_text(value+'\n')
+                link = interface/'device'
+                link.unlink(missing_ok=True); link.symlink_to(child)
+                result = m.host_usb_link(net)
+                self.assertEqual(result['speed_mbps'], speed)
+                self.assertEqual(result['usb_path'], str(device))
+            (device/'idProduct').write_text('0000')
+            with self.assertRaisesRegex(RuntimeError, 'exactly one'):
+                m.host_usb_link(net)
+
+    def test_usb3_requires_negotiated_speed_at_both_ends(self):
+        for current, maximum, host_speed, expected in (
+                ('high-speed', 'super-speed', '480', False),
+                ('super-speed', 'super-speed', '480', False),
+                ('super-speed', 'super-speed', '5000', True)):
+            with self.subTest(current=current, host=host_speed):
+                raw = (f'boot_id=boot\ncurrent_speed={current}\n'
+                       f'maximum_speed={maximum}\nstate=configured\n')
+                runner = SimpleNamespace(persistence=SimpleNamespace(run=mock.Mock(return_value=raw)),
+                                         qualify=SimpleNamespace(save=mock.Mock()))
+                with mock.patch.object(m, 'host_usb_link', return_value={'speed_mbps': host_speed}):
+                    m.usb_link_evidence(runner, [], {'boot_id': 'boot'}, Path('/unused'))
+                    self.assertEqual(runner.qualify.save.call_args.args[-1]['superspeed_observed'], expected)
+                    with self.assertRaisesRegex(RuntimeError, 'identity'):
+                        m.usb_link_evidence(runner, [], {'boot_id': 'different'}, Path('/unused'))
+
     def test_manifest_selects_bundle_and_rejects_changed_contents(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); data=b'compressed store fixture'

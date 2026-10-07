@@ -186,6 +186,48 @@ test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
     verify_efi(runner, ssh, state, directory, 'selected-efi-files.json')
 
 
+def host_usb_link(net_root=Path('/sys/class/net')):
+    """Follow the Gemini MAC to its USB device, including SuperSpeed re-enumeration."""
+    matches = []
+    for interface in net_root.iterdir():
+        try:
+            if (interface/'address').read_text().strip() != '42:00:15:19:82:00':
+                continue
+            device = (interface/'device').resolve(strict=True)
+            for parent in (device, *device.parents):
+                if not (parent/'idVendor').exists():
+                    continue
+                identity = [(parent/name).read_text().strip()
+                            for name in ('idVendor', 'idProduct')]
+                if identity == ['0525', 'a4a2']:
+                    matches.append(dict(interface=interface.name, usb_path=str(parent),
+                                        speed_mbps=(parent/'speed').read_text().strip()))
+                break
+        except OSError:
+            continue
+    if len(matches) != 1:
+        raise RuntimeError('Cannot identify exactly one Gemini USB network link')
+    return matches[0]
+
+
+def usb_link_evidence(runner, ssh, state, directory):
+    raw = runner.persistence.run(ssh, '''set -eu
+printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
+printf 'current_speed='; cat /sys/class/udc/11271000.usb/current_speed
+printf 'maximum_speed='; cat /sys/class/udc/11271000.usb/maximum_speed
+printf 'state='; cat /sys/class/udc/11271000.usb/state
+''', directory, 'usb-link')
+    device = calendar.parse(raw, ('boot_id', 'current_speed', 'maximum_speed', 'state'))
+    if device['boot_id'] != state['boot_id'] or device['state'] != 'configured':
+        raise RuntimeError('Candidate USB identity or configuration changed')
+    host = host_usb_link()
+    # Record actual negotiation at both ends; capability alone is not proof.
+    superspeed = (device['current_speed'] in ('super-speed', 'super-speed-plus')
+                  and host['speed_mbps'] in ('5000', '10000', '20000'))
+    runner.qualify.save(directory, 'usb-link.json',
+                        dict(device=device, host=host, superspeed_observed=superspeed))
+
+
 def configure(watchdog=False, pm_test=None, cycle=False):
     if pm_test or cycle:
         raise ValueError('Boot test supports alarms or watchdog expiry; PM/USB need separate recovery checks')
@@ -213,6 +255,12 @@ def configure(watchdog=False, pm_test=None, cycle=False):
             install_efi(runner, ssh, state, directory)
             return state
         runner.candidate_return = publish_candidate
+    candidate_with_boot_checks = runner.candidate_return
+    def capture_usb_link(ssh, before, directory, profile):
+        state = candidate_with_boot_checks(ssh, before, directory, profile)
+        usb_link_evidence(runner, ssh, state, directory)
+        return state
+    runner.candidate_return = capture_usb_link
     # Probe the native clock after health checks, before calendar.install's
     # explicit RTC_SET_TIME, followed by the original alarm sequence.
     startup.install_probe(p, runner, calendar)

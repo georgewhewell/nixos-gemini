@@ -63,7 +63,8 @@ python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s)
 
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The command checks RTC startup/alarms, paging, an ordinary Nix build and retained
-data before returning to recovery. It uses this device's fixed-swap layout and
+data before returning to recovery. It records negotiated USB link speed at both
+the gadget and its host interface in `usb-link.json`. It uses this device's fixed-swap layout and
 existing host USB/SSH setup. Copy the system closure into the installed Nix
 store before testing. From recovery, that store is accessible to Nix as
 `local?root=/persist/nixos`; its database and files are separate from recovery's

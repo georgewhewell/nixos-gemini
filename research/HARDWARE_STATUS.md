@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 98ed7e2bacb7b, including the tested watchdog and RTC
+Linux branch `gemini` at 8482b753c5143, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
@@ -335,6 +335,22 @@ The DTB and configuration match the preceding kernel byte for byte; recovery
 is unchanged and nothing was deployed. Board supply ownership, remaining PHY
 tuning and SuperSpeed enablement are still pending; this change does not raise
 the current USB2 speed limit.
+
+USB3 board integration now enables the left SuperSpeed PHY and a 0.95 V VA10
+supply shared with its USB2 fallback PHY. The driver applies the MT6797 vendor
+signal settings after analog power-up, using the three calibration fields from
+LK devinfo word 37 with vendor defaults for unprogrammed fields. Linux commits
+1e514531dbcf8, 02c9ad67268ad and 8482b753c5143 contain the binding, driver and
+board changes. Both bindings and the compiled board's relevant schemas validate;
+the ARM64 W=1 object/DTB build and calibration/power callback regression pass.
+Existing unrelated DT address warnings remain. This is a device-mode candidate;
+left-port host role switching is still disabled. Full kernel, system bundle, EFI
+files and bootloader builds pass, including the packaged driver regressions.
+Neither SuperSpeed negotiation nor cable orientation has been tested. The normal
+boot runner now records actual USB speed from the device and the exact host
+network interface, with tests covering USB2/USB3 bus changes and mismatched
+speeds. The owner confirmed a known SuperSpeed cable and host port. Device
+trial awaits resolution of the allocator failure in the normal generation.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
