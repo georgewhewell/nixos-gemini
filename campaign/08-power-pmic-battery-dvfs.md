@@ -378,6 +378,48 @@ qualification remain outstanding. Build/probe sources are recorded in
 `handoff/battery-estimator-20261007/`; on-device measurements and the kernel
 error check are in `handoff/battery-estimator-trial-01/`.
 
+## CPU rail admission and remaining voltage control
+
+Maintained Linux `2db1ca9770760` corrects a units error in calibrated-DVFS
+admission. Vendor `mt_cpufreq.c` expresses voltages in 10 microvolt units:
+the nominal SRAM offset is 100 mV, the maximum offset is 300 mV, and the
+SRAM range is 1.0–1.2 V. Its runtime checks allow equal CPU/SRAM voltages
+at the upper ceiling. The old 10–30 mV admission window rejected valid
+vendor operating points. EEM table construction, handoff admission and
+snapshot matching now share the same overflow-safe rail check. Snapshot
+matching also enforces the SRAM absolute range.
+
+The production admission paths pass 733 host cases under UBSan, covering
+boundary values, DA9214 selectors, SRAM rounding and unsigned overflow.
+The three affected ARM64 driver objects and the adjusted calibrated-provider
+KUnit object compile. The host test substitutes unrelated provenance and
+EEM voltage conversion; it does not exercise physical rail transitions.
+The normal kernel package now runs this regression test.
+The full normal kernel build and its complete check phase pass, producing
+`/nix/store/vdgk5l0gvddcarcnak5nnkpypla48qcp-linux-gemini-7.1.3`.
+The source manifest, build/check logs and retained output are recorded in
+`handoff/cpu-rail-admission-20261008/`. No device trial was started for this
+admission-only change.
+
+Voltage scaling is still inactive. The production tree has no caller of
+`mt6797_dvfsp_vendor_owner_bind()`, so the calibrated-provider plumbing is
+not an active voltage controller. The active CPU clock planner accepts
+MP0/MP1 transitions only; CCI remains observational. BUCKA is constrained
+to 1.00 V and supplies both A53 clusters and CCI. Implementing scaling
+requires shared voltage votes, CCI frequency control, and ownership of the
+eight CPU SRAM LDOs at INFRACFG offsets 0xf98/0xf9c/0xfa0. The vendor sets
+both four-lane SRAM registers together in 25 mV steps, raises SRAM before
+CPU voltage and lowers CPU voltage before SRAM, with bounded intermediate
+rail differences and settling delays. These operations need readback and
+failure handling coordinated with the existing DVFSP hardware lease.
+The PMIC `vsram-proc` regulator must not be assumed to represent these LDOs.
+CCI also needs its own DCM sequence: vendor `set_cur_freq()` selects zero
+before a CCI downshift, unlike the A53 target-frequency calculation;
+`sync_dcm_set_cci_freq()` updates selector bits 5:1 and its toggle in the
+shared MCUCFG DCM register. Extending the MP0/MP1 transition code by merely
+adding a CCI rate table would omit this domain-specific behavior.
+No operating-point voltage or device runtime setting changes in this fix.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
