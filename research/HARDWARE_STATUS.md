@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 516b58a0a53eb, including the tested watchdog and RTC
+Linux branch `gemini` at d951c0cadafbb, including the tested watchdog and RTC
 fixes, EFI/Nix support, desktop keyboard and zswap writeback, plus host-tested
 FUSB301 role-switch and MT6797 USB3 PHY power-sequencing support. Historical
 profiles are isolated in the frozen
@@ -268,7 +268,7 @@ Direct M69 remains installed. See
 | U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. Consolidated U-Boot boots the normal installed NixOS entry through systemd-boot, with real EFI variables, memory map, native CPU DT and boot-file readback verified. Native Unicode/modifier behavior passes host tests; actual EFI polling passed the earlier complete device trial. Physical key selection, the separate power/Escape input, persistent EFI settings, permanent promotion and normal NixOS generation management remain. Per-entry DT fixup preserves LK reservations and both native and historical CPU trees; an older carrier also boots a newer kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; installation of the consolidated default and normal generation updates remain |
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
-| USB speed and roles | The maintained left MTU3 DT enables both PHYs and SuperSpeed; trials still negotiate only 480 Mb/s with the diagnostic MAC VBUS override. Recovery M69 remains capped to USB2. Board lane routing and a real 5 Gb/s connection remain unverified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
+| USB speed and roles | The maintained left MTU3 DT enables both PHYs and SuperSpeed, with connector-driven peripheral VBUS. The maintained kernel now enumerates at 480 Mb/s without a diagnostic VBUS patch and passes connector-driver unbind/rebind. Recovery M69 remains capped to USB2. Board lane routing and a real 5 Gb/s connection remain unverified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
 | Cellular / eSIM | Resolve weak reception and registration; qualify applicable SIM/eSIM use. The October 1 record says stock Gemian also failed registration with the same SIM at the same location; a comparable stock operator scan/signal measurement remains outstanding. On October 7 the owner offered a new eSIM on their existing Sunrise contract and confirmed it includes calls, SMS and data. Confirm this device's provisioning path before activation, then test registration and all three services; no new profile has been installed or tested |
 | Wi-Fi / Bluetooth / GNSS | The September 30 M51 record reports WPA3-SAE/PMF data and three successful reconnects; older summaries calling all on-air testing absent are stale. Associated Wi-Fi scanning remains a recorded gap. Bluetooth LE discovery passed on M45; pairing, profiles and sustained coexistence remain unqualified. GNSS has source/transport work but no retained successful location-fix evidence |
 | Peripherals | microSD, wired headset and RTC alarm power-on need hands-on qualification; check retained evidence for other interfaces |
@@ -456,6 +456,27 @@ not rely on the disputed PHY monitor decoding. The diagnostic still fails
 the normal cgroup-v2 memory-controller check; it is not a qualified generation.
 Automatic recovery passed its complete health and retention audit: 35 source
 hashes matched, 26 ordinary outputs retained, both locks available, no writer.
+
+Peripheral VBUS integration is now in the maintained kernel (d951c0cadafbb).
+FUSB301 requests device role only when an attached source reports VBUS valid,
+and disconnects on read errors or a missing partner type. MTU3 peripheral mode
+registers the connector role provider, rejects host requests, drives its MAC
+VBUS sense from those reports, gates pull-up/fallback on attachment, and reports
+powered/not-attached state to the UDC. The left connector graph connects these
+drivers. Gadget-only and dual-role ARM64 builds and real-function regression
+tests pass, including PM failures, stale fallback IRQs and reconnects.
+
+`usb-connector-vbus-trial-01` uses exactly the normal kernel output. Its system
+retains temporary cgroup v1 and diagnostic tracing/capture. The always-on diagnostic
+VBUS patch was removed. Initial USB2 enumeration succeeds. Unbinding only the
+left FUSB301 driver over independent right-port Ethernet changes MISC_CTRL
+3→1, USB3_CONFIG 1→0 and POWER_MANAGEMENT 0x64f1→0x64a0, with UDC state
+not-attached. Rebinding restores configured/high-speed, MISC_CTRL=3 and left
+USB SSH; host speed is 480 Mb/s. This tests connector-driver detach/reprobe,
+not a physical cable removal. SuperSpeed remains unresolved, and this does
+not qualify the normal cgroup-v2 generation.
+Automatic M69 recovery and the full retention audit passed (35 source hashes,
+26 retained outputs, both locks and no writer); no generation was promoted.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
