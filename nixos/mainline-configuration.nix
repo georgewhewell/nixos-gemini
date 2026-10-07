@@ -138,7 +138,8 @@
     withKexectools = false;
     withTimesyncd = true;
   };
-  systemd.enableUnifiedCgroupHierarchy = false;
+  # The maintained kernel and paging policy use the cgroup v2 memory controller.
+  systemd.enableUnifiedCgroupHierarchy = true;
   systemd.coredump.enable = false;
   systemd.oomd.enable = false;
   systemd.shutdownRamfs.enable = false;
