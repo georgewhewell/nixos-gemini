@@ -459,6 +459,35 @@ and complete check phase pass, producing
 Build/check logs, source manifest and the retained output are recorded in
 `handoff/cci-clock-20261008/`. No device trial has started for this driver.
 
+## Native A53 SRAM regulator
+
+Linux binding `7d785d4872e76` and driver `2dd12edcf765b` add the eight
+INFRACFG CPU SRAM LDOs as `vsram-a53-cci`. The provider supports 1.0–1.2 V
+in 25 mV steps and recognizes code zero as the alternate 1.05 V encoding.
+It requires all eight lanes enabled and at the same decoded voltage,
+preserves reserved bits, leaves the enable register untouched, and verifies
+each bank write plus a stable final snapshot. Per-bank delays use the vendor
+settling formulas. Any uncertain write or semaphore release returns EUCLEAN
+through the actual handoff gate, which fences later CSPM/I2C access.
+
+The hardware semaphore implementation is shared with the CPU clock driver.
+The regulator prepares its interface clock before entering the CSPM gate
+and releases it afterward, avoiding a CCF/CSPM lock inversion. Board
+constraints cover the supported range and keep the rail always on; probe
+adopts an in-range firmware setting without changing it. BUCKA remains
+fixed at 1.00 V. A coupled CPU/SRAM voltage policy is not yet installed.
+
+The production regulator callbacks, semaphore helpers and handoff access
+gate pass 81 voltage pairs and 1,206 injected I/O failures under UBSan,
+plus lane/enable/alias checks, unstable reads, clock and semaphore failures,
+and rejection after global fencing. Existing CPU clock tests pass. The
+binding and packaged board DTB validate; packaged and local DTBs match.
+Normal and diagnostic bundles build with the new regulator enabled, and
+the complete normal kernel check phase passes. The shared kernel is
+`/nix/store/9cn7dsjlp2fbb2647xw29id6a5w831yf-linux-gemini-7.1.3`.
+Builds, checks and the bounded adoption/concurrent-read probe are retained
+in `handoff/cpu-sram-20261008/`. Physical SRAM transitions remain untested.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the

@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=676c564d691c4e958245e6c6465f05d1d9e09696";
+      url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=2dd12edcf765b9f2df59bc43fd436e275ba75c4c";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
