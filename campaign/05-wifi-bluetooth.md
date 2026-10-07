@@ -32,15 +32,23 @@ normal kernel/system builds pass. In `handoff/wifi-station-trial-02`, the same
 normal kernel running in the cgroup1 diagnostic joined WPA2 and returned real
 station get/dump/link data: the current peer, all three authorization flags,
 increasing connection age and receive counters. An unrelated peer returned
-ENOENT. The first query waited for DHCP and ran 12 seconds after association;
-no fresh signal was reported, so RSSI remains unqualified. The traffic check
-received 7/8 gateway replies, with the first reply absent. Preserve that failed
-loss check; these observations do not establish loss-free traffic. An earlier
+ENOENT. Trial03 sampled before DHCP: signal was -62 dBm at connection ages
+3 and 5 seconds, then omitted at ages 7 and 9 seconds, consistent with the
+five-second freshness policy. Counters, flags, connection age and unchanged
+WPA2 association also passed. Both trials received 7/8 gateway replies, with
+the first reply absent. Preserve those failed loss checks; these observations
+do not establish loss-free traffic. An earlier
 trial never exposed the supplicant socket during its 55-second probe, for an
-unknown reason. Both trials retained strict qualification, which rejected the
+unknown reason. All three trials retained strict qualification, which rejected the
 cgroup1 diagnostic. Neither qualifies the normal generation. Build artifacts
-and the next probe, which samples before DHCP, are in
+and the next probe, which captures ARP/ICMP headers and subsequent traffic, are in
 `handoff/wifi-station-20261007`.
+
+On recovered M69, `handoff/wifi-first-packet-20261007` recorded an initially
+empty neighbor cache, successful ARP resolution, all 8 initial ping replies and
+all 12 subsequent replies. Capture contains every request/reply; interface
+errors/drops stayed zero. This does not yet identify the candidate's lost first
+reply. Collect the matching candidate capture before attributing a regression.
 
 The September 30 M51 record separately reports WPA3-SAE/PMF data and three
 successful reconnects. Scanning while associated to a WPA3 or 5 GHz network,
