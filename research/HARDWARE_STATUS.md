@@ -24,11 +24,21 @@ Generic CPU hotplug and idle code now match upstream Linux; the duplicated
 readiness token is replaced by the existing capability receipt's ready state.
 Live CPU register, topology, capability, mitigation, HWCAP and power checks
 remain. The only additional config change removes the disabled P30 model
-option. U-Boot 1ff66d0a accepts both native and historical DTs in host tests.
+option. U-Boot a655c003 accepts both native and historical DTs in host tests.
 Runtime driver startup services and other temporary diagnostics still need
 consolidation.
 
-The consolidated default passed `handoff/boot-test-05` (candidate boot
+U-Boot now uses `mt6797_gemini_defconfig` through a normal standalone recipe.
+Startup initializes the real eMMC, console and keyboard drivers without the
+old fixed GPT/boot-partition hashes, Debian version check, or embedded EFI
+test apps. The former GPT hash rejected the current fixed-swap layout. The
+manager launcher now reads the installed systemd-boot image, bounds its size,
+records its actual digest and retains FIT fallback on failure. Its 18 host
+test scripts and complete firmware/carrier builds pass. `bootloader` packages
+the flashable image with the normal Linux fallback. Historical inputs and the
+exact recovery bundle remain unchanged. This firmware has NOT been device-tested.
+
+The Linux bundle tested in `handoff/boot-test-05` passed (candidate boot
 `02bea5df-ea61-427f-96c6-02dafe13090e`): both A72s came online without the old
 DT record, startup models or M10 tracing, followed by full Linux health,
 real paging with the built-in zswap policy, an ordinary unprivileged Nix build, native RTC startup,
@@ -40,7 +50,11 @@ services. The worker exited zero, and M69 returned healthy as boot
 `2710f4b7-7b93-4cc8-b33a-417e154a3cba`. The previous unused candidate cache was
 archived before replacement; installed EFI entries and the recovery cache were
 retained. This tests the direct boot bundle; the new default EFI bundle still
-needs its own boot-manager trial.
+needs its own boot-manager trial. Current packaging has the identical kernel
+and DTB; the only userspace closure changes are the desktop keyboard check and
+the service references that include it. That check now depends on the two
+keymap input files, and its derivation is identical across the old and new
+U-Boot revisions. The repackaged bundle itself has not been booted yet.
 
 The first two attempts exposed host-tool issues. mtkclient now stops an idle USB
 scan after 120 seconds, leaving transfer time inside its existing 180-second

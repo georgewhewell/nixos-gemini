@@ -1,4 +1,30 @@
-# Gemini U-Boot qualification, 2026-10-04
+# Gemini U-Boot and EFI boot, 2026-10-07
+
+The maintained firmware is U-Boot a655c003, built with its native
+`mt6797_gemini_defconfig`. `nix build .#uboot` builds the firmware;
+`nix build .#bootloader` packages a flashable p22 image with the normal Linux
+fallback; `nix build .#efiBootFiles` prepares the versioned systemd-boot files.
+Building these outputs does not install them.
+
+Normal startup no longer runs the embedded display/storage test applications
+or compares the disk with a historical GPT hash. The real eMMC initialization,
+read-only storage policy, GOP, keyboard and LK memory handoff remain. The
+launcher reads the installed systemd-boot image on p29 with a 2 MiB size bound,
+records its digest, and falls back to the embedded Linux FIT if it returns or
+cannot be loaded. Updating the distro loader no longer needs its size/hash
+compiled into U-Boot. Native and historical kernel DTs remain supported.
+
+The 18 production-function host test scripts, firmware, carrier, EFI files
+and system bundle builds pass. These current artifacts are **not yet booted**:
+publication of the current EFI entry, its supervised manager trial, normal
+generation updates and permanent promotion remain. M69 is still installed.
+Workspace artifacts and logs: `handoff/efi-consolidation/`.
+
+The sections below record earlier hardware trials and their historical
+profiles. Their original build commands refer to those revisions; those
+profiles now live under `legacyPackages.x86_64-linux`.
+
+## Earlier hardware results
 
 Status: software reset and 31-second watchdog expiry are hardware-qualified
 after removing an unmapped framebuffer probe. Both automatically recovered

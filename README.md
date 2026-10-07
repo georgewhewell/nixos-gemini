@@ -1,7 +1,7 @@
 # NixOS on the Planet Computers Gemini PDA
 
 This repository packages Linux 7.1.3 and NixOS for the MT6797X Gemini.
-The default build includes the tested EFI boot support, persistent Nix daemon,
+The default build includes EFI boot support, a persistent Nix daemon,
 desktop keyboard layout, zswap writeback, watchdog and MT6351 RTC fixes.
 Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
 Camera and vibrator are outside the owner's completion scope.
@@ -23,6 +23,7 @@ Building does not install or flash it.
 nix build .#kernel         # Linux, with fixes committed in its source tree
 nix build .#efiBootFiles   # Versioned systemd-boot entry, kernel, DTB and initramfs
 nix build .#uboot          # U-Boot with display, keyboard and EFI storage support
+nix build .#bootloader     # Flashable U-Boot image with the normal Linux fallback
 nix build .#mtkclient      # Open-source flashing tool, including RTC preservation
 nix build .#recovery       # Exact installed M69 recovery bundle
 ```
@@ -40,6 +41,11 @@ still needs a device trial.
 Unused CPU startup models, rollback hooks and temporary hotplug tracing have
 been removed. Generic CPU hotplug and idle code now match upstream Linux;
 the working A72 power and capability checks remain in the board support.
+U-Boot likewise uses a native `mt6797_gemini_defconfig`. Normal startup loads
+the installed systemd-boot image without the former fixed disk hashes or
+embedded display/storage test apps. Its flashable image includes the normal
+Linux fallback. The keyboard build depends only on its keymap and input header,
+so unrelated firmware changes no longer rebuild the userspace image.
 The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
 requires those checkouts, or explicit `--override-input` paths.
 
@@ -65,14 +71,15 @@ active loop device or installed EFI entry/initramfs uses it.
 
 ## Device status
 
-The consolidated default boots both A72s without a generated build record or
+The maintained Linux kernel boots both A72s without a generated build record or
 the retired CPU startup models and tracing.
-It passes the complete supervised test: healthy Linux,
+It passed the complete supervised test in `boot-test-05`: healthy Linux,
 real swap paging, an unprivileged Nix build, native RTC startup, UTC write/read,
 alarm delivery/cancellation/rearm and automatic M69 recovery. The final audit
 retained home, EFI files and all 24 ordinary Nix outputs. The installed recovery
-system remains M69; the current default EFI bundle has not yet had its own
-boot-manager trial. mtkclient now ends idle USB scans before the outer transfer
+system remains M69. The current U-Boot, EFI files and repackaged userspace pass
+their host checks and builds but still need publication and a boot-manager trial.
+mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 
 Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
