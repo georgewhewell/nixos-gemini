@@ -345,7 +345,7 @@ the ARM64 W=1 object/DTB build and calibration/power callback regression pass.
 Existing unrelated DT address warnings remain. This is a device-mode candidate;
 left-port host role switching is still disabled. Full kernel, system bundle, EFI
 files and bootloader builds pass, including the packaged driver regressions.
-Neither SuperSpeed negotiation nor cable orientation has been tested. The normal
+SuperSpeed negotiation has not succeeded. The normal
 boot runner now records actual USB speed from the device and the exact host
 network interface, with tests covering USB2/USB3 bus changes and mismatched
 speeds. The owner confirmed a known SuperSpeed cable and host port. Device trials now show the controller initializes for SuperSpeed but fails
@@ -371,12 +371,23 @@ reported reverse orientation, sink/device and 1.5 A. PHY calibration readback
 matched the vendor defaults (intr 45, RX 15, TX 16), but the UDC stayed
 unattached even after a standard gadget disconnect/reconnect. This isolates the
 USB failure from the early allocator crash; it does not qualify the normal
-generation, which remains cgroup v2. Other cable orientation is untested.
+generation, which remains cgroup v2. A later PHY trial reported normal
+orientation with the same failure; no physical connector transition was witnessed.
 Controller snapshots show USB3 enabled, LTSSM disabled, automatic USB2 switching
 enabled, both device ports powered, reference-clock control 0x1f and no VBUS
 override. A read-only powered-PHY register dump now exposes routing/reset and
 analog controls for further diagnosis. All supervised trials recovered M69
 with complete retention audits; no candidate was promoted.
+
+Linux a3b50ebb47cfb adds software USB2 fallback for MT6797, matching the active
+vendor `mu3d/` driver: automatic switching off, SS.Disable interrupt enabled,
+and explicit fallback disconnect. Host regressions, ARM64 W=1 and full packages
+pass. The temporary cgroup-v1 trial reads back USB2_TEST_MODE=0 and
+LTSSM_INTR_ENABLE=0x2432, but still reports LTSSM Disable, SOFT_CONN clear and
+UDC not attached through 143 seconds. This change alone does not restore the
+link. M69 recovery and final retention audit passed; no promotion. Evidence:
+`handoff/usb3-fallback-trial-02` and `handoff/usb3-link-diagnostic/fallback-ethernet-capture.txt`
+in the workspace. Grok's allocator instrumentation is unchanged.
 
 The [FUSB340 datasheet](https://www.onsemi.com/download/data-sheet/pdf/fusb340-d.pdf)
 identifies it as a SuperSpeed lane switch. [Planet's port guide](https://support.planetcom.co.uk/index.php/Troubleshooting)
