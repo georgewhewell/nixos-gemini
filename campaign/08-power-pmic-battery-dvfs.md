@@ -1289,7 +1289,13 @@ Cleanup restores both A72s, schedutil, and automatic parking, and removes its
 hold/pause files. Post-probe health checks pass. Evidence:
 `handoff/a53-1040mv-trial-01/`. These results establish bounded transition
 coverage at the new points; sustained stress and physical thermal response
-remain outstanding.
+remain outstanding. M69 returns healthy as
+`f7968825-e132-48ab-a3e9-01419e0d209c`; the worker exits0 and the final audit
+passes all35 source hashes,26 retained outputs, no-writer and lock checks.
+No default is promoted while normal cgroup2 qualification remains unresolved.
+Final record:`handoff/a53-1040mv-20261008/completion.json`.
+The next load/cooling probe is prepared in
+`handoff/a53-1040mv-load-cooling-20261008/`; it has not run yet.
 
 ## Historical Cycle18 observations
 
