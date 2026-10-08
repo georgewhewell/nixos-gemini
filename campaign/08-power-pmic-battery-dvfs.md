@@ -2266,6 +2266,33 @@ assertions and ARM64 compilation pass. Evidence:
 Hardware owner callbacks, CPUFreq/hotplug/CCI coordination and device trials
 remain pending; no runtime policy or installed system changed.
 
+## 2026-10-08: hardware-backed A72 owner DVFS API
+
+Linux `f0a1b38ebb9c5` wires `mt6797_a72_power_set_opp()` to exclusive BUCKB,
+SRAM and MP2 clock providers. Caller-held CPU hotplug serialization precedes
+the owner and operation mutexes. Admission requires committed live CPU8,
+CPU4, no startup/shutdown transaction, and an owned BUCKB vote. Each rail
+sample checks regulator enable, reset, primary power acknowledgments,
+isolation, disabled iDVFS, stable VPROC and the full expected SRAM record.
+Successful SRAM writes update the owner's record. Faults latch the owner and
+retain the hardware state.
+
+Production API tests pass35 upward and44 downward hardware error boundaries,
+both write-effect models,21 admission failures, CPU9 handling, exact lock
+ordering, full SRAM comparisons and sticky faults. All19 core cases /
+1,287,608 assertions, native hotplug lifecycle, SRAM/clock API regressions and
+ARM64 owner compilation pass. Evidence: `owner-api-tests.log` and
+`owner-api-regressions.log` under `handoff/a72-frequency-audit-20261008/`.
+
+No runtime caller is connected yet. Two integration obligations are explicit:
+CPUFreq invokes targets during hotplug initialization, so unconditional
+`cpus_read_lock()` in an OPP callback would recurse against the hotplug writer
+and can deadlock. Also, warm startup programs750MHz and initializes SRAM to
+1.1V: the last DVFS VPROC setting cannot simply be retained across restart.
+The CPUFreq/offline integration must restore startup-compatible clock/rails
+and coordinate CCI before enabling this API in a policy. Normal packaging and
+installed M69 remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
