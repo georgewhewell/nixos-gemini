@@ -2546,6 +2546,26 @@ Its system closure is copied to persistent storage. `a72-mid-trial-01` is
 running under `boot-test-1791460081-1925953.service`; hardware outcome and final
 recovery audit remain pending. Normal packaging and installed M69 are unchanged.
 
+## 2026-10-08: A72 DVFS through1677MHz passes
+
+Eight-point trial boot `df5c138c-5cbc-4487-8027-babade6e637a` passes all64
+directed transition pairs,150 frequency/rail samples,16 CPU-affined workload
+processes and225 checked computations. Maximum measured CPU/SRAM voltages
+are1.04/1.15V. CPU4-parked DVFS and full-cluster restart from338/1677MHz
+both pass. Probe runtime is28.7seconds, peak55.1°C, parking is restored,
+and kernel matching/post-probe health checks pass. Raw evidence:
+`handoff/a72-mid-trial-01`; summary:
+`handoff/a72-mid-20261008/probe-result.json`. Final recovery audit is pending.
+
+Full16-point diagnostic packaging now builds main kernel commit
+`16d3f060f017c`, with the same userspace governor and cgroup1 isolation.
+`handoff/a72-full-20261008` contains the build and prepared bounded probe:
+each upper-half source visits every OPP and returns, checking forward/reverse
+readbacks, both-core work at all eight new rates and restart from338/2587MHz.
+The CCI readback check respects the production988MHz ceiling. These future
+checks are not yet hardware evidence; the full-range device trial has not
+started, and normal packaging remains on b62fc653f754f.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
