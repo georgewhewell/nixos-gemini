@@ -1136,6 +1136,39 @@ DTB. Build evidence and GC roots are in
 `handoff/a72-restart-diagnostics-20261008/`; diagnostic hardware testing
 remains pending.
 
+Trial06 boot `2a7af4c7-fd4f-48c3-af4e-e7e03e14c4f0` locates the failure
+at applied step 11, inside the SRAM restart precheck, before its initialization
+SMC. The recorded powered-off sample is control/calibration `0/0`; after
+the Linux buck/isolation sequence, the first powered sample is
+`0x00400ff9/0`. The check incorrectly requires these different power states
+to match. The first mismatch stops sampling, so this diagnostic does not
+establish a stable pair of powered samples. M69 recovery returns boot
+`74622d50-f765-4570-a9d7-1509713d0347`; terminal-worker and final source/output
+audits pass. Evidence: `handoff/a72-native-trial-06/` and
+`handoff/a72-restart-diagnostics-20261008/completion.json`.
+
+Linux `ca4b6d9b98e2b` records two matching powered SRAM samples before the
+first successful vendor initialization. That original baseline survives
+every restart. Restart consumes its shutdown authorization, then requires
+two matching samples equal either to the recorded shutdown state or to
+that original powered baseline, before invoking the same initialization,
+calibration verification and settling sequence. A changing pair, partial
+match, unrelated value, I/O failure or failed initialization still faults
+the provider permanently. There is no hard-coded acceptance of `0x00400ff9`.
+The existing boot-attempt latch and exclusive native ownership remain intact.
+
+Tests execute the real provider, covering six powered-baseline cycles with
+reset/retained shutdown samples, 64 single-bit corruptions, two mixed
+observations, nine initial I/O failures and two unstable initial samples,
+alongside the previous shutdown/restart fault cases. All 14 SRAM KUnit
+cases/238 assertions and native hotplug fault tests pass. ARM64 provider
+and test compilation and checkpatch pass. Normal and diagnostic bundles
+pass all kernel checks and share kernel
+`/nix/store/j4dc3d1qrih52bdx2jr8x1zsg837paq5-linux-gemini-7.1.3`, with unchanged
+DTB. Build evidence and GC roots are in
+`handoff/a72-sram-powered-baseline-20261008/`. Hardware restart qualification
+remains pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
