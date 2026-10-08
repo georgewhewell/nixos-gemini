@@ -1944,6 +1944,27 @@ work must establish firmware admission, voltage/SRAM and CCI ordering,
 shared-register serialization, failure handling and hotplug restoration
 before adding an A72 OPP policy. No A72 frequency writes were attempted.
 
+## 2026-10-08: full-ceiling thermal guard and minimum cooling level
+
+`a53-1200mv-thermal-response-trial-01` passed all15 cooling states under
+emulation, cleared emulation and reached both full rates during real load.
+It stopped after about32 seconds of load at the90°C guard (90.7°C reading).
+The120 retained load samples show cooling states0–3 above85°C, with repeated
+returns to state2 (1.443/1.885GHz,1.19V) near90°C. Cleanup restored governors
+and parking; kernel and follow-up checks pass. Recovery audit is pending.
+
+`gov_step_wise.c:get_target_state()` permits reducing cooling on a falling
+sample even while above the trip. With the expanded sixteen-point tables,
+the previous unrestricted map admits the three newly added hot OPPs during
+passive cooling. Diagnostic commit `085d69c3f2945` sets the85°C map minimum
+to state3, capping LL/L at1.391/1.820GHz and1.15V while cooling is requested.
+The governor may throttle further; full rates remain available after cooling
+releases. The95°C and117°C trips are unchanged. DTB compilation passes;
+full packaging and a repeated bounded hardware load are pending. This is
+a board thermal-policy adjustment, not a claim that the governor is faulty.
+The repeated synthetic test expects the policy's reachable states3–15;
+the original trial already verified frequency mapping for states1–15.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
