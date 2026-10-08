@@ -10,11 +10,11 @@
 # - gemini-cpufreq loads cpufreq-dt (hardware-verified on M42c) once the
 #   A72s are up and selects schedutil; the kernel default governor is
 #   performance.
-# - gemini-core-parking parks CPUs 7..1 (L cluster first, then the extra LL
-#   cores) and brings them back on load and input.  CPU0 is never written.
-#   CPU8/9 remain pinned while native A72 shutdown/restart receives bounded
-#   hardware qualification. The kernel now admits ordered unplug and handles
-#   cancellation; enabling load-driven A72 parking requires that qualification.
+# - gemini-core-parking parks CPUs 9..1 (A72 cluster, then L, then extra LL
+#   cores) and brings them back on load and input. CPU0 is never written.
+#   Native A72 shutdown/restart and the shared-rail low-voltage transitions
+#   passed bounded hardware probes (a72-native-trial-07). CPU8 starts after
+#   CPU4, and CPU9 after CPU8; shutdown uses the reverse order.
 # - /run/gemini-core-parking/hold onlines everything and stops parking (tests,
 #   benchmarks); /run/gemini-core-parking/pause freezes the topology (set for
 #   the duration of system sleep).
@@ -45,11 +45,10 @@ let
       install -Dm0755 gemini-core-parking "$out/bin/gemini-core-parking"
     '';
   };
-  # Unpark order: extra LL cores, then the L cluster.  CPU8/9 are pinned
-  # (see above); CPU8 would need CPU4 online to start, CPU9 needs CPU8.
+  # Unpark order: extra LL cores, L cluster, then A72s.
+  # CPU8 needs CPU4 online to start; CPU9 needs CPU8.
   args = lib.escapeShellArgs [
     "--order" "1,2,3,4,5,6,7,8,9"
-    "--pinned" "8,9"
     "--requires" "8:4"
     "--requires" "9:8"
     "--period-ms" "50"
@@ -80,7 +79,7 @@ let
   '';
   onlineAll = pkgs.writeShellScript "gemini-core-parking-online-all" ''
     test -e /run/gemini-core-parking/pause && exit 0
-    for cpu in 1 2 3 4 5 6 7; do
+    for cpu in 1 2 3 4 5 6 7 8 9; do
       echo 1 > /sys/devices/system/cpu/cpu$cpu/online || :
     done
   '';

@@ -1169,6 +1169,28 @@ DTB. Build evidence and GC roots are in
 `handoff/a72-sram-powered-baseline-20261008/`. Hardware restart qualification
 remains pending.
 
+Trial07 (`92339179-b34f-432c-b75a-d384c8c9b429`) passes CPU9-only
+shutdown/restart and three full A72 cluster shutdown/restart cycles in
+4.09 seconds. Wrong-order CPU8 removal is refused, every restarted core
+executes a checked workload, BUCKB is disabled and MP2 reads26MHz while
+the cluster is off, and both cores return at750MHz. The captured original
+powered SRAM baseline is`0x00400ff9/0`. No kernel errors occur; cleanup
+restores schedutil and removes the test hold/pause.
+
+The chained low-voltage probe passes all98 A53 ordered frequency pairs
+with both A72s off, all49 ordered CCI pairs across169/234/325/416/481/533/
+611MHz, CPU rails770–1000mV and1,420 concurrent SRAM reads in44.53 seconds.
+Checked computations pass, kernel errors are absent, and cleanup restores
+both A72s and schedutil. Evidence: `handoff/a72-native-trial-07/`, including
+its`low-voltage/` child directory. These are bounded diagnostic hardware
+results; normal cgroup2 qualification remains unresolved.
+
+The maintained candidate now removes the CPU8/9 parking exclusion while
+preserving CPU4→CPU8→CPU9 startup dependencies. Service-stop cleanup also
+restores CPU8/9. Both packaging variants build with unchanged kernel/DTB.
+The actual daemon's repeated idle/load qualification is the next test;
+evidence is collected in`handoff/a72-automatic-parking-20261008/`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
