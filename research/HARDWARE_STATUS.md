@@ -4,54 +4,32 @@ The objective remains complete hardware enablement and consolidation. Camera
 and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
-kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at eb64c46a953ef, including watchdog/RTC fixes,
-EFI/Nix support, desktop keyboard, zswap writeback, coupled A53/CCI voltage
-scaling and native A72 shutdown/restart. Automatic A72 parking is enabled in
-the candidate and has passed bounded hardware tests; the detailed evidence
-and remaining limits are recorded below. Coupled A53/CCI scaling passes
-bounded transitions through 1.15 V (LL 1.391/L 1.820 GHz). A 45-second
-checked eight-core load and all twelve emulated cooling states pass; real
-temperature peaks at 85.4°C and both clusters throttle at the 85°C trip.
-Endurance remains unqualified. The first L transition attempt lost contact
-without a result; a traced repeat passes, but that interruption remains
-unexplained. The selected candidate enables the remaining A53 points
-through 1.20 V (LL 1.547/L 2.002 GHz). All174 added transition pairs pass,
-but one clock-snapshot EAGAIN occurs during CPU8 startup before the matrix;
-the selected kernel now scopes read-only stability checks to the requested
-clock domain, with host/build checks passing. Its physical regression lost
-contact while restoring parked cores, after CPU7 started and before CPU8
-was reported online; the regression itself never began. M69 recovery and
-the final storage/source audit passed. A subsequent diagnostic trace localizes
-an interruption near warm CPU8 VPROC enable. A more detailed repeat
-completes regulator enable and verification, then stops at the following
-1ms delay entry, still before CPU_ON. The cause remains unresolved; the
-regulator trace does not show a lock or I2C failure. Matching the vendor
-reset-held busy wait did not resolve the interruption: that trial stopped
-earlier, at PWRAP reset assertion, before the changed delay. All these
-trials recovered M69 with clean final audits. Diagnostic kernel1844e1afbb318
-now restricts actual observation reads to the requested clock domain. It
-passes three A72 power cycles with558 paired A53 rate reads, six checked A72
-workloads and all174 upper transition pairs; recovery/audit also pass.
-That test used fixed startup clocks. A follow-up with ordinary governors
-failed during PWRAP reset verification before CPU8 came online; M69 recovery
-and the final audit passed. Diagnostic kernel `7c94d629970b5` additionally
-limits AP transaction snapshots to AP PLLs while retaining full shared
-mux/divider/DCM checks and strict native A72 snapshots. Ordinary startup
-now passes a bounded test: three A72 cycles, 586 paired rate reads, six
-checked A72 workloads and 174 upper transition pairs. Recovery and audit
-pass. A repeat without extra driver tracing also passes: three A72 cycles,
-480 paired reads, six checked workloads and 174 transitions, peaking at
-43.6°C. Its M69 recovery and final audit pass; normal packaging has not adopted
-the diagnostic fixes.
-Diagnostic `b62fc653f754f` passes the bounded full-ceiling thermal test:
-45 seconds on eight A53 cores, 11,156 checked computations and 173 real
-samples, peaking at 88.1°C. Both clusters reach full frequency and exercise
-cooling states 3–5. It combines a state3 cooling floor at 85°C with 100 ms
-normal and 40 ms passive polling; the prior one-second interval allowed
-reheating past the 90°C test guard after cooling released. Reachable
-synthetic states 3–15, cleanup and kernel checks pass. Recovery audit is
-pending, endurance remains unqualified and normal packaging is unchanged.
+kernel c0dbf01b2bdaa). The normal packaging selects the maintained
+Linux branch `gemini` at `b62fc653f754fde3bf388c284a5098a53cd8f244`. It includes watchdog/RTC fixes,
+EFI/Nix support, desktop keyboard, zswap writeback, coupled A53/CCI scaling,
+native A72 shutdown/restart and automatic A72 parking. Normal system, EFI and bootloader packages build successfully, and all
+five flake check outputs are realized. The normal bundle uses the exact
+hardware-tested kernel. The installed recovery system is unchanged.
+
+The full A53 table reaches LL 1.547/L 2.002 GHz at up to 1.20 V. AP-only
+clock transaction snapshots and domain-scoped observation reads retain
+shared mux/divider/DCM checks and strict native A72 admission. A bounded
+ordinary-startup regression passes without extra driver tracing: three A72
+cycles, 480 paired A53 rate reads, six checked A72 workloads and 174 upper
+transition pairs, with clean M69 recovery and final audit. Earlier startup
+interruptions and the source changes are documented in the power campaign;
+the evidence does not prove the precise firmware cause of those hangs.
+
+The selected kernel also passes a bounded full-ceiling thermal test on the
+cgroup1 diagnostic: 45 seconds on eight A53 cores, 11,156 checked computations
+and 173 real samples, peaking at 88.1°C. Both clusters reach full frequency
+and exercise cooling states 3–5. The board sets a state3 cooling floor at
+85°C, with 100 ms normal and 40 ms passive polling. Earlier tests showed
+weak cooling at the new top OPPs and rapid reheating after cooling release.
+Reachable synthetic states 3–15, cleanup and kernel checks pass. The latest
+thermal trial's recovery audit is pending. Endurance and normal cgroup2
+operation remain unqualified; the allocator issue still prevents installation.
+
 FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
