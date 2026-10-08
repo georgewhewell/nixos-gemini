@@ -2,7 +2,7 @@
 
 Current status, 2026-10-08: use [the completion ledger](../research/HARDWARE_STATUS.md)
 and the dated results in each campaign chapter. The maintained kernel pin is
-`0d44f0f59b6a083e9eb7b95e52fe65f3151318ee`; M69 remains the installed recovery
+`814f83792871aa44b79479fda5305f24d0e77dc3`; M69 remains the installed recovery
 baseline. Automatic A72 parking has passed repeated hardware load/idle cycles and
 service-stop restoration,
 and coupled A53/CCI voltage scaling has passed bounded tests down to770mV.

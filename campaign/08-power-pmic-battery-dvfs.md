@@ -1564,6 +1564,33 @@ Evidence: `handoff/a53-1150mv-thermal-response-trial-01/`, including the
 raw JSON, kernel log and `thermal-timeline.csv`. The earlier75°C-bound
 abort remains a separate failed test; its threshold was not changed.
 
+## Full vendor A53 table through 1.20 V — 2026-10-08
+
+Linux `814f83792871a` enables the remaining six SB OPPs:
+LL 1.443/1.495/1.547 GHz and L 1.885/1.950/2.002 GHz, at nominal
+1.17/1.19/1.20 V. Both A53 clusters now expose all16 vendor points in the
+candidate. SRAM remains capped at1.20 V; the vendor rail code explicitly
+permits SRAM equal to CPU voltage at the upper ceiling. L1.885 GHz needs
+CCI975MHz/1.19V; L2.002 GHz uses the vendor CCI saturation at988MHz/1.20V.
+
+Normal and diagnostic bundles build successfully with the full kernel
+checks and identical kernel/DTB. The DTB differs from the1.15V image only
+by six OPP enable flags. Clock-host UBSan tests pass2,048 A53 pairs,
+12,344 postdivider failures and127,933 intermediate checks; the runtime
+CCI test already covers these upper points and passes unchanged.
+Both packaging inputs select this commit. No default is promoted.
+
+The prepared hardware probe covers every pair with at least one newly
+enabled rate:87 pairs per cluster,174 CPU pairs total,87 CCI pairs, and
+48LL/30L target postdivider crossings. These disjoint pairs plus the two
+qualified13x13 lower matrices cover all512 ordered CPU pairs. This is a
+coverage plan, not a claim of new hardware qualification. It retains
+boot-tagged progress markers, concurrent SRAM reads, checked computation,
+65-second guard and70-second service deadline. Builds, source hashes,
+DTB diff, expected mappings and probe scripts are in
+`handoff/a53-1200mv-20261008/`. Transition and load/thermal qualification
+of the1.20V ceiling remain pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
