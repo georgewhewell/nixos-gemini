@@ -1308,6 +1308,11 @@ time is35.81 seconds, with no kernel errors and passing post-probe health.
 This verifies software cooling response, not physical overtemperature,
 long-term stability or endurance. Evidence:
 `handoff/a53-1040mv-load-cooling-trial-01/`.
+All5,355 checked workloads pass. M69 returns healthy as
+`afe0fc55-49d1-4cb9-8b19-c3ad286e3f9e`; the worker exits0. Final audits
+verify no writer, both locks,35 source hashes and26 retained outputs.
+Final record:`handoff/a53-1040mv-load-cooling-20261008/completion.json`.
+No default is promoted; normal cgroup2 qualification remains unresolved.
 
 The next LL point crosses an ARMPLL postdivider boundary. Test-only Linux
 `2ed10202112a9` expands native clock callback coverage to both LL and L,
