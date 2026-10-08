@@ -2533,6 +2533,19 @@ probe checks all64 directed transitions, both-core workloads at every rate,
 CPU4-parked DVFS and restart from338/1677MHz under the same90°C/65-second
 bounds. The full16-point final table and normal packaging pin are unchanged.
 
+Low-range restart trial recovery is now audited on M69 boot
+`aab38704-887d-47e5-afa2-02494d28ca53`:35 matching sources,26 retained
+outputs, fixed swap and no active writer. Its worker is terminal with MainPID0.
+Completion evidence is in `handoff/a72-first-restart-20261008/completion.json`.
+
+The eight-point bundle
+`/nix/store/1mrr1i1bi3lzawk6w0bl8g0grqsgmi6z-gemini-mainline-nixos-bundle`
+passes full build, packaged regressions and final-image checks for nominal
+voltages, shared A72 OPP ownership, userspace governor and source revision.
+Its system closure is copied to persistent storage. `a72-mid-trial-01` is
+running under `boot-test-1791460081-1925953.service`; hardware outcome and final
+recovery audit remain pending. Normal packaging and installed M69 are unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
