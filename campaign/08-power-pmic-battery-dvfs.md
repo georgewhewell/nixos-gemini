@@ -2293,6 +2293,31 @@ The CPUFreq/offline integration must restore startup-compatible clock/rails
 and coordinate CCI before enabling this API in a policy. Normal packaging and
 installed M69 remain unchanged.
 
+## 2026-10-08: DVFS-safe warm restart voltage restoration
+
+Linux `58d6616e1e8b6` captures the admitted startup VPROC and marks successful
+DVFS use. After firmware-verified last-core shutdown and BUCKB disable, it
+checks the regulator is off, restores that captured voltage and verifies two
+readbacks before recording the stopped state. This does not change a live
+clock or require a shutdown CCI boost. CPU9-only shutdown preserves the live
+DVFS voltage. Failed or ignored restoration fences the owner and denies
+restart. Policies without DVFS retain the existing shutdown sequence.
+
+Warm admission now accepts SRAM selectors7–15 only when their voltage and
+full control/calibration words match the verified shutdown record. This
+preserves exact-state checks while accepting voltages produced by the live
+SRAM owner. Startup still runs the verified1.1V SRAM initialization before
+firmware starts the750MHz cores. The DVFS API requires a captured VPROC in
+the800–1100mV range on the10mV grid.
+
+Production lifecycle tests pass all251 valid DVFS rail pairs through shutdown
+and warm startup, CPU9-only retention,45 shutdown error boundaries with both
+write-effect models, and ignored-write rejection. Owner API admission,
+all19 core cases /1,287,608 assertions and ARM64 compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/dvfs-restart-tests.log`.
+CPUFreq hotplug-lock integration, CCI coordination and hardware qualification
+remain pending. Normal packaging and installed M69 remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
