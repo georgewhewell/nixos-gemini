@@ -2137,6 +2137,31 @@ Evidence: `handoff/a72-frequency-audit-20261008/inherited-latch-tests.log`.
 Hardware callback/rail-owner integration remains pending; normal packaging
 and installed M69 are unchanged.
 
+## 2026-10-08: owner-only A72 hardware rate API
+
+Linux `97f46b6fefea7` connects the verified MP2 executor to the actual divider,
+mux and dedicated firmware PLL setter. `mt6797_cpuclk_set_mp2_rate()` accepts
+only the A72 power owner. The caller must serialize hotplug/power, keep a core
+online, disable iDVFS and provision both rails for the higher endpoint.
+The API pins the already-enabled MAINPLL rate before taking observer/CSPM
+locks, disables MP2 DCM with verified toggle writes, executes the five-step
+clock plan and restores the original DCM policy. A final full snapshot checks
+that DCM restoration preserved the endpoint. DVFS creates no last-core restart
+receipt. Uncertain writes or lease release fence the owner and retain the
+MAINPLL rate pin; callers must retain sufficient rails on `-EUCLEAN`.
+
+The production-provider host harness passes all39 hardware error boundaries
+with both failed-write effect models, full-width SMC status failures, DCM
+readback corruption, precondition refusal and retained-pin re-entry. Existing
+boot/restart tests, all19 core cases/163,542 assertions, AP snapshot/transition
+regressions and ARM64 provider compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/hardware-api-tests.log` and
+`hardware-api-regression.log`.
+
+No runtime consumer calls this API yet. Power-owner voltage/SRAM coordination,
+CPUFreq/OPP integration and bounded hardware qualification remain required.
+Normal packaging stays at `b62fc653f754f`; installed M69 is unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
