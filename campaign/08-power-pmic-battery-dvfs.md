@@ -1913,7 +1913,12 @@ because this diagnostic uses cgroup1; the normal memory-controller gate
 fails as expected. No installed/default generation was promoted. Evidence:
 `handoff/clock-ap-snapshot-20261008/completion.json` and
 `handoff/clock-ap-snapshot-trial-01/`. A repeat without extra driver tracing
-is next, followed by full-ceiling thermal qualification.
+passed its physical probe in `clock-ap-untraced-trial-01`: boot
+`c08eda15-c702-4827-bb18-30c109002235`, three A72 cycles,480 paired reads,
+six checked workloads,174 transitions,1046 SRAM samples,34.816 seconds
+and43.6°C peak. Cleanup and kernel checks pass. The boot command line has
+no dyndbg argument. Recovery is still pending. Full-ceiling thermal
+qualification follows once the worker and final audit complete.
 
 ## Historical Cycle18 observations
 

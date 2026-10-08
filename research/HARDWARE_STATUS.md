@@ -40,8 +40,10 @@ limits AP transaction snapshots to AP PLLs while retaining full shared
 mux/divider/DCM checks and strict native A72 snapshots. Ordinary startup
 now passes a bounded test: three A72 cycles, 586 paired rate reads, six
 checked A72 workloads and 174 upper transition pairs. Recovery and audit
-pass. A repeat without extra driver tracing is pending; normal packaging
-has not adopted the diagnostic fixes.
+pass. A repeat without extra driver tracing also passes: three A72 cycles,
+480 paired reads, six checked workloads and 174 transitions, peaking at
+43.6°C. Its recovery audit is pending; normal packaging has not adopted
+the diagnostic fixes.
 Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
