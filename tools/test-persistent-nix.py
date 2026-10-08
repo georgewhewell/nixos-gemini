@@ -5,12 +5,35 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 
 spec=importlib.util.spec_from_file_location('recovery',Path(__file__).with_name('qualify-uboot-recovery.py'))
 r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 n=r.persistent_nix
 
 class PersistentNix(unittest.TestCase):
+    def test_native_and_legacy_cpu_admission_use_the_correct_evidence(self):
+        boot = '8ab215b1-2e33-4b19-9168-2ff5b0574d84'
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy), tempfile.TemporaryDirectory() as tmp:
+                kernel = Path(tmp)
+                (kernel/'kernel.config').write_text('CONFIG_ARM64_LATE_CPU_RUNTIME_IDENTITY=y\n' if legacy else '')
+                persistence = SimpleNamespace(run=mock.Mock(side_effect=RuntimeError('stop after admission')))
+                with mock.patch.object(n, 'old_persistence'), self.assertRaisesRegex(RuntimeError, 'stop after admission'):
+                    n.evidence([], boot, kernel, None, persistence, kernel=kernel)
+                script = persistence.run.call_args.args[1]
+                label = persistence.run.call_args.args[3]
+                if legacy:
+                    self.assertEqual(label, 'nix-candidate-state')
+                    self.assertIn('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1', script)
+                    self.assertIn('test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1', script)
+                    self.assertIn('verified the pre-finalization runtime identity binding', script)
+                else:
+                    self.assertEqual(label, 'nix-native-cpus')
+                    self.assertEqual(script, n.native_cpu_script(boot))
+                    self.assertIn('a72_startup=pass', script)
+
     def test_namespace_identity_and_nonroot_builder(self):
         proof=dict(token='a'*32,uid='1000',net='net:[200]',outside_home='absent')
         n.verify_builder(proof,'a'*32,'net:[100]','net:[100]')

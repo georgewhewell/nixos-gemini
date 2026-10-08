@@ -170,31 +170,8 @@ def verify_manager_handoff(runner, before, after, profile):
 
 
 def native_cpu_script(boot_id):
-    """Check completed first-start evidence without racing load-driven parking."""
-    if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', boot_id):
-        raise ValueError('Invalid native CPU boot identity')
-    return f'''set -eu
-test "$(cat /proc/sys/kernel/random/boot_id)" = {boot_id}
-unit=gemini-a72-preflight.service
-test "$(systemctl show "$unit" -p ActiveState --value)" = active
-test "$(systemctl show "$unit" -p SubState --value)" = exited
-test "$(systemctl show "$unit" -p Result --value)" = success
-test "$(systemctl show "$unit" -p ExecMainStatus --value)" = 0
-result=/run/gemini-a72-preflight/result
-test "$(tail -n 1 "$result")" = a72_startup=pass
-grep -qx 'cpu8_start=requested' "$result"
-grep -qx 'cpu9_start=requested' "$result"
-grep -Fq 'CPU8 PSCI CPU_ON committed with CPU4 prerequisite' "$result"
-grep -Fq 'CPU9 PSCI CPU_ON committed with CPU8 prerequisite' "$result"
-grep -qx '0-9' "$result"
-printf 'boot_id=%s\\n' {boot_id}
-cat "$result"
-for cpu in 8 9; do
- online=$(cat /sys/devices/system/cpu/cpu$cpu/online)
- case "$online" in 0|1) ;; *) exit 1;; esac
- printf 'current_cpu%s_online=%s\\n' "$cpu" "$online"
-done
-'''
+    return p.f.q.r.persistent_nix.native_cpu_script(boot_id)
+
 
 
 def manager_evidence(runner, ssh, state, directory):

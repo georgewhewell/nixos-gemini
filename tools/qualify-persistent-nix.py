@@ -67,6 +67,34 @@ def verify_builder(evidence, token, host_net, daemon_net):
         raise RuntimeError('Builder did not receive its own network namespace')
 
 
+def native_cpu_script(boot_id):
+    """Check completed first-start evidence without racing load-driven parking."""
+    if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', boot_id):
+        raise ValueError('Invalid native CPU boot identity')
+    return f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {boot_id}
+unit=gemini-a72-preflight.service
+test "$(systemctl show "$unit" -p ActiveState --value)" = active
+test "$(systemctl show "$unit" -p SubState --value)" = exited
+test "$(systemctl show "$unit" -p Result --value)" = success
+test "$(systemctl show "$unit" -p ExecMainStatus --value)" = 0
+result=/run/gemini-a72-preflight/result
+test "$(tail -n 1 "$result")" = a72_startup=pass
+grep -qx 'cpu8_start=requested' "$result"
+grep -qx 'cpu9_start=requested' "$result"
+grep -Fq 'CPU8 PSCI CPU_ON committed with CPU4 prerequisite' "$result"
+grep -Fq 'CPU9 PSCI CPU_ON committed with CPU8 prerequisite' "$result"
+grep -qx '0-9' "$result"
+printf 'boot_id=%s\\n' {boot_id}
+cat "$result"
+for cpu in 8 9; do
+ online=$(cat /sys/devices/system/cpu/cpu$cpu/online)
+ case "$online" in 0|1) ;; *) exit 1;; esac
+ printf 'current_cpu%s_online=%s\\n' "$cpu" "$online"
+done
+'''
+
+
 def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False,
              system=SYSTEM, kernel=KERNEL):
     if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+',system):
@@ -80,13 +108,16 @@ def evidence(ssh, boot_id, directory, qualify, persistence, require_efi=False,
     profile = 'mt6797-a53-a72-a41-v7' if bound else 'mt6797-a53-a72'
     identity_check = ("dmesg | grep -F 'arm64-late-cpu-profile: verified the pre-finalization runtime identity binding' >/dev/null"
                       if bound else 'test ! -e /sys/firmware/devicetree/base/chosen/gemini-late-cpu-provenance')
+    if not bound:
+        persistence.run(ssh, native_cpu_script(boot_id), directory, 'nix-native-cpus')
+    cpu_check = ('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1\n'
+                 'test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1' if bound else ':')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink /run/current-system)" = {system}
 test "$(zcat /proc/config.gz | sha256sum | cut -d' ' -f1)" = {config_sha}
 {efi_guard}
-test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
-test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
+{cpu_check}
 {identity_check}
 dmesg | grep -F 'arm64-late-cpu-profile: {profile} ready' >/dev/null
 grep -qx 'sandbox = true' /etc/nix/nix.conf
@@ -133,6 +164,10 @@ test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
     output=persistence.run(ssh,command,directory,'nix-unprivileged-build').strip()
     if not re.fullmatch('/nix/store/[0-9a-z]{32}-gemini-daemon-'+token,output):
         raise RuntimeError('Unexpected daemon build output')
+    if not bound:
+        persistence.run(ssh, native_cpu_script(boot_id), directory, 'nix-native-cpus')
+    cpu_check = ('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1\n'
+                 'test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1' if bound else ':')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {output_link})" = {output}
@@ -154,6 +189,10 @@ def verify_retained(ssh, boot_id, directory, qualify, persistence, previous, nam
     root = previous.get('store_root', '')
     if root not in ('', '/persist/nixos'): raise ValueError('Unknown retained Nix store root')
     store_arg = " --store 'local?root=/persist/nixos'" if root else ''
+    if not bound:
+        persistence.run(ssh, native_cpu_script(boot_id), directory, 'nix-native-cpus')
+    cpu_check = ('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1\n'
+                 'test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1' if bound else ':')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {previous['output_link']})" = {previous['output']}

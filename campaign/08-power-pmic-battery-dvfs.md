@@ -1207,6 +1207,32 @@ source hashes and26 retained outputs. The overall diagnostic profile still
 fails its expected cgroup2 memory-controller requirement. No default is
 promoted. Final evidence: `handoff/a72-automatic-parking-20261008/completion.json`.
 
+Boot qualification must distinguish successful A72 startup from their later
+parking state. The native first-start service already checks each online
+transition, both kernel commit messages, the active MP2 clock, and all ten
+online CPUs before writing its final`a72_startup=pass` record. The post-boot
+EFI check now verifies that completed service and record for the current
+boot, then records the present online bits separately. Host tests reject
+failed/incomplete service evidence, missing startup records and changed boot
+identity while accepting subsequent parking.
+
+On candidate boot`8ab215b1-2e33-4b19-9168-2ff5b0574d84`, this read-only check
+passes with both CPU8 and CPU9 currently offline. Evidence:
+`handoff/a72-parking-soak-trial-01/native-startup-check.json`. The larger
+six-cycle probe stops before load because its systemd PATH lacks`sh`; it
+records no completed cycles. Kernel and follow-up health checks are clean.
+A retry is withheld for insufficient observation time. The corrected probe
+uses the verified absolute shell path and is prepared in
+`handoff/a72-parking-soak-fixed-20261008/`. Six-cycle and hardware service-stop
+restoration results remain pending; the previous three-cycle success stands.
+The trial returns to healthy M69 boot`5479167c-24dc-4c34-873e-fc5493fc42e8`;
+terminal-worker and final source/output audits pass. The same read-only
+startup script is now shared by EFI and ordinary Nix-build qualification;
+its contents exactly match the successful device check. Historical kernels
+retain their online-CPU/runtime-identity requirements. All16 boot-runner and
+five persistent-Nix tests pass. Final evidence:
+`handoff/a72-parking-soak-20261008/completion.json`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
