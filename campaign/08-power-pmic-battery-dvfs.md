@@ -2224,6 +2224,27 @@ This planner has no hardware effects. Settling/readback execution, sequencing
 around clock changes, CPUFreq integration and hardware qualification remain
 pending. Installed M69 and normal packaging remain unchanged.
 
+## 2026-10-08: verified A72 rail executor
+
+Linux `edbddbc5850c1` adds `mt6797_a72_execute_rails()`. It reconstructs the
+complete plan against an independently supplied target, rejects stale initial
+readback before writing, changes one rail per step, waits for the vendor
+DA9214/LDO slew interval (rounded conservatively, minimum25us), and verifies
+both rail voltages. Any write failure or post-write readback failure sets a
+sticky fault and stops all writes; no speculative rollback is attempted.
+Caller-owned clock/power/hotplug serialization and clock-versus-voltage
+ordering remain required.
+
+Executor tests cover all1681 CPU-voltage pairs from nominal SRAM endpoints,
+every read/write error boundary, writes with and without an applied effect,
+every bit of each readback, sticky fault re-entry and full-plan byte mutation.
+The fake withholds settled readback until the rail-specific minimum delay is
+met. All18 power-core cases /1,274,624 assertions, existing shutdown regressions
+and ARM64 compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/rail-executor-tests.log`.
+Hardware rail callbacks, combined clock/voltage sequencing and CPUFreq remain
+pending; the installed system and normal packaging are unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
