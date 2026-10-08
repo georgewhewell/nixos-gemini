@@ -1828,6 +1828,40 @@ Worker inactive, MainPID0. Evidence: `handoff/a72-fixed-startup-trial-01/`
 and `handoff/a72-fixed-startup-20261008/trial-01-result.json`. No default
 promoted and normal packaging remains unchanged.
 
+## 2026-10-08: domain-specific reads pass concurrent A72 regression
+
+Diagnostic kernel `1844e1afbb318` changes actual observation accesses: each
+A53/CCI read samples only its PLL, mux and divider twice, without MP2 secure
+reads. MP2 observation still samples its two secure PLL words; transition
+and lifecycle full snapshots are unchanged. Host tests execute the domain
+reader and assert exact access footprints across1,152 bit-change cases,
+zero A53/CCI secure calls,23 error cases and lease ownership. Existing
+58,539 core assertions, callback checks, ARM64 and full image builds pass.
+
+Trial `clock-domain-reads-trial-01`, boot
+`43070076-e93f-43b7-b0e6-283a4c5fb0a1`, passed the same fixed-startup
+comparison that failed on `e7314b974124e`. Initial restoration at
+LL806/L1092MHz,CCI611MHz/CPU1.00V succeeded. At maximum A53 rates the probe
+completed three full A72 cycles with558 paired rate reads and six checked
+workloads on restarted A72 cores. All174 upper transition pairs passed,
+including48 LL/30 L postdivider crossings and1,083 SRAM reads. Elapsed
+36.232 seconds; peak sampled temperature43.9°C. Both schedutil governors,
+parking and hold/pause cleanup were restored. The captured kernel has no
+matched clock, rail, lifecycle, BUG/Oops/WARNING or Wi-Fi HIF errors.
+
+This is bounded evidence for the domain-read change, not proof of a secure
+monitor root cause or ordinary autonomous startup qualification. The next
+prepared probe removes fixed-startup conditioning. Full-ceiling thermal and
+endurance checks remain pending. Normal packaging remains at `eb64`.
+
+The runner's general profile check failed at the expected cgroup-v2 memory
+controller gate on this cgroup-v1 diagnostic image; the hardware probe itself
+returned0. M69 recovery `14dc830a-7f25-48ac-a052-db8c866928cb` passed the final
+locked audit:35 matching source hashes,26 retained outputs, no writer and
+swap layout. Worker inactive, MainPID0. Evidence:
+`handoff/clock-domain-reads-20261008/completion.json` and
+`handoff/clock-domain-reads-trial-01/`. No default promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
