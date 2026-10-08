@@ -1295,7 +1295,31 @@ passes all35 source hashes,26 retained outputs, no-writer and lock checks.
 No default is promoted while normal cgroup2 qualification remains unresolved.
 Final record:`handoff/a53-1040mv-20261008/completion.json`.
 The next load/cooling probe is prepared in
-`handoff/a53-1040mv-load-cooling-20261008/`; it has not run yet.
+`handoff/a53-1040mv-load-cooling-20261008/`.
+
+That probe passes on boot`aa336a57-bc1e-40e2-99a5-e34f24dfdf8b`. Eight
+CPU-affined workers each complete30 seconds of checked PBKDF2 computation;
+load snapshots reach both new frequency maxima and real temperature peaks
+at59.8°C. After all workers exit, synthetic temperature steps exercise all
+seven CPUFreq cooling states on both clusters, down to221/325MHz. Clearing
+emulation restores1.014/1.352GHz limits and zero cooling state; cleanup
+restores schedutil and parking. The final real reading is43.2°C. Total probe
+time is35.81 seconds, with no kernel errors and passing post-probe health.
+This verifies software cooling response, not physical overtemperature,
+long-term stability or endurance. Evidence:
+`handoff/a53-1040mv-load-cooling-trial-01/`.
+
+The next LL point crosses an ARMPLL postdivider boundary. Test-only Linux
+`2ed10202112a9` expands native clock callback coverage to both LL and L,
+ten rates per domain and four inherited fallback settings:800 successful
+pairs and4,256 injected postdivider failures pass under UBSan. Every
+intermediate write checks sibling mux/divider/DCM/PLL preservation. LL221MHz
+already uses the temporary /4 divider, so identical-value refused writes are
+accepted only when the required register state is already present; refused
+state changes still test failure fencing. The existing256 CCI pairs/1,836
+failures and49 lower-LL pairs/371 failures also pass. No additional operating
+point or production driver changes in this test commit. Evidence:
+`handoff/a53-upper-divider-20261008/`.
 
 ## Historical Cycle18 observations
 
