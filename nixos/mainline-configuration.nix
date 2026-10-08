@@ -139,6 +139,9 @@
   };
   # The maintained kernel and paging policy use the cgroup v2 memory controller.
   systemd.enableUnifiedCgroupHierarchy = true;
+  # Stock LK prepends the vendor kernel's "slub_max_order=0 slub_debug=OFZPU".
+  # Later arguments win: no SLUB debugging and the default maximum order.
+  boot.kernelParams = [ "slub_debug=-" "slub_max_order=3" ];
   systemd.coredump.enable = false;
   systemd.oomd.enable = false;
   systemd.shutdownRamfs.enable = false;
