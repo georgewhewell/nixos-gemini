@@ -2392,6 +2392,34 @@ owner builds pass. Evidence:
 CPUFreq/OPP wiring and hardware qualification remain pending. Normal packaging
 and installed M69 remain unchanged.
 
+## 2026-10-08: optional shared A72 OPP callback registration
+
+Linux `06b9387cfff3f` installs an OPP clock callback during cold owner probe
+when CPU8/9 reference the same `opp-shared` table. It rejects separate tables,
+CPU regulator supply properties or mismatched MP2 clock handles. The OPP
+callback takes the selected frequency/voltage and routes it through the
+native owner;338MHz selects the vendor /2 divider. Configuration is released
+with the power owner's lifetime. No second regulator consumer is created.
+
+MP2 rate determination now returns `-EOPNOTSUPP`: the OPP core therefore
+retains its requested frequency instead of rounding every request to the
+currently fixed MP2 rate. Actual programming remains owner-only. After a
+DVFS last-core shutdown, the owner disables the regulator-less CPU OPP table
+in software, invalidating its enabled-state cache before firmware restarts
+at750MHz. Otherwise a request for the previous OPP could be incorrectly
+skipped after restart.
+
+Tests pass shared-table/clock admission, configuration unwind, OPP routing,
+error propagation, MP2 determination behavior, all251 DVFS shutdown/restart
+rail pairs and46 shutdown failure boundaries including cache invalidation.
+ARM64 clock/owner compilation passes. Evidence:
+`handoff/a72-frequency-audit-20261008/opp-owner-tests.log`.
+The board DT still has no attached A72 OPP table; activation and hardware
+qualification remain pending. The existing Nix CPUFreq service loads its
+module after A72 preflight, allowing configuration before OPP registration;
+this ordering must be retained when enabling the table. Normal packaging and
+installed M69 remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
