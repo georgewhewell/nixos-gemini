@@ -2500,6 +2500,19 @@ no second trial or normal promotion has started. Raw evidence is retained in
 `handoff/a72-first-trial-01`, summarized in
 `handoff/a72-first-20261008/probe-result.json`.
 
+First-trial recovery audit completed on M69 boot
+`28df58fd-ad98-427b-9205-ccb25fc496c4`:35 source hashes match,26 ordinary
+outputs retained, fixed swap preserved, locks acquired and no writer active.
+Worker `boot-test-1791458839-1759173.service` is inactive with MainPID0.
+`handoff/a72-first-20261008/completion.json` retains both failed probe and
+successful recovery evidence; `transition-coverage.json` verifies all16
+adjacent request pairs from actual samples.
+
+The corrected probe now runs as `a72-first-trial-02`, supervised by
+`boot-test-1791459443-1811203.service`, using the identical packaged kernel.
+Only the separate probe's stopped-clock expectation changed; physical restart
+qualification and this new trial's recovery audit remain pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
