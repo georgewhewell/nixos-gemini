@@ -1114,6 +1114,28 @@ physical restart qualification remains pending. Trial04 recovery returned
 healthy M69 boot `3374baff-83db-4a92-858c-39d064f08c4e`. The worker is terminal
 and final source/output audits pass.
 
+Trial05 boot `3501052e-5501-4903-8fc9-d9bd9b30cfd8` verifies the clock fix:
+after CPU9 and CPU8 shutdown, BUCKB is disabled and MP2 correctly reads
+26 MHz, with no collected clock/kernel errors. CPU8 restart now returns
+EUCLEAN during preparation, before another CPU_ON commit. Cleanup is also
+refused. This is a further preparation failure, not a qualified restart.
+The conditional low-voltage probe records `admitted=false` and does not run.
+Evidence is in `handoff/a72-native-trial-05/` and
+`handoff/a72-reset-clock-20261008/completion.json`.
+
+Recovery returns healthy M69 boot `a4bf6f77-3ea3-410d-8f15-d8a1bd3f8132`;
+the worker is terminal and final audits pass for 35 source hashes and 26
+retained outputs. Linux `d8cc8df95225e` adds failure-only diagnostics of the
+power transaction's applied step count and initial resources, plus the SRAM
+restart phase, underlying error, recorded shutdown sample and observed
+samples. It adds no hardware reads and changes no admission rule. Native
+hotplug and SRAM host tests, ARM64 compilation and checkpatch pass. Normal
+and diagnostic builds pass the complete kernel checks, sharing kernel
+`/nix/store/lw7sjsd0khvmkcv71k6iay8kzxpq0fz9-linux-gemini-7.1.3` and unchanged
+DTB. Build evidence and GC roots are in
+`handoff/a72-restart-diagnostics-20261008/`; diagnostic hardware testing
+remains pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
