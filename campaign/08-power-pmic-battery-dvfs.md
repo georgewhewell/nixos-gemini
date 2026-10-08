@@ -1188,8 +1188,19 @@ results; normal cgroup2 qualification remains unresolved.
 The maintained candidate now removes the CPU8/9 parking exclusion while
 preserving CPU4→CPU8→CPU9 startup dependencies. Service-stop cleanup also
 restores CPU8/9. Both packaging variants build with unchanged kernel/DTB.
-The actual daemon's repeated idle/load qualification is the next test;
-evidence is collected in`handoff/a72-automatic-parking-20261008/`.
+The actual daemon passes three load/idle cycles on candidate boot
+`6b06926a-a9ab-4367-beec-c95a952bf376` in22.52 seconds, with schedutil
+active throughout. Twelve load processes bring all ten CPUs online;
+checked workloads execute on CPU8 and CPU9 in every cycle. Removing load
+lets the daemon shut down CPU9 then CPU8, disable BUCKB and return MP2 to
+26MHz each time. Loaded snapshots peak at47.7°C; kernel error checks and
+post-probe health checks pass. The host simulation also passes three
+all-core idle/load cycles, dependency ordering and service-stop restoration.
+A separate hardware service-stop check was withheld before execution because
+only21 seconds remained in the observation window; that particular cleanup
+path is host-tested only. Evidence: `handoff/a72-automatic-parking-trial-01/`
+and `handoff/a72-automatic-parking-20261008/`. Sustained stress and normal
+cgroup2 qualification are separate outstanding requirements.
 
 ## Historical Cycle18 observations
 
