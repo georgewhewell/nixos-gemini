@@ -1978,6 +1978,23 @@ a board thermal-policy adjustment, not a claim that the governor is faulty.
 The repeated synthetic test expects the policy's reachable states3–15;
 the original trial already verified frequency mapping for states1–15.
 
+## 2026-10-08: cooling release exposes slow normal polling
+
+`a53-thermal-floor-trial-01` verifies reachable synthetic states3–15 and
+the real state3 frequency cap, but still stops at90.4°C. Near the end,
+temperature falls through84.2,83.5,83.2°C with state3 and1.15V. Cooling then
+releases: samples at35.202,35.462 and35.722 seconds show full1.547/2.002GHz,
+1.20V and85.4,88.2,89.9°C, respectively. The normal one-second polling
+interval permits rapid reheating after passive cooling releases. This is
+a distinct boundary from the overly weak cooling levels in the first trial.
+Cleanup and kernel checks pass; recovery audit is pending. Evidence:
+`handoff/a53-thermal-floor-20261008/probe-result.json` and the raw trial.
+
+Diagnostic `b62fc653f754f` reduces normal thermal polling from1000 to100ms,
+retaining40ms passive polling, the state3 floor and all trip temperatures.
+The DTB builds. Full packaging and hardware verification remain pending;
+neither thermal diagnostic has qualified the full-ceiling load yet.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
