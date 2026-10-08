@@ -3,7 +3,8 @@
 Current status, 2026-10-08: use [the completion ledger](../research/HARDWARE_STATUS.md)
 and the dated results in each campaign chapter. The maintained kernel pin is
 `ca4b6d9b98e2b0dd3130eea37de405f680afa41d`; M69 remains the installed recovery
-baseline. Automatic A72 parking has passed three hardware load/idle cycles,
+baseline. Automatic A72 parking has passed repeated hardware load/idle cycles and
+service-stop restoration,
 and coupled A53/CCI voltage scaling has passed bounded tests down to770mV.
 These results do not qualify the normal cgroup2 generation: its allocator
 failure remains unresolved. USB3 SuperSpeed and the other unfinished hardware

@@ -1233,6 +1233,26 @@ retain their online-CPU/runtime-identity requirements. All16 boot-runner and
 five persistent-Nix tests pass. Final evidence:
 `handoff/a72-parking-soak-20261008/completion.json`.
 
+The corrected probe passes on candidate boot
+`3c480f98-6dda-48d6-bb3a-b5178a284751`. Six schedutil load/idle cycles
+bring all ten CPUs online, execute checked workloads on both A72s, then
+power the A72 cluster off with BUCKB disabled and MP2 at26MHz. Stopping the
+parking service restores all ten CPUs, enables BUCKB and returns MP2 to
+750MHz; restarting the service resumes ordered A72 parking. The native
+startup-record check also passes while both A72s are parked. Total probe
+time is47.99 seconds. Daemon error records and kernel error checks are empty;
+post-probe service and system health checks pass. Evidence:
+`handoff/a72-parking-soak-trial-03/`. This extends the bounded lifecycle
+coverage; it is not sustained thermal or endurance qualification.
+
+Before this boot, trial02 stopped in preflight without a reboot or candidate
+writer because a duplicated admission block referenced an undefined variable
+in retained-output verification. Commit`3b8199f` removes the two unintended
+copies. The regression test now exercises the complete mocked build/proof/
+retention sequence and independent post-recovery retention, alongside the
+startup rejection tests; all22 tests pass. Trial03's real preflight also
+passes. Its corrected probe sets the system command path explicitly.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
