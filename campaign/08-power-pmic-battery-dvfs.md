@@ -1690,6 +1690,34 @@ all26 ordinary outputs retained. The worker is inactive with MainPID0.
 No default was promoted. Evidence: `handoff/clock-domain-observation-trial-01/`
 and `handoff/clock-domain-observation-20261008/trial-01-result.json`.
 
+## 2026-10-08: traced warm startup stops in VPROC enable
+
+Diagnostic-only kernel `3c9e22b10f1ee` adds dynamic-debug preparation stages
+and host-harness logging plumbing. Full image build and packaged tests pass;
+the DTB is identical to `eb64c46a953ef`. Normal packaging remains at `eb64`.
+The traced trial boot `9a65254e-7c9c-40b6-896e-81aa08079626` reached healthy
+userspace and the probe's cold-start trace check passed before creating its
+parking hold. Warm CPU8 startup reached both off samples, clock restart
+validation, transaction admission, guard entry, SPM reset update, IDVFS
+fence and PWRAP reset assertion. Their verify stages completed.
+
+The final console marker at164.014728 seconds enters action4,
+`MT6797_A72_VPROC_ENABLE`. No action4 verify or prepare-complete marker
+follows. This localizes the observed interruption to the enable action,
+which calls `regulator_enable(preflight->vproc_big)` when a vote is needed;
+it does not identify whether regulator-core locking, provider I/O, hardware
+response, or another concurrent failure is responsible. CPU_ON has not been
+reached by this prepare callback. The CCI startup vote hypothesis remains
+unproven and should not be treated as the cause. The next trace should
+separate regulator-core entry, DA9213 provider entry and its I2C transaction.
+The observation regression and upper transition matrix never started.
+
+The observer timed out after85 seconds. Automatic recovery returned M69
+`bf4283d8-6dc1-4c29-8079-d1f71f300cbd`; the final locked audit passed all35
+source hashes and retained all26 outputs. Worker inactive, MainPID0.
+Evidence: `handoff/a72-startup-trace-trial-01/recovery-console.txt` and
+`handoff/a72-startup-trace-20261008/trial-01-result.json`. No default promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the

@@ -22,7 +22,10 @@ the selected kernel now scopes read-only stability checks to the requested
 clock domain, with host/build checks passing. Its physical regression lost
 contact while restoring parked cores, after CPU7 started and before CPU8
 was reported online; the regression itself never began. M69 recovery and
-the final storage/source audit passed. Physical validation remains pending.
+the final storage/source audit passed. A subsequent diagnostic trace localizes
+the interruption to warm CPU8 VPROC enable, before its verify stage and
+before CPU_ON; the underlying cause remains unresolved. That trial also
+recovered M69 with a clean final audit. Physical validation remains pending.
 Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
