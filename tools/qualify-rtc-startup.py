@@ -62,7 +62,7 @@ def verify_baseline(calendar, raw, boot, start, end, elapsed):
     observation(start, end, elapsed)
     if v['boot_id'] != boot or not all(v[k].isdigit() for k in ('rtc', 'system')):
         raise RuntimeError('Legacy clock identity differs')
-    utc = calendar.decode_m69(int(v['rtc']))
+    utc = calendar.baseline_utc(int(v['rtc']))
     if not all(start-3 <= t <= end+3 for t in (utc, int(v['system']))):
         raise RuntimeError('Startup trial requires previously retained firmware UTC')
     return dict(boot_id=boot, legacy_rtc_epoch=int(v['rtc']), firmware_decoded_utc=utc,

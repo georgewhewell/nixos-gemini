@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -35,6 +36,7 @@ class Keep(unittest.TestCase):
             command = argv[-1]
             if 'gemini-system' in command: return 'normal\n'
             if 'shrinker_enabled' in command: return 'Y\n'
+            if 'since_epoch' in command: return f'{int(time.time())}\n'
             if argv[:2] == ['systemctl', '--user']: return ''
             raise AssertionError(argv)
         with mock.patch.object(r, 'wait_state') as wait, \
@@ -55,8 +57,8 @@ class Keep(unittest.TestCase):
         baseline = json.loads((self.dir / 'promoted-baseline.json').read_text())
         self.assertEqual(baseline['boot_sha256'], self.sha)
         self.assertEqual(baseline['system'], self.middle['system'])
-        self.assertEqual((baseline['store'], baseline['zswap_shrinker'], baseline['boot']),
-                         ('normal', 'Y', 'uboot-efi'))
+        self.assertEqual((baseline['store'], baseline['zswap_shrinker'], baseline['boot'], baseline['rtc_epoch']),
+                         ('normal', 'Y', 'uboot-efi', 'native'))
         self.assertEqual(baseline['previous'], r.BASELINE['name'])
 
     def test_reboot_during_stand_down_is_not_promoted(self):

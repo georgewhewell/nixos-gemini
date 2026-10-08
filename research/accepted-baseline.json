@@ -6,5 +6,6 @@
   "store": "normal",
   "zswap_shrinker": "Y",
   "previous": "M69",
-  "boot": "uboot-efi"
+  "boot": "uboot-efi",
+  "rtc_epoch": "native"
 }

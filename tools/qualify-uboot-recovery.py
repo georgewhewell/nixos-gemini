@@ -639,6 +639,8 @@ def keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit
                     system=kept['system'], store=qualify.run(ssh + ['test -f /nix/store/.gemini-system && echo m69-overlay || echo normal']).strip(),
                     zswap_shrinker=qualify.run(ssh + ['cat /sys/module/zswap/parameters/shrinker_enabled']).strip(),
                     boot='uboot-efi' if handoff_tree(ssh).get(HANDOFF_MARKER) == b'efi\0'.hex() else 'direct',
+                    rtc_epoch='native' if abs(int(qualify.run(ssh + ['cat /sys/class/rtc/rtc0/since_epoch']).strip())
+                                              - time.time()) <= 10 else 'm69-legacy',
                     previous=BASELINE['name'])
     if qualify.accepted_digest(Path(baseline['image'])) != sha:
         raise RuntimeError('Kept image differs from the qualified candidate')

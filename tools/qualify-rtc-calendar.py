@@ -22,6 +22,15 @@ import time
 LIMITS = dict(RuntimeMaxUSec='30s', TimeoutStopUSec='3s', KillMode='control-group', RemainAfterExit='yes')
 
 
+def baseline_utc(epoch):
+    """UTC from the accepted baseline kernel's RTC reading."""
+    baseline = json.loads(Path(os.environ.get('GEMINI_ACCEPTED_BASELINE') or
+                               Path(__file__).resolve().parents[1]/'research/accepted-baseline.json').read_text())
+    if baseline.get('rtc_epoch', 'm69-legacy') == 'native':
+        return epoch
+    return decode_m69(epoch)
+
+
 def decode_m69(epoch):
     # Invert the qualified driver's 1900..2027 range rotation first, then
     # interpret the same hardware calendar fields using the firmware epoch.
@@ -228,12 +237,13 @@ zcat /proc/config.gz | grep -qx '# CONFIG_RTC_SYSTOHC is not set'
         values = parse(raw, ('boot_id', 'notes', 'rtc'))
         if values['boot_id'] != state['boot_id'] or values['notes'] != baseline['notes']:
             raise RuntimeError('Legacy RTC decoder identity differs')
-        utc = decode_m69(int(values['rtc']))
+        utc = baseline_utc(int(values['rtc']))
+        legacy = utc != int(values['rtc'])
         proof = dict(recovered_boot_id=state['boot_id'], legacy_rtc_epoch=int(values['rtc']),
             firmware_decoded_utc=utc, host_start=start, host_end=end,
-            legacy_m69_decoder=True, native_m69_utc_correct=False,
+            legacy_m69_decoder=legacy, native_m69_utc_correct=False,
             rtc_reboot_persistence_qualified=(start-3 <= utc <= end+3 and elapsed <= 10 and abs(end-start-elapsed) <= 1))
         runner.qualify.save(directory, 'rtc-calendar-reboot.json', proof)
         if not proof['rtc_reboot_persistence_qualified']:
-            raise RuntimeError('RTC UTC did not persist across firmware and M69 recovery')
+            raise RuntimeError('RTC UTC did not persist across firmware and baseline recovery')
         return proof

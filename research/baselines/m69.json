@@ -5,5 +5,6 @@
   "system": "/nix/store/0xbrhrl8ym703g1449gni51dkv7jwlqv-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
   "store": "m69-overlay",
   "zswap_shrinker": "N",
-  "boot": "direct"
+  "boot": "direct",
+  "rtc_epoch": "m69-legacy"
 }
