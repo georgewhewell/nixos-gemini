@@ -1386,6 +1386,26 @@ outputs. The CLI exits 1 because the diagnostic lacks the normal cgroup2
 memory controller. No default is promoted.
 Final record: `handoff/a53-1100mv-load-cooling-20261008/completion.json`.
 
+## Full A53 clock table prerequisite — 2026-10-08
+
+Linux `108f859dc137d` adds the missing vendor SB clock rates:
+LL 1.443/1.495/1.547 GHz and L 2.002 GHz, all with unity PLL/path dividers.
+The vendor `mt_cpufreq.c` SB frequency and FP divider tables supply these
+values. This completes clock-provider coverage of the existing A53 DT OPP
+tables; it does not enable the disabled operating points.
+
+The production clock transition host test now covers all 16 rates per
+cluster: 2,048 ordered pairs across four saved MAINPLL settings, 12,344
+postdivider fault injections and 127,933 intermediate checks, with UBSan.
+Sibling register preservation, failure fencing and fallback restoration
+remain checked. All 58,539 clock-core assertions, registration tests and
+ARM64 clock-core compilation pass. Evidence and source hash:
+`handoff/a53-full-clock-table-20261008/completion.json` and adjacent logs.
+
+Packaging remains pinned to the physically tested `7fe1d8055ed94` kernel.
+Higher voltage points still require coupled-rail/runtime tests and physical
+qualification; no new candidate was flashed for this clock-table change.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
