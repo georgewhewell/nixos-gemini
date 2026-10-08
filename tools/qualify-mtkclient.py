@@ -19,8 +19,11 @@ import subprocess
 import sys
 import time
 
-ACCEPTED_BOOT = '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'
-ACCEPTED_SYSTEM = '/nix/store/0xbrhrl8ym703g1449gni51dkv7jwlqv-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade'
+# The installed p22 image every trial starts from and is rescued back to.
+BASELINE_FILE = Path(__file__).resolve().parent.parent / 'research' / 'accepted-baseline.json'
+BASELINE = json.loads(BASELINE_FILE.read_text())
+ACCEPTED_BOOT = BASELINE['boot_sha256']
+ACCEPTED_SYSTEM = BASELINE['system']
 COMMANDS = 'printgpt;ro 0 0x8000 gpt-primary.bin;r boot boot-readback.img;reset --bootmode reboot'
 WRITE_COMMANDS = ('printgpt;ro 0 0x8000 gpt-primary.bin;w boot accepted-boot.img;'
                   'r boot boot-readback.img;reset --bootmode reboot')
@@ -57,7 +60,7 @@ def snapshot(ssh):
     result = dict(line.split('=', 1) for line in run(ssh + [SNAPSHOT]).splitlines())
     if (result.get('boot_sha256') != ACCEPTED_BOOT or
             result.get('system') != ACCEPTED_SYSTEM or result.get('healthy') != 'yes'):
-        raise RuntimeError('Gemini is not on healthy accepted M69')
+        raise RuntimeError('Gemini is not on the healthy accepted baseline ('+BASELINE['name']+')')
     if not re.fullmatch(r'[0-9a-f-]{36}', result.get('boot_id', '')):
         raise RuntimeError('Missing boot identity')
     if not re.fullmatch(r'[0-9a-f]{64}', result.get('gpt_sha256', '')):
@@ -78,11 +81,23 @@ def verify_reads(directory, before):
 
 def accepted_boot_bytes(path):
     if path.stat().st_size != 16 * 1024 * 1024:
-        raise RuntimeError('Write input must be the complete 16 MiB accepted M69 boot image')
+        raise RuntimeError('Write input must be the complete 16 MiB accepted boot image')
     data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != ACCEPTED_BOOT:
-        raise RuntimeError('Write input does not match the accepted M69 boot SHA-256')
+        raise RuntimeError('Write input does not match the accepted boot SHA-256')
     return data
+
+
+def adopt_baseline(baseline):
+    """Make a newly kept p22 image this process's accepted baseline."""
+    global BASELINE, ACCEPTED_BOOT, ACCEPTED_SYSTEM
+    BASELINE, ACCEPTED_BOOT, ACCEPTED_SYSTEM = baseline, baseline['boot_sha256'], baseline['system']
+
+
+def accepted_digest(path):
+    if path.stat().st_size != 16 * 1024 * 1024:
+        raise RuntimeError('Accepted image must be a complete 16 MiB p22 image')
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def commands_for(writing, capture_phase, capture_ramoops=False):

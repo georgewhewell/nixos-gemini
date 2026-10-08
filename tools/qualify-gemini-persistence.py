@@ -86,6 +86,39 @@ else
 fi'''
 
 
+def store_checks(previous):
+    """Shell that verifies a token output from either installed store layout.
+
+    M69 runs an overlay store whose upper layer and state are /nix/upper and
+    /nix/var on p32. The normal generation mounts /persist/nixos/nix. Each
+    can see the other's files on p32 but not its store at /nix/store, so a
+    foreign token is checked by bytes and root link; its own system checks
+    the database identity.
+    """
+    built=previous.get('store','m69-overlay')
+    if built not in ('m69-overlay','normal'): raise ValueError('Unknown token store')
+    name=Path(previous['output']).name
+    root=Path(previous['gcroot']).name
+    native=f''' test "$(readlink {previous['gcroot']})" = {previous['output']}
+ {NIX}/nix-store --check-validity {previous['output']}
+ printf 'output_sha256='; sha256sum {previous['output']} | cut -d' ' -f1
+ printf 'nix_hash='; {NIX}/nix-store --query --hash {previous['output']}
+ printf 'deriver='; {NIX}/nix-store --query --deriver {previous['output']}'''
+    if built=='m69-overlay':
+        foreign=f''' test "$(readlink /persist/nix/var/nix/gcroots/{root})" = {previous['output']}
+ printf 'output_sha256='; sha256sum /persist/nix/upper/{name} | cut -d' ' -f1
+ printf 'store=foreign\\n'
+'''
+        same='test -f /nix/store/.gemini-system'
+    else:
+        foreign=f''' test "$(readlink /persist/nixos/nix/var/nix/gcroots/{root})" = {previous['output']}
+ printf 'output_sha256='; sha256sum /persist/nixos/nix/store/{name} | cut -d' ' -f1
+ printf 'store=foreign\\n'
+'''
+        same='test ! -f /nix/store/.gemini-system'
+    return f'if {same}; then\n{native}\nelse\n{foreign}\nfi'
+
+
 def evidence(ssh, boot_id, directory, qualify, previous=None, system=None):
     phase='persistence-after' if previous else 'persistence-before'
     system=system or qualify.ACCEPTED_SYSTEM
@@ -122,7 +155,9 @@ chmod 0600 {home}
 ''',directory,phase+'-build').strip()
         if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-gemini-persistence-'+token,output):
             raise RuntimeError('Unexpected Nix build output')
-        previous=dict(boot_id=boot_id,home=home,output=output,gcroot=gcroot,build_store='local',
+        built_in=run(ssh,'test -f /nix/store/.gemini-system && echo m69-overlay || echo normal',
+                     directory,phase+'-store').strip()
+        previous=dict(boot_id=boot_id,home=home,output=output,gcroot=gcroot,build_store='local',store=built_in,
                       build_type='fixed-output',sandbox_setting=True,ordinary_builds_qualified=False,
                       content_sha256=content_sha)
         run(ssh,f'''set -eu
@@ -131,27 +166,11 @@ sync
 ''',directory,phase+'-root')
     elif previous['boot_id']==boot_id:
         raise RuntimeError('Persistence was checked in the original boot')
-    # The token is built in M69's store. A normal generation mounts its own
-    # store and state from /persist/nixos/nix, so there it checks M69's root
-    # and output bytes on p32; the recovered M69 boot rechecks the database.
-    m69_root='/persist/nix/var/nix/gcroots/'+Path(previous['gcroot']).name
-    m69_output='/persist/nix/upper/'+Path(previous['output']).name
     command=f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(stat -c %U:%G:%a {previous['home']})" = gemini:users:600
 printf 'home_sha256='; sha256sum {previous['home']} | cut -d' ' -f1
-if test -f /nix/store/.gemini-system; then
- test "$(readlink {previous['gcroot']})" = {previous['output']}
- {NIX}/nix-store --check-validity {previous['output']}
- printf 'output_sha256='; sha256sum {previous['output']} | cut -d' ' -f1
- printf 'nix_hash='; {NIX}/nix-store --query --hash {previous['output']}
- printf 'deriver='; {NIX}/nix-store --query --deriver {previous['output']}
-else
- test /nix/store -ef /persist/nixos/nix/store
- test "$(readlink {m69_root})" = {previous['output']}
- printf 'output_sha256='; sha256sum {m69_output} | cut -d' ' -f1
- printf 'store=normal\n'
-fi
+{store_checks(previous)}
 '''
     observed=dict(line.split('=',1) for line in run(ssh,command,directory,phase+'-verify').splitlines())
     verify_content(previous,observed)
@@ -164,7 +183,7 @@ fi
 def verify_content(expected,observed):
     if any(observed.get(k)!=expected['content_sha256'] for k in ('home_sha256','output_sha256')):
         raise RuntimeError('Persistent home or Nix output bytes changed')
-    if observed.get('store')=='normal':
+    if observed.get('store')=='foreign':
         return
     if not observed.get('nix_hash','').startswith('sha256:'):
         raise RuntimeError('Nix database lacks the output hash')

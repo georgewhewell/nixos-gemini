@@ -185,18 +185,31 @@ def verify_retained(ssh, boot_id, directory, qualify, persistence, previous, nam
     root = previous.get('store_root', '')
     if root not in ('', '/persist/nixos'): raise ValueError('Unknown retained Nix store root')
     store_arg = " --store 'local?root=/persist/nixos'" if root else ''
+    native=f'''{persistence.NIX}/nix-store{store_arg} --check-validity {previous['output']}
+printf 'proof_sha256='; sha256sum {root}{previous['output']}/proof | cut -d' ' -f1
+printf 'nix_hash='; {persistence.NIX}/nix-store{store_arg} --query --hash {previous['output']}
+printf 'deriver='; {persistence.NIX}/nix-store{store_arg} --query --deriver {previous['output']}'''
+    if not root:
+        # Built in M69's overlay store. Another installed system sees its
+        # upper layer on p32 but not its database; M69 keeps that identity.
+        native=f'''if test -f /nix/store/.gemini-system; then
+{native}
+else
+printf 'proof_sha256='; sha256sum /persist/nix/upper/{Path(previous['output']).name}/proof | cut -d' ' -f1
+printf 'store=foreign\\n'
+fi'''
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {previous['output_link']})" = {previous['output']}
-{persistence.NIX}/nix-store{store_arg} --check-validity {previous['output']}
-printf 'proof_sha256='; sha256sum {root}{previous['output']}/proof | cut -d' ' -f1
-printf 'nix_hash='; {persistence.NIX}/nix-store{store_arg} --query --hash {previous['output']}
-printf 'deriver='; {persistence.NIX}/nix-store{store_arg} --query --deriver {previous['output']}
+{native}
 sync
 ''',directory,name)
     observed=dict(line.split('=',1) for line in raw.splitlines())
     if observed['proof_sha256']!=previous['proof_sha256']:
         raise RuntimeError('Ordinary build output changed')
+    if observed.get('store')=='foreign':
+        qualify.save(directory,name+'.json',dict(boot_id=boot_id,**observed))
+        return
     if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-gemini-daemon-'+previous['token']+r'\.drv',observed['deriver']):
         raise RuntimeError('Ordinary build derivation not registered')
     if 'registered' in previous and observed!=previous['registered']:

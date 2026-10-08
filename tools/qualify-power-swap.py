@@ -181,8 +181,9 @@ def preflight(r, directory, execute):
         before = json.loads((directory/'before.json').read_text())
         current = f.snapshot('swap')
         if current != dict(before, layout='swap'): raise RuntimeError('Device changed during extended preflight')
-        if r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() != 'N':
-            raise RuntimeError('M69 recovery policy differs')
+        if (r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() !=
+                r.qualify.BASELINE['zswap_shrinker']):
+            raise RuntimeError('Baseline recovery zswap policy differs')
         old = directory/'before-all-data'; old.mkdir(mode=0o700)
         retained_all(old, current, directory)
         if r.pm_test_last_stage or r.usb_cycle_requested:
@@ -241,6 +242,12 @@ def stop_owned_unit(r, unit):
 
 
 def finish(r, directory, before, error=None):
+    promoted = directory/'promoted-baseline.json'
+    if promoted.exists():
+        # The kept candidate, not the old baseline, is what must be healthy.
+        baseline = json.loads(promoted.read_text())
+        for qualify in (r.qualify, f.q.r.qualify):
+            qualify.adopt_baseline(baseline)
     units_path = directory/'units.json'
     if units_path.exists():
         units = json.loads(units_path.read_text())
@@ -255,7 +262,7 @@ def finish(r, directory, before, error=None):
             try:
                 after = f.snapshot('swap'); r.qualify.check_host_idle(); break
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
-                if time.monotonic() > deadline: raise RuntimeError('Healthy M69 with fixed swap did not return')
+                if time.monotonic() > deadline: raise RuntimeError('Healthy baseline with fixed swap did not return')
                 time.sleep(3)
         for key in ('owner', 'network'): stop_owned_unit(r, units[key])
     with ExitStack() as locks:
@@ -266,8 +273,9 @@ def finish(r, directory, before, error=None):
         audit = directory/'final-audit'; audit.mkdir(mode=0o700)
         outputs = retained_all(audit, after, directory)
         f.swap_evidence(audit, after); paging.watchdog(audit, after, 'watchdog')
-        if r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() != 'N':
-            raise RuntimeError('Recovered M69 no longer has its original policy')
+        if (r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() !=
+                r.qualify.BASELINE['zswap_shrinker']):
+            raise RuntimeError('Recovered baseline no longer has its original zswap policy')
         if (directory/'nix-candidate.json').exists():
             latest = json.loads((directory/'nix-candidate.json').read_text())
             r.persistent_nix.verify_retained(f.q.SSH, after['boot_id'], audit, r.qualify,
@@ -331,6 +339,8 @@ def main(configure_artifacts=None):
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--observe-seconds', type=int, default=0, metavar='0..90',
                         help='Observe accepted candidate before strict checks; recovery deadlines stay unchanged')
+    parser.add_argument('--keep', action='store_true',
+                        help='Keep a fully qualified candidate installed as the new accepted baseline')
     diagnostic = parser.add_mutually_exclusive_group()
     diagnostic.add_argument('--watchdog-expiry', action='store_true',
                         help='After full candidate checks, qualify keepalive loss and automatic recovery')
@@ -375,6 +385,7 @@ def main(configure_artifacts=None):
             (['--watchdog-expiry'] if args.watchdog_expiry else []) +
             (['--pm-test', args.pm_test] if args.pm_test else []) +
             (['--usb-cycle'] if args.usb_cycle else []) +
+            (['--keep'] if args.keep else []) +
             ['--observe-seconds', str(args.observe_seconds)] + artifact_args)
         if child.returncode: raise RuntimeError('Power/swap worker failed; inspect its retained trial and recovery evidence')
         return
@@ -386,6 +397,9 @@ def main(configure_artifacts=None):
     os.umask(0o077)
     r = configure(args.watchdog_expiry, args.pm_test, args.usb_cycle)
     r.OBSERVE_SECONDS = args.observe_seconds
+    if args.keep and (args.watchdog_expiry or args.pm_test or args.usb_cycle):
+        raise ValueError('--keep promotes a plain qualification; diagnostics always roll back')
+    r.KEEP = args.keep
     before = preflight(r, directory, args.worker)
     if not args.worker:
         print('Power/swap preflight passed; no device writes or reboot'); return

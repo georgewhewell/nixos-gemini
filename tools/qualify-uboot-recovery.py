@@ -27,7 +27,10 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 OBSERVE_SECONDS = 0
-ACCEPTED = Path('/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img')
+# Keep a fully qualified candidate as the new accepted baseline (promotion).
+KEEP = False
+BASELINE = json.loads((ROOT / 'research/accepted-baseline.json').read_text())
+ACCEPTED = Path(BASELINE['image'])
 PROFILES = {
     'power-kernel': (WORKSPACE / 'handoff/power-kernel-linux/boot-padded-p22.img', 'd2bb1ef41563db0bffaa64f5293f979aeae167b93ab85ea5db67c9fe7d1d1fbc'),
     'desktop-keyboard': (WORKSPACE / 'handoff/desktop-keyboard-linux/boot-padded-p22.img',
@@ -60,7 +63,7 @@ PROFILES = {
                     '0b104d094c012a8c5c00e4284368c153a831b94a7e39fc4e55f50ce0fe762f3a'),
     'efi-linux': (WORKSPACE / 'handoff/uboot-no-debug/boot-padded-p22.img',
                   '1d463996c9506cff718f83ff3e702e68240dbcfb90aea1f6425d747bdc2f2c7e'),
-    'baseline': (ACCEPTED, '913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3'),
+    'baseline': (ACCEPTED, BASELINE['boot_sha256']),
     'reset': (WORKSPACE / 'handoff/uboot-m69-efi-order-2/boot-padded-p22.img',
               'e9e0f6f2f44c28d98424420444c9f3466fa593adfe7f5d38c66652c349e8e950'),
     'watchdog': (WORKSPACE / 'handoff/uboot-m69-efi-order-3/boot-padded-p22.img',
@@ -602,6 +605,41 @@ def stage(directory, profile, before):
     return config
 
 
+def keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit):
+    """Promote a fully qualified candidate instead of rescuing the old baseline.
+
+    The supervisor accepts only the exact candidate-SHA record, and only at a
+    quiescent point between rescue scans. The candidate must still be the same
+    healthy boot afterwards. The new baseline is written for explicit
+    installation; this run does not edit the repository.
+    """
+    if profile not in LINUX_PROFILES:
+        raise ValueError('Only a Linux candidate can become the accepted baseline')
+    image, sha = PROFILES[profile]
+    record = directory / 'candidate-self-accepted'
+    with record.open('x') as handle:
+        handle.write(f'candidate_self_accepted sha256={sha}\n')
+    print('Candidate qualified; publishing self-acceptance to the rescue supervisor', flush=True)
+    wait_state(directory / 'supervisor.state', 'supervisor_candidate_self_accepted ', 700)
+    kept = candidate_snapshot(ssh, before, profile)
+    if kept['boot_id'] != middle['boot_id']:
+        raise RuntimeError('Candidate rebooted while the supervisor stood down')
+    baseline = dict(name=directory.name, image=str(Path(image).resolve(strict=True)), boot_sha256=sha,
+                    system=kept['system'], store=qualify.run(ssh + ['test -f /nix/store/.gemini-system && echo m69-overlay || echo normal']).strip(),
+                    zswap_shrinker=qualify.run(ssh + ['cat /sys/module/zswap/parameters/shrinker_enabled']).strip(),
+                    previous=BASELINE['name'])
+    if qualify.accepted_digest(Path(baseline['image'])) != sha:
+        raise RuntimeError('Kept image differs from the qualified candidate')
+    qualify.save(directory, 'promoted-baseline.json', baseline)
+    result = dict(result='passed', profile=profile, kept_boot_id=kept['boot_id'],
+                  proof='candidate-self-accepted-by-supervisor', profile_qualified=True,
+                  linux_handoff_proven=True, promoted=True)
+    qualify.save(directory, 'result.json', result)
+    qualify.run(['systemctl', '--user', 'stop', owner_unit, net_unit])
+    print(f'PASS: {profile} kept as the new accepted baseline. Evidence: {directory}', flush=True)
+    return result
+
+
 def trial(directory, profile, before, ssh, verify_persistence=False):
     if verify_persistence and profile != 'baseline':
         raise ValueError('Persistence qualification requires the accepted baseline profile')
@@ -631,7 +669,9 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
          candidate_state, directory / 'rescue.img', qualify.ACCEPTED_BOOT, directory / 'boot.img',
          xml, LOCKS / '.p22-flash-writer.lock', '360', wrapper,
          directory / 'supervisor-rollback.state', directory / 'supervisor-rollback.log',
-         supervisor_state, '720', '', '', '300', '300', config])
+         supervisor_state, '720',
+         str(directory / 'candidate-self-accepted') if KEEP else '',
+         PROFILES[profile][1] if KEEP else '', '300', '300', config])
     wait_state(supervisor_state, 'supervisor_waiting_candidate ', 15)
     # systemd gives the launcher a process group. setsid can therefore fork;
     # --wait keeps the service's main process alive until its session exits.
@@ -694,6 +734,9 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
         recovery_before = middle
     else:
         recovery_before = before
+    if KEEP and candidate_qualified:
+        # Past this point the old baseline is no longer the rescue target.
+        return keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit)
     if profile in LINUX_PROFILES:
         request_linux_rescue(ssh, before, directory, profile,
             wait_seconds=0 if read_state(candidate_state).startswith('flash_rc=0 ') else 150)
