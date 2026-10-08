@@ -2476,6 +2476,30 @@ to the persistent Nix store. `a72-first-trial-01` is now supervised by
 accepted candidate window. Hardware outcome and final recovery audit remain
 pending; no normal pin or installed generation was promoted.
 
+## 2026-10-08: first physical A72 DVFS transitions
+
+Candidate boot `034812a3-9025-46a1-94b7-922bddb4d37c` created policy8 and
+successfully changed the initial750MHz to845MHz. The bounded probe then
+recorded55 verified frequency/rail samples across338/676/845/1001MHz,
+all16 directed pairs and32 CPU8/9 workload processes with299 checked
+PBKDF2 results. CPU4-parked338 and1001MHz requests passed. Peak temperature
+was45°C; post-probe kernel error matching and system follow-up passed.
+
+The probe failed before its first restart because it expected26MHz after
+shutdown from338MHz. Actual stopped rate was13MHz, with vproc-big disabled
+and restored to1.0V. The production stopped-MP2 validator explicitly requires
+the previous CKDIV value to be retained while switching to CLK26M, so /2
+correctly yields13MHz. This is a probe expectation defect, not evidence for
+changing the driver. Overall probe remains failed and restart qualification
+incomplete. A separate corrected probe is prepared in
+`handoff/a72-first-restart-20261008`; original trial sources remain intact.
+
+The normal runner's cgroup2 gate failed as expected for this cgroup1 diagnostic
+and initiated automatic M69 recovery. Final recovery audit is still pending;
+no second trial or normal promotion has started. Raw evidence is retained in
+`handoff/a72-first-trial-01`, summarized in
+`handoff/a72-first-20261008/probe-result.json`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
