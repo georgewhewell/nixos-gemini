@@ -1406,6 +1406,32 @@ Packaging remains pinned to the physically tested `7fe1d8055ed94` kernel.
 Higher voltage points still require coupled-rail/runtime tests and physical
 qualification; no new candidate was flashed for this clock-table change.
 
+## A53 points through 1.15 V — 2026-10-08
+
+Linux `0d44f0f59b6a0` enables LL 1.274/1.339/1.391 GHz and
+L 1.703/1.755/1.820 GHz at nominal 1.13/1.14/1.15 V, using the vendor
+SB frequency/voltage tables. SRAM remains capped at 1.20 V. The compiled
+DTB differs from the 1.10 V image only by six removed disabled flags.
+Normal and diagnostic images build successfully with the full kernel checks
+and identical kernel/DTB. Both packaging inputs select this commit.
+
+The native CCI runtime test now covers all upper SB CPU points through
+1.20 V with exact mock OPP tables. It verifies rail votes and their release.
+L 1.703 GHz selects CCI 884 MHz/1.14 V rather than 845 MHz/1.13 V because
+of the half-rate floor; L 1.885 GHz similarly selects 975 MHz/1.19 V.
+These are expected governor decisions, not new driver behavior. UBSan
+runtime tests and all 5,376 policy combinations, 512 ordered paths, 6,388
+fault cases and 704 boot states pass.
+
+Physical probes are prepared separately for LL and L: 169 ordered CPU pairs
+each, 80 target postdivider crossings each, 169 LL and 121 L CCI/voltage
+pairs. Each uses the existing bounded systemd cleanup and recovery workflow;
+no hardware trial has run for this ceiling yet. All higher points above
+1.15 V remain disabled. M69 remains the default and normal cgroup2 remains
+unqualified. Build identities, source hash, full build logs and DTB diff:
+`handoff/a53-1150mv-20261008/`. Probe scripts and expected mappings:
+`handoff/a53-1150mv-ll-20261008/` and `handoff/a53-1150mv-l-20261008/`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
