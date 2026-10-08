@@ -44,7 +44,10 @@ pass. A repeat without extra driver tracing also passes: three A72 cycles,
 480 paired reads, six checked workloads and 174 transitions, peaking at
 43.6°C. Its M69 recovery and final audit pass; normal packaging has not adopted
 the diagnostic fixes.
-Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
+Full-ceiling thermal trial fails its90°C guard at90.7°C after about32 seconds
+of load. All15 emulated cooling states work, and real throttling occurs,
+but the bounded load is not qualified. Governors and parking restore;
+kernel checks pass. Recovery audit is pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains
