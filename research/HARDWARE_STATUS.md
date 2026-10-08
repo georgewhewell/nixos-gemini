@@ -47,7 +47,7 @@ the diagnostic fixes.
 Full-ceiling thermal trial fails its90°C guard at90.7°C after about32 seconds
 of load. All15 emulated cooling states work, and real throttling occurs,
 but the bounded load is not qualified. Governors and parking restore;
-kernel checks pass. Recovery audit is pending. FUSB301 role-switch and MT6797 USB3
+kernel checks pass. M69 recovery and the final audit pass. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains

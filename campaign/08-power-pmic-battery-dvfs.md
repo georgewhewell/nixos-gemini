@@ -1951,7 +1951,10 @@ emulation, cleared emulation and reached both full rates during real load.
 It stopped after about32 seconds of load at the90°C guard (90.7°C reading).
 The120 retained load samples show cooling states0–3 above85°C, with repeated
 returns to state2 (1.443/1.885GHz,1.19V) near90°C. Cleanup restored governors
-and parking; kernel and follow-up checks pass. Recovery audit is pending.
+and parking; kernel and follow-up checks pass. M69 recovery
+`f620de92-a764-4b96-9cec-dc9d04a14c6f` and final audit pass:35 matching
+sources,26 retained outputs, swap layout and no writer. Worker inactive,
+MainPID0. Evidence: `handoff/a53-1200mv-thermal-response-20261008/completion.json`.
 
 `gov_step_wise.c:get_target_state()` permits reducing cooling on a falling
 sample even while above the trip. With the expanded sixteen-point tables,
