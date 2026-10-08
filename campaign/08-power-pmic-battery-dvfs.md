@@ -2080,6 +2080,26 @@ CPU hotplug read lock in a callback that can run under the hotplug writer,
 or query firmware AFFINITY_INFO on a running A72. Future tests must include
 CPUFreq initial policy, restart, teardown veto and partial clock/rail failure.
 
+## 2026-10-08: bounded A72 clock handoff planning
+
+Linux `d6763b2d4fa27` adds the clock-only MP2 transition plan: divide the
+running PLL path by4, select MAINPLL, program the disconnected MP2 PLL,
+return to MP2 at /4 and restore the target path divider. The338MHz vendor
+point uses a676MHz PLL with /2. Other selected points use unity division;
+equivalent existing unity encodings are preserved. The plan rejects disabled
+or latched PLL state, non-PLL source, unsupported dividers, wrong reference
+and a fallback rate exceeding the greater endpoint. It records the minimum
+intermediate rate for the executor's DCM handling and full expected snapshots.
+
+The production-core suite passes18 cases and115,279 assertions. The new
+matrix covers1156 combinations (17 points including startup750MHz, squared,
+across four unity encodings), checks every intermediate rate and unrelated
+snapshot fields, and includes rejected-admission/output-preservation cases.
+ARM64 core-object compilation passes. Evidence:
+`handoff/a72-frequency-audit-20261008/transition-plan-tests.log`.
+No firmware executor, OPP policy or voltage ownership change is enabled;
+normal packaging remains at hardware-tested `b62fc653f754f`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
