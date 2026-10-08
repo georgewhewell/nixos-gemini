@@ -1888,6 +1888,33 @@ Worker inactive, MainPID0. Evidence: `handoff/clock-domain-reads-idle-trial-01/`
 and `handoff/clock-domain-reads-idle-20261008/trial-01-result.json`.
 Normal packaging remains unchanged; no default promoted.
 
+## 2026-10-08: AP snapshots pass ordinary startup and clock stress
+
+Diagnostic kernel `7c94d629970b5` uses AP-only snapshots for A53/CCI
+transactions and parent changes. These retain both complete shared mux and
+divider words, all three AP PLL words and SYNC_DCM. Native A72 transactions
+and initial admission retain full snapshots, including secure MP2 reads.
+Host checks cover 288 AP snapshot bit changes in addition to 1152 domain
+observation cases; transition and native A72 checks and the full build pass.
+
+Trial `clock-ap-snapshot-trial-01`, boot
+`c1fb9e5f-d07b-4e47-92e4-68a1d52f8c93`, started from CPUs0–3 with ordinary
+governors and no fixed-clock conditioning. It passed three A72 cycles,
+586 paired A53 rate reads, six checked A72 workloads, 174 upper transition
+pairs and 1063 SRAM samples in36.016 seconds, peaking at45.4°C. Both governors
+returned to schedutil, hold/pause were removed and parking remained active.
+The kernel error scan and follow-up passed. This supports the access-scope
+fix, but does not prove which firmware operation caused earlier hangs.
+
+Healthy M69 recovery `14dd17b4-d551-43d0-9f46-db225f93db61` passed the final
+locked audit:35 matching source hashes,26 retained outputs, swap layout and
+no writer. Worker inactive, MainPID0. The general profile remains unqualified
+because this diagnostic uses cgroup1; the normal memory-controller gate
+fails as expected. No installed/default generation was promoted. Evidence:
+`handoff/clock-ap-snapshot-20261008/completion.json` and
+`handoff/clock-ap-snapshot-trial-01/`. A repeat without extra driver tracing
+is next, followed by full-ceiling thermal qualification.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the

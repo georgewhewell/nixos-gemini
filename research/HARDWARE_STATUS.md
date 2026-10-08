@@ -35,8 +35,13 @@ passes three A72 power cycles with558 paired A53 rate reads, six checked A72
 workloads and all174 upper transition pairs; recovery/audit also pass.
 That test used fixed startup clocks. A follow-up with ordinary governors
 failed during PWRAP reset verification before CPU8 came online; M69 recovery
-and the final audit passed. Ordinary startup remains unresolved, and normal
-packaging has not adopted the diagnostic fix.
+and the final audit passed. Diagnostic kernel `7c94d629970b5` additionally
+limits AP transaction snapshots to AP PLLs while retaining full shared
+mux/divider/DCM checks and strict native A72 snapshots. Ordinary startup
+now passes a bounded test: three A72 cycles, 586 paired rate reads, six
+checked A72 workloads and 174 upper transition pairs. Recovery and audit
+pass. A repeat without extra driver tracing is pending; normal packaging
+has not adopted the diagnostic fixes.
 Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
