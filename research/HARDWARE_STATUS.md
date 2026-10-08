@@ -27,7 +27,7 @@ and exercise cooling states 3–5. The board sets a state3 cooling floor at
 85°C, with 100 ms normal and 40 ms passive polling. Earlier tests showed
 weak cooling at the new top OPPs and rapid reheating after cooling release.
 Reachable synthetic states 3–15, cleanup and kernel checks pass. The latest
-thermal trial's recovery audit is pending. Endurance and normal cgroup2
+thermal trial's M69 recovery and final audit pass. Endurance and normal cgroup2
 operation remain unqualified; the allocator issue still prevents installation.
 
 FUSB301 role-switch and MT6797 USB3

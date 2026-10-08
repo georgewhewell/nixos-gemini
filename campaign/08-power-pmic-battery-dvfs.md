@@ -2011,7 +2011,11 @@ states0,3,4,5, and the last load sample is84.2°C at1.274/1.703GHz.
 
 Total probe time is55.766 seconds. Cleanup restores both schedutil governors,
 removes the hold and retains active parking; final temperature is75.8°C.
-Kernel and follow-up checks pass. Recovery audit is pending. This qualifies
+Kernel and follow-up checks pass. Healthy M69 recovery
+`d0177459-b374-47cd-a18e-85faf4df2311` passes the final locked audit:
+35 matching sources,26 retained outputs, swap layout and no writer. Worker
+inactive, MainPID0. Final record: `handoff/a53-thermal-poll-20261008/completion.json`.
+This qualifies
 the bounded response, not endurance or normal cgroup2 operation, and does
 not promote the installed/default generation. Evidence:
 `handoff/a53-thermal-poll-20261008/probe-result.json` and raw trial files.
