@@ -1506,6 +1506,35 @@ is the expected diagnostic cgroup2 memory-controller qualification failure.
 Final record: `handoff/a53-1150mv-l-trace-20261008/completion.json`.
 Load/cooling remains pending. No default is promoted.
 
+## A53 1.15 V load stop at 75°C — 2026-10-08
+
+Candidate boot `e01e1e7f-e24e-48b3-9bea-314e1704513f` reaches both
+1.391/1.820 GHz limits under eight-core load, but stops after about ten
+seconds when the physical sensor reaches 75.5°C, exceeding the probe's
+75°C bound. Nine preceding samples are retained; the last is 74.3°C at
+9.50 seconds. The planned 30-second checked workload does not complete,
+and cooling emulation is not reached. This is a bounded-test stop, not
+proof of CPU instability or successful load qualification.
+
+The probe terminates the workers, restores schedutil, removes its hold and
+resumes automatic parking. Final temperature is 73.7°C; the transient unit
+is inactive, the system remains healthy, and kernel error checks are empty.
+Evidence: `handoff/a53-1150mv-load-cooling-trial-01/`.
+Recovery returns healthy M69 boot `13f9d8e6-071e-4e63-b065-4d0c21ee84f7`.
+The worker is terminal with MainPID0/exit0; final audit verifies no writer,
+both locks,35 source hashes and26 retained outputs. No default is promoted.
+Final record: `handoff/a53-1150mv-load-cooling-20261008/completion.json`.
+
+The selected board's first passive trip is 85°C, second passive trip 95°C,
+and critical trip 117°C. A separate probe is prepared in
+`handoff/a53-1150mv-thermal-response-20261008/`: first all twelve emulated
+cooling states, then up to45 seconds of checked eight-core load with real
+temperature sampling every quarter second and a90°C stop bound. It checks
+trip identity, retains raw frequency/cooling readings, and reports actual
+physical throttling separately from bounded workload success. The device
+service deadline remains70 seconds within the90-second recovery observation
+window. It has not run; the aborted75°C test remains recorded as failed.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
