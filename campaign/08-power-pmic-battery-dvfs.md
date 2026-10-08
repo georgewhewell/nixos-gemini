@@ -2162,6 +2162,27 @@ No runtime consumer calls this API yet. Power-owner voltage/SRAM coordination,
 CPUFreq/OPP integration and bounded hardware qualification remain required.
 Normal packaging stays at `b62fc653f754f`; installed M69 is unchanged.
 
+## 2026-10-08: SRAM runtime transaction preserves restart ownership
+
+Linux `bf4844daa46ba` adds the provider-internal `mt6797_sram_set_running()`
+transaction. It requires a completed first-start record and excludes stopped,
+restart-armed or faulted state. It admits the vendor 1.0–1.2V SRAM range on
+its exact25mV grid, compares two full pre-write samples against the last
+verified live state, verifies two full post-write samples and updates the
+live record only on success. Calibration and upper control bits must remain
+unchanged. Unexpected state or uncertain writes fence further operation;
+there is no voltage rollback. The original powered reset baseline survives
+runtime changes, allowing existing shutdown/restart checks to remain strict.
+
+All81 voltage pairs pass with shutdown/restart after each pair, plus256
+single-bit sample corruptions, five I/O failure boundaries and admission
+checks. The production SRAM core suite passes17 cases/2692 assertions;
+provider boot API regressions and ARM64 regulator compilation also pass.
+Evidence: `handoff/a72-frequency-audit-20261008/sram-runtime-tests.log`.
+This core is not yet exposed through the exclusive power-owner API. Runtime
+VPROC/SRAM ordering, CPUFreq integration and hardware qualification remain
+pending; normal packaging and installed M69 are unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
