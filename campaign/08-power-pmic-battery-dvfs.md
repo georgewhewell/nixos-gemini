@@ -2245,6 +2245,27 @@ and ARM64 compilation pass. Evidence:
 Hardware rail callbacks, combined clock/voltage sequencing and CPUFreq remain
 pending; the installed system and normal packaging are unchanged.
 
+## 2026-10-08: combined A72 DVFS transaction core
+
+Linux `dbb26fb5baff5` adds `mt6797_a72_change_opp()`, coordinating the verified
+rail executor with the clock backend. Higher requested VPROC is established
+before the clock call; equal/lower VPROC and any associated SRAM adjustment
+are applied only after verified clock success. A clock error fences the
+transaction and retains the existing rails. Once the clock has changed, even
+a pre-write rail readback error fences the combined operation. The backend
+must verify clock completion and the caller must supply a qualified OPP while
+serializing clock, power and hotplug owners.
+
+Tests cover289 frequency/voltage pairs, every rail read/write failure boundary,
+clock failure with and without an effect, no undervolted execution, retained
+rails after clock failure, and sticky refusal after uncertainty. They include
+the16 nominal TT points and a synthetic750MHz case using the845MHz voltage;
+this does not qualify a startup voltage. All19 power-core cases /1,287,608
+assertions and ARM64 compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/dvfs-sequence-tests.log`.
+Hardware owner callbacks, CPUFreq/hotplug/CCI coordination and device trials
+remain pending; no runtime policy or installed system changed.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
