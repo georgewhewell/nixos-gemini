@@ -2056,6 +2056,30 @@ Normal packaging remains at the physically tested `b62fc653f754f`.
 Remaining implementation includes OPP/voltage admission, SRAM/power ownership,
 safe-parent/DCM sequencing, strict readback and hotplug restoration.
 
+## 2026-10-08: A72 DVFS integration route and lock ordering
+
+Source review rules out assigning a second regulator owner: the native A72
+power provider holds exclusive VPROC and SRAM handles. A separate CPUFreq
+driver would also conflict with the existing cpufreq-dt registration.
+`dev_pm_opp_config.config_clks` offers a candidate integration route: the
+existing cpufreq-dt target calls `dev_pm_opp_set_rate()`, and the OPP core
+invokes this callback with the selected OPP. The A72 owner can retain rail
+ownership and execute voltage/clock coordination inside that callback.
+OPP voltage metadata can be parsed without giving the OPP core a second
+regulator handle; registration must precede CPUFreq table discovery.
+This is an implementation route, not a tested callback integration yet.
+
+Both native A72 commit/teardown and CPUFreq use CPUHP_AP_ONLINE_DYN. Native
+power is built in; `nixos/core-parking.nix` loads cpufreq-dt later. That
+registration order puts A72 startup commit before CPUFreq online and reverses
+on teardown, allowing CPUFreq to stop before native shutdown. Registration
+order must be enforced/verified, not inferred merely from callback names.
+A72 frequency operations must serialize through the existing power owner;
+CCF prepare precedes clock-observer/CSPM locks. Do not introduce a nested
+CPU hotplug read lock in a callback that can run under the hotplug writer,
+or query firmware AFFINITY_INFO on a running A72. Future tests must include
+CPUFreq initial policy, restart, teardown veto and partial clock/rail failure.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
