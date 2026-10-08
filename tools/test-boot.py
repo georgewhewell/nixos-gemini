@@ -388,8 +388,13 @@ def calendar_finish(runner, directory, before, error=None):
         # storage/source/ordinary-output audit, even if calendar checks fail.
         alarm_finish(runner, directory, before, error)
         if not STORE_ROOT: proof.update(cache.verify_final(runner, directory))
-        reboot = calendar.recovered(p, runner, directory)
-        proof['rtc_reboot_persistence_qualified'] = reboot['rtc_reboot_persistence_qualified']
+        if (directory/'promoted-baseline.json').exists():
+            # A kept candidate has no rescue reboot; the next trial from the
+            # new baseline exercises RTC persistence across its recovery.
+            proof['rtc_reboot_persistence_qualified'] = None
+        else:
+            reboot = calendar.recovered(p, runner, directory)
+            proof['rtc_reboot_persistence_qualified'] = reboot['rtc_reboot_persistence_qualified']
     except Exception as caught:
         error = caught
         raise
@@ -399,7 +404,8 @@ def calendar_finish(runner, directory, before, error=None):
         if result_file.exists():
             result = json.loads(result_file.read_text()); result.update(proof)
             passed = error is None and result.get('profile_qualified') is True and all(
-                proof[k] for k in ('rtc_utc_write_read_qualified', 'rtc_reboot_persistence_qualified'))
+                proof[k] or (k == 'rtc_reboot_persistence_qualified' and proof[k] is None and result.get('promoted'))
+                for k in ('rtc_utc_write_read_qualified', 'rtc_reboot_persistence_qualified'))
             result.update(result='passed' if passed else 'failed', profile_qualified=passed)
             if error is not None: result['error'] = str(error)
             runner.qualify.save(directory, 'result.json', result)

@@ -1,8 +1,9 @@
 {
-  "name": "M69",
-  "image": "/nix/store/wfqzzdajvbc4fwajplp1a4h9fs3gsc12-gemini-mainline-nixos-padded.img",
-  "boot_sha256": "913eb41721a1a5862fb47a1387fce535f715bca5c1c951554395100a6c762ee3",
-  "system": "/nix/store/0xbrhrl8ym703g1449gni51dkv7jwlqv-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-  "store": "m69-overlay",
-  "zswap_shrinker": "N"
+  "name": "promote-keep-01",
+  "image": "/nix/store/82qm55wl83h3xslk8qly78411l9b08nm-gemini-bootloader/boot-padded-p22.img",
+  "boot_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+  "system": "/nix/store/6kz5hp0r1vid5si0fjpz32jilc37gkqz-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+  "store": "normal",
+  "zswap_shrinker": "Y",
+  "previous": "M69"
 }
