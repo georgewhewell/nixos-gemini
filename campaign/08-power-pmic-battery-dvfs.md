@@ -2445,6 +2445,17 @@ been launched; no A72 DVFS candidate has been booted yet. Normal packaging
 remains pinned to b62fc653f754f and M69 recovery remains unchanged.
 Grok's allocator edits are excluded from the diagnostic commit.
 
+The first packaged build compiled the kernel but failed its broader host
+checks on a signed/unsigned comparison in retained SRAM restart admission.
+Linux `97176b8440a0c` keeps the comparison in signed voltage units after
+bounding the selector to7–15. The off-path and1,287,608-assertion core tests
+pass with the fix. Diagnostic head is now `feb466660ac1d`; the replacement
+build is running. Logs and the bounded probe/observer are retained under
+`handoff/a72-first-20261008`. The probe checks all16 directed pairs,
+32 CPU-affined checked workloads, CPU4-parked DVFS and two full-cluster
+restart cycles, with a90°C abort and device-side deadline/cleanup.
+No hardware result is claimed yet.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
