@@ -742,14 +742,32 @@ candidate is `/nix/store/x025hcn6q01g5yqgmnx4lhgjiwkkn3n0-gemini-mainline-nixos-
 Build logs, result metadata and GC roots are retained in
 `handoff/cci-runtime-20261008/`.
 
-The driver and DT node are enabled in the candidate configuration. BUCKA
-remains fixed at 1.00 V, so its first hardware test will exercise CCI
-frequency changes and voltage requests without changing the physical CPU
-rail. The new runtime consumer has not yet booted on the device. Before
-relaxing BUCKA's constraints, startup must also guarantee a CCI voltage
-floor until its consumer has established ownership; dependency timing
-observed in one boot is insufficient. Physical CCI transitions, coupled
-rail transitions and normal cgroup2 qualification remain outstanding.
+The driver and DT node are enabled in the candidate configuration. The
+October 8 runtime trial `handoff/cci-runtime-trial-01` booted candidate
+`2b25c776-156c-4845-ac08-7fff5f5f7c48` and adopted CCI at 611 MHz. It passed
+all 98 A53 ordered frequency pairs and all 16 ordered CCI pairs among
+416, 481, 533 and 611 MHz, checking devfreq, branch and raw PLL readings.
+BUCKA remained fixed at 1.00 V; all 1,633 concurrent SRAM readings were
+1.10 V over 43.40 seconds. The probe completed in 43.85 seconds with sample
+temperatures 37.5–43.0 C, restored both schedutil governors, removed its
+parking hold and exited. The follow-up found a running system, an inactive
+probe service and no matching kernel errors. Startup did emit repeated
+OPP-table-not-found messages before cpufreq registered; the retry needs
+quiet handling.
+
+The 95.49-second observation completed. This diagnostic cgroup1 profile
+failed the normal cgroup2 memory-controller gate as expected; it is not a
+qualified normal generation and was not promoted. Automatic recovery
+returned healthy M69 `fbc7adf3-97b1-4a4c-958e-1f1573aaa43d`. The worker is
+terminal with no writer, both locks acquired, all 35 source hashes matching
+and 26 ordinary outputs retained in the final audit.
+
+This proves physical CCI transitions over the four tested rates. A72 was
+online at its fixed 750 MHz, so lower CCI rates and deliberate A72 hotplug
+remain untested. Before relaxing BUCKA's constraints, startup must guarantee
+a CCI voltage floor until its consumer has established ownership;
+dependency timing observed in one boot is insufficient. Physical coupled
+rail transitions and normal cgroup2 qualification also remain outstanding.
 
 ## Historical Cycle18 observations
 
