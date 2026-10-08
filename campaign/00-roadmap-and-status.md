@@ -1,12 +1,27 @@
 # Gemini PDA mainline campaign: evidence first
 
-This is the front-page evidence ledger, not a promise that a source tree has
-run on the device. It was corrected on 2026-08-30 against
+Current status, 2026-10-08: use [the completion ledger](../research/HARDWARE_STATUS.md)
+and the dated results in each campaign chapter. The maintained kernel pin is
+`ca4b6d9b98e2b0dd3130eea37de405f680afa41d`; M69 remains the installed recovery
+baseline. Automatic A72 parking has passed three hardware load/idle cycles,
+and coupled A53/CCI voltage scaling has passed bounded tests down to770mV.
+These results do not qualify the normal cgroup2 generation: its allocator
+failure remains unresolved. USB3 SuperSpeed and the other unfinished hardware
+items are listed in the completion ledger. Camera and vibrator are excluded;
+physical keyboard work is deferred.
+
+## Historical August–September ledger
+
+The remainder of this page preserves the earlier campaign baseline and its
+requirements. Its statements about the current image, active drivers, missing
+recovery, and next activation gates describe that earlier baseline. They must
+not override later device evidence or the owner's current instructions.
+
+This historical evidence ledger was corrected on 2026-08-30 against
 `nixos-gemini@e118018605a8c5ded99973b2902e9f930fb88eff`,
 `linux-gemini-platform@28c47150235be70cf5b19ea8d9ce7a5473ec23f2`, the
-retained hardware ledger, and Cycle18 live probe artifacts. The Nix flake pins
-that exact Linux revision at `flake.nix:23-28`; older identifiers in retained
-historical records are not evidence for the current full-image composition.
+retained hardware ledger, and Cycle18 live probe artifacts. The Nix flake at that time pinned
+that Linux revision; it is not the currently selected kernel.
 
 The local 3.18 vendor checkout is currently a mutable worktree. Citations to
 `vendor/gemini-linux-kernel-3.18/<path>:<line>` identify text inspected in that
