@@ -969,6 +969,36 @@ SRAM words. The new SRAM shutdown-record API must be called only after the
 last-core shutdown core verifies BUCKB off. These connections remain necessary
 before enabling unplug or conducting the physical off/on trial.
 
+
+Linux `071c10bcb0025` adds warm transaction admission and the public clock
+restart check. A successful MP2 DCM disable saves the running clock snapshot
+inside the clock provider; duplicate disable is refused without replacing it.
+The restart check compares fresh stopped clocks against that observation.
+Successful DCM enable invalidates the saved observation. These clock checks
+alone do not prove power-off: the native power owner must also retain the
+completed last-core shutdown record.
+
+`mt6797_a72_transaction_restart()` requires that completed, nonfaulted
+cluster-off record plus a saved post-shutdown resource snapshot. A fresh
+snapshot must retain the recorded MP2 power control, disabled BUCKB vote,
+voltage and full SRAM state. Both snapshots require isolation, no online A72,
+no reset/transaction in progress, and valid voltage limits. SRAM must be the
+complete cold tuple or the initialized 1.10 V tuple. The cold entry point
+keeps its original strict admission. Both entry points use the same startup
+sequence and rollback/fault boundaries. The native owner must capture these
+records after firmware/rail shutdown and recheck physical shutdown state
+before dispatching restart; those lifecycle calls are not yet connected.
+
+The power-core suite passes 15 cases and 2,088 assertions, including 30
+invalid restart admissions, both warm SRAM shapes and 108 injected step
+failures across cold/reset-SRAM/retained-SRAM starts. Clock API and transition
+regressions, ARM64 clock/power-core/KUnit compilation and checkpatch pass.
+Evidence is in `handoff/a72-warm-admission-20261008/`. No bundle rebuild or
+hardware trial was performed for this commit; packaging remains on the
+previous fully built SRAM-provider commit `eecfc28abc66b`. The next work is
+the native hotplug admission/cancellation, CPU_OFF/firmware-kill callbacks
+and power-owner lifecycle calls, followed by the complete off/on trial.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
