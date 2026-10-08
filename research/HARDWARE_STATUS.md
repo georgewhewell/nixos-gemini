@@ -44,15 +44,14 @@ pass. A repeat without extra driver tracing also passes: three A72 cycles,
 480 paired reads, six checked workloads and 174 transitions, peaking at
 43.6°C. Its M69 recovery and final audit pass; normal packaging has not adopted
 the diagnostic fixes.
-Full-ceiling thermal qualification remains incomplete. The first trial hit
-its 90°C guard at 90.7°C. A minimum cooling state of 3 correctly caps the
-hot CPU policies to the 1.15 V range, but its repeat hit 90.4°C after cooling
-released and full power returned during the one-second polling interval.
-Both trials restored governors and parking, passed kernel checks and
-recovered M69 with clean final audits. Diagnostic `b62fc653f754f` reduces
-normal polling to 100 ms while retaining 40 ms passive polling and the same
-cooling floor and trips. Full packaging and DTB checks pass; its repeated
-hardware load test is in progress.
+Diagnostic `b62fc653f754f` passes the bounded full-ceiling thermal test:
+45 seconds on eight A53 cores, 11,156 checked computations and 173 real
+samples, peaking at 88.1°C. Both clusters reach full frequency and exercise
+cooling states 3–5. It combines a state3 cooling floor at 85°C with 100 ms
+normal and 40 ms passive polling; the prior one-second interval allowed
+reheating past the 90°C test guard after cooling released. Reachable
+synthetic states 3–15, cleanup and kernel checks pass. Recovery audit is
+pending, endurance remains unqualified and normal packaging is unchanged.
 FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen

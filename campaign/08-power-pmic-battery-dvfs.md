@@ -1998,6 +1998,24 @@ DTB and full packaging builds pass. Packaged DTB polling, floor and trip
 checks pass. Hardware verification remains pending;
 neither thermal diagnostic has qualified the full-ceiling load yet.
 
+## 2026-10-08: full-ceiling thermal response passes with faster polling
+
+Kernel `b62fc653f754f`, trial `a53-thermal-poll-trial-01`, boot
+`69044188-1cfe-4faf-adb3-d98e2547aa76`, passes the bounded thermal probe.
+The live DT verifies100ms normal polling,40ms passive polling and the state3
+cooling floor. All reachable synthetic states3–15 map correctly and clear
+before the physical load. Eight A53 cores complete45 seconds and11,156
+checked PBKDF2 computations, with173 real-temperature samples. Both full
+rates are observed; peak temperature is88.1°C. Both clusters exercise
+states0,3,4,5, and the last load sample is84.2°C at1.274/1.703GHz.
+
+Total probe time is55.766 seconds. Cleanup restores both schedutil governors,
+removes the hold and retains active parking; final temperature is75.8°C.
+Kernel and follow-up checks pass. Recovery audit is pending. This qualifies
+the bounded response, not endurance or normal cgroup2 operation, and does
+not promote the installed/default generation. Evidence:
+`handoff/a53-thermal-poll-20261008/probe-result.json` and raw trial files.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
