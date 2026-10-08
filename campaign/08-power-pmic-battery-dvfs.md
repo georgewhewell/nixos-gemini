@@ -1457,6 +1457,31 @@ eight-core load and twelve-state cooling probe is also prepared in
 `handoff/a53-1150mv-load-cooling-20261008/`, with the existing 75°C physical
 temperature bound and cleanup. Neither has run at this ceiling yet.
 
+## A53 1.15 V L trial 01 — 2026-10-08
+
+Candidate boot `9eb7766b-dba8-4507-97a7-452c41ec4f24` reaches the healthy
+observation window, but the observer SSH command times out after 85 seconds
+without returning a probe result. A concurrent runner storage-verification
+command times out after 25 seconds. No L transition pair is qualified by
+this trial. The same supervisor successfully writes/readbacks M69 and
+returns healthy boot `e4c5fa50-2dea-46d6-84e8-2cb49c308438`. The terminal
+worker has MainPID 0 and exit 0; final audit passes with no writer, both
+locks, 35 matching sources and 26 retained outputs. No default is promoted.
+
+The retained current-candidate console shows healthy acceptance around
+uptime 157 seconds, a Wi-Fi HIF -75 fault/restart around 164 seconds, and
+ends after CPU4–7 reactivation around 166 seconds. It does not establish
+why contact was lost or whether a frequency transition was reached.
+Separate retained dmesg-ramoops records contain a memcg panic at uptime 57;
+these are not evidence of this accepted diagnostic boot's failure.
+Evidence: `handoff/a53-1150mv-l-trial-01/recovery-console.txt`, observer log,
+and `handoff/a53-1150mv-l-20261008/trial-01-result.json`.
+
+A separate diagnostic probe in `handoff/a53-1150mv-l-trace-20261008/` adds
+boot-tagged kernel markers before/after core activation, matrix operations
+and cleanup, plus preservation of partial SSH output on timeout. Original
+trial sources are retained. No retry or load/cooling trial has run yet.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
