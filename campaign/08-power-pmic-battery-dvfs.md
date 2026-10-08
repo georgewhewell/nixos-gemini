@@ -1252,6 +1252,12 @@ copies. The regression test now exercises the complete mocked build/proof/
 retention sequence and independent post-recovery retention, alongside the
 startup rejection tests; all22 tests pass. Trial03's real preflight also
 passes. Its corrected probe sets the system command path explicitly.
+The completed trial returns to healthy M69 boot
+`19538208-778e-4177-8248-9712eceea415`. The worker is terminal with exit0;
+the final audit verifies no writer, both locks, all35 source hashes and26
+retained outputs. The diagnostic still fails the normal cgroup2 requirement,
+so no default is promoted. Final record:
+`handoff/a72-parking-soak-fixed-20261008/completion.json`.
 
 ## Historical Cycle18 observations
 
