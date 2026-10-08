@@ -2513,6 +2513,26 @@ The corrected probe now runs as `a72-first-trial-02`, supervised by
 Only the separate probe's stopped-clock expectation changed; physical restart
 qualification and this new trial's recovery audit remain pending.
 
+## 2026-10-08: low-range A72 DVFS restart probe passes
+
+The corrected probe on boot `c565ae81-630c-4fec-910d-2a6952e8fdea`
+passes58 frequency/rail samples, all16 directed low-range pairs and301 checked
+computations across32 CPU8/9 workload processes. Both complete shutdown /
+restart cycles pass: stopped MP2 is13MHz after338MHz and26MHz after1001MHz;
+BUCKB is disabled and restored to1.0V, then both cores restart and reacquire
+the requested OPP. CPU4-parked transitions pass. Peak temperature is44.7°C;
+parking restoration, kernel error matching and post-probe system checks pass.
+Evidence: `handoff/a72-first-restart-20261008/probe-result.json` and
+`handoff/a72-first-trial-02`. Automatic recovery is underway; final retention
+audit remains pending.
+
+Next isolated diagnostic `bf979567d44cc` exposes the first eight OPPs through
+1677MHz (nominal CPU1.04V / SRAM1.15V). Its local bundle build is running in
+`handoff/a72-mid-20261008`; no new device trial has started. The prepared
+probe checks all64 directed transitions, both-core workloads at every rate,
+CPU4-parked DVFS and restart from338/1677MHz under the same90°C/65-second
+bounds. The full16-point final table and normal packaging pin are unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
