@@ -1358,6 +1358,11 @@ post-probe health checks. Evidence:`handoff/a53-1100mv-trial-01/`.
 The30-second load and nine-state emulated-cooling probe is prepared in
 `handoff/a53-1100mv-load-cooling-20261008/` but has not run yet. Physical
 thermal response and endurance remain unqualified.
+M69 recovery returns healthy boot`2907e8a6-f8dd-4d48-bff3-280800b8575e`;
+the worker is terminal with exit0. The final audit verifies no writer, both
+locks,35 source hashes and26 retained outputs. The overall diagnostic still
+fails the normal cgroup2 memory-controller requirement; no default is promoted.
+Final record:`handoff/a53-1100mv-20261008/completion.json`.
 
 ## Historical Cycle18 observations
 
