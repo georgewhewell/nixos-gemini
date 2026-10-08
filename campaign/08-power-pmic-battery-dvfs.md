@@ -1591,6 +1591,41 @@ DTB diff, expected mappings and probe scripts are in
 `handoff/a53-1200mv-20261008/`. Transition and load/thermal qualification
 of the1.20V ceiling remain pending.
 
+## A53 1.20 V transition trial 01 — 2026-10-08
+
+Candidate boot `c24ad825-17da-47a3-ba23-bffcf3a371bc` passes all174 added
+CPU pairs and87 CCI pairs, with48LL/30L target postdivider crossings,
+1,037 concurrent SRAM reads and checked computation. It reaches
+LL1.547/L2.002GHz, CCI988MHz, and CPU/SRAM1.20/1.20V. L1.885GHz correctly
+selects CCI975MHz/1.19V. Sampled temperature peaks at43.6°C; duration is
+33.28 seconds. Both A72s and schedutil are restored, hold/pause removed,
+automatic parking resumes and post-probe health passes.
+
+One kernel diagnostic is retained at uptime169.036834:
+`CPUCLK_OBSERVE callback=path-rate domain=1 stage=snapshot status=-11`.
+It occurs during CPU8 activation, before all-cpus-online at169.299857 and
+matrix-start at169.520318. The clock observer requires stable snapshots;
+its path-rate callback returns zero when sampling fails. This is not a
+failed matrix pair, but it remains an unresolved observation issue and the
+kernel-error check is not clean. No Wi-Fi HIF fault appears in this log.
+
+Independent coverage audit verifies that these174 new pairs and the two
+prior169-pair matrices are disjoint and cover all512 ordered pairs across
+both16-point tables. This is aggregate evidence across consecutive kernels
+differing only by six OPP enable flags, not a single512-pair run.
+Evidence: `handoff/a53-1200mv-trial-01/`, including `coverage-audit.json`.
+Recovery returns healthy M69 boot `8dbf28fc-451e-4750-aa1a-3cbf607952cd`.
+The worker is inactive with MainPID0/exit0; final audit verifies no writer,
+both locks,35 source hashes and26 retained outputs. CLI exit1 remains the
+expected diagnostic cgroup2 memory-controller qualification failure. No
+default is promoted. Final record:
+`handoff/a53-1200mv-20261008/trial-01-result.json`.
+
+The full-ceiling load/thermal probe is prepared in
+`handoff/a53-1200mv-thermal-response-20261008/`: fifteen emulated cooling
+states, then45 seconds of checked eight-core load, with real throttling
+reported separately and a90°C stop bound. It has not run yet.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
