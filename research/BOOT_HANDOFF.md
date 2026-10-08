@@ -27,8 +27,8 @@ firmware host scripts and 45 relevant boot/recovery tests also pass.
 --efi-files /path/to/efiBootFiles --out /path/to/new-output --execute` uses
 the existing supervised rescue path. Omit `--execute` for a read-only preflight.
 The EFI files must already be installed through `gemini-boot-install`.
-Normal `nixos-rebuild` generation hooks and permanent promotion remain.
-M69 is still installed. Workspace artifacts and logs: `handoff/efi-consolidation/`.
+Promotion is done (2026-10-09): this chain is the accepted baseline; see
+HARDWARE_STATUS.md. Generations update through `switch-to-configuration boot`. Workspace artifacts and logs: `handoff/efi-consolidation/`.
 
 The sections below record earlier hardware trials and their historical
 profiles. Their original build commands refer to those revisions; those

@@ -1,4 +1,16 @@
-# Gemini completion status, 2026-10-08
+# Gemini completion status, 2026-10-09
+
+2026-10-09: the device baseline is now U-Boot -> systemd-boot -> NixOS
+(p22 `095640ea`, recorded in `research/accepted-baseline.json`); M69 is
+retired to the frozen `recovery` package and `research/baselines/m69.json`.
+Promotion used the supervisor's self-accept path (`test-boot.py --keep`,
+`handoff/promote-keep-01`). The first on-device generation update followed
+the standard NixOS path (`switch-to-configuration boot`, `handoff/system-update-01`),
+and supervised trials from the new baseline pass end to end with rescue to
+the bootloader (`handoff/post-promotion-trial-06`). Fixes found on the way:
+MT6351 RTC alarm status latched across cancel (Linux 3780e3d8) and a stage-1
+race that lost the charger-preflight marker (repo 021da60). The text below
+predates this and describes M69 as installed.
 
 The objective remains complete hardware enablement and consolidation. Camera
 and vibrator are excluded by the owner; hardware video is still unresolved,
@@ -300,7 +312,7 @@ Direct M69 remains installed. See
 | Area | Required evidence |
 |---|---|
 | Recovery / mtkclient | Read/reboot, boot-only candidate/rollback ownership, software-reset rescue, watchdog rescue, factory-GPT write/readback and fixed-swap installation/restoration now pass. The new power/swap boot profile also preserves and verifies the installed swap layout. General harness migration and adaptation of older factory-only profiles remain |
-| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. Consolidated U-Boot boots the normal installed NixOS entry through systemd-boot, with real EFI variables, memory map, native CPU DT and boot-file readback verified. Native Unicode/modifier behavior passes host tests; actual EFI polling passed the earlier complete device trial. Physical key selection, the separate power/Escape input, persistent EFI settings, permanent promotion and normal NixOS generation management remain. Per-entry DT fixup preserves LK reservations and both native and historical CPU trees; an older carrier also boots a newer kernel/DT. See BOOT_HANDOFF.md |
+| U-Boot / UEFI | Reset/watchdog recovery, FIT and full EFI Linux handoff, owner-confirmed GOP/text, native keyboard polling, native eMMC and EFI filesystem reads pass. Consolidated U-Boot boots the normal installed NixOS entry through systemd-boot, with real EFI variables, memory map, native CPU DT and boot-file readback verified. Native Unicode/modifier behavior passes host tests; actual EFI polling passed the earlier complete device trial. Permanent promotion is done and one generation update passed through switch-to-configuration. Physical key selection, the separate power/Escape input, persistent EFI settings and rescue of a bad default generation (the rescue writer restores p22 only) remain. Per-entry DT fixup preserves LK reservations and both native and historical CPU trees; an older carrier also boots a newer kernel/DT. See BOOT_HANDOFF.md |
 | Persistence and fixed-size swap | Home and Nix storage/database survive reboots and the fixed-swap transition. Ordinary unprivileged daemon builds pass direct boot and the distro-manager path. Offline backup, fixed 5 GiB swap installation, automatic factory restoration, activation and reboot persistence pass. Real paging under a 64 MiB cgroup limit now passes with the candidate's default zswap writeback policy; installation of the consolidated default and normal generation updates remain |
 | Power | The hibernation-watchdog and default zswap writeback fixes pass normal boot, exact runtime identity, real paging, ordinary builds and automatic recovery. Freezer/device diagnostics pass on the power/swap kernel with guarded USB disconnection and fresh GPU rendering. The calendar kernel passes native UTC startup/write/read/ticking, awake delivery/cancellation/rearm, RTC-preserving recovery and controlled watchdog expiry. A separate bounded-suspend guard is built but not hardware-qualified. Kernel/clock-policy promotion, selected-kernel USB/PM checks, wake-source validation, noirq, full suspend/wake, deep idle, hibernation save/restore and the 24-hour policy remain |
 | USB speed and roles | The maintained left MTU3 DT enables both PHYs and SuperSpeed, with connector-driven peripheral VBUS. The maintained kernel now enumerates at 480 Mb/s without a diagnostic VBUS patch and passes connector-driver unbind/rebind. Recovery M69 remains capped to USB2. Board lane routing and a real 5 Gb/s connection remain unverified (source notes below). Left-port OTG host operation is also unqualified. The right port uses the separate USB2 controller |
