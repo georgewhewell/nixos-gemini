@@ -26,8 +26,10 @@ the final storage/source audit passed. A subsequent diagnostic trace localizes
 an interruption near warm CPU8 VPROC enable. A more detailed repeat
 completes regulator enable and verification, then stops at the following
 1ms delay entry, still before CPU_ON. The cause remains unresolved; the
-latest trace does not show a regulator lock or I2C failure. Both trials
-recovered M69 with clean final audits. Physical validation remains pending.
+regulator trace does not show a lock or I2C failure. Matching the vendor
+reset-held busy wait did not resolve the interruption: that trial stopped
+earlier, at PWRAP reset assertion, before the changed delay. All these
+trials recovered M69 with clean final audits. Physical validation remains pending.
 Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen

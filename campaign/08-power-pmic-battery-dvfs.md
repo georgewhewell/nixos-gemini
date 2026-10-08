@@ -1768,6 +1768,36 @@ source hashes and26 retained outputs, swap layout and no writer. Evidence:
 `handoff/a72-regulator-trace-runtime-20261008/trial-01-result.json`.
 No default promoted.
 
+## 2026-10-08: vendor reset-held delay does not resolve warm startup
+
+Vendor `arch/arm64/kernel/psci.c:525–550` uses `udelay(1000)` between BUCKB
+enable and isolation release while PWRAP reset is latched. Diagnostic kernel
+`e7314b974124e` matches that busy wait for the guarded interval, retaining
+sleeping delays after reset release. Core/lifecycle fault tests, ARM64 and
+full packaged builds pass. The lifecycle harness now rejects sleeping while
+reset is asserted and checks the guarded1ms busy delay. This change neither
+disables interrupts nor excludes other CPUs' hardware accesses.
+
+Trial `a72-reset-settle-trial-01`, boot
+`d12f8f10-c8ce-40cf-bc6b-a505cdbd9476`, reached healthy acceptance and started
+the same traced probe. Warm preparation completed off-state samples, clock
+validation, SPM reset and IDVFS fence. The last marker at168.618853 enters
+PWRAP reset assertion (action3); its verify marker is absent. The changed
+delay was not reached. The interruption therefore persists and this candidate
+is not qualified. No observation regression or transition matrix ran.
+
+The trace also records VMC/VMCH regulator activity shortly before reset
+assertion; this is concurrent activity, not proof of a conflicting access.
+The reset identifier matches the vendor bit11 (0x800). Next investigation
+should examine coordination between this reset window and PMIC-wrapper
+clients, rather than infer a timer fault from the earlier delay-entry marker.
+
+Recovery M69 `690d7ffc-92fc-4b70-a3c0-c6d957987b05` passed the final locked
+audit:35 source hashes,26 retained outputs, swap layout and no writer.
+Worker inactive, MainPID0. Evidence: `handoff/a72-reset-settle-trial-01/`
+and `handoff/a72-reset-settle-20261008/trial-01-result.json`. Normal packaging
+remains at `eb64c46a953ef`; no default promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
