@@ -2366,6 +2366,32 @@ Devfreq must account for the synchronous frequency update and enforce its
 frequency range; an uncertain MP2 result must retain the raised CCI vote.
 Normal packaging and installed M69 remain unchanged.
 
+## 2026-10-08: synchronous CCI reservation across A72 DVFS
+
+Linux `9d999fa65896a` routes the power owner's complete DVFS operation through
+`mt6797_cci_run_a72()`. The active owner task supplies proof of MP2 lifecycle
+serialization. CCI raises to at least half the requested A72 rate, capped at
+the vendor988MHz maximum, while preserving any higher existing CCI rate.
+The normal devfreq governor/target path performs that raise, preserving
+frequency constraints and devfreq accounting. Its temporary target bypasses
+global CPUHP locking only inside this serialized operation. The devfreq mutex
+remains held across the A72 clock/voltage callback, excluding asynchronous
+CCI reductions until the transition finishes.
+
+An uncertain A72 result fences CCI and retains its raised vote; known
+pre-write failures permit a later fresh governor sample. Provider publication
+and teardown serialize with calls through a separate owner mutex. Invalid
+A72 request parameters are rejected before entering CCI.
+
+Production runtime tests pass544 combinations (16 initial CCI points x17 A72
+rates x ordinary/CPUHP-writer context), owner admission, devfreq accounting,
+QoS/voltage refusal, callback failures and retained pre-raise. Power-owner
+fault tests, all251 DVFS restart pairs, CCI policy regressions and ARM64 CCI /
+owner builds pass. Evidence:
+`handoff/a72-frequency-audit-20261008/cci-a72-sync-tests.log`.
+CPUFreq/OPP wiring and hardware qualification remain pending. Normal packaging
+and installed M69 remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
