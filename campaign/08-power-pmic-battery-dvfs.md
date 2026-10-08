@@ -833,6 +833,10 @@ implementation and host fault tests rather than oscilloscope evidence.
 
 ## A72 shutdown lifecycle prerequisite, October 8
 
+The following prerequisite entries describe successive implementation stages.
+Native callbacks are now connected; the first hardware trial and its failure
+are recorded below under “Native A72 lifecycle trial.”
+
 The planned A72-offline low-voltage trial cannot run on the current CPU
 operations. `arch/arm64/kernel/mt6797_psci.c` deliberately returns `-EPERM`
 for CPU8/9 disable and provides neither `cpu_die` nor `cpu_kill`. The native
@@ -998,6 +1002,46 @@ hardware trial was performed for this commit; packaging remains on the
 previous fully built SRAM-provider commit `eecfc28abc66b`. The next work is
 the native hotplug admission/cancellation, CPU_OFF/firmware-kill callbacks
 and power-owner lifecycle calls, followed by the complete off/on trial.
+
+## Native A72 lifecycle trial, October 8
+
+Linux `8061e213868e5` connects CPU8/9 admission, CPU_OFF and surviving-CPU
+firmware completion to the native power, clock and SRAM owners. CPU9 must
+leave before CPU8; cancellation clears the pending shutdown without replaying
+startup. Successful last-core shutdown records the stopped resources, and
+restart checks fresh clock, power and SRAM state before consuming its
+authorization. Faults permanently prevent further lifecycle operations.
+Automatic parking still retains both A72s pending hardware qualification.
+
+Normal and diagnostic bundles build with the same kernel and unchanged DTB.
+The production callback host test covers cold/warm cycles, CPU9 re-add,
+cancellation and errors before/after effects at 41 CPU8-shutdown, 19
+CPU9-shutdown and 34 warm-start I/O boundaries. These tests used matching
+primary/secondary SPM acknowledgment words, an assumption now contradicted
+by hardware observation.
+
+Diagnostic boot `52dc0135-4192-46a6-ae78-37fb71ebda46` successfully starts
+both A72s and enables MP2 sync DCM. With A53 rates and shared rails fixed at
+their previously tested maxima, wrong-order CPU8 removal correctly returns
+EBUSY. CPU9 removal returns success in 41.2 ms and firmware reports it killed,
+but the native post-shutdown check faults with EUCLEAN. CPU9 re-add and probe
+cleanup are consequently refused. No full cluster shutdown or restart was
+attempted. This is a failed qualification, not successful A72 hotplug.
+
+The boot worker restores healthy M69 boot
+`51f5beca-7346-466c-a12e-fb84382fe74d`; terminal-worker and source/output audits
+pass. Evidence is in `handoff/a72-native-trial-01/` and
+`handoff/a72-native-lifecycle-20261008/completion.json`.
+
+Linux `24820f78a5629` adds failure-only logging of the existing shutdown
+samples without changing admission or hardware operations. Normal and
+diagnostic builds pass; build evidence is in
+`handoff/a72-shutdown-diagnostics-20261008/`. A read-only M69 observation
+finds primary CPU power status `0x003b80c8` and secondary `0x003980ff` while
+both A72s are online: the secondary cluster bit is clear even though the
+cluster is running. ATF `power_off_big()` and `power_off_cl3()` poll the
+primary status word, not that secondary word. The next diagnostic trial
+captures the precise failed post-shutdown state before changing verification.
 
 ## Historical Cycle18 observations
 
