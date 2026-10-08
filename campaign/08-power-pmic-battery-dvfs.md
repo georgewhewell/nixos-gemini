@@ -1482,6 +1482,30 @@ boot-tagged kernel markers before/after core activation, matrix operations
 and cleanup, plus preservation of partial SSH output on timeout. Original
 trial sources are retained. No retry or load/cooling trial has run yet.
 
+## A53 1.15 V L traced trial 02 — 2026-10-08
+
+The unchanged kernel passes the traced repeat on boot
+`126657c3-fe9e-4387-882f-16c3eaa6778e`: all 169 ordered L CPU pairs,
+121 CCI/voltage pairs and 80 target postdivider crossings. It reaches
+L 1.820 GHz, CCI 910 MHz and CPU/SRAM 1.15/1.20 V. Every sample at
+L 1.703 GHz confirms CCI 884 MHz with the raised 1.14 V CPU vote.
+All checked computations and 1,114 concurrent SRAM reads pass. Sampled
+temperature peaks at 42.3°C; duration is 37.59 seconds.
+
+Boot-tagged markers show successful all-core activation, ordered A72
+shutdown, the complete matrix and cleanup. Both A72s and schedutil are
+restored, hold/pause removed, and automatic parking resumes. Post-probe
+health passes, with no kernel errors or Wi-Fi HIF fault in the captured log.
+The first trial's loss of contact did not reproduce and remains unexplained;
+this result establishes bounded transition behavior, not endurance.
+Evidence: `handoff/a53-1150mv-l-trial-02/`.
+Recovery returns healthy M69 boot `f9e958ea-50a6-4543-8c8e-55c0d1ba0846`.
+The worker is inactive with MainPID 0 and exit 0. The final audit verifies
+no writer, both locks, 35 source hashes and 26 retained outputs. CLI exit 1
+is the expected diagnostic cgroup2 memory-controller qualification failure.
+Final record: `handoff/a53-1150mv-l-trace-20261008/completion.json`.
+Load/cooling remains pending. No default is promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
