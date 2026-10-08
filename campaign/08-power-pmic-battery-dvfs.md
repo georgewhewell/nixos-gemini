@@ -831,6 +831,63 @@ unfinished. The concurrent reads are not analog transient measurements;
 provider settling and the intermediate-step envelope remain backed by the
 implementation and host fault tests rather than oscilloscope evidence.
 
+## A72 shutdown lifecycle prerequisite, October 8
+
+The planned A72-offline low-voltage trial cannot run on the current CPU
+operations. `arch/arm64/kernel/mt6797_psci.c` deliberately returns `-EPERM`
+for CPU8/9 disable and provides neither `cpu_die` nor `cpu_kill`. The native
+power owner and SRAM preparation also accept only the first cold CPU8
+start. The existing hotplug attribute test explicitly verifies that refusal.
+Generic ARM64 hotplug matching upstream does not mean this platform's A72
+shutdown lifecycle is implemented. No unplug was attempted on the device.
+This also blocks the nonboot-CPU teardown needed by full system sleep.
+
+The frozen vendor kernel at `51e705e4e7b1` provides the required order in
+`arch/arm64/kernel/psci.c`: last-core MP2 sync DCM off, PSCI AFFINITY_INFO
+completion, then BUCKB disable. `BigiDVFSSRAMLDODisable()` in
+`drivers/misc/mediatek/base/power/mt6797/mt_idvfs.c` is a no-op; its name is
+not evidence for an additional SRAM register write. The retained ATF
+source `artifacts/atf-1.0-x20/services/std_svc/psci/psci_main.c` confirms
+that AFFINITY_INFO actively invokes `power_off_big()`. It must only be
+called by a surviving CPU after the target has left Linux, never as a live
+CPU health query. `plat/mt6797/power.c` performs core/cluster power-off,
+coherency teardown, PLL deselection/disable and external isolation.
+
+Linux `8f945dc45d722` adds the shutdown transaction core to the existing A72
+power implementation. CPU9 removal requires CPU8 to remain online and
+powered, with the rail retained. CPU8 removal requires both A72s logically
+offline. After firmware completion, both SPM status words must confirm the
+expected core/cluster power state. Last-core removal additionally requires
+external isolation, reset asserted and clock-disable set before BUCKB can
+be disabled. Two further samples verify the rail is off. Unexpected state
+or I/O failure permanently fences the transaction, with no rollback or
+restart of a CPU that already left Linux. An enabled iDVFS controller is
+rejected. Other clusters' status bits are ignored.
+
+The host test runs the production core, checking the two exact operation
+sequences, 24 failure cases over 12 I/O positions, 62 corrupt-readback cases,
+live-target refusal, unrelated status bits and permanent fencing. The
+existing cold-start suite passes all 14 cases and 721 assertions. ARM64
+core/adapter compilation and checkpatch pass. The shutdown test is included
+in the normal kernel recipe. Normal and diagnostic bundles pass with the
+full kernel check suite and share kernel
+`/nix/store/pdlsigq9s5mm8s2k9n9w08cfx4mg2cpn-linux-gemini-7.1.3`. The DTB is
+byte-identical to the voltage-tested candidate. Build evidence, completion
+metadata and GC roots are retained in `handoff/a72-lifecycle-20261008/`.
+No new device boot occurred; healthy M69 remains
+`95e8a653-14da-4624-8edb-52cc11443cfe`.
+
+This is a tested core, not enabled A72 unplug. Remaining work is native
+CPU-hotplug admission/cancellation and firmware-kill callbacks, serialized
+MP2 sync-DCM control through the clock owner, and a restart contract covering
+retained PLL/SRAM state. The cold clock validator currently requires both
+PLL words to be zero, while firmware shutdown only deselects and disables
+the PLL. SRAM's first-start attempt latch must not simply be cleared; a
+verified shutdown receipt must authorize each subsequent start. A refused
+unplug must also be able to unwind CPU-hotplug callbacks without being
+misclassified as a new cold start. These pieces must be integrated before
+A72-offline voltage or full shutdown/restart hardware qualification.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
