@@ -2020,6 +2020,25 @@ the bounded response, not endurance or normal cgroup2 operation, and does
 not promote the installed/default generation. Evidence:
 `handoff/a53-thermal-poll-20261008/probe-result.json` and raw trial files.
 
+## 2026-10-08: live A72 table selection and SRAM ownership prerequisite
+
+After verified recovery, read-only M69 capture of `/chosen/atag,devinfo`
+(boot `d0177459-b374-47cd-a18e-85faf4df2311`) reports word61=0x003f00c0
+and word22=0x00000004. Applying the pinned vendor's date/segment functions
+selects date0119, CPU_LEVEL_1, TT segment. Its nominal B table is SB0119
+with the TT overrides at the first two points (2.587/2.431GHz); this is
+source selection evidence, not a qualified operating range. The extracted
+sixteen-point nominal table is in
+`handoff/a72-frequency-audit-20261008/live-table-selection.json`.
+Calibration and hardware qualification are still required.
+
+The maintained SRAM regulator's ordinary setter rejects changes after
+`mt6797_sram_boot_attempted` is set (`mt6797-bigidvfs-sram.c:601`). Existing
+A72 hotplug uses an explicit lifecycle transaction instead. A future A72
+DVFS implementation must extend coordinated ownership rather than attaching
+an OPP table to a setter that is intentionally unavailable after startup.
+No regulator or frequency writes were made in this capture.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
