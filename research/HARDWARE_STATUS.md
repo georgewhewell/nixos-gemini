@@ -5,7 +5,7 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 814f83792871a, including watchdog/RTC fixes,
+Linux branch `gemini` at eb64c46a953ef, including watchdog/RTC fixes,
 EFI/Nix support, desktop keyboard, zswap writeback, coupled A53/CCI voltage
 scaling and native A72 shutdown/restart. Automatic A72 parking is enabled in
 the candidate and has passed bounded hardware tests; the detailed evidence
@@ -18,7 +18,9 @@ without a result; a traced repeat passes, but that interruption remains
 unexplained. The selected candidate enables the remaining A53 points
 through 1.20 V (LL 1.547/L 2.002 GHz). All174 added transition pairs pass,
 but one clock-snapshot EAGAIN occurs during CPU8 startup before the matrix;
-clean-log and full-ceiling load/thermal qualification remain pending. FUSB301 role-switch and MT6797 USB3
+the selected kernel now scopes read-only stability checks to the requested
+clock domain, with host/build checks passing and physical validation pending.
+Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains

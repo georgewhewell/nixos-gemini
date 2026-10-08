@@ -63,7 +63,7 @@ in
       export CC=${buildPkgs.stdenv.cc}/bin/cc HOSTCC=${buildPkgs.stdenv.cc}/bin/cc
       export MT6797_SPM_FIRMWARE_DIR=${spmFirmware}/lib/firmware/mediatek/mt6797
       for test in \
-        mt6797-a72-hotplug-attribute mt6797-cpuclk-observation mt6797-cpuclk-core-host \
+        mt6797-a72-hotplug-attribute mt6797-cpuclk-observation mt6797-cpuclk-snapshot-host mt6797-cpuclk-core-host \
         mt6797-a72-power-core-host mt6797-a72-off-host \
         mt6797-sram-core-host mt6797-sram-boot-api \
         a72-vproc-votes a72-online-commit a72-hotplug-lifecycle mt6797-cpuclk-boot-api \

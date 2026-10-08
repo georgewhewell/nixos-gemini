@@ -1626,6 +1626,38 @@ The full-ceiling load/thermal probe is prepared in
 states, then45 seconds of checked eight-core load, with real throttling
 reported separately and a90°C stop bound. It has not run yet.
 
+## Clock observations during A72 startup — 2026-10-08
+
+Linux `eb64c46a953ef` separates read-only domain observation from the
+full snapshot used by transition planning, execution, startup admission and
+power lifecycle checks. Previously a read of the L clock compared every
+sampled register, including firmware-owned A72 PLL words. The full-table
+trial's path-rate snapshot EAGAIN coincides with CPU8 startup; unrelated
+A72 register changes are a plausible cause, though the original log did
+not capture the differing words.
+
+Read-only callbacks now compare only the requested domain's PLL words,
+mux and divider fields, under the existing mutex and CSPM lease. They still
+take exactly two samples and reject requested-domain instability or I/O
+failure. No retry, stale-rate substitution or diagnostic suppression is
+introduced. All transition and lifecycle paths retain strict full snapshots;
+lease-release errors still fence the provider.
+
+The production observation/lease path passes1,152 single-bit change cases
+and25 injected errors under UBSan. Every full-snapshot comparison remains
+strict, while unrelated changes no longer invalidate a requested-domain
+read. Existing callback semantics,58,539 core assertions,2,048 A53 pairs,
+12,344 postdivider failures and native A72 lifecycle tests pass. ARM64
+compilation and both full image builds pass; the new regression is part of
+both packaging check suites. Kernel and DTB match between bundles, and the
+DTB is unchanged from the full-table candidate.
+
+A physical regression is prepared: continuous A53 rate reads during three
+complete A72 power cycles with checked work on each restarted core, followed
+by the174 upper transition pairs. It has not run. Evidence, builds and
+scripts: `handoff/clock-domain-observation-20261008/`. Both packaging inputs
+select this commit; no default is promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
