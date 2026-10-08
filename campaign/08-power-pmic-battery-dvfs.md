@@ -1276,10 +1276,20 @@ It passes under UBSan. ARM64 DTB compilation passes; decoded-DTB comparison
 shows exactly the two removed disabled properties and no other change.
 Normal and diagnostic bundle builds pass their full kernel checks and use
 the same kernel. Build identities and GC roots are retained in
-`handoff/a53-1040mv-20261008/`. Bounded hardware qualification is pending. The previous physical ceiling remains897MHz/1.209GHz at1.00V
-until the new trial succeeds. The prepared probe covers128 ordered A53
+`handoff/a53-1040mv-20261008/`. Bounded hardware results follow below. The prepared probe covers128 ordered A53
 pairs and64 ordered CCI/voltage pairs with A72s off, concurrent SRAM reads,
 checked computation, and governor/core restoration.
+
+Trial01 passes on candidate boot`c2d5cccf-28f4-47af-bc24-6e7c5b5bcde5`:
+all128 A53 ordered frequency pairs and all64 ordered CCI/voltage pairs,
+including LL1.014GHz, L1.352GHz, CCI676MHz, CPU1.04V and SRAM1.15V.
+All checked computations pass. The53.28-second probe retains1,709 concurrent
+SRAM readings; sampled temperature peaks at37.5°C. No kernel errors occur.
+Cleanup restores both A72s, schedutil, and automatic parking, and removes its
+hold/pause files. Post-probe health checks pass. Evidence:
+`handoff/a53-1040mv-trial-01/`. These results establish bounded transition
+coverage at the new points; sustained stress and physical thermal response
+remain outstanding.
 
 ## Historical Cycle18 observations
 
