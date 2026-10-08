@@ -1200,7 +1200,12 @@ A separate hardware service-stop check was withheld before execution because
 only21 seconds remained in the observation window; that particular cleanup
 path is host-tested only. Evidence: `handoff/a72-automatic-parking-trial-01/`
 and `handoff/a72-automatic-parking-20261008/`. Sustained stress and normal
-cgroup2 qualification are separate outstanding requirements.
+cgroup2 qualification are separate outstanding requirements. The trial returns
+to healthy M69 boot`b4177a75-b3d4-413d-a2e7-0720bdc9577d`. The worker exits
+successfully; the final audit verifies no writer, both locks, all35 executed
+source hashes and26 retained outputs. The overall diagnostic profile still
+fails its expected cgroup2 memory-controller requirement. No default is
+promoted. Final evidence: `handoff/a72-automatic-parking-20261008/completion.json`.
 
 ## Historical Cycle18 observations
 
