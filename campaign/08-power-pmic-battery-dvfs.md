@@ -2420,6 +2420,31 @@ module after A72 preflight, allowing configuration before OPP registration;
 this ordering must be retained when enabling the table. Normal packaging and
 installed M69 remain unchanged.
 
+## 2026-10-08: A72 table activation and first trial preparation
+
+Linux `3e5b378f9d799` attaches the audited CPU_LEVEL_1/0119 TT nominal
+16-point A72 table (338–2587MHz) to CPU8 and CPU9, sharing one OPP table
+and retaining exclusive rail ownership in a72-power. Both thermal maps
+now include A72 cooling. Runtime DVFS no longer requires CPU4 online:
+CPU4 is required for startup, but can be parked after CPU8 is running.
+The CPU8 lifetime and owner transaction checks remain enforced.
+
+Owner/SRAM API tests and ARM64 object/DT builds pass. The compiled DT was
+checked against all16 audited frequency/voltage pairs, shared CPU8/9
+phandles and absence of separate CPU regulator supplies. Evidence:
+`handoff/a72-frequency-audit-20261008/opp-activation-tests.log`.
+These checks do not establish hardware DVFS qualification.
+
+Diagnostic commit `702e95db67183` exposes only338/676/845/1001MHz for the
+first hardware trial. Its isolated packaging in
+`handoff/a72-first-20261008/packaging` selects userspace as the initial
+governor and preserves userspace on policy8 when the CPUFreq service runs.
+It retains the cgroup1 diagnostic workaround. The full final table remains
+on gemini; this diagnostic limit is a qualification stage. A build has
+been launched; no A72 DVFS candidate has been booted yet. Normal packaging
+remains pinned to b62fc653f754f and M69 recovery remains unchanged.
+Grok's allocator edits are excluded from the diagnostic commit.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
