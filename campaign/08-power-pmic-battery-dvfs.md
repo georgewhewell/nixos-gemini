@@ -2566,6 +2566,22 @@ The CCI readback check respects the production988MHz ceiling. These future
 checks are not yet hardware evidence; the full-range device trial has not
 started, and normal packaging remains on b62fc653f754f.
 
+The eight-point trial is now closed with a successful recovery audit on
+M69 boot `f8f9150b-fde6-4ad0-9b73-cbcea9bfac13`:35 source hashes match,
+26 outputs are retained, fixed swap is preserved, locks are acquired and
+no writer is active. The previous worker is terminal with MainPID0.
+`handoff/a72-mid-20261008/completion.json` records the complete result.
+
+Full-table bundle
+`/nix/store/2pm83fy6c7rrnlalrvn2v0hk97jhg3hp-gemini-mainline-nixos-bundle`
+passes build, packaged regressions and all16 final-image frequency/voltage
+checks. Its copied system closure is now under test as `a72-full-trial-01`,
+supervised by `boot-test-1791460739-2042498.service`. The planned upper-half
+transitions and returns add192 distinct pairs to the64 already observed;
+combined coverage would be256, but must be verified from actual samples.
+Hardware result and final recovery audit are pending. Normal packaging and
+installed recovery remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
