@@ -2343,6 +2343,29 @@ Host lock doubles verify ordering/state boundaries; hardware concurrency
 qualification remains pending. CCI and CPUFreq integration are next; no normal
 packaging or installed system changes were made.
 
+## 2026-10-08: CCI hotplug contention retries without lock inversion
+
+Linux `4e734756f2a0a` changes CCI governor/target CPU hotplug reads to
+`cpus_read_trylock()`. A writer now produces `-EAGAIN` rather than sleeping
+while holding the devfreq mutex; the existing worker retries after20ms.
+This is required before synchronously raising CCI from CPUFreq hotplug
+initialization, which already holds the CPU hotplug writer.
+
+Production runtime tests cover a writer present at governor entry and one
+arriving between governor and target callbacks. Both paths leave hardware
+unchanged, release the devfreq mutex, retain pending work and succeed after
+the writer releases. Existing CCI runtime tests,5376 policy combinations,
+512 ordered paths,6388 injected failures,704 boot states and ARM64 CCI
+compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/cci-hotplug-lock-tests.log`.
+
+The synchronous CCI/A72 transaction is still pending. It should run inside
+the A72 owner's serialized operation, preventing native MP2 power changes,
+and hold the devfreq mutex across CCI pre-raise and the MP2 transition.
+Devfreq must account for the synchronous frequency update and enforce its
+frequency range; an uncertain MP2 result must retain the raised CCI vote.
+Normal packaging and installed M69 remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
