@@ -1535,6 +1535,35 @@ physical throttling separately from bounded workload success. The device
 service deadline remains70 seconds within the90-second recovery observation
 window. It has not run; the aborted75°C test remains recorded as failed.
 
+## A53 1.15 V physical thermal response — 2026-10-08
+
+The separate thermal-response trial passes on boot
+`83bc7780-e6d0-445f-b6bf-8a0df1031d8e`. All twelve emulated cooling states
+on both clusters map to the expected frequency limits and clear before
+real load starts. Eight A53 cores then complete 10,936 checked PBKDF2
+computations over45 seconds, retaining173 real-temperature samples.
+
+Real temperature peaks at85.4°C. The first sampled crossing is at45.255s
+from probe start; by45.516s both clusters have cooling state1, limits and
+actual rates1.339/1.755GHz, and the shared rail has dropped from1.15 to1.14V.
+Both clusters exercise states1 and2 during real load. The final load sample
+is83.8°C with state0 and restored1.391/1.820GHz limits. This demonstrates
+bounded physical throttling and release around the85°C passive trip; it
+does not establish endurance or operation at the95°C/117°C trips.
+
+Total probe time is53.80 seconds. Cleanup restores schedutil and parking,
+removes the hold, and leaves the system healthy with the transient unit
+inactive. Final temperature is74.3°C. Kernel checks and the Wi-Fi HIF fault
+search are empty. Recovery returns healthy M69 boot
+`f48185ac-3a2a-4cd7-aee8-8c7847a225be`. The worker is inactive with MainPID0
+and exit0; final audit passes with no writer, both locks,35 source hashes
+and26 retained outputs. CLI exit1 remains the expected diagnostic cgroup2
+memory-controller qualification failure. No default is promoted.
+Final record: `handoff/a53-1150mv-thermal-response-20261008/completion.json`.
+Evidence: `handoff/a53-1150mv-thermal-response-trial-01/`, including the
+raw JSON, kernel log and `thermal-timeline.csv`. The earlier75°C-bound
+abort remains a separate failed test; its threshold was not changed.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
