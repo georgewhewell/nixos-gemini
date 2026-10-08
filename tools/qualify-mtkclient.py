@@ -20,7 +20,8 @@ import sys
 import time
 
 # The installed p22 image every trial starts from and is rescued back to.
-BASELINE_FILE = Path(__file__).resolve().parent.parent / 'research' / 'accepted-baseline.json'
+BASELINE_FILE = Path(os.environ.get('GEMINI_ACCEPTED_BASELINE') or
+                     Path(__file__).resolve().parent.parent / 'research' / 'accepted-baseline.json')
 BASELINE = json.loads(BASELINE_FILE.read_text())
 ACCEPTED_BOOT = BASELINE['boot_sha256']
 ACCEPTED_SYSTEM = BASELINE['system']

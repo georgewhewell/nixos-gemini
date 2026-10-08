@@ -12,6 +12,8 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+# These fixtures model trials from the direct-boot M69 baseline.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec=importlib.util.spec_from_file_location('rtc_profile',Path(__file__).with_name('test-boot.py'))
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 

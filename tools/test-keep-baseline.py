@@ -39,6 +39,7 @@ class Keep(unittest.TestCase):
             raise AssertionError(argv)
         with mock.patch.object(r, 'wait_state') as wait, \
                 mock.patch.object(r, 'candidate_snapshot', return_value=kept), \
+                mock.patch.object(r, 'handoff_tree', return_value={r.HANDOFF_MARKER: b'efi\0'.hex()}), \
                 mock.patch.object(r.qualify, 'run', side_effect=run):
             result = r.keep_candidate(self.dir, 'normal', {}, self.middle, ['ssh'], 'owner', 'net')
         wait.assert_called_once()
@@ -54,7 +55,8 @@ class Keep(unittest.TestCase):
         baseline = json.loads((self.dir / 'promoted-baseline.json').read_text())
         self.assertEqual(baseline['boot_sha256'], self.sha)
         self.assertEqual(baseline['system'], self.middle['system'])
-        self.assertEqual((baseline['store'], baseline['zswap_shrinker']), ('normal', 'Y'))
+        self.assertEqual((baseline['store'], baseline['zswap_shrinker'], baseline['boot']),
+                         ('normal', 'Y', 'uboot-efi'))
         self.assertEqual(baseline['previous'], r.BASELINE['name'])
 
     def test_reboot_during_stand_down_is_not_promoted(self):
@@ -66,6 +68,15 @@ class Keep(unittest.TestCase):
         (self.dir / 'candidate-self-accepted').write_text('stale\n')
         with self.assertRaises(FileExistsError):
             self.keep(dict(self.middle))
+
+    def test_baseline_tree_follows_boot_type(self):
+        efi = {r.HANDOFF_MARKER: b'efi\0'.hex()}
+        with mock.patch.dict(r.BASELINE, boot='direct'):
+            r.verify_baseline_tree({})
+            with self.assertRaisesRegex(RuntimeError, 'Direct-Linux'): r.verify_baseline_tree(efi)
+        with mock.patch.dict(r.BASELINE, boot='uboot-efi'):
+            r.verify_baseline_tree(efi)
+            with self.assertRaisesRegex(RuntimeError, 'EFI handoff'): r.verify_baseline_tree({})
 
     def test_supervisor_self_accept_suite(self):
         subprocess.run(['sh', str(ROOT / 'research/p22-self-accept-supervisor.test.sh')],

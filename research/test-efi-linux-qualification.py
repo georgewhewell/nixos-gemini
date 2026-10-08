@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Host-only rejection tests for EFI proof and candidate/rescue identities."""
+import os
 import importlib.util
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
+# These fixtures model trials from the direct-boot M69 baseline.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec = importlib.util.spec_from_file_location('runner', Path(__file__).resolve().parents[1]/'tools/qualify-uboot-recovery.py')
 r = importlib.util.module_from_spec(spec); spec.loader.exec_module(r)
 e = r.efi_linux

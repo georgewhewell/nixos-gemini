@@ -29,7 +29,8 @@ LOCKS = Path('/mnt/Home/src/nixos-gemini-flash-p22-20260829')
 OBSERVE_SECONDS = 0
 # Keep a fully qualified candidate as the new accepted baseline (promotion).
 KEEP = False
-BASELINE = json.loads((ROOT / 'research/accepted-baseline.json').read_text())
+BASELINE = json.loads(Path(os.environ.get('GEMINI_ACCEPTED_BASELINE') or
+                           ROOT / 'research/accepted-baseline.json').read_text())
 ACCEPTED = Path(BASELINE['image'])
 PROFILES = {
     'power-kernel': (WORKSPACE / 'handoff/power-kernel-linux/boot-padded-p22.img', 'd2bb1ef41563db0bffaa64f5293f979aeae167b93ab85ea5db67c9fe7d1d1fbc'),
@@ -207,15 +208,25 @@ def canonical_reservations(tree):
     return result
 
 
+def verify_baseline_tree(tree):
+    """The accepted baseline's own boot path, not a stale candidate marker."""
+    if BASELINE.get('boot', 'direct') == 'direct':
+        if any(key in tree for key in MARKERS):
+            raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
+    elif tree.get(HANDOFF_MARKER) != b'efi\0'.hex():
+        raise RuntimeError('U-Boot baseline lacks its EFI handoff marker')
+
+
 def verify_memory_handoff(before, after):
     before, after = canonical_reservations(before), canonical_reservations(after)
     def memory_keys(tree):
         return {key for key in tree if key.startswith('reserved-memory/')}
     if memory_keys(before) != memory_keys(after):
         raise RuntimeError('Linux handoff changed memory reservation properties')
-    if any(key in before for key in MARKERS):
-        raise RuntimeError('Direct-Linux baseline unexpectedly contains a U-Boot marker')
+    verify_baseline_tree(before)
     for key, value in before.items():
+        if key in MARKERS:
+            continue
         if key == 'reserved-memory/reserve-memory-dram_r0_dummy_read/alloc-ranges':
             # LK begins this allocation window after the Android ramdisk.
             # The FIT carrier is larger than the direct-Linux initramfs.
@@ -627,6 +638,7 @@ def keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit
     baseline = dict(name=directory.name, image=str(Path(image).resolve(strict=True)), boot_sha256=sha,
                     system=kept['system'], store=qualify.run(ssh + ['test -f /nix/store/.gemini-system && echo m69-overlay || echo normal']).strip(),
                     zswap_shrinker=qualify.run(ssh + ['cat /sys/module/zswap/parameters/shrinker_enabled']).strip(),
+                    boot='uboot-efi' if handoff_tree(ssh).get(HANDOFF_MARKER) == b'efi\0'.hex() else 'direct',
                     previous=BASELINE['name'])
     if qualify.accepted_digest(Path(baseline['image'])) != sha:
         raise RuntimeError('Kept image differs from the qualified candidate')
@@ -844,8 +856,8 @@ def main():
         qualify.check_host_idle()
         before = snapshot(ssh)
         tree = handoff_tree(ssh) if args.profile in LINUX_PROFILES else None
-        if tree is not None and any(key in tree for key in MARKERS):
-            raise RuntimeError('Baseline contains a stale U-Boot/EFI marker')
+        if tree is not None:
+            verify_baseline_tree(tree)
         candidate, sha = PROFILES[args.profile]
         backend.checked_image(candidate.resolve(strict=True), sha)
         if args.profile in EFI_LINUX_PROFILES and args.profile not in NIX_PROFILES:

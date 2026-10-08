@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Host-only evidence and USB-ordering tests; never open a real USB device."""
+import os
 import importlib.util
 import errno
 from pathlib import Path
@@ -7,6 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+# These fixtures model trials from the direct-boot M69 baseline.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec = importlib.util.spec_from_file_location('backend', Path(__file__).with_name('p22-mtkclient-backend.py'))
 backend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backend)

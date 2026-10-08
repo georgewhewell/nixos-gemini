@@ -11,6 +11,7 @@ import fcntl
 from functools import partial
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -50,7 +51,8 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
     global EFI_FILES, EFI_MANIFEST, BOOTLOADER, INSTALL_EFI, STORE_ROOT
     if bool(bootloader) != bool(efi_files) or (bootloader and (install_efi or reclaim_cache)):
         raise ValueError('--bootloader requires --efi-files and an already installed generation')
-    baseline = json.loads((Path(__file__).resolve().parents[1]/'research/accepted-baseline.json').read_text())
+    baseline = json.loads(Path(os.environ.get('GEMINI_ACCEPTED_BASELINE') or
+                               Path(__file__).resolve().parents[1]/'research/accepted-baseline.json').read_text())
     if install_efi and baseline['store'] != 'm69-overlay':
         # systemd-boot's default entry belongs to the accepted U-Boot baseline.
         raise ValueError('Installing EFI files would change the accepted baseline; '

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reject wrong storage/kernel identities and runtime-supplied default policy."""
+import os
 import importlib.util
 import json
 from pathlib import Path
@@ -9,6 +10,8 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+# These fixtures model trials from the direct-boot M69 baseline.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec = importlib.util.spec_from_file_location('power_swap', Path(__file__).with_name('qualify-power-swap.py'))
 p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
 

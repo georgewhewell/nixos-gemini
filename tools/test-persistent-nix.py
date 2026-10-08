@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reject false daemon/sandbox evidence and crossed boot/store profiles."""
+import os
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -8,6 +9,8 @@ import unittest
 from unittest import mock
 from types import SimpleNamespace
 
+# These fixtures model trials from the direct-boot M69 baseline.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec=importlib.util.spec_from_file_location('recovery',Path(__file__).with_name('qualify-uboot-recovery.py'))
 r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 n=r.persistent_nix
