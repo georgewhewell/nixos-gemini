@@ -2464,6 +2464,18 @@ see `handoff/a72-first-20261008/packaged-host-check.log`. Diagnostic head
 `0014ed3257509` includes both fixes. Full bundle checks and physical trial
 remain pending.
 
+The complete diagnostic bundle subsequently built and passed its packaged
+checks. Retained bundle is
+`/nix/store/zkcqkc6db8yjbqd57rbngix0yzawlwq6-gemini-mainline-nixos-bundle`,
+with kernel `ky3458gyaya2l0x5r3il4l1h4i1nsqji-linux-gemini-7.1.3`.
+`packaged-check.json` verifies the final DT's four active A72 points,
+shared table, exclusive rail ownership, source revision, config and actual
+Android-image userspace governor argument. The system closure was copied
+to the persistent Nix store. `a72-first-trial-01` is now supervised by
+`boot-test-1791458839-1759173.service`, with its observer waiting for the
+accepted candidate window. Hardware outcome and final recovery audit remain
+pending; no normal pin or installed generation was promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
