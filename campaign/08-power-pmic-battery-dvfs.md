@@ -1944,6 +1944,16 @@ work must establish firmware admission, voltage/SRAM and CCI ordering,
 shared-register serialization, failure handling and hotplug restoration
 before adding an A72 OPP policy. No A72 frequency writes were attempted.
 
+The retained newer live capture was independently checked on the host:
+SHA-256 `82eb00d45057489a5964b14cfe534d883ed16b4ca335d80920c5e7e286160c32`
+(the identity documented in `research/ATF_WATCHDOG_HANDOFF.md`). At mapping
+base0xff3c0, the AArch64 dispatcher compares0xc20003b8 at0x108db4 and
+routes through0x109164 to the PLL handler at0x106450. The handler starts by
+disabling the PLL at0x102224a0, matching the retained vendor implementation.
+This validates the entry point against that captured firmware, not a new
+live reread or an operational frequency-change test. Host evidence is in
+`handoff/a72-frequency-audit-20261008/`; private payload bytes remain local.
+
 ## 2026-10-08: full-ceiling thermal guard and minimum cooling level
 
 `a53-1200mv-thermal-response-trial-01` passed all15 cooling states under
