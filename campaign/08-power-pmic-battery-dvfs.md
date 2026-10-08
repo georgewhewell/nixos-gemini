@@ -1923,6 +1923,27 @@ layout and no writer. The worker is terminal. Evidence is in
 `handoff/clock-ap-untraced-20261008/completion.json`. Full-ceiling thermal
 qualification is next.
 
+## 2026-10-08: A72 frequency-control source entry points
+
+A72 frequency control remains unfinished at the fixed750MHz operating point.
+The local vendor tree's
+`drivers/misc/mediatek/base/power/mt6797/mt_cpufreq.c:3178` implements the
+iDVFS request path, selecting percentage tables by CPU date code and segment.
+`mt_idvfs.c:917` converts the percentage into a fixed-point SWREQ and invokes
+`SEC_BIGIDVFS_SWREQ`; low-frequency requests also change the clock divider.
+This is not the same transaction as the maintained AP clock planner.
+
+The vendor also provides a non-iDVFS path in `mt_cpufreq.c:3044`:
+`adjust_armpll_dds()` raises the B rail to its fallback requirement when
+needed, switches to MAINPLL, calls `BigiDVFSPllSetFreq()` in MHz, waits for
+PLL settling, switches back to ARMPLL and restores voltage. The wrapper in
+`mt_idvfs.h:118` invokes the dedicated firmware PLL-set-frequency call.
+These are source entry points, not evidence that either interface is safe
+or supported by the device's current firmware state. Next implementation
+work must establish firmware admission, voltage/SRAM and CCI ordering,
+shared-register serialization, failure handling and hotplug restoration
+before adding an A72 OPP policy. No A72 frequency writes were attempted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
