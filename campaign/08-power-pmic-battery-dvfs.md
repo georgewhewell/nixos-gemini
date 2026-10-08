@@ -2456,6 +2456,14 @@ build is running. Logs and the bounded probe/observer are retained under
 restart cycles, with a90°C abort and device-side deadline/cleanup.
 No hardware result is claimed yet.
 
+The second packaged check exposed an outdated online-commit test extractor
+which selected only the newly added wrapper. Linux `16d3f060f017c` extracts
+both the locked implementation and wrapper and checks balanced locking.
+All tests in the packaged `tools/gemini` host-test list now pass locally;
+see `handoff/a72-first-20261008/packaged-host-check.log`. Diagnostic head
+`0014ed3257509` includes both fixes. Full bundle checks and physical trial
+remain pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
