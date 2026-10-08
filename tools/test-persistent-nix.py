@@ -34,6 +34,37 @@ class PersistentNix(unittest.TestCase):
                     self.assertEqual(script, n.native_cpu_script(boot))
                     self.assertIn('a72_startup=pass', script)
 
+    def test_complete_build_and_retention_do_not_repeat_cpu_admission(self):
+        token = 'a'*32
+        boot = '8ab215b1-2e33-4b19-9168-2ff5b0574d84'
+        output = '/nix/store/'+'b'*32+'-gemini-daemon-'+token
+        proof = f'token={token}\nuid=1000\nnet=net:[200]\noutside_home=absent\n'
+        digest = hashlib.sha256(proof.encode()).hexdigest()
+        retained = f'proof_sha256={digest}\nnix_hash=sha256:test\nderiver={output}.drv\n'
+        state = 'daemon_pid=23\nhost_net=net:[100]\ndaemon_net=net:[100]\nclient_uid=1000\nstore_root=/persist/nixos\n'
+        replies = {'nix-native-cpus':'', 'nix-candidate-state':state,
+                   'nix-unprivileged-build':output, 'nix-builder-proof':proof,
+                   'nix-build-before':retained, 'nix-build-after':retained}
+        with tempfile.TemporaryDirectory() as tmp:
+            kernel = Path(tmp); (kernel/'kernel.config').write_text('')
+            persistence = SimpleNamespace(NIX='/nix/bin', BUSYBOX='/busybox',
+                run=mock.Mock(side_effect=lambda ssh, script, directory, name: replies[name]))
+            qualify = SimpleNamespace(save=mock.Mock())
+            with mock.patch.object(n, 'old_persistence'), mock.patch.object(n.uuid, 'uuid4', return_value=SimpleNamespace(hex=token)):
+                result = n.evidence([], boot, kernel, qualify, persistence, kernel=kernel)
+            self.assertTrue(result['ordinary_daemon_build_qualified'])
+            self.assertEqual([c.args[3] for c in persistence.run.call_args_list],
+                             ['nix-native-cpus', 'nix-candidate-state', 'nix-unprivileged-build', 'nix-builder-proof', 'nix-build-before'])
+            persistence.run.reset_mock()
+            n.verify_retained([], 'recovery-boot', kernel, qualify, persistence, result)
+            persistence.run.assert_called_once()
+            script = persistence.run.call_args.args[1]
+            self.assertIn("--store 'local?root=/persist/nixos'", script)
+            self.assertNotIn('gemini-a72-preflight', script)
+            replies['nix-build-after'] = retained.replace(digest, '0'*64)
+            with self.assertRaisesRegex(RuntimeError, 'output changed'):
+                n.verify_retained([], 'recovery-boot', kernel, qualify, persistence, result)
+
     def test_namespace_identity_and_nonroot_builder(self):
         proof=dict(token='a'*32,uid='1000',net='net:[200]',outside_home='absent')
         n.verify_builder(proof,'a'*32,'net:[100]','net:[100]')

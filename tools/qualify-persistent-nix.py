@@ -164,10 +164,6 @@ test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
     output=persistence.run(ssh,command,directory,'nix-unprivileged-build').strip()
     if not re.fullmatch('/nix/store/[0-9a-z]{32}-gemini-daemon-'+token,output):
         raise RuntimeError('Unexpected daemon build output')
-    if not bound:
-        persistence.run(ssh, native_cpu_script(boot_id), directory, 'nix-native-cpus')
-    cpu_check = ('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1\n'
-                 'test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1' if bound else ':')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {output_link})" = {output}
@@ -189,10 +185,6 @@ def verify_retained(ssh, boot_id, directory, qualify, persistence, previous, nam
     root = previous.get('store_root', '')
     if root not in ('', '/persist/nixos'): raise ValueError('Unknown retained Nix store root')
     store_arg = " --store 'local?root=/persist/nixos'" if root else ''
-    if not bound:
-        persistence.run(ssh, native_cpu_script(boot_id), directory, 'nix-native-cpus')
-    cpu_check = ('test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1\n'
-                 'test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1' if bound else ':')
     raw=persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
 test "$(readlink {previous['output_link']})" = {previous['output']}
