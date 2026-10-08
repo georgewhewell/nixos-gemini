@@ -1426,11 +1426,36 @@ fault cases and 704 boot states pass.
 Physical probes are prepared separately for LL and L: 169 ordered CPU pairs
 each, 80 target postdivider crossings each, 169 LL and 121 L CCI/voltage
 pairs. Each uses the existing bounded systemd cleanup and recovery workflow;
-no hardware trial has run for this ceiling yet. All higher points above
+the LL result is recorded below and the L trial is pending. All higher points above
 1.15 V remain disabled. M69 remains the default and normal cgroup2 remains
 unqualified. Build identities, source hash, full build logs and DTB diff:
 `handoff/a53-1150mv-20261008/`. Probe scripts and expected mappings:
 `handoff/a53-1150mv-ll-20261008/` and `handoff/a53-1150mv-l-20261008/`.
+
+## A53 1.15 V LL transition trial — 2026-10-08
+
+Candidate boot `eada5a22-a5b7-435b-9404-46714bb4925c` passes all 169
+ordered LL CPU pairs and 169 ordered CCI/voltage pairs. The test reaches
+LL 1.391 GHz, CCI 910 MHz, CPU 1.15 V and SRAM 1.20 V, including 80 target
+postdivider crossings. All checked computations and 1,749 concurrent SRAM
+reads pass. Sampled temperature peaks at 38.8°C; duration is 56.65 seconds.
+The L cluster stays at its minimum during measurement, so this does not
+qualify its upper transitions. Startup and cleanup use both cluster maxima.
+
+Both A72s are off during measurement; cleanup restores them, schedutil and
+automatic parking, and removes hold/pause. Follow-up health checks pass and
+kernel errors are absent. Evidence: `handoff/a53-1150mv-ll-trial-01/`.
+M69 recovery returns healthy boot `6aa3d496-f0eb-488c-8d5b-1fd754399c5a`.
+The worker is inactive with MainPID 0 and exit 0. The final audit confirms
+no writer, both locks acquired, 35 source hashes and 26 retained outputs.
+The CLI exits 1 because this diagnostic lacks the normal cgroup2 memory
+controller. No default is promoted. Final record:
+`handoff/a53-1150mv-ll-20261008/completion.json`.
+
+The separate L transition probe remains prepared. A follow-up 30-second
+eight-core load and twelve-state cooling probe is also prepared in
+`handoff/a53-1150mv-load-cooling-20261008/`, with the existing 75°C physical
+temperature bound and cleanup. Neither has run at this ceiling yet.
 
 ## Historical Cycle18 observations
 
