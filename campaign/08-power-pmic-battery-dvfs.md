@@ -1070,6 +1070,17 @@ qualification remains pending. Trial02 completed M69 recovery as boot
 `19fecbdd-1dbb-4899-9405-567ac0998e67`, with terminal worker, all 35 source
 hashes matching and all 26 tracked outputs retained.
 
+Trial03 boot `15a7d905-0591-4c8c-9170-dfa6ecc7065a` verifies the correction:
+CPU9 powers off in 62.0 ms and restarts in 49.1 ms, with unchanged peer
+clock/rails and no collected kernel errors. The probe then fails to locate
+`taskset` in its service environment. Its cleanup restores both governors
+and removes its hold/pause. A separate Python-affinity workload on the same
+restarted CPU9 passes. Full-cluster shutdown was not reached. Evidence:
+`handoff/a72-native-trial-03/{a72.json,cpu9-execution-check.json,analysis.json}`.
+The replacement probe in `handoff/a72-affinity-probe-20261008/` sets and
+checks affinity through Python directly. A bounded retry did not fit the
+remaining observation window and was not launched; a fresh trial is required.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
