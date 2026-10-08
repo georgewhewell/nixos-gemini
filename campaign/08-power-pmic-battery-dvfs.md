@@ -769,6 +769,41 @@ a CCI voltage floor until its consumer has established ownership;
 dependency timing observed in one boot is insufficient. Physical coupled
 rail transitions and normal cgroup2 qualification also remain outstanding.
 
+## CCI startup ownership and coupled voltage enablement, October 8
+
+Linux `e4ab5bf89d728` adds a one-way CCI ownership contract to the existing
+DVFSP handoff owner. The coupler preserves measured Vproc until ownership
+is published, so an earlier CPU regulator request cannot lower the rail
+under the inherited CCI clock. Publication follows verified CCI adoption,
+an enabled voltage vote, and registered lifetime cleanup. It serializes
+with the CSPM admission/fault gate and rejects duplicate or blocked claims.
+Consumer cleanup permanently fences the owner before releasing its vote;
+there is no unfenced ownership release. The coupler rejects a blocked or
+faulted owner before reading or changing rails. The public status accessor
+avoids acquiring the owner mutex under regulator locks.
+
+The board now permits the supported 0.77–1.20 V BUCKA range with reciprocal
+CPU/SRAM coupling. Existing A53 frequency limits remain. Normal regulator
+constraint application preserves the measured boot voltage when it is in
+this range; subsequent requests pass through the coupler. CCI startup also
+checks OPP availability before frequency lookups, avoiding the repeated
+late-table messages found in the previous hardware trial.
+
+Host tests execute the production ownership callbacks and coupler through
+11,528 inherited-pair/target combinations before and after ownership,
+including a consumer vote that must survive lower CPU requests. Duplicate
+claims, conflicting maxima, blocked/faulted ownership and permanent fencing
+are covered. The original 11,528 coupled paths and 156,336 injected failures
+still pass. Runtime tests check ownership ordering, nine post-adoption
+failure positions, five preflight failures, and voltage-enabled high/low
+votes in addition to fixed-rail rejection. The policy regression passes;
+ARM64 objects, board DTB, CCI schema validation and checkpatch pass. Normal and
+diagnostic bundle builds pass with the full kernel check suite; the packaged
+DTB matches the validated local DTB. Physical voltage-transition
+qualification is pending.
+Evidence and the prepared bounded probe are in
+`handoff/cci-ownership-20261008/`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
