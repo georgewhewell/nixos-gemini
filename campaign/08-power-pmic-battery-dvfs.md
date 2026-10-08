@@ -799,10 +799,37 @@ failure positions, five preflight failures, and voltage-enabled high/low
 votes in addition to fixed-rail rejection. The policy regression passes;
 ARM64 objects, board DTB, CCI schema validation and checkpatch pass. Normal and
 diagnostic bundle builds pass with the full kernel check suite; the packaged
-DTB matches the validated local DTB. Physical voltage-transition
-qualification is pending.
-Evidence and the prepared bounded probe are in
-`handoff/cci-ownership-20261008/`.
+DTB matches the validated local DTB. The shared kernel is
+`/nix/store/1jbvv8bahp2xxsg6ksvdmi5qjr7rgbx9-linux-gemini-7.1.3`, and the diagnostic
+bundle is `/nix/store/2dll060k52khn8sv838jc6cq6zzyx8gh-gemini-mainline-nixos-bundle`.
+Builds, probe and completion metadata are in `handoff/cci-ownership-20261008/`.
+
+The physical trial `handoff/coupled-voltage-trial-01` booted
+`0c171d7e-ba1d-445e-8bbe-0dee885c543d` and passed all 98 A53 ordered frequency
+pairs and all 16 ordered transitions among CPU/SRAM pairs 0.90/1.00,
+0.94/1.05, 0.97/1.075 and 1.00/1.10 V. The probe checked settled regulator
+readback, CCI/CPU branch and raw PLL clocks, and a pinned computation digest.
+CCI covered 416, 481, 533 and 611 MHz. A concurrent reader took 1,586 SRAM
+samples over 41.50 seconds; these include all four expected SRAM levels.
+The probe completed in 42.03 seconds at sample temperatures 35.9–38.8 C.
+Both schedutil governors were restored, the parking hold was removed, the
+probe service exited and the system remained running. Kernel error scanning
+was empty, including the previously noisy missing-OPP lookup pattern.
+
+The 95.50-second observation completed, followed by the expected normal
+cgroup2 gate failure in this diagnostic cgroup1 profile. Automatic recovery
+returned healthy M69 `95e8a653-14da-4624-8edb-52cc11443cfe`. The worker is
+terminal; the final audit acquired both locks, found no writer, verified
+all 35 executed source hashes and retained 26 ordinary outputs. No normal
+generation was qualified or promoted.
+
+This proves real coordinated CPU/SRAM voltage changes over the four tested
+levels. A72 stayed online at 750 MHz, keeping the minimum CPU rail at
+0.90 V. A72-offline low-voltage operation, higher A53/CCI operating points,
+A72 frequency control, sustained load/thermal validation and full PM remain
+unfinished. The concurrent reads are not analog transient measurements;
+provider settling and the intermediate-step envelope remain backed by the
+implementation and host fault tests rather than oscilloscope evidence.
 
 ## Historical Cycle18 observations
 
