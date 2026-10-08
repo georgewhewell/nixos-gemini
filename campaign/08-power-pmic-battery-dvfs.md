@@ -1798,6 +1798,36 @@ Worker inactive, MainPID0. Evidence: `handoff/a72-reset-settle-trial-01/`
 and `handoff/a72-reset-settle-20261008/trial-01-result.json`. Normal packaging
 remains at `eb64c46a953ef`; no default promoted.
 
+## 2026-10-08: fixed startup passes once; concurrent observation still fails
+
+Trial `a72-fixed-startup-trial-01`, kernel `e7314b974124e`, boot
+`4a8980b5-5f4f-453c-a3cd-d34d08143b36`, froze parking and set LL806/L1092MHz,
+CCI611MHz and CPU1.000V with readback before releasing the hold. Both A72
+cores then started successfully and all CPUs were online at164.840 seconds.
+The recorded state before fixing the clocks was already CPU1.20V/CCI988MHz;
+therefore this run does not establish that the earlier failures were caused
+by a low voltage or CCI floor.
+
+The probe then selected the qualified maximum A53 points and started its
+continuous A53 clock-rate reader. In cycle0, CPU9 and CPU8 went offline.
+The first CPU8 re-add stopped at VPROC_ENABLE entry at165.088392 seconds,
+after PWRAP reset assertion/verification. No regulator-core entry follows.
+No full cycle completed and the174 transition matrix never began. The fixed
+operating point is not a sufficient fix; timing and concurrent clock access
+remain variables. The failed probe produced no measurement JSON.
+
+Source inspection identifies a remaining observation coupling:
+`mt6797_cpuclk_read_observation()` still calls the full `read_once()` twice,
+including secure MP2 register reads, even for A53/CCI rate callbacks. The
+`eb64` fix only scopes equality. Narrowing the actual register reads is the
+next investigation; this source fact does not prove a secure-monitor hang.
+
+Healthy M69 recovery `79e049cf-c608-4f85-9b7b-f793aac31692` passed the final
+locked audit (35 source hashes,26 retained outputs, swap layout, no writer).
+Worker inactive, MainPID0. Evidence: `handoff/a72-fixed-startup-trial-01/`
+and `handoff/a72-fixed-startup-20261008/trial-01-result.json`. No default
+promoted and normal packaging remains unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
