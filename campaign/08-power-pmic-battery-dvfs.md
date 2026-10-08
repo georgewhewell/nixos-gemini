@@ -1741,6 +1741,33 @@ the probe starts, after health acceptance. It builds with the same kernel;
 see `handoff/a72-regulator-trace-runtime-20261008/`. Its physical trial is
 pending. Normal packaging and the installed default have not changed.
 
+## 2026-10-08: BUCKB enable completes; trace ends at following delay
+
+The shortened-argument candidate boot `f9396084-2651-433c-b47e-1e35217f201d`
+passed healthy acceptance. The probe enabled the additional dynamic-debug
+callsites at165.518 seconds before creating the parking hold. Warm CPU8
+startup again reached VPROC_ENABLE, but this capture shows both regulator
+core dependency locks and the DA9214 mutex acquired, the control-register
+write and readback returning2 (the expected transfer count), and the
+regulator enable sequence returning0 at165.842684 seconds. Action4 verify
+also completed successfully.
+
+The final marker at165.846512 enters action5 with value0x3e8: the1ms delay
+before isolation release. No delay verify follows. Thus the prior trace's
+last enable-entry marker did not establish a regulator lock or I2C stall;
+this attempt completed that entire path. Logging changes timing, and neither
+capture proves the root cause. The observation regression never started.
+Further investigation must consider concurrency while PWRAP reset is held,
+scheduling during the delay, and power/clock conditions, without assuming
+the delay itself is faulty or substituting a busy wait without evidence.
+
+Recovery returned healthy M69 `5a212a80-cfec-4ad1-b985-3a7d46cfdfd0`.
+The worker is inactive with MainPID0; the final locked audit confirms all35
+source hashes and26 retained outputs, swap layout and no writer. Evidence:
+`handoff/a72-regulator-trace-runtime-trial-01/recovery-console.txt` and
+`handoff/a72-regulator-trace-runtime-20261008/trial-01-result.json`.
+No default promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
