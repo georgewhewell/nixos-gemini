@@ -2204,6 +2204,26 @@ The power owner still needs the coordinated VPROC/SRAM/clock transaction and
 CPUFreq integration; this API has no runtime caller yet. No hardware trial or
 normal packaging change was made.
 
+## 2026-10-08: coordinated A72 rail planner
+
+Linux `a1884ace568e9` adds a hardware-independent CPU/SRAM voltage planner.
+It uses the DA9214 driver's10mV CPU grid, the SRAM25mV grid, CPU800–1200mV
+and SRAM1000–1200mV. Vendor `set_cur_volt_extbuck()` requires SRAM at least
+CPU voltage and no more than300mV above it; new gap-increasing writes keep
+the vendor275mV intermediate margin. The target SRAM voltage is CPU+100mV,
+rounded up and clamped to the SRAM range. Each step changes exactly one
+rail; both rails move monotonically toward their endpoints. An inherited
+valid300mV gap is admitted without forcing a reversal in the SRAM ramp.
+
+The exhaustive matrix covers251 valid initial rail pairs times41 CPU targets
+(10,291 plans), checking every intermediate grid, bound, delta, monotonicity
+and endpoint. Invalid input leaves the output unchanged. All17 power-core
+cases /206,589 assertions and ARM64 core compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/rail-plan-tests.log`.
+This planner has no hardware effects. Settling/readback execution, sequencing
+around clock changes, CPUFreq integration and hardware qualification remain
+pending. Installed M69 and normal packaging remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
