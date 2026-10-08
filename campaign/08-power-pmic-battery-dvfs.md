@@ -1718,6 +1718,29 @@ source hashes and retained all26 outputs. Worker inactive, MainPID0.
 Evidence: `handoff/a72-startup-trace-trial-01/recovery-console.txt` and
 `handoff/a72-startup-trace-20261008/trial-01-result.json`. No default promoted.
 
+## 2026-10-08: regulator trace boot-argument limit
+
+The next diagnostic (`a028500f1517b`) adds regulator dependency-lock,
+DA9214 provider and BUCKB I2C entry/return markers. ARM64 compilation,
+98,304 selector-pair/settling/rollback cases and the full packaged build pass.
+Trial `a72-regulator-trace-trial-01` reached SSH but never healthy acceptance:
+its expanded dynamic-debug argument filled the command line to2047 bytes
+(excluding newline), truncating the baseline lease capability token. The
+self-accept service repeatedly failed and the regression never started.
+This trial supplies no new evidence about the warm-start regulator stall.
+
+The runner restored healthy M69 `01fc7e2f-ef5d-42b6-a5a5-f105f2003fb6`.
+Its final audit passed:35 source hashes,26 retained outputs, swap layout,
+no writer and locks acquired. Worker inactive, MainPID0. Evidence lives in
+`handoff/a72-regulator-trace-trial-01/` and the corresponding dated
+`trial-01-result.json`.
+
+The corrected bundle uses the previous shorter A72-only debug boot argument
+and enables the extra regulator callsites through dynamic-debug control when
+the probe starts, after health acceptance. It builds with the same kernel;
+see `handoff/a72-regulator-trace-runtime-20261008/`. Its physical trial is
+pending. Normal packaging and the installed default have not changed.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
