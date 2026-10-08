@@ -131,15 +131,27 @@ sync
 ''',directory,phase+'-root')
     elif previous['boot_id']==boot_id:
         raise RuntimeError('Persistence was checked in the original boot')
+    # The token is built in M69's store. A normal generation mounts its own
+    # store and state from /persist/nixos/nix, so there it checks M69's root
+    # and output bytes on p32; the recovered M69 boot rechecks the database.
+    m69_root='/persist/nix/var/nix/gcroots/'+Path(previous['gcroot']).name
+    m69_output='/persist/nix/upper/'+Path(previous['output']).name
     command=f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {shlex.quote(boot_id)}
-test "$(readlink {previous['gcroot']})" = {previous['output']}
-{NIX}/nix-store --check-validity {previous['output']}
 test "$(stat -c %U:%G:%a {previous['home']})" = gemini:users:600
 printf 'home_sha256='; sha256sum {previous['home']} | cut -d' ' -f1
-printf 'output_sha256='; sha256sum {previous['output']} | cut -d' ' -f1
-printf 'nix_hash='; {NIX}/nix-store --query --hash {previous['output']}
-printf 'deriver='; {NIX}/nix-store --query --deriver {previous['output']}
+if test -f /nix/store/.gemini-system; then
+ test "$(readlink {previous['gcroot']})" = {previous['output']}
+ {NIX}/nix-store --check-validity {previous['output']}
+ printf 'output_sha256='; sha256sum {previous['output']} | cut -d' ' -f1
+ printf 'nix_hash='; {NIX}/nix-store --query --hash {previous['output']}
+ printf 'deriver='; {NIX}/nix-store --query --deriver {previous['output']}
+else
+ test /nix/store -ef /persist/nixos/nix/store
+ test "$(readlink {m69_root})" = {previous['output']}
+ printf 'output_sha256='; sha256sum {m69_output} | cut -d' ' -f1
+ printf 'store=normal\n'
+fi
 '''
     observed=dict(line.split('=',1) for line in run(ssh,command,directory,phase+'-verify').splitlines())
     verify_content(previous,observed)
@@ -152,6 +164,8 @@ printf 'deriver='; {NIX}/nix-store --query --deriver {previous['output']}
 def verify_content(expected,observed):
     if any(observed.get(k)!=expected['content_sha256'] for k in ('home_sha256','output_sha256')):
         raise RuntimeError('Persistent home or Nix output bytes changed')
+    if observed.get('store')=='normal':
+        return
     if not observed.get('nix_hash','').startswith('sha256:'):
         raise RuntimeError('Nix database lacks the output hash')
     name=expected['output'].split('-',1)[1]
