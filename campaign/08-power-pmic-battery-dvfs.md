@@ -935,6 +935,40 @@ The next integration must connect the native CPU-hotplug callbacks, bind
 saved clock state to completed shutdown, and authorize SRAM restart without
 clearing permanent failure state.
 
+
+Linux `eecfc28abc66b` adds the SRAM provider restart path. The exclusive A72
+power owner may call `mt6797_sram_record_cpu8_off()` after verifying BUCKB
+shutdown. The provider requires both CPUs logically offline, both SPM status
+words clear for MP2, external isolation set, reset asserted and clock-disable
+set, sampling these conditions twice. It does not query AFFINITY_INFO.
+Two full SRAM samples must match and must either retain the last committed
+control/calibration words or both be zero. A successful record authorizes
+one restart. Restart consumes authorization before reading hardware, checks
+two fresh samples against the recorded state, then reruns the full vendor
+SRAM service, calibration verification and settling sequence. Any uncertain
+restart permanently faults the provider. The physical boot-attempt latch
+remains set across all cycles and provider reprobe; ordinary voltage setters
+remain excluded. Actual SRAM retention through physical shutdown has not
+yet been measured.
+
+The actual provider/core host test passes six restart cycles (retained and
+zeroed samples), 13 invalid shutdowns, 12 shutdown I/O failures and 17 restart
+failures, alongside existing ownership, first-start and ordinary-setter
+checks. ARM64 provider/KUnit/A72-owner objects compile; checkpatch passes.
+Normal and diagnostic bundles pass the full kernel checks and share kernel
+`/nix/store/6nqfv4zanhql9ybndn9gza7hgw648bcz-linux-gemini-7.1.3`. The DTB is
+unchanged. Evidence and GC roots are in `handoff/a72-sram-restart-20261008/`.
+No hardware trial or promotion occurred, and M69 boot
+`95e8a653-14da-4624-8edb-52cc11443cfe` was rechecked healthy.
+
+The power owner still needs the native hotplug admission/cancellation and
+firmware-kill callbacks, a saved running MP2 clock observation checked via
+the provider at restart, and warm power-transaction admission tied to its
+completed shutdown. Its current transaction admission still requires cold
+SRAM words. The new SRAM shutdown-record API must be called only after the
+last-core shutdown core verifies BUCKB off. These connections remain necessary
+before enabling unplug or conducting the physical off/on trial.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
