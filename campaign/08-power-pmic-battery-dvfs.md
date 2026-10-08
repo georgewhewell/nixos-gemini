@@ -1987,12 +1987,15 @@ releases: samples at35.202,35.462 and35.722 seconds show full1.547/2.002GHz,
 1.20V and85.4,88.2,89.9°C, respectively. The normal one-second polling
 interval permits rapid reheating after passive cooling releases. This is
 a distinct boundary from the overly weak cooling levels in the first trial.
-Cleanup and kernel checks pass; recovery audit is pending. Evidence:
+Cleanup and kernel checks pass. M69 recovery `eb109d18-9545-48d4-9c5c-f28da6b6b3e4`
+and final audit pass:35 matching source hashes,26 retained outputs, swap
+layout and no writer; worker inactive with MainPID0. Evidence:
 `handoff/a53-thermal-floor-20261008/probe-result.json` and the raw trial.
 
 Diagnostic `b62fc653f754f` reduces normal thermal polling from1000 to100ms,
 retaining40ms passive polling, the state3 floor and all trip temperatures.
-The DTB builds. Full packaging and hardware verification remain pending;
+DTB and full packaging builds pass. Packaged DTB polling, floor and trip
+checks pass. Hardware verification remains pending;
 neither thermal diagnostic has qualified the full-ceiling load yet.
 
 ## Historical Cycle18 observations
