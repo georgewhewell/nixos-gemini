@@ -1355,14 +1355,36 @@ include32 LL and50 L postdivider crossings. The64.37-second probe retains
 temperature peaks at41.8°C; kernel errors are absent. Cleanup restores both
 A72s, schedutil and automatic parking, removes hold/pause, and passes
 post-probe health checks. Evidence:`handoff/a53-1100mv-trial-01/`.
-The30-second load and nine-state emulated-cooling probe is prepared in
-`handoff/a53-1100mv-load-cooling-20261008/` but has not run yet. Physical
-thermal response and endurance remain unqualified.
+The follow-up load/cooling trial below covers this ceiling. Physical thermal
+response and endurance remain unqualified.
 M69 recovery returns healthy boot`2907e8a6-f8dd-4d48-bff3-280800b8575e`;
 the worker is terminal with exit0. The final audit verifies no writer, both
 locks,35 source hashes and26 retained outputs. The overall diagnostic still
 fails the normal cgroup2 memory-controller requirement; no default is promoted.
 Final record:`handoff/a53-1100mv-20261008/completion.json`.
+
+## A53 1.10V load and cooling — 2026-10-08
+
+The unchanged Linux 7fe1d8055ed94 diagnostic passes a 30-second checked
+PBKDF2 workload on CPU 0–7, with 6,466 successful computations and 30 samples.
+Both clusters reach their 1.222/1.625 GHz limits at 1.10 V. Real temperature
+peaks at 70.6°C; this bounded run does not establish endurance or physical
+thermal throttling.
+
+After load exits, synthetic temperatures exercise all nine cooling states
+on both clusters, down to 221/325 MHz. Clearing emulation restores both maximum
+frequencies and cooling state 0. Cleanup restores schedutil, removes the probe
+hold and resumes automatic parking; the probe is inactive and the system is
+healthy. Kernel error checks are empty. Total probe time is 37.01 seconds.
+Candidate boot: `9a751836-a6d2-431b-b4f1-a58d1abf677d`.
+Evidence: `handoff/a53-1100mv-load-cooling-trial-01/`; scripts:
+`handoff/a53-1100mv-load-cooling-20261008/`.
+Recovery returns healthy M69 boot `451692c1-6b66-4a56-95ae-368783ef6d23`.
+The worker is inactive with MainPID 0 and exit 0. The final audit passes:
+no writer, both locks acquired, 35 matching executed sources and 26 retained
+outputs. The CLI exits 1 because the diagnostic lacks the normal cgroup2
+memory controller. No default is promoted.
+Final record: `handoff/a53-1100mv-load-cooling-20261008/completion.json`.
 
 ## Historical Cycle18 observations
 
