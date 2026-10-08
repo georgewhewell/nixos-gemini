@@ -1259,6 +1259,28 @@ retained outputs. The diagnostic still fails the normal cgroup2 requirement,
 so no default is promoted. Final record:
 `handoff/a72-parking-soak-fixed-20261008/completion.json`.
 
+## Next A53 voltage step: 1.04 V, October 8
+
+Linux`70823e0a3c4c7` enables the next SB-table operating point for each
+A53 cluster: LL1.014GHz and L1.352GHz at1.04V. The vendor definitions are
+`CPU_DVFS_FREQ8_LL_SB`, `CPU_DVFS_FREQ8_L_SB` and
+`CPU_DVFS_VOLT8_VPROC1_SB` in`mt_cpufreq.c`; the inspected source revision
+and content hash are retained in`handoff/a53-1040mv-20261008/source-evidence.json`.
+The existing clock provider supports both rates. CCI follows the shared
+budget to676MHz, and the CPU/SRAM coupler rounds the1.14V nominal SRAM
+target to its1.15V selector. Thermal trips and cooling maps remain unchanged.
+
+The production runtime-consumer host test now verifies each new CPU point
+raises CCI to676MHz/1.04V and releases that vote on return to low rates.
+It passes under UBSan. ARM64 DTB compilation passes; decoded-DTB comparison
+shows exactly the two removed disabled properties and no other change.
+Normal and diagnostic bundle builds pass their full kernel checks and use
+the same kernel. Build identities and GC roots are retained in
+`handoff/a53-1040mv-20261008/`. Bounded hardware qualification is pending. The previous physical ceiling remains897MHz/1.209GHz at1.00V
+until the new trial succeeds. The prepared probe covers128 ordered A53
+pairs and64 ordered CCI/voltage pairs with A72s off, concurrent SRAM reads,
+checked computation, and governor/core restoration.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
