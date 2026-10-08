@@ -906,6 +906,35 @@ checkpatch reports no warnings or errors. This commit is not yet selected
 by the bundle recipe and has not been booted. MP2 DCM control, native hotplug
 callbacks and SRAM restart handling remain outstanding.
 
+
+Linux `0f4521b48adff` adds the native clock-provider MP2 sync-DCM API. It
+validates the A72 power consumer's exact MP2 handle, holds the supplier
+against removal, enables the interface clock before the observer/CSPM
+locks, and uses the raw hardware semaphore inside the transaction. The
+existing cold-boot API now uses the same lock ordering. DCM changes require
+an enabled, selected MP2 PLL and two equal initial DCM reads. The secure
+MCUSYS-write service updates only bits 6:0 of `0x10222274`, preserving all
+other bits; enable selects divide-by-four, with toggle high then low as in
+vendor `dcm_mcusys_mp2_sync_dcm()`. Each write is read back. Any failure after
+a dispatched write, or hardware-semaphore release failure, permanently
+fences both clock observer and shared handoff. Full-width SMC errors are
+rejected. No DCM call has yet been connected to the A72 power owner.
+
+The production API/transaction host test covers lookup failures, lock order,
+both toggle sequences, 36 injected I/O failures, eight readback corruptions,
+high-word SMC errors, preserved upper bits and no I/O after fencing. The
+clock-core suite now passes 15 cases and 58,361 assertions. All clock host
+suites, ARM64 provider/core/KUnit compilation and checkpatch pass. Normal
+and diagnostic bundles both complete successfully with the full kernel
+checks and share kernel
+`/nix/store/zc563d6av8wgapxl77b53vwhiydc8gc2-linux-gemini-7.1.3`; the DTB is
+unchanged. Recipes and lockfiles now select this commit. Evidence and GC
+roots are in `handoff/a72-mp2-clock-20261008/`. No hardware trial or promotion
+occurred; M69 boot `95e8a653-14da-4624-8edb-52cc11443cfe` was rechecked healthy.
+The next integration must connect the native CPU-hotplug callbacks, bind
+saved clock state to completed shutdown, and authorize SRAM restart without
+clearing permanent failure state.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
