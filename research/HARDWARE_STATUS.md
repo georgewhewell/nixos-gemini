@@ -44,10 +44,16 @@ pass. A repeat without extra driver tracing also passes: three A72 cycles,
 480 paired reads, six checked workloads and 174 transitions, peaking at
 43.6°C. Its M69 recovery and final audit pass; normal packaging has not adopted
 the diagnostic fixes.
-Full-ceiling thermal trial fails its90°C guard at90.7°C after about32 seconds
-of load. All15 emulated cooling states work, and real throttling occurs,
-but the bounded load is not qualified. Governors and parking restore;
-kernel checks pass. M69 recovery and the final audit pass. FUSB301 role-switch and MT6797 USB3
+Full-ceiling thermal qualification remains incomplete. The first trial hit
+its 90°C guard at 90.7°C. A minimum cooling state of 3 correctly caps the
+hot CPU policies to the 1.15 V range, but its repeat hit 90.4°C after cooling
+released and full power returned during the one-second polling interval.
+Both trials restored governors and parking, passed kernel checks and
+recovered M69 with clean final audits. Diagnostic `b62fc653f754f` reduces
+normal polling to 100 ms while retaining 40 ms passive polling and the same
+cooling floor and trips. Full packaging and DTB checks pass; its repeated
+hardware load test is in progress.
+FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains
