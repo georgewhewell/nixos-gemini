@@ -1081,6 +1081,39 @@ The replacement probe in `handoff/a72-affinity-probe-20261008/` sets and
 checks affinity through Python directly. A bounded retry did not fit the
 remaining observation window and was not launched; a fresh trial is required.
 
+Trial04 boot `426a1970-e102-42da-879e-d289c9556c2c` passes CPU9 off/on and
+the pinned workload, then powers off CPU9 and CPU8. CPU8 removal takes
+54.8 ms. The stopped system has CPUs0–7 online, BUCKB disabled at a stored
+1.00 V setting, and big SRAM reporting its reset selector's 1.05 V.
+No native shutdown-verification error is logged. This reaches successful
+last-core shutdown and the SRAM shutdown record, but not restart.
+
+The next snapshot exposes a second incorrect assumption: MP2 PLL words are
+both zero after rail removal, with mux `0x54` and divider `0x42108`. The
+clock observer returns zero/error because its zero-PLL decoding exception
+requires the original cold divider 0, whereas the retained MP2 divider is 8.
+The restart validator separately refuses the reset PLL pair because it
+requires retained programming. The probe therefore fails its expected
+26 MHz path-rate check, and cleanup CPU8 restart returns EBUSY. Evidence:
+`handoff/a72-native-trial-04/{a72.json,kernel-after-probe.txt,stopped-state.txt,stopped-rails.txt}`.
+
+Linux `a2ad78e32f349` decodes an unselected, fully reset MP2 PLL with any
+valid divider, without relaxing cold-start admission. Restart still needs
+the saved running clock record, reference mux selection and exact retained
+divider, and now permits either exact retained PLL programming or both
+PLL words zero. Partial resets and changed mux/divider bits remain rejected.
+The power owner still independently verifies the completed shutdown receipt,
+logical CPU state, primary power acknowledgments, isolation and disabled
+rail before invoking this clock check. Regression tests fail against the
+previous decoder; 15 clock-core cases/58,539 assertions, native clock API
+tests, ARM64 compilation and checkpatch pass. Both normal and diagnostic
+bundles pass the full kernel checks and share kernel
+`/nix/store/wr0kgandrdn32csj23qa3j21zcpyjmm6-linux-gemini-7.1.3`, with unchanged
+DTB. Build logs and GC roots are in `handoff/a72-reset-clock-20261008/`;
+physical restart qualification remains pending. Trial04 recovery returned
+healthy M69 boot `3374baff-83db-4a92-858c-39d064f08c4e`. The worker is terminal
+and final source/output audits pass.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
