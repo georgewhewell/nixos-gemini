@@ -2120,6 +2120,23 @@ boot API regressions pass. Logs are in
 integration are still pending; no runtime frequency-write path is enabled.
 Normal packaging remains at `b62fc653f754f`.
 
+## 2026-10-08: inherited MP2 PCW latch is valid startup state
+
+Before wiring hardware callbacks, the admission check was corrected:
+firmware `power.c:221` explicitly expects MP2 CON1=0xB9B13B14 at startup,
+also used by existing native A72 fixtures. Bit31 is the PCW latch strobe,
+not an independently established busy indication. Rejecting it would reject
+the actual750MHz startup state. The planner now accepts either inherited
+bit value; its firmware-write result still requires bit31 clear, matching
+the audited PLL setter. No post-write equality checks were weakened.
+
+The transition matrix now covers2312 combinations across both latch states.
+The real executor fixture starts at0xB9B13B14. All19 core cases and163,542
+assertions pass, along with native A72 boot API tests and ARM64 compilation.
+Evidence: `handoff/a72-frequency-audit-20261008/inherited-latch-tests.log`.
+Hardware callback/rail-owner integration remains pending; normal packaging
+and installed M69 are unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
