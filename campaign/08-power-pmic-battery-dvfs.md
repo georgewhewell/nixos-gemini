@@ -1341,11 +1341,23 @@ raise and release the correct CCI vote. It passes under UBSan, as do the
 expanded800 LL/L transition pairs and4,256 postdivider failure cases. DTB
 compilation passes. Both bundles pass full kernel checks and share the same
 kernel/DTB; identities and GC roots are retained in the evidence directory.
-Physical qualification is pending.
-The prepared device probe covers200 ordered A53 pairs,100 CCI/voltage pairs,
+Physical transition results follow below.
+The device probe covers200 ordered A53 pairs,100 CCI/voltage pairs,
 and82 target transitions crossing the PLL postdivider boundary. Each pair
 executes a checked5,000-iteration PBKDF2 workload; separate sustained-load
 qualification remains necessary.
+
+Trial01 passes on boot`c2bbc244-5de8-4184-b757-223e1d46ac41`: all200
+ordered A53 frequency pairs and100 ordered CCI/voltage pairs, reaching
+LL1.222GHz/L1.625GHz, CCI819MHz, CPU1.10V and SRAM1.20V. Target transitions
+include32 LL and50 L postdivider crossings. The64.37-second probe retains
+1,928 concurrent SRAM reads, and all checked workloads pass. Sampled real
+temperature peaks at41.8°C; kernel errors are absent. Cleanup restores both
+A72s, schedutil and automatic parking, removes hold/pause, and passes
+post-probe health checks. Evidence:`handoff/a53-1100mv-trial-01/`.
+The30-second load and nine-state emulated-cooling probe is prepared in
+`handoff/a53-1100mv-load-cooling-20261008/` but has not run yet. Physical
+thermal response and endurance remain unqualified.
 
 ## Historical Cycle18 observations
 
