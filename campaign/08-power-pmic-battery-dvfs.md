@@ -2603,6 +2603,19 @@ schedutil load,90°C abort,65-second probe deadline and service-owned cleanup.
 It remains unexecuted pending full-range recovery audit. Normal packaging
 and installed generation remain unchanged.
 
+Full-range recovery audit now passes on M69 boot
+`55519d0a-3dbd-4e1f-ad7d-2659ded2f8d9`:35 source hashes match,26 retained
+outputs are intact, fixed swap is preserved and no writer is active. The
+worker is terminal with MainPID0; full evidence is retained in
+`handoff/a72-full-20261008/completion.json`.
+
+The prepared ten-core thermal probe has now launched as `a72-thermal-trial-01`
+under `boot-test-1791461344-2098053.service`, reusing the same full-table bundle.
+It checks the85°C cooling floor and states through15 on all three policies,
+then45seconds real ten-core schedutil load with checked workloads and a90°C
+abort. Governors, emulated temperature and the parking hold are restored on
+exit. Thermal/load outcome and this trial's final recovery audit remain pending.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
