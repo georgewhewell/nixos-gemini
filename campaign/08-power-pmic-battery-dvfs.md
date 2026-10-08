@@ -2318,6 +2318,31 @@ all19 core cases /1,287,608 assertions and ARM64 compilation pass. Evidence:
 CPUFreq hotplug-lock integration, CCI coordination and hardware qualification
 remain pending. Normal packaging and installed M69 remain unchanged.
 
+## 2026-10-08: A72 owner serialization replaces nested CPUHP locking
+
+Linux `9143d91e62b8e` removes the DVFS API's caller-held global CPU hotplug
+lock requirement. The owner mutex now serializes online commit and shutdown
+admission with DVFS, and a CPU9-starting flag excludes DVFS from preparation
+through commit/abort. Existing CPU8 armed/committed and per-core off-armed
+state excludes the remaining power windows. No DVFS path acquires the global
+CPU hotplug lock, so CPUFreq initialization can call it while CPUHP already
+owns the writer without recursive locking.
+
+The live SRAM API requires an active DVFS transaction belonging to the current
+task and matching consumer device. That proof is installed only while the
+power owner holds its owner/operation mutexes, and is cleared on return.
+First-start/shutdown SRAM operations retain their CPU hotplug requirements.
+This supersedes the earlier caller-held CPUHP requirement for live DVFS only.
+
+Tests execute normal DVFS without a global hotplug lock, reject other-task /
+wrong-device ownership and CPU9-starting admission, exercise startup aborts,
+online/offline cycles, all251 DVFS restart rail pairs, and the existing fault
+matrices. All19 core cases /1,287,608 assertions and ARM64 owner/SRAM builds
+pass. Evidence: `handoff/a72-frequency-audit-20261008/dvfs-owner-lock-tests.log`.
+Host lock doubles verify ordering/state boundaries; hardware concurrency
+qualification remains pending. CCI and CPUFreq integration are next; no normal
+packaging or installed system changes were made.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
