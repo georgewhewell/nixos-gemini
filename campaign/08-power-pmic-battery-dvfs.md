@@ -888,6 +888,24 @@ unplug must also be able to unwind CPU-hotplug callbacks without being
 misclassified as a new cold start. These pieces must be integrated before
 A72-offline voltage or full shutdown/restart hardware qualification.
 
+Linux `a89f2e0eb96f3` adds the clock portion of that restart contract:
+`mt6797_cpuclk_validate_stopped_mp2()` compares a saved running observation
+against the stopped state. The running PLL must be enabled, selected and
+decodable. The stopped MP2 must select 26 MHz, retain its divider and both
+PLL words exactly except for the cleared PLL-enable bit. This matches the
+retained ATF `power_off_cl3()` sequence; it does not assume a new cold tuple
+or a hard-coded retained rate. Other clusters' fields may change. The cold
+validator remains unchanged. This helper alone neither proves cluster power
+is off nor authorizes CPU_ON: native integration must bind the saved snapshot
+to a successful shutdown and validate SRAM state separately.
+
+The production clock-core host suite passes 15 cases and 58,357 assertions,
+including 128 single-bit stopped-state mutations and invalid running
+observations. Both clock core and KUnit objects compile for ARM64;
+checkpatch reports no warnings or errors. This commit is not yet selected
+by the bundle recipe and has not been booted. MP2 DCM control, native hotplug
+callbacks and SRAM restart handling remain outstanding.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
