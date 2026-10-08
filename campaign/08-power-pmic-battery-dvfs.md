@@ -2582,6 +2582,27 @@ combined coverage would be256, but must be verified from actual samples.
 Hardware result and final recovery audit are pending. Normal packaging and
 installed recovery remain unchanged.
 
+## 2026-10-08: full nominal A72 frequency matrix passes
+
+Full-table boot `68aabb34-0c5f-4412-89bc-c5db108e6898` passes278
+frequency/rail samples and466 checked computations on both A72 cores at
+all eight upper OPPs, including2587MHz at CPU/SRAM1.20/1.20V. Combined
+actual sample pairs with the prior eight-point run cover all256 ordered
+pairs in the16-point nominal table; no pair is inferred solely from a plan.
+CPU4-parked transitions and full-cluster restart from338/2587MHz pass.
+The probe completes in47.1seconds, peaks at81°C, restores parking and has
+no matching kernel errors. Post-probe health checks pass. Evidence:
+`handoff/a72-full-20261008/probe-result.json`, `transition-coverage.json`
+and `handoff/a72-full-trial-01`. Final recovery audit remains pending.
+
+This does not yet qualify sustained full-system load or automatic A72
+thermal response. A separate prepared probe in
+`handoff/a72-thermal-20261008` extends the prior A53 thermal probe to all
+three policies and ten checked workers: emulated cooling,45seconds real
+schedutil load,90°C abort,65-second probe deadline and service-owned cleanup.
+It remains unexecuted pending full-range recovery audit. Normal packaging
+and installed generation remain unchanged.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
