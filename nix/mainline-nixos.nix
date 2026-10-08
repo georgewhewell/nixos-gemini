@@ -410,6 +410,7 @@ let
       log "input_observe=started mode=sysfs-read-only i2c_transfers=none touchscreen_client=untouched"
     '' else ""}
     /bin/bq2589x-preflight &
+    preflight_pid=$!
     log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
     /bin/usb-net &
     /bin/usb-host-net &
@@ -457,6 +458,17 @@ let
     nixos_system=''${nixos_init%/init}
     [ -x "/mnt/nixos$nixos_init" ] || fail "nixos-init-missing"
     log "store=mounted system=$nixos_system"
+    # The preflight reads /proc and /sys and writes /run: let it finish
+    # before they move, or its result lands in the abandoned initramfs /run.
+    waited=0
+    while kill -0 "$preflight_pid" 2>/dev/null && [ "$waited" -lt 15 ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$preflight_pid" 2>/dev/null; then
+      kill "$preflight_pid" 2>/dev/null || true
+      log "power_observe_preflight=timeout waited=''${waited}s"
+    fi
     mount --move /mnt/gemian /mnt/nixos/gemian || fail "move-gemian"
     mount --move /proc /mnt/nixos/proc || fail "move-proc"
     mount --move /sys /mnt/nixos/sys || fail "move-sys"
