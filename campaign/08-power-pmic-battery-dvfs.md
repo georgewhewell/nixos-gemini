@@ -1654,9 +1654,41 @@ DTB is unchanged from the full-table candidate.
 
 A physical regression is prepared: continuous A53 rate reads during three
 complete A72 power cycles with checked work on each restarted core, followed
-by the174 upper transition pairs. It has not run. Evidence, builds and
+by the174 upper transition pairs. The first attempt is recorded below. Evidence, builds and
 scripts: `handoff/clock-domain-observation-20261008/`. Both packaging inputs
 select this commit; no default is promoted.
+
+## 2026-10-08: observation trial interrupted before CPU8 startup completed
+
+Trial `clock-domain-observation-trial-01` booted kernel `eb64c46a953ef`
+(candidate boot `5c453107-d099-4568-bdad-b833bf4b0f96`). The probe created
+its parking hold at 163.792 seconds with CPUs0–3 online. CPUs4–7 then
+started; the console ends at 163.997 seconds after CPU7. No CPU8 online,
+all-CPUs-ready, observation regression or transition-matrix marker follows.
+The observer timed out after85 seconds and produced no measurement result.
+This does not qualify or disprove the domain-scoped observation fix.
+
+There is no Wi-Fi HIF fault in the current candidate console. The older
+memcg panic in separate pstore records predates this healthy candidate and
+must not be attributed to this interruption. The earlier1.15V L trial also
+ended after CPU7 startup, but its coincident Wi-Fi fault is not necessary
+for this observed pattern. Neither capture identifies the blocking call.
+
+The CCI driver samples only online clusters and queues its update from
+`CPUHP_AP_ONLINE_DYN`; the A72 power driver's prepare callback has no CCI
+floor acquisition. A missing startup vote is a hypothesis, not a measured
+cause. Instrumentation must distinguish prepare entry, off-state checks,
+clock restart validation, rail transaction and PSCI CPU_ON. A synchronous
+devfreq update from prepare cannot simply be added: existing updates hold
+the devfreq mutex while acquiring the CPU hotplug read lock, whereas prepare
+runs under the hotplug write lock. Any startup vote needs a consistent lock
+order and lifetime through failure/unwind and the last-core shutdown.
+
+Recovery boot `16976c24-8d3a-45a7-97d1-65596b5043aa` passed the final audit:
+swap layout, no writer, locks acquired, all35 source hashes matching and
+all26 ordinary outputs retained. The worker is inactive with MainPID0.
+No default was promoted. Evidence: `handoff/clock-domain-observation-trial-01/`
+and `handoff/clock-domain-observation-20261008/trial-01-result.json`.
 
 ## Historical Cycle18 observations
 

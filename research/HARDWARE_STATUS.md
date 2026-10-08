@@ -19,7 +19,10 @@ unexplained. The selected candidate enables the remaining A53 points
 through 1.20 V (LL 1.547/L 2.002 GHz). All174 added transition pairs pass,
 but one clock-snapshot EAGAIN occurs during CPU8 startup before the matrix;
 the selected kernel now scopes read-only stability checks to the requested
-clock domain, with host/build checks passing and physical validation pending.
+clock domain, with host/build checks passing. Its physical regression lost
+contact while restoring parked cores, after CPU7 started and before CPU8
+was reported online; the regression itself never began. M69 recovery and
+the final storage/source audit passed. Physical validation remains pending.
 Full-ceiling load/thermal qualification remains pending. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
