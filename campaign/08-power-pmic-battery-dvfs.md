@@ -698,6 +698,59 @@ that ordering; integration must handle unmanaged CPUs, hotplug, consumer
 lifetime and failure propagation. BUCKA remains fixed at 1.00 V and no
 new hardware clock or voltage transition has run for this core.
 
+## Native CCI runtime consumer (2026-10-08)
+
+Kernel commit `ecf9cc95a71a22dc5dadd189f01e1e36b3677848` adds the built-in
+MT6797 devfreq consumer and immutable CCI governor. The SoC node names the
+native CCI and three CPU cluster clocks plus the DVFSP handoff supplier;
+Gemini supplies the shared BUCKA regulator and all 16 SB CCI OPPs. Probe
+checks those OPPs against the policy table, holds a regulator vote, adopts
+the inherited clock through the tested sequence, and retains an enabled
+regulator reference for the running CCI. It drives only the compound
+clock provider; no raw PLL reparenting is used.
+
+CPUFreq post-change and CPU hotplug callbacks queue work. The worker
+samples active cluster clocks and A53 OPP voltages, includes A72 frequency
+without requiring an A72 CPUFreq policy, then applies the tested vote/clock
+sequence. Clock identity maps possible CPUs to clusters. The CPU hotplug
+read lock covers target sampling and execution; hotplug callbacks never
+wait on devfreq while holding the hotplug write lock. OPP registration
+and stale target samples retry while retaining the existing CCI vote.
+Frequency limits and regulator support are checked before hardware writes.
+A managed CPU policy removal fences clock/rail access because unmanaged
+CPU clocks could outlive their removed voltage votes.
+
+Cleanup stops new notifications, unregisters both CPUFreq notifiers and
+hotplug callbacks, drains queued work, and fences before releasing the
+live CCI supply reference. Nested global/device suspend events retain the
+vote and suppress work until the final resume event. These lifecycle rules
+are host-tested, not proof of physical suspend or resume support.
+
+The production runtime callbacks and probe unwind pass UBSan tests covering
+native clock/vote calls, A72 inclusion and removal, hotplug, late OPP
+registration, stale targets, unsupported frequency/voltage limits, nested
+PM, policy removal, eight post-adoption failure positions and five
+preflight failures. The policy-core suite still passes 5,376 combinations,
+512 ordered paths, 6,388 injected failures and 704 boot states. The board
+CCI table matches the policy table exactly. ARM64 compilation, checkpatch,
+DT binding validation and the built board DTB validation pass. Normal and
+diagnostic bundle builds pass with the full kernel check suite. The
+packaged kernel enables the runtime driver, and its DTB matches the
+validated local DTB. The shared kernel is
+`/nix/store/mh5z6a6qfsj2nh7pnq2jrh0hpmgfx5p6-linux-gemini-7.1.3`, and the diagnostic
+candidate is `/nix/store/x025hcn6q01g5yqgmnx4lhgjiwkkn3n0-gemini-mainline-nixos-bundle`.
+Build logs, result metadata and GC roots are retained in
+`handoff/cci-runtime-20261008/`.
+
+The driver and DT node are enabled in the candidate configuration. BUCKA
+remains fixed at 1.00 V, so its first hardware test will exercise CCI
+frequency changes and voltage requests without changing the physical CPU
+rail. The new runtime consumer has not yet booted on the device. Before
+relaxing BUCKA's constraints, startup must also guarantee a CCI voltage
+floor until its consumer has established ownership; dependency timing
+observed in one boot is insufficient. Physical CCI transitions, coupled
+rail transitions and normal cgroup2 qualification remain outstanding.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
