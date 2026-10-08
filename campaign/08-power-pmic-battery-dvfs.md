@@ -2100,6 +2100,26 @@ ARM64 core-object compilation passes. Evidence:
 No firmware executor, OPP policy or voltage ownership change is enabled;
 normal packaging remains at hardware-tested `b62fc653f754f`.
 
+## 2026-10-08: strict A72 clock-plan executor
+
+Linux `1e6071c7f2f3e` adds the callback-based clock executor. It reconstructs
+the plan using the caller's independently measured/pinned MAINPLL rate,
+rejects altered plans and stale initial state before mutation, and requires
+MP2 DCM to be quiesced. All five writes require exact full-snapshot and DCM
+readback. Any uncertain write or subsequent readback error sets a sticky
+fault and stops I/O; it does not attempt a speculative rollback. The future
+power owner must retain sufficient voltage after such a fault.
+
+Host production-core checks pass19 cases and121,859 assertions, including
+six read and five write error boundaries,1728 snapshot bit corruptions,
+160 DCM corruptions, enabled-DCM refusal, plan mutation and sticky-fault
+re-entry. ARM64 object compilation and existing AP transition/native A72
+boot API regressions pass. Logs are in
+`handoff/a72-frequency-audit-20261008/executor-tests.log` and
+`executor-regression.log`. Hardware callbacks, owner serialization and OPP
+integration are still pending; no runtime frequency-write path is enabled.
+Normal packaging remains at `b62fc653f754f`.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
