@@ -169,6 +169,34 @@ def verify_manager_handoff(runner, before, after, profile):
         raise RuntimeError('The normal bootloader unexpectedly ran a historical diagnostic app')
 
 
+def native_cpu_script(boot_id):
+    """Check completed first-start evidence without racing load-driven parking."""
+    if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', boot_id):
+        raise ValueError('Invalid native CPU boot identity')
+    return f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {boot_id}
+unit=gemini-a72-preflight.service
+test "$(systemctl show "$unit" -p ActiveState --value)" = active
+test "$(systemctl show "$unit" -p SubState --value)" = exited
+test "$(systemctl show "$unit" -p Result --value)" = success
+test "$(systemctl show "$unit" -p ExecMainStatus --value)" = 0
+result=/run/gemini-a72-preflight/result
+test "$(tail -n 1 "$result")" = a72_startup=pass
+grep -qx 'cpu8_start=requested' "$result"
+grep -qx 'cpu9_start=requested' "$result"
+grep -Fq 'CPU8 PSCI CPU_ON committed with CPU4 prerequisite' "$result"
+grep -Fq 'CPU9 PSCI CPU_ON committed with CPU8 prerequisite' "$result"
+grep -qx '0-9' "$result"
+printf 'boot_id=%s\\n' {boot_id}
+cat "$result"
+for cpu in 8 9; do
+ online=$(cat /sys/devices/system/cpu/cpu$cpu/online)
+ case "$online" in 0|1) ;; *) exit 1;; esac
+ printf 'current_cpu%s_online=%s\\n' "$cpu" "$online"
+done
+'''
+
+
 def manager_evidence(runner, ssh, state, directory):
     tree = json.loads((directory/'candidate-tree.json').read_text())
     runner.efi_manager.evidence(ssh, state['boot_id'], directory, runner.qualify, tree,
@@ -177,11 +205,7 @@ def manager_evidence(runner, ssh, state, directory):
     if not installer.matches(source, EFI_MANIFEST['files'][EFI_MANIFEST['entry_device_tree']]):
         raise ValueError('Entry device tree differs from its EFI package')
     proof = runner.entry_dt.verify_native(source, directory/'candidate-fdt.dtb', EFI_MANIFEST['payload_identity'])
-    runner.persistence.run(ssh, f'''set -eu
-test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
-test "$(cat /sys/devices/system/cpu/cpu8/online)" = 1
-test "$(cat /sys/devices/system/cpu/cpu9/online)" = 1
-''', directory, 'efi-native-cpus')
+    runner.persistence.run(ssh, native_cpu_script(state['boot_id']), directory, 'efi-native-cpus')
     runner.qualify.save(directory, 'entry-dt-evidence.json', dict(boot_id=state['boot_id'], **proof))
     verify_efi(runner, ssh, state, directory, 'selected-efi-files.json')
 

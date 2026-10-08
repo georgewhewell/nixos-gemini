@@ -17,6 +17,55 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
+    def test_native_startup_evidence_survives_parking_and_rejects_failed_boot(self):
+        boot = '6b06926a-a9ab-4367-beec-c95a952bf376'
+        proof = ('cpu8_start=requested\n'
+                 '[64.1] CPU8 PSCI CPU_ON committed with CPU4 prerequisite\n'
+                 'cpu9_start=requested\n'
+                 '[64.2] CPU9 PSCI CPU_ON committed with CPU8 prerequisite\n'
+                 '0-9\na72_startup=pass\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            boot_file = root/'boot'; boot_file.write_text(boot)
+            result = root/'result'; result.write_text(proof)
+            for cpu in (8, 9):
+                (root/f'cpu{cpu}').mkdir()
+                (root/f'cpu{cpu}'/'online').write_text('0')
+            script = m.native_cpu_script(boot).replace('/proc/sys/kernel/random/boot_id', str(boot_file))
+            script = script.replace('/run/gemini-a72-preflight/result', str(result))
+            script = script.replace('/sys/devices/system/cpu', str(root))
+            def execute(**overrides):
+                props = dict(ActiveState='active', SubState='exited', Result='success', ExecMainStatus='0')
+                props.update(overrides)
+                stub = 'systemctl() { case "$4" in\n'
+                stub += ''.join(f'{key}) echo {value};;\n' for key, value in props.items())
+                stub += '*) return 1;; esac; }\n'
+                return subprocess.run(['sh', '-c', stub+script], capture_output=True, text=True)
+            for state in ((0,0), (1,0), (1,1)):
+                for cpu, online in zip((8,9),state):
+                    (root/f'cpu{cpu}'/'online').write_text(str(online))
+                checked = execute()
+                self.assertEqual(checked.returncode, 0, checked.stderr)
+                self.assertIn(f'current_cpu8_online={state[0]}', checked.stdout)
+                self.assertIn(f'current_cpu9_online={state[1]}', checked.stdout)
+            for prop, value in [('ActiveState','failed'), ('SubState','running'),
+                                ('Result','exit-code'), ('ExecMainStatus','1')]:
+                with self.subTest(prop=prop):
+                    self.assertNotEqual(execute(**{prop:value}).returncode, 0)
+            for line in proof.splitlines(keepends=True):
+                result.write_text(proof.replace(line, ''))
+                self.assertNotEqual(execute().returncode, 0, line)
+            result.write_text(proof+'late failure\n')
+            self.assertNotEqual(execute().returncode, 0)
+            result.write_text(proof)
+            (root/'cpu8'/'online').write_text('invalid')
+            self.assertNotEqual(execute().returncode, 0)
+            (root/'cpu8'/'online').write_text('0')
+            boot_file.write_text('another-boot')
+            self.assertNotEqual(execute().returncode, 0)
+        with self.assertRaises(ValueError):
+            m.native_cpu_script('invalid; false')
+
     def test_observation_is_bounded_and_keeps_strict_qualification(self):
         r = m.configure()
         state = {'boot_id': 'candidate'}
