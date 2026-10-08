@@ -2183,6 +2183,27 @@ This core is not yet exposed through the exclusive power-owner API. Runtime
 VPROC/SRAM ordering, CPUFreq integration and hardware qualification remain
 pending; normal packaging and installed M69 are unchanged.
 
+## 2026-10-08: exclusive live SRAM provider API
+
+Linux `4128daa6cd1d0` exposes `mt6797_sram_set_running_voltage()` to the
+exclusive A72 power owner. The caller must hold CPU hotplug serialization and
+coordinate VPROC and clocks. The provider requires CPU4/CPU8 online, its
+completed startup record, an exclusive matching regulator/device, clear
+isolation and two matching iDVFS control reads with firmware DVFS disabled.
+It never calls PSCI AFFINITY_INFO on a running core. Verified success returns
+the full new SRAM sample; uncertain transactions fence the provider. The
+firmware setter now rejects every nonzero return, including unexpected
+positive status, before considering readback.
+
+Production-provider tests cover22 admission failures, ten I/O/status failures,
+stale SRAM state, unchanged output on failure, sticky fencing and no live
+PSCI calls. Existing startup/shutdown/restart regressions, all17 core cases /
+2692 assertions and ARM64 regulator compilation pass. Evidence:
+`handoff/a72-frequency-audit-20261008/sram-live-api-tests.log`.
+The power owner still needs the coordinated VPROC/SRAM/clock transaction and
+CPUFreq integration; this API has no runtime caller yet. No hardware trial or
+normal packaging change was made.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
