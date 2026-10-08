@@ -2039,6 +2039,23 @@ DVFS implementation must extend coordinated ownership rather than attaching
 an OPP table to a setter that is intentionally unavailable after startup.
 No regulator or frequency writes were made in this capture.
 
+## 2026-10-08: A72 firmware PLL expected-state planner
+
+Linux `43b04fd6748ea` adds a pure expected-readback planner for the audited
+0xc20003b8 PLL service. It accepts only the26MHz reference and integral-MHz
+requests within the vendor API's250–3000MHz bounds, models post-divider
+selection and Q24 PCW truncation, preserves unrelated snapshot/register bits,
+and expects PLL enable with the PCW latch clear. This API range does not
+qualify any board OPP. No firmware write callback or CPUFreq policy is added.
+
+The production-core host suite passes16 cases and73,581 assertions, including
+all2751 integral-MHz requests, boundary constants,32-bit preservation cases,
+invalid arguments and unchanged output on failure. ARM64 core-object build
+passes. Evidence: `handoff/a72-frequency-audit-20261008/pll-plan-tests.log`.
+Normal packaging remains at the physically tested `b62fc653f754f`.
+Remaining implementation includes OPP/voltage admission, SRAM/power ownership,
+safe-parent/DCM sequencing, strict readback and hotplug restoration.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
