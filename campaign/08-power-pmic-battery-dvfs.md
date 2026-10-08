@@ -1917,8 +1917,11 @@ passed its physical probe in `clock-ap-untraced-trial-01`: boot
 `c08eda15-c702-4827-bb18-30c109002235`, three A72 cycles,480 paired reads,
 six checked workloads,174 transitions,1046 SRAM samples,34.816 seconds
 and43.6°C peak. Cleanup and kernel checks pass. The boot command line has
-no dyndbg argument. Recovery is still pending. Full-ceiling thermal
-qualification follows once the worker and final audit complete.
+no dyndbg argument. M69 recovery `104bbd44-031f-4073-b961-bd3aa67111d1`
+and final locked audit pass:35 matching sources,26 retained outputs, swap
+layout and no writer. The worker is terminal. Evidence is in
+`handoff/clock-ap-untraced-20261008/completion.json`. Full-ceiling thermal
+qualification is next.
 
 ## Historical Cycle18 observations
 
