@@ -1043,6 +1043,33 @@ cluster is running. ATF `power_off_big()` and `power_off_cl3()` poll the
 primary status word, not that secondary word. The next diagnostic trial
 captures the precise failed post-shutdown state before changing verification.
 
+Diagnostic boot `11eaa14c-68ce-444e-a168-c6dda88ed73f` confirms the mismatch.
+CPU9 shutdown changes primary status from `0x003fc0c8` to `0x003fc088`,
+clearing precisely CPU9's bit 6. Secondary status remains `0x003dc0ff`.
+Primary masked by `0x200c0` equals the required CPU8-plus-cluster `0x20080`;
+secondary does not. MP2 power control is `0x00010127`, isolation and iDVFS
+control are zero, and BUCKB is enabled: every other CPU9-off check passes.
+The unchanged verifier faults and refuses re-add as before. Evidence:
+`handoff/a72-native-trial-02/kernel-after-probe.txt` and
+`handoff/a72-primary-ack-20261008/diagnosis.json`.
+
+Linux `def0029470b6c` corrects power-owner and SRAM restart checks to use
+the primary MP2 acknowledgment bits polled by ATF. The owner retains the
+secondary word for failure diagnostics. Repeated primary readings, peer
+ordering, iDVFS exclusion, reset/clock/isolation checks, rail checks and
+permanent fault protection remain enforced. Tests now keep the secondary
+word independent of MP2 transitions and replay the exact hardware sample;
+the regression fails against the old verifier. Both shutdown sequences,
+24 I/O failures, 64 corrupt samples, native hotplug fault cases, SRAM restart
+tests and all 15 power-core cases/2,088 assertions pass. ARM64 compilation
+and checkpatch pass. Normal and diagnostic bundles pass all kernel checks
+and share kernel `/nix/store/sp049jpi7ymbxjbkyrbgvgrm000y1w0z-linux-gemini-7.1.3`,
+with unchanged DTB. Build logs and GC roots are retained in
+`handoff/a72-primary-ack-20261008/`. Trial03 is running; physical restart
+qualification remains pending. Trial02 completed M69 recovery as boot
+`19fecbdd-1dbb-4899-9405-567ac0998e67`, with terminal worker, all 35 source
+hashes matching and all 26 tracked outputs retained.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
