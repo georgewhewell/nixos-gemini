@@ -12,9 +12,9 @@
 #   performance.
 # - gemini-core-parking parks CPUs 7..1 (L cluster first, then the extra LL
 #   cores) and brings them back on load and input.  CPU0 is never written.
-#   CPU8/9 are pinned: this kernel refuses their unplug
-#   (mt6797_psci_cpu_disable() returns -EPERM), and a refused unplug re-runs
-#   the A72 online-commit callback, which latches the A72 owner as faulted.
+#   CPU8/9 remain pinned while native A72 shutdown/restart receives bounded
+#   hardware qualification. The kernel now admits ordered unplug and handles
+#   cancellation; enabling load-driven A72 parking requires that qualification.
 # - /run/gemini-core-parking/hold onlines everything and stops parking (tests,
 #   benchmarks); /run/gemini-core-parking/pause freezes the topology (set for
 #   the duration of system sleep).

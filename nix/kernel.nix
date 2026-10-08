@@ -66,7 +66,7 @@ in
         mt6797-a72-hotplug-attribute mt6797-cpuclk-observation mt6797-cpuclk-core-host \
         mt6797-a72-power-core-host mt6797-a72-off-host \
         mt6797-sram-core-host mt6797-sram-boot-api \
-        a72-vproc-votes a72-online-commit mt6797-cpuclk-boot-api \
+        a72-vproc-votes a72-online-commit a72-hotplug-lifecycle mt6797-cpuclk-boot-api \
         mt6797-cpuclk-fhctl-host mt6797-cpuclk-transition-host mt6797-topckgen-cpu-host \
         mt6797-cpuclk-registration-host \
         mt6797-cpu-rail-admission-host \
