@@ -5,12 +5,14 @@ and vibrator are excluded by the owner; hardware video is still unresolved,
 not an additional exclusion. Historical milestone names are not completion
 proof. The installed recovery system is M69 (configuration 3f8e9d5,
 kernel c0dbf01b2bdaa). The default packaging now selects the combined maintained
-Linux branch `gemini` at 70823e0a3c4c7, including watchdog/RTC fixes,
+Linux branch `gemini` at 7fe1d8055ed94, including watchdog/RTC fixes,
 EFI/Nix support, desktop keyboard, zswap writeback, coupled A53/CCI voltage
 scaling and native A72 shutdown/restart. Automatic A72 parking is enabled in
 the candidate and has passed bounded hardware tests; the detailed evidence
 and remaining limits are recorded below. The next A53 vendor points
-(1.014/1.352GHz at1.04V) pass bounded hardware transition testing. FUSB301 role-switch and MT6797 USB3
+(1.014/1.352GHz at1.04V) pass bounded hardware transition testing. The
+next1.07/1.10V points through1.222/1.625GHz are selected for qualification
+but have not yet been tested on hardware. FUSB301 role-switch and MT6797 USB3
 PHY support are enabled, but no SuperSpeed link has been observed. Historical
 profiles are isolated in the frozen
 `recovery-packaging` input; local `legacy.nix` is removed. `recovery` retains

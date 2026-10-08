@@ -1326,6 +1326,27 @@ failures and49 lower-LL pairs/371 failures also pass. No additional operating
 point or production driver changes in this test commit. Evidence:
 `handoff/a53-upper-divider-20261008/`.
 
+## A53 points through 1.10 V, October 8
+
+Linux`7fe1d8055ed94` enables LL1.118/1.222GHz and L1.495/1.625GHz
+using the vendor SB OPP7/OPP6 voltages1.07/1.10V. CCI follows to754/819MHz
+and SRAM to1.175/1.20V. Existing thermal limits and voltage ceilings remain
+unchanged. Source hashes and the decoded-DTB comparison are retained in
+`handoff/a53-1100mv-20261008/`; only four OPP enable flags differ from the
+qualified1.04V DTB. The comparison scopes nodes to their CPU cluster because
+1.495GHz also appears in the higher, still-disabled LL table.
+
+The runtime-consumer host test checks all six upper CPU points independently
+raise and release the correct CCI vote. It passes under UBSan, as do the
+expanded800 LL/L transition pairs and4,256 postdivider failure cases. DTB
+compilation passes. Both bundles pass full kernel checks and share the same
+kernel/DTB; identities and GC roots are retained in the evidence directory.
+Physical qualification is pending.
+The prepared device probe covers200 ordered A53 pairs,100 CCI/voltage pairs,
+and82 target transitions crossing the PLL postdivider boundary. Each pair
+executes a checked5,000-iteration PBKDF2 workload; separate sustained-load
+qualification remains necessary.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
