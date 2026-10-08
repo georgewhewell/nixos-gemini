@@ -2616,6 +2616,31 @@ then45seconds real ten-core schedutil load with checked workloads and a90°C
 abort. Governors, emulated temperature and the parking hold are restored on
 exit. Thermal/load outcome and this trial's final recovery audit remain pending.
 
+## 2026-10-08: ten-core thermal bound fails; stronger floor prepared
+
+Thermal boot `ed450115-fab6-44c9-8ae6-e90b2eacdc9f` passes all16
+emulated-temperature samples on three CPU policies, including cooling states
+3–15 and complete release. Physical ten-core load then exceeds the90°C
+probe bound at91.2°C after roughly2.2seconds; only seven load samples were
+recorded, so45-second load qualification failed. State3 initially caps the
+clusters at1391/1820/2262MHz, but CCI still holds the shared rail at1.20V.
+At state7 (1118/1495/1885MHz), the shared rail remains1.19V; a brief falling
+trend permits a return toward state6 before the guard aborts. No full-duration
+workload result is claimed. Cleanup restores schedutil/schedutil/userspace,
+removes the hold and leaves parking active; post-cleanup temperature78.6°C
+and kernel/system follow-up checks pass. Evidence:
+`handoff/a72-thermal-trial-01` and
+`handoff/a72-thermal-20261008/probe-result.json`. Recovery audit is pending.
+
+Linux `36b119e0ef218` raises the85°C passive cooling floor to state8 for all
+three policies, capping hot LL/L/A72 at1014/1352/1677MHz and allowing CCI
+at845MHz with a1.13V shared-rail vote. The full cold-frequency table, trips,
+hysteresis and polling intervals remain intact. ARM64 DT build passes with
+only existing USB address-cell warnings. An isolated full bundle is building
+in `handoff/a72-thermal-floor-20261008`; its separate probe expects states
+8–15 and retains the same ten-core load, duration and90°C abort. This is a
+candidate fix, not a thermal qualification. No second thermal trial has started.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
