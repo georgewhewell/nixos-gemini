@@ -1862,6 +1862,32 @@ swap layout. Worker inactive, MainPID0. Evidence:
 `handoff/clock-domain-reads-20261008/completion.json` and
 `handoff/clock-domain-reads-trial-01/`. No default promoted.
 
+## 2026-10-08: ordinary startup remains unresolved after scoped observations
+
+Trial `clock-domain-reads-idle-trial-01` used the same `1844e1afbb318` bundle
+as the passing fixed-startup regression, but created its hold directly from
+autonomous parking with CPUs0–3 online and without changing governors first.
+Boot `2b3bbc3a-4204-4e58-b943-f7ff72395a61` reached healthy acceptance. Warm
+CPU8 preparation completed its off samples, clock checks, transaction
+admission, SPM reset update and IDVFS fence. The last marker at163.943664
+enters PWRAP reset verification; no VPROC_ENABLE marker follows. The observer
+timed out without a result, before the observation stress or matrix began.
+The scoped-observation fix therefore has bounded passing evidence under
+fixed-clock conditioning, but ordinary startup is not qualified.
+
+The next source audit concerns full snapshots still used by A53/CCI
+frequency transitions and parent changes. These include secure MP2 reads,
+unlike the now-scoped read-only callbacks. A future change must preserve
+all shared mux/divider/DCM checks and strict native A72 admission; do not
+merely weaken snapshot comparisons or assume the secure call is proven to
+hang. Reset/PMIC access coordination remains another unproven possibility.
+
+Healthy M69 recovery `3da89774-2ac5-45ac-adf2-7f5a4bd58025` passed the final
+locked audit:35 source hashes,26 retained outputs, swap layout and no writer.
+Worker inactive, MainPID0. Evidence: `handoff/clock-domain-reads-idle-trial-01/`
+and `handoff/clock-domain-reads-idle-20261008/trial-01-result.json`.
+Normal packaging remains unchanged; no default promoted.
+
 ## Historical Cycle18 observations
 
 The following records the August probe configuration at `28c471502`, not the
