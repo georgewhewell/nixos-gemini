@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0-only
+obj-m += mt6797_vdec_probe.o
+mt6797_vdec_probe-y := probe.o mt6797-h264-controls.o

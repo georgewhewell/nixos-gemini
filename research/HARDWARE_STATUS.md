@@ -17,11 +17,26 @@ it was never installed. The revised ten-core test completed 10,061 checked
 computations in 45 seconds and peaked at 87.2°C, with physical throttling on all
 three clusters and clean kernel/rail checks (`handoff/cleanup-trial-02/thermal.json`).
 The full supervised boot, paging, ordinary Nix build, RTC delivery/cancel/delivery,
-automatic recovery and final no-writer audit pass. Genuine hibernation through
-reboot also passes on the installed generation, preserving the boot ID and DVFS
-readiness with zero kernel errors (`handoff/cleanup-thermal-20261009/hibernate`).
+automatic recovery and final no-writer audit pass. Hibernation through reboot
+preserves the boot ID and DVFS readiness in the bounded test
+(`handoff/cleanup-thermal-20261009/hibernate`). A longer post-resume observation
+then found recurring Panfrost timeouts and a terminal Wi-Fi fault
+(`handoff/video-cleanroom-20261009/post-hibernate-kernel.txt`). Hibernation is
+therefore not qualified for normal use; policy continues to disable it.
 Host driver/admission tests, the package checks and flake checks pass. Existing
 uncommitted Grok allocator diagnostics in `mm/slab.h` and `mm/slub.c` were preserved.
+
+2026-10-09 video: independent GPL H.264 SPS/PPS, progressive slice-header and
+scaling-SRAM translation is implemented and passes ASan/UBSan host tests in
+`research/mt6797-vdec`. A pinned public MT8173 GPL hardware test interface has
+the same seven H.264 bank bases as the published MT6797 specification. A temporary
+non-DMA probe observes the 338 MHz clock and local selector roundtrip `0 -> 2 -> 0`.
+AVC control readback remains zero and is inconclusive: the reference reads
+status fields from the control register but never reads SPS/PPS back. No frame
+was submitted; video decoding and encoding remain unimplemented. The target is
+V4L2 stateless Request API decoding without proprietary codec firmware or
+`libvcodec`. The source ledger, qualification results and remaining hardware
+contracts are in `research/mt6797-video-interface.json`.
 
 2026-10-09: the device baseline is now U-Boot -> systemd-boot -> NixOS
 (p22 `095640ea`, recorded in `research/accepted-baseline.json`); M69 is
@@ -41,7 +56,7 @@ the same kernel. The bq25890 status poll touched I2C during suspend; Linux
 guard bounds qualification sleeps only; the normal system pauses the watchdog
 while asleep. Generation updates go through `tools/update-system.py`, which
 requires a qualified direct-boot trial of the exact system.
-Hibernation works on the U-Boot baseline: `tools/hibernate-test.sh reboot`
+The hibernation mechanism works on the U-Boot baseline: `tools/hibernate-test.sh reboot`
 writes the image, reboots through LK, U-Boot and systemd-boot, and stage 1
 resumes the same session (same boot id, DVFS ready, no kernel errors;
 `handoff/hibernate-20261009/reboot-05`). Fixes: stage 1 detaches the USB gadget
@@ -49,8 +64,8 @@ before resuming a signed image (mtu3 refuses to quiesce while hosted); the DA921
 voltage registers are volatile; CCI re-adopts the fabric and the CPU clock
 provider re-initializes FHCTL channels on restore. The tool restores the swsusp
 fields left in the swap header tail so the pinned layout holds. Policy keeps
-AllowHibernation=false; `HibernateMode=shutdown` resumes the same way but needs
-the power key to boot.
+AllowHibernation=false; delayed GPU/Wi-Fi resume failures are recorded above.
+`HibernateMode=shutdown` resumes the same way but needs the power key to boot.
 
 Owner-observed 2026-10-09: setting the pwm-backlight from 1023 to 300 visibly
 dims the panel. The Gemini PDA keyboard has no backlight (owner-confirmed;
@@ -368,7 +383,7 @@ Direct M69 remains installed. See
 | A72 power and idle | Native CPU9-only hotplug and three full-cluster shutdown/restart cycles pass, including checked A72 execution, BUCKB-off and MP2 at 26 MHz while off. Automatic parking passes repeated load/idle cycles and service-stop/restart restoration: all ten CPUs under load, restored cores on stop, and parking resumes after restart. Power, clock and SRAM failure paths have host tests; bounded hardware runs show no kernel errors and recover to M69. The native DVFS owner and full nominal 16-point table (338–2587 MHz) are implemented. An isolated cgroup1 candidate passes all 16 directed pairs among 338/676/845/1001 MHz, 55 clock/rail samples and 299 checked computations, including CPU4-parked transitions; peak temperature is 45°C and recovery audit passes. Its restart probe stops on an incorrect 26 MHz expectation: firmware preserves /2, yielding 13 MHz while off after 338 MHz. A corrected probe with the same kernel passes both full-cluster DVFS restart cycles and 301 checked computations, peaking at 44.7°C with no kernel errors; its final M69 recovery audit also passes. The eight-point range through 1.677 GHz also passes all 64 directed pairs, 150 samples, workloads and both restarts, with a 55.1°C peak and audited recovery. The full table through 2.587 GHz passes 278 additional samples, 466 checked computations and restart from 2.587 GHz at CPU/SRAM 1.20/1.20 V. Combined samples cover all 256 ordered OPP pairs; peak temperature is 81°C with no kernel errors. Full-range recovery audit passes. Emulated cooling passes on all three clusters. Ten-core load first exceeded the 90°C bound (91.2°C; 97.8°C with a state-8 floor) because step_wise released the trip to full rate whenever noise dipped below trip−2°C. An 80°C trip with 15°C hysteresis holds 45 seconds of ten-core load at 65–80°C in cooling states 8–11 with 8,923 checked computations (`handoff/a72-thermal-band-trial-01`). Normal packaging now includes A72 DVFS; endurance and system sleep remain unfinished. No cpuidle driver is present. See [power campaign](../campaign/08-power-pmic-battery-dvfs.md) |
 | Battery / charging | Charger-backed voltage and rough temperature pass 12 on-device comparisons; current and charge count remain gauge-backed. Full status stays stable across 12 samples spanning −34.5 to +6.9 mA. The native gauge uses the original-pack OCV/resistance/Qmax models and vendor CAR scaling. A 66.1-second diagnostic passes 32 samples at 100%/Full with 11 OCV updates, followed by audited recovery. Discharge integration, percentage accuracy, physical calibration, aging and charging/discharging remain unqualified. See [power campaign](../campaign/08-power-pmic-battery-dvfs.md) |
 | Display IOMMU | Resolve intermittent translated scanout stalls; current M69 display bypasses translation |
-| Media | JPEG was hardware-tested historically; video encode/decode remains unimplemented and requires further vendor investigation |
+| Media | JPEG hardware-tested historically; independent H.264 control translation and non-DMA register probe implemented, with frame encode/decode still unimplemented (`research/mt6797-vdec`) |
 | Consolidation | Merge qualified work, reconcile stale docs and stranded branches, and preserve reproducible source/artifacts |
 
 ### USB SuperSpeed evidence

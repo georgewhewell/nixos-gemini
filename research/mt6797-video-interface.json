@@ -1,0 +1,313 @@
+{
+  "schema": 1,
+  "implementation_status": "Original H.264 SPS/PPS, slice and scaling-SRAM translators plus an isolated non-DMA register probe implemented; frame decode and encode not implemented",
+  "target": {
+    "soc": "MT6797",
+    "board": "Planet Gemini PDA",
+    "decoder_api": "V4L2 stateless Request API",
+    "initial_codec": "H.264",
+    "encoder_api": "V4L2; select an upstream interface after the hardware control model is established",
+    "userspace": "GStreamer v4l2codecs for Request API decoding",
+    "codec_firmware": "no proprietary codec firmware or libvcodec dependency in the target implementation"
+  },
+  "provenance": {
+    "implementation_inputs": "Published hardware interface facts, public GPL MediaTek kernel register definitions, public Linux UAPI and independently observed hardware behavior",
+    "proprietary_codec_source_read": false,
+    "proprietary_codec_binary_disassembled": false,
+    "vendor_codec_binary_executed": false,
+    "note": "Existing kernel framework and resource drivers are open source. This is an independent implementation target, not a claim that a formally separated clean-room project has already been completed."
+  },
+  "sources": [
+    {
+      "url": "https://www.96boards.org/documentation/consumer/mediatekx20/additional-docs/docs/MT6797_Functional_Specification_V1_0.pdf",
+      "sha256": "8d079e9447765b4a0ce68cb94241d686c3537546750d11cd4a6a92a80b69944e",
+      "scope": "Sections 6.7/6.8, pages 275-286"
+    },
+    {
+      "url": "https://www.96boards.org/documentation/consumer/mediatekx20/additional-docs/docs/MT6797_Register_Table_Part_2.pdf",
+      "sha256": "e31066d16d0e94fdd5c2a7f8c306ad6a3b5516f31482f54b59286b62393d2c3a",
+      "scope": "Sections 4.7/4.8, pages 799-822"
+    },
+    {
+      "url": "https://docs.kernel.org/userspace-api/media/v4l/dev-stateless-decoder.html",
+      "scope": "Public stateless decode UAPI"
+    },
+    {
+      "url": "https://docs.kernel.org/userspace-api/media/v4l/dev-encoder.html",
+      "scope": "Public encoder UAPI; software bitstream construction in kernel discouraged"
+    },
+    {
+      "url": "https://gstreamer.freedesktop.org/documentation/v4l2codecs/index.html",
+      "scope": "Userspace integration target; not yet qualified on Gemini"
+    }
+  ],
+  "documented_resources": {
+    "decoder_banks": {
+      "misc": "0x16020000",
+      "vld": "0x16021000",
+      "vld_top": "0x16021800",
+      "mc": "0x16022000",
+      "avc_vld": "0x16023000",
+      "avc_mv": "0x16024000",
+      "pp": "0x16025000"
+    },
+    "decoder_domain": "MT6797_POWER_DOMAIN_VDEC",
+    "decoder_larb": 1,
+    "encoder_base_from_existing_dt": "0x17002000",
+    "encoder_domain": "MT6797_POWER_DOMAIN_VENC",
+    "encoder_larb": 3,
+    "decoder_interrupt": {
+      "spi": 240,
+      "polarity": "level low",
+      "source": "Public gemian/gemini-linux-kernel-3.18 at 51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c, arch/arm64/boot/dts/mt6797.dtsi, vdec@16020000"
+    }
+  },
+  "coverage": {
+    "functional_specification": "Sections 6.7 and 6.8 describe CPU-programmed decoding/encoding. No conclusion about a mandatory codec firmware follows from the upstream VPU/SCP driver.",
+    "decoder_register_table": "Section 4.7, pages 799-820, documents VDEC_GCON, not the frame-programming banks.",
+    "encoder_register_table": "Section 4.8, pages 821-822, documents three clock/chip-enable registers, not frame programming.",
+    "existing_kernel": "No MT6797 match in mtk-vcodec; the configured mtk-jpeg driver is separate. The MT6797 encoder DT node is disabled. CONFIG_COMMON_CLK_MT6797_VDECSYS is disabled; a temporary build of the existing open-source clock provider was used during the non-DMA probe.",
+    "related_silicon": "Public MT8173 kernel hardware verification code supplies candidate H.264 frame/slice, scaling SRAM, reference, bitstream and reset interfaces. Their compatibility with MT6797 remains subject to hardware tests."
+  },
+  "missing_contracts": [
+    "MT6797 qualification of candidate decoder frame/slice register fields and sequencing, including references, quantization and start/completion",
+    "Encoder source/reference/bitstream buffer fields, picture commands, rate control and completion",
+    "Exact decoded tile layout, strides and alignment, including mapping to a Linux pixel format",
+    "Scratch-buffer sizes and lifetimes, DMA alignment and address units",
+    "MT6797 qualification of decoder interrupt status and acknowledge sequence (SPI 240 level-low resource is known)",
+    "Reset/timeout recovery that quiesces DMA before returning or freeing buffers"
+  ],
+  "qualification": {
+    "interface_probe": "tools/codec-inventory.py",
+    "inventory_is_acceleration_proof": false,
+    "required": [
+      "v4l2-compliance for the implemented interface",
+      "Decoded output compared against software reference across intra, inter, multi-slice and resolution-change cases",
+      "Encoded output decoded by an independent software decoder and checked against quality/rate targets",
+      "Malformed controls, invalid references, timeout, streamoff, close, suspend and repeated-open tests",
+      "On-board measurement of throughput, CPU use, thermals and IOMMU/kernel errors"
+    ],
+    "inventory_result": {
+      "nodes": [
+        {
+          "path": "/dev/video0",
+          "driver": "mtk-jpeg-enc"
+        },
+        {
+          "path": "/dev/video1",
+          "driver": "mtk-jpeg-dec"
+        }
+      ],
+      "hardware_video_node": false,
+      "streaming_tested": false
+    },
+    "host_tests": {
+      "result": "passed",
+      "sanitizers": [
+        "AddressSanitizer",
+        "UndefinedBehaviorSanitizer"
+      ],
+      "coverage": "Independent SPS/PPS and slice word fixtures, signed QP, bounds and atomic rejection, 4x4/8x8 Linux scaling-list order, SRAM locations and coefficient byte order",
+      "reproduce": "CC=gcc bash research/mt6797-vdec/test.sh /path/to/linux"
+    },
+    "register_probe_result": {
+      "status": "inconclusive for AVC control compatibility",
+      "kernel_revision": "21ac47a970d7dc4935d0996b00587a13be9b7c1f",
+      "vdec_clock_hz": 338000000,
+      "gcon_clock_status": "0x111",
+      "gcon_reset_status": 1,
+      "local_clock_select_roundtrip": [
+        0,
+        2,
+        0
+      ],
+      "avc_expected": [
+        "0x344001",
+        "0x10000",
+        "0x21"
+      ],
+      "avc_observed": [
+        0,
+        0,
+        0
+      ],
+      "original_and_restored_equal": true,
+      "dma_started": false,
+      "decode_started": false,
+      "power_vote_released": true,
+      "note": "Expected AVC readback was not obtained. The public reference reads status fields from AVC_CONTROL but does not read back SPS/PPS. Zero readback therefore neither proves register incompatibility nor validates accepted control programming. Output comparison after real frame submission is required.",
+      "evidence": "handoff/video-cleanroom-20261009/probe-write.json",
+      "probe_source_sha256": "69b17c96d281c169be1a53bd9c777c077c316aaf1fc432268a4bc1c2713dd765",
+      "tested_module_sha256": "f2a929b73d724ccec083b0bff58941a5fdfaf11baec4d44c9dfc43a694b951ee"
+    },
+    "final_board_audit": {
+      "result": "passed",
+      "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+      "boot_id": "588e7774-6353-469f-b457-b4e91a2a410f",
+      "tainted": 0,
+      "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+      "failed_units": [],
+      "temporary_modules_loaded": false,
+      "temporary_probe_device_present": false,
+      "kernel_fault_patterns_found": [],
+      "evidence": "handoff/video-cleanroom-20261009/final-board-audit.json"
+    }
+  },
+  "related_silicon_reference": {
+    "repository": "mt8173-dev/android_kernel_amazon_sloane",
+    "revision": "7cdf75e7ac0ba7009ff98fe71b291b118f634e77",
+    "license": "GPL-2.0; root COPYING inspected",
+    "license_url": "https://github.com/mt8173-dev/android_kernel_amazon_sloane/blob/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/COPYING",
+    "license_sha256": "af8067302947c01fd9eee72befa54c7e3ef8a48fecde7fd71277f2290b2bf0f7",
+    "files": [
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hal_if_h264.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hal_if_h264.c",
+        "sha256": "ed7424dd98a8d8e18fbdf18e2dda8228ad82d88cc62ee608ea672e460be9af5d",
+        "bytes": 104409
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_common.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_common.c",
+        "sha256": "9e2085d6440616f0984b1e2e976a477c11e23220630973a8023b21169256619a",
+        "bytes": 63331
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_common.h",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_common.h",
+        "sha256": "15bb2e18c138ab5fc07971f6b81fac24068829347e7fd5b27b59a4b74d47ebfc",
+        "bytes": 75821
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_h264.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hw_h264.c",
+        "sha256": "be0d49a2ffc6e09a2bd2c49227d532dfe0d84fb6b3d263e11455adba739a57b0",
+        "bytes": 25106
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/include/vdec_info_common.h",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/include/vdec_info_common.h",
+        "sha256": "26fd4cc9db802aa93732555a21eb7fa51e2db8ddb23a547dfdccb0bc9f991a1e",
+        "bytes": 9331
+      }
+    ],
+    "compatibility_evidence": "All seven H.264 register-bank bases match the MT6797 functional specification. CONFIG_CHIP_VER_CURR=80 selects the MT8580-class VLD_TOP path in this MT8173 kernel test interface. Bank matching is not proof of command, tile-layout or DMA compatibility.",
+    "hardware_compatibility_qualified": false
+  },
+  "candidate_registers": {
+    "source": "related_silicon_reference files",
+    "avc_vld_relative_to_misc": "0x3000",
+    "sps_offset": "0x88",
+    "pps_offset": "0x90",
+    "reference_counts_offset": "0x94",
+    "scaling_address_offset": "0x260",
+    "scaling_data_offset": "0x264",
+    "decode_command_offset": "0x238",
+    "decode_command_value": "0x1",
+    "sps_fields": {
+      "chroma_format_idc": [
+        0,
+        1
+      ],
+      "log2_max_frame_num_minus4": [
+        2,
+        5
+      ],
+      "pic_order_cnt_type": [
+        6,
+        7
+      ],
+      "log2_max_pic_order_cnt_lsb_minus4": [
+        8,
+        11
+      ],
+      "delta_pic_order_always_zero": [
+        12,
+        12
+      ],
+      "max_num_ref_frames": [
+        13,
+        17
+      ],
+      "frame_mbs_only": [
+        18,
+        18
+      ],
+      "mb_adaptive_frame_field": [
+        19,
+        19
+      ],
+      "direct_8x8_inference": [
+        20,
+        20
+      ],
+      "reference_interface_fixed_one": [
+        21,
+        21
+      ]
+    },
+    "pps_fields": {
+      "entropy_coding": [
+        0,
+        0
+      ],
+      "bottom_field_poc_present": [
+        1,
+        1
+      ],
+      "weighted_pred": [
+        2,
+        2
+      ],
+      "weighted_bipred_idc": [
+        3,
+        4
+      ],
+      "pic_init_qp_minus26_signed": [
+        5,
+        10
+      ],
+      "chroma_qp_index_offset_signed": [
+        11,
+        15
+      ],
+      "deblocking_filter_control_present": [
+        16,
+        16
+      ],
+      "constrained_intra_pred": [
+        17,
+        17
+      ],
+      "transform_8x8_mode": [
+        18,
+        18
+      ],
+      "second_chroma_qp_index_offset_signed": [
+        19,
+        23
+      ]
+    },
+    "vld_relative_to_misc": "0x1000",
+    "local_clock_select_offset": "0x84",
+    "h264_local_clock_select": 2,
+    "vld_soft_reset_offset": "0x108",
+    "vld_soft_reset_documented_bit": 0,
+    "avc_control_offset": "0x84",
+    "avc_enable_candidate_bit": 0,
+    "slice_header1_offset": "0x98",
+    "slice_header2_offset": "0x9c",
+    "scaling_bank": "VLD, not AVC_VLD",
+    "scaling_words": 56,
+    "scaling_8x8_uapi_entries": [
+      0,
+      1
+    ]
+  },
+  "implemented_components": {
+    "inventory": "tools/codec-inventory.py; public read-only capability/format/control ioctls",
+    "control_translator": "research/mt6797-vdec/mt6797-h264-controls.c; progressive 8-bit 4:2:0 SPS/PPS, slice-header fields, scaling-SRAM packing, signed fields and atomic validation",
+    "register_probe": "research/mt6797-vdec/probe.c; separate temporary module, no DMA buffers, IRQ registration or frame start",
+    "hardware_driver": false
+  }
+}
