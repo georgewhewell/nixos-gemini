@@ -193,16 +193,24 @@ readback does not establish a decoded frame.
 
 The current diagnostic also enables the public decoder cycle counter and
 starts working-buffer data at zero while keeping output and trailing guards
-poisoned. `frame_flat=1` selects an independently verified 20-byte compressed
+poisoned. Trial 15 timed out on all four PCM/compressed and error-bypass variants,
+with output unchanged. `frame_flat=1` selects an independently verified 20-byte compressed
 I_16x16 DC fixture. `frame_error_bypass=1` tests the related-core AVC bits 14/15;
 concealment is not enabled, and raw error words and pixel comparisons remain
-required. These experiments are not production controls.
+required. `frame_pattern=1` selects a verified 27-byte compressed intra fixture
+with calculated luma DC blocks at QP 46; it is exclusive with `frame_flat`.
+Its chroma is neutral, so it does not qualify colour ordering.
+`frame_wrapper_bypass=1` selects three small-picture extension writes that are
+inside a disabled reference block. The default now follows the active path.
+Cached local register words and post-idle prediction/MV/wrapper change flags
+record setup and working-memory activity without exposing live DMA storage.
+These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM
 macroblocks, original pixel gradients and deblocking disabled. It uses public
 H.264 syntax and no encoder library, then requires FFmpeg to decode all 6,144
 sample bytes exactly. It emits Annex B, a slice NAL, planar YUV and control/hash
-metadata, plus a generated C header containing only the original test NAL.
+metadata, plus a generated C header containing only the original test NALs.
 This fixture generator is not a hardware encoder.
 
 With `--p-skip`, it also emits an original five-byte P-slice NAL referencing

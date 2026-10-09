@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original GPL control translation and hardware input DMA/barrel proof implemented; guarded frame diagnostics have submitted two frames without completion or output. Hardware decoding and encoding are unqualified; no V4L2 video device is advertised.",
+  "implementation_status": "Original GPL control translation and hardware input DMA/barrel proof implemented; six guarded frame submissions have not completed or written output. Hardware decoding and encoding are unqualified; no V4L2 video device is advertised.",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -64,6 +64,11 @@
       "url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/base/power/mt6797/mt_clkmgr.h",
       "sha256": "612f60f95efe935b49fa38f6b816caddf09d12aa2fac557bca8fdd62f37d9819",
       "scope": "Public kernel resource definitions for top clock-debug and calibration offsets"
+    },
+    {
+      "url": "https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.264-202408-S%21%21PDF-E&lang=e&type=items",
+      "sha256": "647d6bb2f7a62d221cd5e31da9a948e2dde32f9ac008a548f98348c838bd389d",
+      "scope": "Public ITU-T H.264 (08/2024): I_16x16 DC prediction 8.3.3, inverse scaling/transform 8.5.9/8.5.10 and CAVLC tables 9-5/9-7; independently constructed original test fixtures, no codec implementation copied."
     }
   ],
   "documented_resources": {
@@ -170,7 +175,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "b1d77c30-e5d7-4d35-8192-4018052191e1",
+      "boot_id": "11cb9c15-cca0-4c09-b505-838b111e2c79",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -1728,7 +1733,7 @@
       ],
       "current_source_sha256": {
         "probe.c": "07088fbbfb79b2a10595817eae5bb074738a2fbd62345cb4230a82a8d6feb618",
-        "fifo-probe.c": "e1496147e8b466b92f1dcfb5dcc8cb266b61ecb27dfc10eac233422137ff178c",
+        "fifo-probe.c": "6497efad6c833fd6281c96341893bf15f075c7175d0513adf937d00c567ece49",
         "supplier-probe.c": "c3bcf10e956c9800131ad386a3c23e98a34d2fbb243400b7e4d9bf385a995ed3",
         "clock-probe.c": "845c1b68d5cadad080acef6cf15a3b98f8d48a8e843c49a7ca868815092ad1fc"
       }
@@ -2119,12 +2124,629 @@
           "boot_trial_passed": true,
           "recovered_boot_id": "b1d77c30-e5d7-4d35-8192-4018052191e1",
           "final_no_writer": true
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-15",
+          "diagnostic": {
+            "passed": false,
+            "boot_id": "cb7a4096-0c24-4c3d-be14-e72466db3de9",
+            "module_sha256": "0169a70fd51787cec61e482d26dbf40b0615799acbd070623a907adfb6e5ee3e",
+            "source_sha256": {
+              "fifo-probe.c": "e1496147e8b466b92f1dcfb5dcc8cb266b61ecb27dfc10eac233422137ff178c",
+              "mt6797-h264-controls.c": "8a70a5495f23db4d1a2f44a054a9eb04aca1e6c3c458b3b84d96e4ce049de884",
+              "mt6797-h264-controls.h": "b33fb71a659a6917eec09638033701866086e521eaa6fb1982f0bcc86a1ae766",
+              "pcm64-fixture.h": "6250e61c374fd2e9e2dcae8c5663ae1284a046f175d98399ece27b9aa5bb27d8",
+              "Kbuild": "fcd149822e2622d3e9278be7d67e27b4cd2df6072dfa08647c91e759e427dcfc"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "passed": false,
+                "index": 0,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 30,
+                  "all_clocks": false,
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": false,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 1073610752,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 16775168,
+                  "fifo_end": 16776192,
+                  "read_ptr": 1073610752,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 8396784,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_spec": 247,
+                  "pdn_module": 329384192,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 16775168,
+                  "read_ptr_before_reset": 1073610752,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 247,
+                    "pdn_module": 329384192,
+                    "auto_pdn": 1,
+                    "write_ptr": 1073617024,
+                    "avc_control": 2282225671,
+                    "sram": 294919,
+                    "irq": 4097
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "error_bypass": false,
+                  "decode_started": true,
+                  "done": false,
+                  "result": -110,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 1,
+                  "irq": 4097,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 1,
+                  "mby": 1,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 1073348608,
+                  "mv_iova": 1073217536,
+                  "vld_wrapper_iova": 1073086464,
+                  "pp_wrapper_iova": 1072955392
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 1073479680,
+                    "mc_y": 1073348608,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 2096384,
+                    "pp_c": 4192784,
+                    "width_mbs": 4,
+                    "mv": 67076096,
+                    "vld_wrapper": 1073086464,
+                    "pp_wrapper": 1072955392
+                  },
+                  "status": {
+                    "avc_status": 469762561,
+                    "avc_complete": 0,
+                    "avc_control": 2282225671,
+                    "vld_proc": 8388608,
+                    "read_ptr": 1073610752,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  },
+                  "mm21": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  }
+                }
+              },
+              {
+                "passed": false,
+                "index": 1,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 30,
+                  "all_clocks": false,
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": false,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 1072824320,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 16762880,
+                  "fifo_end": 16763904,
+                  "read_ptr": 1072824320,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 8396784,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_spec": 247,
+                  "pdn_module": 329384192,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 16762880,
+                  "read_ptr_before_reset": 1072824320,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 247,
+                    "pdn_module": 329384192,
+                    "auto_pdn": 1,
+                    "write_ptr": 1072824448,
+                    "avc_control": 2283012103,
+                    "sram": 98312,
+                    "irq": 4097
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": true,
+                  "error_bypass": false,
+                  "decode_started": true,
+                  "done": false,
+                  "result": -110,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 1,
+                  "irq": 4097,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 1,
+                  "mby": 1,
+                  "input_first": 1706573986,
+                  "input_data": 656877351,
+                  "width": 64,
+                  "height": 64,
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 1072562176,
+                  "mv_iova": 1072431104,
+                  "vld_wrapper_iova": 1072300032,
+                  "pp_wrapper_iova": 1072168960
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 1072693248,
+                    "mc_y": 1072562176,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 2094848,
+                    "pp_c": 4189712,
+                    "width_mbs": 4,
+                    "mv": 67026944,
+                    "vld_wrapper": 1072300032,
+                    "pp_wrapper": 1072168960
+                  },
+                  "status": {
+                    "avc_status": 201327105,
+                    "avc_complete": 0,
+                    "avc_control": 2283012103,
+                    "vld_proc": 8388608,
+                    "read_ptr": 1072824320,
+                    "fetch": 1041,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6144/6144 pixels differ; first byte 0: actual=211, expected=128\n"
+                  },
+                  "mm21": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6144/6144 pixels differ; first byte 0: actual=211, expected=128\n"
+                  }
+                }
+              },
+              {
+                "passed": false,
+                "index": 2,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 30,
+                  "all_clocks": false,
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": false,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 1072955392,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 16764928,
+                  "fifo_end": 16765952,
+                  "read_ptr": 1072955392,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 8396784,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_spec": 247,
+                  "pdn_module": 329384192,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 16764928,
+                  "read_ptr_before_reset": 1072955392,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 247,
+                    "pdn_module": 329384192,
+                    "auto_pdn": 1,
+                    "write_ptr": 1072955520,
+                    "avc_control": 2283061255,
+                    "sram": 98312,
+                    "irq": 4097
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": true,
+                  "error_bypass": true,
+                  "decode_started": true,
+                  "done": false,
+                  "result": -110,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 1,
+                  "irq": 4097,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 1,
+                  "mby": 1,
+                  "input_first": 1706573986,
+                  "input_data": 656877351,
+                  "width": 64,
+                  "height": 64,
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 1073217536,
+                  "mv_iova": 1073348608,
+                  "vld_wrapper_iova": 1073479680,
+                  "pp_wrapper_iova": 1073610752
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 1073086464,
+                    "mc_y": 1073217536,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 2096128,
+                    "pp_c": 4192272,
+                    "width_mbs": 4,
+                    "mv": 67084288,
+                    "vld_wrapper": 1073479680,
+                    "pp_wrapper": 1073610752
+                  },
+                  "status": {
+                    "avc_status": 201327105,
+                    "avc_complete": 0,
+                    "avc_control": 2283061255,
+                    "vld_proc": 8388608,
+                    "read_ptr": 1072955392,
+                    "fetch": 1041,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6144/6144 pixels differ; first byte 0: actual=211, expected=128\n"
+                  },
+                  "mm21": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6144/6144 pixels differ; first byte 0: actual=211, expected=128\n"
+                  }
+                }
+              },
+              {
+                "passed": false,
+                "index": 3,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 30,
+                  "all_clocks": false,
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": false,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 1073610752,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 16775168,
+                  "fifo_end": 16776192,
+                  "read_ptr": 1073610752,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 8396784,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_spec": 247,
+                  "pdn_module": 329384192,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 16775168,
+                  "read_ptr_before_reset": 1073610752,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 247,
+                    "pdn_module": 329384192,
+                    "auto_pdn": 1,
+                    "write_ptr": 1073617024,
+                    "avc_control": 2282274823,
+                    "sram": 294919,
+                    "irq": 4097
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "error_bypass": true,
+                  "decode_started": true,
+                  "done": false,
+                  "result": -110,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 1,
+                  "irq": 4097,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 1,
+                  "mby": 1,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 1073348608,
+                  "mv_iova": 1073217536,
+                  "vld_wrapper_iova": 1073086464,
+                  "pp_wrapper_iova": 1072955392
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 1073479680,
+                    "mc_y": 1073348608,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 2096384,
+                    "pp_c": 4192784,
+                    "width_mbs": 4,
+                    "mv": 67076096,
+                    "vld_wrapper": 1073086464,
+                    "pp_wrapper": 1072955392
+                  },
+                  "status": {
+                    "avc_status": 469762561,
+                    "avc_complete": 0,
+                    "avc_control": 2282274823,
+                    "vld_proc": 8388608,
+                    "read_ptr": 1073610752,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  },
+                  "mm21": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  }
+                }
+              }
+            ],
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "boot_trial_passed": true,
+          "recovered_boot_id": "11cb9c15-cca0-4c09-b505-838b111e2c79",
+          "final_no_writer": true
         }
       ],
-      "frame_submissions": 2,
+      "frame_submissions": 6,
       "successful_frame_comparisons": 0,
-      "note": "Trials 13/14 passed input and stop/idle, but frame completion timed out and all output remained 0xd3. Both explicit layouts failed. Trial 14 read back the complete frame configuration with the public H.264 masks and all three clock votes. Both full system trials and recovery passed. This is not hardware decode qualification.",
-      "input_fetch_commands": 4
+      "note": "Trials 13/14 and all four trial-15 variants timed out with no output writes; zero frames compared successfully. Trial 15 used both I_PCM and compressed I_16x16 DC with AVC error-bypass bits off/on. All input comparisons, guards, documented stop/idle and normal unload passed. All three full boot/paging/Nix/RTC/recovery trials passed. Current diagnostics make the three wrapper-extension operations optional because they are under #if 0 in the pinned reference; a combined all-votes/all-local-clocks experiment remains untested. This is not hardware decode qualification.",
+      "input_fetch_commands": 12
     },
     "p_skip_fixture": {
       "evidence": "handoff/video-resource-20261009/fixtures-p-skip/pcm64-p.json",
@@ -2151,7 +2773,43 @@
         "grey64.h264": "b62ce5bf82d54a7ea73c4ab18ed4e649496a93af8712ab1748282f6add0598ef",
         "grey64.nal": "855a5ef2c41f93be0348d94136d49a78fba4c22829670cd2e6526ca09fc111e7",
         "grey64.yuv": "cb11e05cb5da949c0e0f5b5a7cb310df35a96a22c45d1ada70d950859fe697d1"
-      }
+      },
+      "hardware_trials": [
+        "handoff/boot-test-video-frame-15"
+      ]
+    },
+    "patterned_intra_fixture": {
+      "evidence": "handoff/video-resource-20261009/fixtures-pattern/pattern64.json",
+      "software_decode_verified": true,
+      "sample_bytes_verified": 6144,
+      "nal_bytes": 27,
+      "header_bit_size": 38,
+      "slice_qp_delta": 20,
+      "block_luma": [
+        136,
+        128,
+        120,
+        128,
+        144,
+        144,
+        124,
+        118,
+        136,
+        148,
+        144,
+        123,
+        128,
+        130,
+        145,
+        142
+      ],
+      "hashes": {
+        "pattern64.h264": "ed5d46c02118842c5cfa6e640cb7caa9ca9568397233292e67ac886494543b0b",
+        "pattern64.nal": "bf762e2a7788e8ec544c9226a2abb310a2dcd7bd8c4d2e4c3f98197f773c3c9c",
+        "pattern64.yuv": "a4398632f6758af6c79f4050774d0474b35b8f30510c86c62403e0d27c43c86d"
+      },
+      "hardware_decode_verified": false,
+      "note": "Original CAVLC I_16x16 DC coefficients and independently calculated inverse scaling/DC prediction. Neutral chroma does not establish UV ordering. FFmpeg comparison passes exactly."
     }
   },
   "related_silicon_reference": {

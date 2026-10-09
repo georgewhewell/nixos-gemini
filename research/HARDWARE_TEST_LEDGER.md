@@ -1432,4 +1432,25 @@ and unchanged output are the same as trial 13. Input, all guards, stop/idle,
 normal unload and full system/RTC/recovery checks pass. No decoded frame is
 qualified. An independently constructed 20-byte I_16x16 DC frame decodes to
 6,144 verified grey samples; a separate original five-byte P-skip fixture
-reproduces 12,288 samples across two frames. Neither has run on hardware yet.
+reproduces 12,288 samples across two frames. The P-skip reference has not run on hardware.
+
+Private frame trial `handoff/boot-test-video-frame-15` tests PCM and compressed
+I_16x16 DC with AVC error-bypass bits 14/15 both off and on. All four frame
+commands time out with state `1`, zero error/message, IRQ `0x1001` and every
+output byte still `0xd3`. Input comparisons, all guards, both stop acknowledgements,
+idle reset and normal unload pass. Boot/paging/Nix/all RTC/recovery checks pass;
+the accepted board is healthy and untainted at boot
+`11cb9c15-cca0-4c09-b505-838b111e2c79`. Six frame submissions have zero successful
+pixel comparisons. Different frontend status words do not establish frame progress.
+
+The next probe makes TOP `0x94`, `0x2c[30]` and `0x40[5:4]` writes optional:
+they are inside `#if 0` in the pinned public reference. The active path is now
+the default. Read-only cached local-control and post-idle working-buffer change
+observations distinguish setup state from actual memory writes. A combined
+all-framework-votes/all-local-clocks experiment is still required.
+
+An original 27-byte patterned I_16x16 DC NAL uses signed unit DC coefficients at
+QP 46. Independent H.264 DC prediction/inverse-scaling calculations match all
+6,144 FFmpeg sample bytes. Its sixteen luma blocks vary, allowing a useful tile
+layout comparison once decoding works; chroma stays neutral and cannot establish
+UV ordering. It remains a software fixture, not hardware decode or encode proof.

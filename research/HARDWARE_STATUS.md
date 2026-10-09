@@ -58,7 +58,15 @@ NV12/MM21 sample comparator are ready. Trials 13/14 submitted guarded frames,
 but completion timed out and no output bytes changed; both comparisons failed.
 Input, stop/idle, guards and normal unload passed in both, as did full boot/
 paging/Nix/RTC/recovery. Trial 14 read back the complete frame configuration
-with the public H.264 masks and all three clock votes. Hardware video decoding and encoding remain unqualified. The target is
+with the public H.264 masks and all three clock votes. Trial 15 also times out
+on all four PCM/compressed-DC and error-bypass combinations without writing any
+output; input, guards, idle/unload and full system/RTC/recovery pass. Six frames
+have been submitted and none has compared successfully. The current probe makes
+three wrapper writes optional after finding them in a disabled reference block,
+and records working-buffer changes for the next clock/path experiment. A
+27-byte patterned compressed intra reference passes all 6,144 samples against
+FFmpeg; it has not run on hardware. Hardware video decoding and encoding remain
+unqualified. The target is
 V4L2 stateless Request API decoding without proprietary codec firmware or
 `libvcodec`. The source ledger, qualification results and remaining hardware
 contracts are in `research/mt6797-video-interface.json`.

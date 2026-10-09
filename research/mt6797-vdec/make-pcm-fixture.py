@@ -186,6 +186,58 @@ def main():
                      ',\n\t'.join(flat_rows) + '\n};\n')
     print('Verified original compressed I_16x16 DC frame:', len(flat_nal),
           'NAL bytes,', len(flat_expected), 'matching decoded bytes')
+    pattern = Bits()
+    # The fixed IDR header up to slice_qp_delta is sixteen RBSP bits.
+    pattern.bits = picture.bits[:header_bits - 8 - 4].copy()
+    pattern.se(20)  # QP 46 makes a single DC coefficient add +/-8 samples.
+    pattern.ue(1)
+    pattern_header_bits = 8 + len(pattern.bits)
+    block_values = []
+    for mb_y in range(4):
+        for mb_x in range(4):
+            negative = (mb_x * 3 + mb_y * 5) % 4 >= 2
+            pattern.ue(3)
+            pattern.ue(0)
+            pattern.se(0)
+            pattern.put(1, 2)  # coeff_token 01: TotalCoeff=TrailingOnes=1
+            pattern.put(int(negative))
+            pattern.put(1)  # total_zeros=0 at tzVlcIndex=1
+            # ITU-T H.264 8.3.3.3 and 8.5.10: flat scaling 16, QP46,
+            # DC level +/-1 -> scaled DC +/-512 -> sample residual +/-8.
+            left = block_values[-1] if mb_x else None
+            top = block_values[(mb_y - 1) * 4 + mb_x] if mb_y else None
+            prediction = ((left + top + 1) // 2 if left is not None and top is not None
+                          else left if left is not None else top if top is not None else 128)
+            block_values.append(max(0, min(255, prediction + (-8 if negative else 8))))
+    pattern.trailing()
+    pattern_nal = nal(0x65, pattern.bytes())
+    pattern_stream = b''.join(b'\0\0\0\1' + item for item in (*nals[:2], pattern_nal))
+    pattern_expected = bytes(block_values[(row // 16) * 4 + x // 16]
+                             for row in range(64) for x in range(64)) + bytes([128]) * 2048
+    decoded = subprocess.run(
+        [args.ffmpeg, '-v', 'error', '-nostdin', '-f', 'h264', '-i', 'pipe:0',
+         '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', 'pipe:1'],
+        input=pattern_stream, capture_output=True, check=True, timeout=30)
+    if decoded.stdout != pattern_expected or decoded.stderr:
+        raise RuntimeError('Patterned intra reference disagrees with derived samples: ' +
+                           decoded.stderr.decode(errors='replace'))
+    pattern_artifacts = {'pattern64.h264': pattern_stream, 'pattern64.nal': pattern_nal,
+                         'pattern64.yuv': pattern_expected}
+    for name, data in pattern_artifacts.items():
+        (args.out / name).write_bytes(data)
+    pattern_info = dict(info, macroblock_type='I_16x16_DC', slice_qp_delta=20,
+                        header_bit_size=pattern_header_bits, block_luma=block_values,
+                        hashes={name: hashlib.sha256(data).hexdigest()
+                                for name, data in pattern_artifacts.items()})
+    (args.out / 'pattern64.json').write_text(json.dumps(pattern_info, indent=2) + '\n')
+    pattern_rows = [', '.join(f'0x{byte:02x}' for byte in pattern_nal[i:i + 12])
+                    for i in range(0, len(pattern_nal), 12)]
+    with (args.out / 'pcm64-fixture.h').open('a') as header:
+        header.write('static const u8 pattern64_nal[] = {\n\t' +
+                     ',\n\t'.join(pattern_rows) + '\n};\n')
+    print('Verified patterned compressed intra frame:', len(pattern_nal),
+          'NAL bytes,', pattern_header_bits, 'header bits,',
+          len(pattern_expected), 'matching samples; luma blocks:', block_values)
     if args.p_skip:
         predicted = Bits()
         for value in (0, 0, 0):  # first_mb, P slice, PPS id

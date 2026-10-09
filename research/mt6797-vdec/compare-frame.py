@@ -43,7 +43,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('allocation', type=Path)
     parser.add_argument('--fixture', type=Path, required=True)
-    parser.add_argument('--prefix', default='pcm64', choices=('pcm64', 'grey64', 'pcm64-p'))
+    parser.add_argument('--prefix', default='pcm64',
+                        choices=('pcm64', 'grey64', 'pattern64', 'pcm64-p'))
     parser.add_argument('--layout', choices=('nv12', 'mm21'), required=True)
     parser.add_argument('--stride', type=int, required=True)
     parser.add_argument('--chroma-offset', type=int, required=True)
