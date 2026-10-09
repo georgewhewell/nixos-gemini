@@ -118,13 +118,15 @@ MT6797's required interrupt-clear mode bit is set during input initialization;
 no clear pulse or IRQ handler is used. The legacy JSON field `dma_started` means
 the software issued its fetch command, not that a hardware transfer was observed.
 
-Seventeen fetches timed out. All eight bus-only trial-07 fetches, including the
+Nineteen initial fetches timed out. Four subsequent trial-12 fetches compared
+all known barrel words exactly after clearing MISC `0xf4` bit 0. All eight
+bus-only trial-07 fetches, including the
 corrected padded allocation, acknowledged break/idle and unloaded normally.
 The supplier snapshot observes power control `0xe0d`, PLL control `0x121`,
 PCW `0xd0000`, PLL power `0x80000001` and mux `0x81010100`. The matching public
 MT6797 power driver uses SRAM PDN bit 8 and ACK bit 12, as does the current
 framework. The other set bits are not evidence that additional SRAM banks need
-enabling. None of these observations established input-fetch compatibility.
+enabling. These supplier observations alone do not establish input transfer.
 
 The public MT6797 resource driver maps codec registers using
 `pgprot_noncached`, which is Device-nGnRnE in its arm64 architecture code. Current
@@ -132,6 +134,41 @@ arm64 default `ioremap` uses Device-nGnRE, allowing early write acknowledgement.
 The FIFO diagnostic uses the resource-managed non-posted mapping by default to
 match the vendor attributes. All four trial-08 fetches with this mapping still
 timed out; stop acknowledgement, buffer guards and normal unload passed.
+
+The separate common-SRAM reset in the public caller pulses VLD `0x2ec` bit 8;
+it is different from the input reset at `0x108`. `common_reset=1` tests that
+initialization before input commands. `async_write=1` also tests the older
+interface's write-pointer enable at VLD `0xd0` bit 18, after input reset. Its
+buffer barrier and software DMA fence precede that potentially active write.
+Both trial-09 variants timed out, acknowledged stop and left all guards intact.
+Trial-09's system qualification failed the first RTC alarm interrupt-count
+check; the input tests do not qualify that candidate for installation.
+
+`clock-probe.c` measures the public MT6797 CKGEN channels for AXI, VDEC and MM
+while a separate resource-only consumer holds power. It changes only the idle
+frequency meter's debug controls and restores them after bounded polling.
+The shared divider, clock muxes, PLLs and power controls are not changed. Raw
+counts and counter-input rates use 1,024 cycles of the 26 MHz reference; rates
+are after the existing meter divider. No upstream divider encoding is assumed.
+Initial trial-09 diagnostics refused before writes because the first version
+required a zero divider; its saved state shows divider setting 1. That refusal
+is not a clock-frequency measurement or hardware-video result.
+
+The revised resource-only trial-11 diagnostic records counts `3072,6656,6400`
+for AXI/VDEC/MM, corresponding to counter-input rates `78,169,162.5` MHz after
+the unchanged divider field 1. Meter controls restore exactly. These observations
+establish clock-signal presence at the meter, without inferring an upstream
+divider encoding, input transfer or hardware frame output.
+
+That trial also observes MISC `0xa8=0`, `0xf4=1` and global clock/reset words
+`0x111/1` before any input initialization. The public common caller clears
+MISC `0xf4` bit 0. `clear_caller_gate=1` tests that single operation before
+input reset, preserving other bits and restoring the original word after
+documented stop/idle. All four trial-12 local/legacy mask combinations passed
+known-word input comparison, both stop acknowledgements, buffer guards and
+normal unload. The full hardware field meaning and frame compatibility are not
+inferred. That trial failed the final RTC alarm interrupt-count check and does
+not qualify the candidate for installation. No frame was submitted.
 
 ## Independent frame reference
 

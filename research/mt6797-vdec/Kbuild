@@ -5,3 +5,5 @@ obj-m += mt6797_vdec_fifo_probe.o
 mt6797_vdec_fifo_probe-y := fifo-probe.o
 obj-m += mt6797_vdec_supplier_probe.o
 mt6797_vdec_supplier_probe-y := supplier-probe.o
+obj-m += mt6797_vdec_clock_probe.o
+mt6797_vdec_clock_probe-y := clock-probe.o

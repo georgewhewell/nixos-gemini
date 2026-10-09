@@ -34,10 +34,13 @@
 #define VLD_FIFO_START 0xb4
 #define VLD_FIFO_END 0xb8
 #define VLD_READY_SWITCH 0xc0
+#define VLD_ASYNC_CONTROL 0xd0
+#define VLD_ASYNC_WRITE_ENABLE BIT(18)
 #define VLD_FETCH_STATUS 0xe8
 #define VLD_SRAM_STATUS 0xf4
 #define VLD_SOFT_RESET 0x108
 #define VLD_WRITE_PTR 0x110
+#define VLD_COMMON_SRAM_RESET 0x2ec
 #define AVC_CONTROL 0x84
 #define AVC_RESET_SUM 0x28c
 #define FETCH_COMMAND BIT(20)
@@ -56,6 +59,15 @@ MODULE_PARM_DESC(fetch, "Fetch and compare a private input pattern through the H
 static bool nonposted = true;
 module_param(nonposted, bool, 0444);
 MODULE_PARM_DESC(nonposted, "Use non-posted codec register mappings, matching the public MT6797 userspace resource mapping");
+static bool common_reset = true;
+module_param(common_reset, bool, 0444);
+MODULE_PARM_DESC(common_reset, "Pulse the separate common SRAM reset from the public related-core initialization");
+static bool async_write;
+module_param(async_write, bool, 0444);
+MODULE_PARM_DESC(async_write, "Test the older related-core asynchronous write-pointer enable after the input reset; no frame starts");
+static bool clear_caller_gate;
+module_param(clear_caller_gate, bool, 0444);
+MODULE_PARM_DESC(clear_caller_gate, "Test clearing MISC 0xf4 bit0 from the public related-core caller; MT6797 meaning is not yet qualified");
 static bool all_clocks;
 module_param(all_clocks, bool, 0444);
 MODULE_PARM_DESC(all_clocks, "Diagnose local clock gating by clearing both decoder power-down masks under reset");
@@ -91,6 +103,9 @@ struct fifo_probe {
 	u32 dcm_original, dcm_programmed, global_after_fetch[3];
 	u32 break_original, break_status;
 	u32 irq_original;
+	u32 async_original, async_after_fetch, common_reset_original;
+	u32 caller_controls[2], global_before[2];
+	u32 caller_gate_after_fetch;
 	unsigned long clock_rate;
 	int result, reset_result, break_result;
 	bool iommu_attached, dma_started, compared, quiesced, fenced;
@@ -152,14 +167,21 @@ static int test_input(struct fifo_probe *p)
 	 */
 	if ((p->larb_mmu & GENMASK(9, 0)) != GENMASK(9, 0))
 		return -ENODEV;
+	if (p->irq_original & BIT(16))
+		return -EBUSY;
+	/* Both the public emulated-clock setup and post-completion caller clear
+	 * this control. It is initially set on MT6797. Test that one documented
+	 * related-core operation before accessing the candidate input controls;
+	 * retain every other bit and restore it only after proven idle.
+	 */
+	if (clear_caller_gate)
+		write_reg(p->caller_controls[1] & ~BIT(0), p->misc + 0xf4);
 	ret = reset_input(p);
 	if (ret)
 		return ret;
 	/* MT6797 requires RISC interrupt-clear mode bit 0 always set. No IRQ
 	 * clear pulse or frame command is issued by this input-only test.
 	 */
-	if (p->irq_original & BIT(16))
-		return -EBUSY;
 	write_reg((p->irq_original & ~BIT(4)) | BIT(0), p->misc + IRQ_CONTROL);
 	/* MT6797's public power sequence places these controls under reset.
 	 * The H.264 masks are candidates from the public related-core interface.
@@ -193,6 +215,17 @@ static int test_input(struct fifo_probe *p)
 	p->clock_select = readl(p->misc + REG_SELECT);
 	write_reg(0, p->vld + VLD_SOFT_RESET);
 	readl(p->vld + VLD_SOFT_RESET);
+	/* The public common initializer has a distinct SRAM reset at VLD 0x2ec,
+	 * separate from the barrel-reset bit at 0x108. Pulse it before any input
+	 * command, with the codec clocks enabled, preserving unrelated bits.
+	 */
+	if (common_reset) {
+		if (p->common_reset_original & BIT(8))
+			return -EBUSY;
+		write_reg(p->common_reset_original, p->vld + VLD_COMMON_SRAM_RESET);
+		write_reg(p->common_reset_original | BIT(8), p->vld + VLD_COMMON_SRAM_RESET);
+		write_reg(p->common_reset_original, p->vld + VLD_COMMON_SRAM_RESET);
+	}
 	write_reg(BIT(18), p->vld + VLD_READY_SWITCH);
 	write_reg(AVC_INPUT_CONTROL, p->avc + AVC_CONTROL);
 	/* Internal output-buffer configuration is part of input initialization;
@@ -218,6 +251,13 @@ static int test_input(struct fifo_probe *p)
 	/* Producer bytes must reach the coherent buffer before the fetch. */
 	dma_wmb();
 	p->dma_started = true;
+	/* The older public interface enables its asynchronous write pointer.
+	 * Treat that write as potentially starting input activity: buffer ordering
+	 * and the software DMA fence must already be established before it.
+	 */
+	if (async_write)
+		write_reg(p->async_original | VLD_ASYNC_WRITE_ENABLE,
+			  p->vld + VLD_ASYNC_CONTROL);
 	write_reg(FETCH_COMMAND, p->vld + VLD_PROC);
 	ret = readl_poll_timeout(p->vld + VLD_FETCH_STATUS, status,
 				status & FETCH_READY, 10, 100000);
@@ -256,6 +296,11 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 	return sysfs_emit(buf,
 		"{\"schema\":1,\"dma_mask_bits\":%u,\"all_clocks\":%s,"
 		"\"nonposted\":%s,"
+		"\"common_reset\":%s,\"async_write\":%s,"
+		"\"clear_caller_gate\":%s,\"caller_gate_after_fetch\":%u,"
+		"\"common_reset_original\":%u,\"async_original\":%u,\"async_after_fetch\":%u,"
+		"\"caller_controls\":{\"misc_a8\":%u,\"misc_f4\":%u},"
+		"\"global_before\":{\"clock\":%u,\"reset\":%u},"
 		"\"minimal_clocks\":%s,\"clear_legacy\":%s,\"resources_held\":%s,"
 		"\"iommu_attached\":%s,\"dma_started\":%s,"
 		"\"decode_started\":false,\"compared\":%s,\"quiesced\":%s,"
@@ -277,6 +322,11 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		"\"avc_control\":%u,\"sram\":%u,\"irq\":%u}}\n",
 		TEST_DMA_BITS, all_clocks ? "true" : "false",
 		nonposted ? "true" : "false",
+		common_reset ? "true" : "false", async_write ? "true" : "false",
+		clear_caller_gate ? "true" : "false", p->caller_gate_after_fetch,
+		p->common_reset_original, p->async_original, p->async_after_fetch,
+		p->caller_controls[0], p->caller_controls[1],
+		p->global_before[0], p->global_before[1],
 		minimal_clocks ? "true" : "false", clear_legacy ? "true" : "false",
 		p->resources_held ? "true" : "false",
 		p->iommu_attached ? "true" : "false",
@@ -406,6 +456,19 @@ static int fifo_probe(struct platform_device *pdev)
 	p->auto_pdn_original = readl(p->misc + AUTO_PDN_CONTROL);
 	p->break_original = readl(p->misc + BREAK_CONTROL);
 	p->irq_original = readl(p->misc + IRQ_CONTROL);
+	p->async_original = readl(p->vld + VLD_ASYNC_CONTROL);
+	p->common_reset_original = readl(p->vld + VLD_COMMON_SRAM_RESET);
+	/* Read-only observations of the extra controls changed by the public
+	 * caller's post-completion path. Their MT6797 meanings are not qualified.
+	 */
+	p->caller_controls[0] = readl(p->misc + 0xa8);
+	p->caller_controls[1] = readl(p->misc + 0xf4);
+	ret = regmap_read(p->gcon, 0, &p->global_before[0]);
+	if (ret)
+		goto put_pm;
+	ret = regmap_read(p->gcon, 0x10, &p->global_before[1]);
+	if (ret)
+		goto put_pm;
 	p->larb_mmu = readl(p->larb_mmu_reg);
 	ret = regmap_read(p->gcon, GLOBAL_DCM_CONTROL, &p->dcm_original);
 	if (ret)
@@ -447,6 +510,8 @@ static int fifo_probe(struct platform_device *pdev)
 	p->after_fetch[5] = readl(p->avc + AVC_CONTROL);
 	p->after_fetch[6] = readl(p->vld + VLD_SRAM_STATUS);
 	p->after_fetch[7] = readl(p->misc + 0xa4);
+	p->async_after_fetch = readl(p->vld + VLD_ASYNC_CONTROL);
+	p->caller_gate_after_fetch = readl(p->misc + 0xf4);
 	regmap_read(p->gcon, 0, &p->global_after_fetch[0]);
 	regmap_read(p->gcon, 0x10, &p->global_after_fetch[1]);
 	regmap_read(p->gcon, GLOBAL_DCM_CONTROL, &p->global_after_fetch[2]);
@@ -479,9 +544,13 @@ static int fifo_probe(struct platform_device *pdev)
 	write_reg(p->auto_pdn_original, p->misc + AUTO_PDN_CONTROL);
 	write_reg(p->break_original, p->misc + BREAK_CONTROL);
 	write_reg(p->irq_original & ~BIT(4), p->misc + IRQ_CONTROL);
+	if (async_write)
+		write_reg(p->async_original, p->vld + VLD_ASYNC_CONTROL);
 	ret = regmap_update_bits(p->gcon, GLOBAL_DCM_CONTROL, BIT(0),
 				 p->dcm_original & BIT(0));
 	write_reg(0, p->vld + VLD_SOFT_RESET);
+	if (clear_caller_gate)
+		write_reg(p->caller_controls[1], p->misc + 0xf4);
 free:
 	free_buffers(p);
 put_pm:

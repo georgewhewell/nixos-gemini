@@ -35,15 +35,24 @@ resources, existing clock provider and enabled larb1. Its resource-only supervis
 boot, paging, Nix, RTC and automatic recovery trial passes; the accepted default
 is unchanged. A bounded FIFO diagnostic has an attached IOMMU domain and observes
 all ten larb1 MMU ports enabled, a configured 338 MHz rate and accepted local power controls.
-Seventeen input-fetch commands timed out with zero FIFO status/pointer readback,
+Nineteen input-fetch commands timed out with zero FIFO status/pointer readback,
 including synchronized writes, both local control masks, the vendor's bus-clock
 sequence, an allocation keeping both FIFO endpoints below 1 GiB and the vendor's
-non-posted register memory attributes. Trials 01-04
+non-posted register memory attributes and the public caller's separate SRAM reset.
+Trials 01-04
 pinned mappings and power until reboot. Trial 05, all eight trial-07 fetches and the four trial-08 fetches
-passed the documented break/idle acknowledgement and released resources normally.
+passed the documented break/idle acknowledgement and released resources normally,
+as did both trial-09 initialization variants. Trial 09 failed its first RTC alarm
+interrupt-count check; supervised recovery and final source/no-writer audits passed.
 Trial 06's SSH guard timed out before any module load; it is recorded as not run.
 Read-only supplier observations match the public MT6797 power-driver SRAM mask;
-they establish control state, not measured frequency or decoding. A verified
+they establish control state. A separate resource-only frequency-meter diagnostic
+observes nonzero AXI/VDEC/MM counts and restores its controls. VDEC's counter-input
+rate is 169 MHz after unchanged divider field 1; no upstream divider encoding or
+decode result is inferred. The public caller clears MISC `0xf4` bit 0, observed
+set here. Clearing it makes all four trial-12 input/barrel comparisons pass,
+with documented stop, unchanged guards and normal unload. Trial 12 fails its
+final RTC alarm check and does not qualify the candidate for installation. A verified
 original 64x64 H.264 I_PCM fixture and explicit
 NV12/MM21 sample comparator are ready, but no hardware frame was submitted.
 Video decoding and encoding remain unimplemented. The target is

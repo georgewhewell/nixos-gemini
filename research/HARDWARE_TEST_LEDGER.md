@@ -1352,7 +1352,7 @@ words and all input/scratch guards, and never start a frame. The exact compiled
 module configuration and version match the candidate. Strict modpost uses 12,092
 genuine exports from the exact candidate ELF; zero CRCs are valid only because
 `CONFIG_MODVERSIONS` is disabled. The control translator passes ASan/UBSan tests.
-All three research modules build with strict symbol checking.
+All four research modules build with strict symbol checking.
 
 | Evidence | Input result | Resource release |
 | --- | --- | --- |
@@ -1362,14 +1362,37 @@ All three research modules build with strict symbol checking.
 | `handoff/boot-test-video-fifo-07/fifo-probe` | Four bus-only fetch timeouts across local/legacy mask combinations, synchronized writes and IRQ-clear mode initialized | All four break/idle sequences and guards passed; normal unload |
 | `handoff/boot-test-video-fifo-07/fifo-padding-probe` | Four more timeouts with the exclusive FIFO end kept below 1 GiB | All four break/idle sequences and guards passed; normal unload |
 | `handoff/boot-test-video-fifo-08/fifo-probe` | Four fetch timeouts with non-posted register mappings matching the public vendor mmap attributes | All four break/idle sequences and guards passed; normal unload |
+| `handoff/boot-test-video-fifo-09/fifo-probe` | Two fetch timeouts with the separate common-SRAM reset, with and without the older asynchronous write-pointer enable | Both break/idle sequences and guards passed; normal unload; boot qualification failed the first RTC alarm interrupt-count check |
+| `handoff/boot-test-video-fifo-12/fifo-probe` | All four known-word fetch/barrel comparisons passed after clearing MISC `0xf4` bit 0 as in the public caller | All four break/idle sequences and guards passed; normal unload; boot qualification failed the final RTC alarm interrupt-count check |
 
 The first DMA30 allocation could end exactly at the aperture boundary. Current
 code maps a trailing guard and rejects an out-of-range exclusive endpoint.
 The corrected endpoint matrix still failed. The source and binary are archived
 separately for each diagnostic; `dma_started` denotes a software command, not
-proof of hardware transfer. All completed supervised FIFO boot trials pass
+proof of hardware transfer. Supervised FIFO trials 01 through 08 pass
 paging, ordinary Nix builds, RTC delivery/cancel/delivery, automatic restoration
-and final source/no-writer checks. None qualifies hardware video.
+and final source/no-writer checks. Trial 09 fails its first RTC delivery check
+with IRQ delta zero and does not qualify the candidate. None qualifies hardware video.
+
+The original bounded CKGEN diagnostic preserves the shared divider and changes
+only frequency-meter debug controls, restoring them after polling. Initial
+trial-09 diagnostics refuse before writes because the divider field is 1 rather
+than zero. Captured meter state is not a frequency measurement.
+
+The revised resource-only trial `handoff/boot-test-video-clock-11` records
+AXI/VDEC/MM counts `3072,6656,6400` over 1,024 reference cycles, giving
+counter-input rates `78,169,162.5` MHz after unchanged divider field 1.
+The meter controls restore exactly; no upstream divider encoding is inferred.
+No input or frame command is issued. MISC `0xa8=0`, `0xf4=1` and global
+clock/reset `0x111/1` are observed before input initialization. The complete
+trial-11 boot/paging/Nix/RTC/recovery and final source/no-writer audits pass.
+Clearing MISC `0xf4` bit 0, as in the public related-core caller, permits all
+four trial-12 known-word comparisons across local/legacy mask combinations.
+This establishes input DMA/barrel compatibility at the tested DMA30 addresses,
+without establishing the full hardware field meaning or frame operation.
+Trial 12 failed the final RTC alarm interrupt-count check; accepted-system
+recovery and final source/no-writer audits passed. The final accepted boot ID is
+`a1a1fae3-eb0f-452e-a45c-6cebd86b71ef`, with taint zero and no temporary modules.
 
 The read-only supplier snapshot reports VDEC power `0xe0d`, PLL control `0x121`,
 PCW `0xd0000`, PLL power `0x80000001` and mux `0x81010100`. The configured rate is
@@ -1387,7 +1410,7 @@ are software reference checks, not a qualified hardware layout or encoder.
 Final accepted-board state, module absence, kernel log, boot-image hash and
 untainted health are recorded under `handoff/video-resource-20261009`.
 The detailed source hashes, exact attempt data and final audit are in
-`research/mt6797-video-interface.json`. Input-fetch compatibility remains
-unqualified; no hardware frame has been submitted and no V4L2 video node is
+`research/mt6797-video-interface.json`. Input-fetch compatibility is established at the tested DMA30 addresses; no
+hardware frame has been submitted and no V4L2 video node is
 advertised. Decoder frame/DPB/layout/Request-API work and the encoder hardware
 contract and implementation remain required.

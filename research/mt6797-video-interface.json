@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original H.264 controls, independent fixtures and isolated decoder resource/FIFO diagnostics implemented; input DMA not qualified, frame decode and encode not implemented",
+  "implementation_status": "Original GPL control translation, bounded hardware input DMA/barrel proof and independent frame reference implemented; hardware frame decoding and encoding are still unimplemented",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -54,6 +54,16 @@
       "url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/arch/arm64/include/asm/pgtable.h",
       "sha256": "9cf8796f2131f8c19709d36c0ca082f23affc286e4a445c56c27f541c4a29e39",
       "scope": "Public architecture definition: pgprot_noncached uses Device-nGnRnE"
+    },
+    {
+      "url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/base/power/mt6797/mt_pm_init.c",
+      "sha256": "6b022172c9b80bf92ca1a42d5d036e3e7e40e121ddad7f6d9340cd6461a5b223",
+      "scope": "Explicit GPL-2.0 clock-resource diagnostic: CKGEN channels, frequency-meter control and 26 MHz reference conversion"
+    },
+    {
+      "url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/base/power/mt6797/mt_clkmgr.h",
+      "sha256": "612f60f95efe935b49fa38f6b816caddf09d12aa2fac557bca8fdd62f37d9819",
+      "scope": "Public kernel resource definitions for top clock-debug and calibration offsets"
     }
   ],
   "documented_resources": {
@@ -160,7 +170,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "99056d64-7d55-49d9-b3a0-d540d84a3385",
+      "boot_id": "a1a1fae3-eb0f-452e-a45c-6cebd86b71ef",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -196,7 +206,7 @@
       "clock_rate_source": "clk_get_rate; supplier snapshots are control/status reads, not frequency measurements"
     },
     "fifo_probe": {
-      "status": "All seventeen input fetches timed out; no known barrel bytes obtained",
+      "status": "Four successful input DMA/barrel comparisons after nineteen timeouts; no hardware frame submitted",
       "decode_started": false,
       "encode_started": false,
       "hardware_address_width_qualified": false,
@@ -1216,15 +1226,471 @@
           "boot_trial_passed": true,
           "recovered_boot_id": "99056d64-7d55-49d9-b3a0-d540d84a3385",
           "final_no_writer": true
+        },
+        {
+          "trial": "handoff/boot-test-video-fifo-09",
+          "diagnostic": "fifo-probe",
+          "input_dma_passed": false,
+          "module_sha256": "34b7b454195cb193e97556fa81e0dfd3ffb88190d5f1b64c433662466ad8e904",
+          "source_sha256": "bc0116881c5987ad12ca61782aa23c7a0e431da0f70492018de5b67cc2d76019",
+          "boot_id": "8325dc9c-3876-4094-aff4-77f8f016d9d0",
+          "fetches": [
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": true,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 0,
+              "minimal_clocks": true,
+              "clear_legacy": true,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": false,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": -110,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073610752,
+              "fetch_status": 0,
+              "sram_status": 0,
+              "first": 0,
+              "shift": 0,
+              "second": 0,
+              "fifo_start": 0,
+              "fifo_end": 0,
+              "read_ptr": 0,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 0,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 0,
+              "pdn_module": 0,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 0,
+              "read_ptr_before_reset": 0,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 0,
+                "pdn_module": 0,
+                "auto_pdn": 1,
+                "write_ptr": 0,
+                "avc_control": 0,
+                "sram": 0,
+                "irq": 1
+              }
+            },
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": true,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": true,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 0,
+              "minimal_clocks": true,
+              "clear_legacy": true,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": false,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": -110,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073348608,
+              "fetch_status": 0,
+              "sram_status": 0,
+              "first": 0,
+              "shift": 0,
+              "second": 0,
+              "fifo_start": 0,
+              "fifo_end": 0,
+              "read_ptr": 0,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 0,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 0,
+              "pdn_module": 0,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 0,
+              "read_ptr_before_reset": 0,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 0,
+                "pdn_module": 0,
+                "auto_pdn": 1,
+                "write_ptr": 0,
+                "avc_control": 0,
+                "sram": 0,
+                "irq": 1
+              }
+            }
+          ],
+          "experimental_difference": "Separate common-SRAM reset at VLD 0x2ec bit8; second variant also enables older asynchronous write pointer at VLD 0xd0 bit18 after barrel reset. Both time out; both stop/guard checks pass.",
+          "boot_trial_passed": false,
+          "boot_trial_failure": "RTC alarm delivery-before interrupt-count check, irq_delta=0; candidate not qualified; supervised recovery and final source/no-writer audit passed",
+          "recovered_boot_id": "aa7cccaa-9e37-496e-96c8-76eee43c5d14",
+          "final_no_writer": true
+        },
+        {
+          "trial": "handoff/boot-test-video-fifo-12",
+          "diagnostic": "fifo-probe",
+          "input_dma_passed": true,
+          "module_sha256": "03724ca138cb8e0550c40be730de58adf773b3c1e5447c52fef67ed9c919776b",
+          "source_sha256": "c0f8e4e48d0c19f641925a196427d671cffa6feafc1cf1643ffb568a63d9e377",
+          "boot_id": "8025a6a1-c957-4c22-bdc7-78aff01a1a82",
+          "fetches": [
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": true,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": true,
+              "clear_legacy": false,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073610752,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16775168,
+              "fifo_end": 16776192,
+              "read_ptr": 1073610752,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 8396784,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 0,
+              "pdn_module": 0,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16775168,
+              "read_ptr_before_reset": 1073610752,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 0,
+                "pdn_module": 0,
+                "auto_pdn": 1,
+                "write_ptr": 1073614848,
+                "avc_control": 2281701383,
+                "sram": 294919,
+                "irq": 1
+              }
+            },
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": true,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": true,
+              "clear_legacy": true,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073348608,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16771072,
+              "fifo_end": 16772096,
+              "read_ptr": 1073348608,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 0,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 0,
+              "pdn_module": 0,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16771072,
+              "read_ptr_before_reset": 1073348608,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 0,
+                "pdn_module": 0,
+                "auto_pdn": 1,
+                "write_ptr": 1073352704,
+                "avc_control": 2281701383,
+                "sram": 294919,
+                "irq": 1
+              }
+            },
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": false,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": true,
+              "clear_legacy": true,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073086464,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16766976,
+              "fifo_end": 16768000,
+              "read_ptr": 1073086464,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 0,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 247,
+              "pdn_module": 329384192,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16766976,
+              "read_ptr_before_reset": 1073086464,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 247,
+                "pdn_module": 329384192,
+                "auto_pdn": 1,
+                "write_ptr": 1073090560,
+                "avc_control": 2281701383,
+                "sram": 294919,
+                "irq": 1
+              }
+            },
+            {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": false,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": true,
+              "clear_legacy": false,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": false,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073348608,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16771072,
+              "fifo_end": 16772096,
+              "read_ptr": 1073348608,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 8396784,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 247,
+              "pdn_module": 329384192,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16771072,
+              "read_ptr_before_reset": 1073348608,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 247,
+                "pdn_module": 329384192,
+                "auto_pdn": 1,
+                "write_ptr": 1073352704,
+                "avc_control": 2281701383,
+                "sram": 294919,
+                "irq": 1
+              }
+            }
+          ],
+          "all_stops_acknowledged": true,
+          "all_guards_unchanged": true,
+          "experimental_difference": "Cleared MISC 0xf4 bit0 before input initialization, following the public related-core common caller; all four mask combinations fetched and compared both known barrel words exactly.",
+          "boot_trial_passed": false,
+          "boot_trial_failure": "RTC alarm delivery-after interrupt-count check; supervised recovery and final source/no-writer audits passed",
+          "recovered_boot_id": "a1a1fae3-eb0f-452e-a45c-6cebd86b71ef",
+          "final_no_writer": true
         }
       ],
-      "note": "Boot qualification is separate from input/frame proof. Trials 01-04 retained mappings until reboot. Trial 05, both trial-07 matrices and trial 08 acknowledged documented break/idle and unloaded normally. Trial 06 did not load a module because its initial SSH health guard timed out. No frame DMA was started.",
+      "note": "Boot qualification is separate from input/frame proof. Trials 01-04 retained mappings until reboot. Trial 05, both trial-07 matrices and trials 08/09 acknowledged documented break/idle and unloaded normally. Trial 06 did not load a module because its initial SSH health guard timed out. Trial 09 failed its first RTC alarm delivery check but passed supervised recovery and source/no-writer audits. No frame DMA was started. Trial 12 clears MISC 0xf4 bit0 and compares known input words in all four local/legacy mask combinations; all stops and buffer guards pass. Its boot qualification failed the final RTC alarm interrupt-count check; supervised recovery and final source/no-writer audits passed.",
       "current_stop_contract": "MT6797 documented MISC break command, both acknowledgement bits, then idle reset; uncertain stop pins mappings, power and module until reboot",
       "current_global_clock_control": "Documented VDEC_GCON 0x18 bit 0 disables global automatic clock-off; programmed through existing syscon regmap, clock and reset registers left to frameworks",
       "observed_stop": "Trial 05: both break acknowledgement bits 0x11 and idle reset passed; mappings, clocks and power released and the module unloaded normally despite failed input comparison.",
       "current_write_ordering": "Each APB write completes with arm64 mb() / DSB SY, matching the public sync_write primitive; per-attempt sources distinguish versions.",
-      "hardware_fetches_attempted": 17,
-      "successful_hardware_fetches": 0,
+      "hardware_fetches_attempted": 23,
+      "successful_hardware_fetches": 4,
       "frame_submissions": 0,
       "endpoint_note": "Early DMA30 allocation could place the exclusive FIFO end at 1 GiB. Current code allocates a trailing guard and rejects an endpoint beyond the DMA mask; the padded trial-07 matrix still timed out with both endpoint words fitting 24 bits.",
       "current_mapping": "Codec banks use resource-managed non-posted Device-nGnRnE by default, matching the public MT6797 driver userspace mapping; trial 08 still timed out"
@@ -1257,12 +1723,14 @@
       "modules": [
         "register",
         "FIFO",
-        "read-only suppliers"
+        "read-only suppliers",
+        "bounded CKGEN frequency meter"
       ],
       "current_source_sha256": {
         "probe.c": "07088fbbfb79b2a10595817eae5bb074738a2fbd62345cb4230a82a8d6feb618",
-        "fifo-probe.c": "7d15df25ec40e3d4804ab8082435941c916b2a987c0e96963e1d4f013251a0f1",
-        "supplier-probe.c": "c3bcf10e956c9800131ad386a3c23e98a34d2fbb243400b7e4d9bf385a995ed3"
+        "fifo-probe.c": "c0f8e4e48d0c19f641925a196427d671cffa6feafc1cf1643ffb568a63d9e377",
+        "supplier-probe.c": "c3bcf10e956c9800131ad386a3c23e98a34d2fbb243400b7e4d9bf385a995ed3",
+        "clock-probe.c": "845c1b68d5cadad080acef6cf15a3b98f8d48a8e843c49a7ca868815092ad1fc"
       }
     },
     "supplier_snapshot": {
@@ -1280,6 +1748,75 @@
       },
       "no_register_writes": true,
       "interpretation": "VDEC power acknowledgements set; reset released, isolation/clock-disable/SRAM-PDN bit8 and SRAM-ACK bit12 clear. PLL control 0x121, PCW 0xd0000, power 0x80000001 and mux 0x81010100 observed. Configured 338 MHz, not independently measured. Bits9-11 remain set; the matching public MT6797 power implementation uses only SRAM bit8, so the snapshot does not justify additional power writes."
+    },
+    "clock_meter": {
+      "status": "measured_counter_input",
+      "initial_trial": "handoff/boot-test-video-fifo-09",
+      "guard_refusal": "Existing CKGEN divider setting 1; first two diagnostics refused before register writes. Captured state is not a frequency measurement. Revised diagnostic reports counter-input rate after the unchanged divider.",
+      "evidence": "handoff/boot-test-video-clock-11/clock-frequency-probe/result.json",
+      "decode_qualified": false,
+      "encode_qualified": false,
+      "measurement_trial": "handoff/boot-test-video-clock-11",
+      "not_run_trial": "handoff/boot-test-video-clock-10/not-run.json",
+      "measurement": {
+        "boot_id": "0376c4ed-79e1-4535-94ad-f41099e689c6",
+        "channels": [
+          "AXI",
+          "VDEC",
+          "MM"
+        ],
+        "reference_hz": 26000000,
+        "reference_cycles": 1024,
+        "counts": [
+          3072,
+          6656,
+          6400
+        ],
+        "counter_input_khz": [
+          78000,
+          169000,
+          162500
+        ],
+        "divider_setting": 1,
+        "divider_register_changed": false,
+        "upstream_rate_inferred": false,
+        "original_registers": [
+          33488898,
+          2424832,
+          4096,
+          67058097
+        ],
+        "result": 0,
+        "restored": true,
+        "decode_qualified": false,
+        "encode_qualified": false,
+        "modules": {
+          "mt6797_vdec_fifo_probe": {
+            "sha": "80397e73269d3b058d6d4db13ebb13d8925ce3a28a0a6628f811a6189a26aa09",
+            "source_sha": "37f00bb914e6b1c3b8a1f2d217dc51d32b4c2ae48265df0d526c7197f566b895"
+          },
+          "mt6797_vdec_clock_probe": {
+            "sha": "a814fb67782d683fa99c2c7e1254819efc5afd465afe9d1e7fbc4688f4f8af2e",
+            "source_sha": "845c1b68d5cadad080acef6cf15a3b98f8d48a8e843c49a7ca868815092ad1fc"
+          }
+        }
+      },
+      "note": "Nonzero AXI/VDEC/MM counts establish signal presence at the meter. Counter-input rates are after unchanged divider field 1; no upstream divider encoding, hardware input transfer or frame output is inferred.",
+      "resource_observations": {
+        "caller_controls": {
+          "misc_a8": 0,
+          "misc_f4": 1
+        },
+        "global_before": {
+          "clock": 273,
+          "reset": 1
+        },
+        "configured_clock_hz": 338000000,
+        "input_command_issued": false
+      },
+      "boot_trial_passed": true,
+      "recovered_boot_id": "0259e430-190e-4f81-bd27-89f716414794",
+      "final_no_writer": true
     }
   },
   "related_silicon_reference": {
@@ -1342,6 +1879,24 @@
         "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/arch/arm/mach-mt8173/include/mach/sync_write.h",
         "sha256": "167676311e9dfbffba83b6564e264267626afcd6f5465e1b880c6d7b817947ba",
         "bytes": 1574
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hal_if_common.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/hal/vdec_hal_if_common.c",
+        "sha256": "551b2bba8c88f9bcf43b3538efb303cc0c62e2bfcaf61ac86f46afbfa968b449",
+        "bytes": 17368
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/verify/vdec_verify_vdecode.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/verify/vdec_verify_vdecode.c",
+        "sha256": "a75889f2b40daccf42541ba5a3f60ac373bc7aaea8ee4d793f4802418c3f9096",
+        "bytes": 211882
+      },
+      {
+        "path": "drivers/misc/mediatek/ldvt/mt8173/vdec/verify/vdec_verify_vparser_h264.c",
+        "url": "https://raw.githubusercontent.com/mt8173-dev/android_kernel_amazon_sloane/7cdf75e7ac0ba7009ff98fe71b291b118f634e77/drivers/misc/mediatek/ldvt/mt8173/vdec/verify/vdec_verify_vparser_h264.c",
+        "sha256": "c048bbd8d2fed56700d8138a49cf667f375c8b7f7f780685814fbff86ea6bcaf",
+        "bytes": 202437
       }
     ],
     "compatibility_evidence": "All seven H.264 register-bank bases match the MT6797 functional specification. CONFIG_CHIP_VER_CURR=80 selects the MT8580-class VLD_TOP path in this MT8173 kernel test interface. Bank matching is not proof of command, tile-layout or DMA compatibility.",
@@ -1466,7 +2021,13 @@
     "input_fifo_address_shift": 6,
     "documented_break_offset": "MISC + 0x100",
     "documented_break_status_offset": "MISC + 0x104",
-    "documented_break_status_mask": "0x11"
+    "documented_break_status_mask": "0x11",
+    "common_sram_reset_offset": "VLD + 0x2ec",
+    "common_sram_reset_bit": 8,
+    "older_async_write_enable_offset": "VLD + 0xd0",
+    "older_async_write_enable_bit": 18,
+    "new_initialization_qualification": "Trial-09: both common-SRAM reset variants time out, with documented stop and unchanged buffer guards; no frame submission.",
+    "caller_misc_f4_bit0": "Clearing MISC 0xf4 bit0 before input reset, as in the public related-core caller, permits MT6797 FIFO fetch and exact barrel-word comparison in all four mask combinations. Its full hardware field meaning and frame compatibility are not inferred."
   },
   "implemented_components": {
     "inventory": "tools/codec-inventory.py; public read-only capability/format/control ioctls",
