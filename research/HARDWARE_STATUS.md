@@ -54,8 +54,11 @@ set here. Clearing it makes all four trial-12 input/barrel comparisons pass,
 with documented stop, unchanged guards and normal unload. Trial 12 fails its
 final RTC alarm check and does not qualify the candidate for installation. A verified
 original 64x64 H.264 I_PCM fixture and explicit
-NV12/MM21 sample comparator are ready, but no hardware frame was submitted.
-Video decoding and encoding remain unimplemented. The target is
+NV12/MM21 sample comparator are ready. Trials 13/14 submitted guarded frames,
+but completion timed out and no output bytes changed; both comparisons failed.
+Input, stop/idle, guards and normal unload passed in both, as did full boot/
+paging/Nix/RTC/recovery. Trial 14 read back the complete frame configuration
+with the public H.264 masks and all three clock votes. Hardware video decoding and encoding remain unqualified. The target is
 V4L2 stateless Request API decoding without proprietary codec firmware or
 `libvcodec`. The source ledger, qualification results and remaining hardware
 contracts are in `research/mt6797-video-interface.json`.

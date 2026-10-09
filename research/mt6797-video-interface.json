@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original GPL control translation, bounded hardware input DMA/barrel proof and independent frame reference implemented; hardware frame decoding and encoding are still unimplemented",
+  "implementation_status": "Original GPL control translation and hardware input DMA/barrel proof implemented; guarded frame diagnostics have submitted two frames without completion or output. Hardware decoding and encoding are unqualified; no V4L2 video device is advertised.",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -170,7 +170,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "a1a1fae3-eb0f-452e-a45c-6cebd86b71ef",
+      "boot_id": "b1d77c30-e5d7-4d35-8192-4018052191e1",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -206,7 +206,7 @@
       "clock_rate_source": "clk_get_rate; supplier snapshots are control/status reads, not frequency measurements"
     },
     "fifo_probe": {
-      "status": "Four successful input DMA/barrel comparisons after nineteen timeouts; no hardware frame submitted",
+      "status": "Four successful input DMA/barrel comparisons after nineteen timeouts in input-only trials; guarded frame testing is recorded separately in frame_probe",
       "decode_started": false,
       "encode_started": false,
       "hardware_address_width_qualified": false,
@@ -1728,7 +1728,7 @@
       ],
       "current_source_sha256": {
         "probe.c": "07088fbbfb79b2a10595817eae5bb074738a2fbd62345cb4230a82a8d6feb618",
-        "fifo-probe.c": "c0f8e4e48d0c19f641925a196427d671cffa6feafc1cf1643ffb568a63d9e377",
+        "fifo-probe.c": "e1496147e8b466b92f1dcfb5dcc8cb266b61ecb27dfc10eac233422137ff178c",
         "supplier-probe.c": "c3bcf10e956c9800131ad386a3c23e98a34d2fbb243400b7e4d9bf385a995ed3",
         "clock-probe.c": "845c1b68d5cadad080acef6cf15a3b98f8d48a8e843c49a7ca868815092ad1fc"
       }
@@ -1817,6 +1817,341 @@
       "boot_trial_passed": true,
       "recovered_boot_id": "0259e430-190e-4f81-bd27-89f716414794",
       "final_no_writer": true
+    },
+    "frame_probe": {
+      "attempts": [
+        {
+          "trial": "handoff/boot-test-video-frame-13",
+          "diagnostic": {
+            "passed": false,
+            "boot_id": "d229b23f-3b3f-479b-8bd7-4396243923d3",
+            "module_sha256": "5315ddf2e62fc87bf926300b931914a9a18cda5cddd7d959d300df1ff0972b36",
+            "source_sha256": {
+              "fifo-probe.c": "b2ed804691b6cfb576f71a5b142880ac993d742b6f212fb24f6de0e6a9ae0b3c",
+              "mt6797-h264-controls.c": "8a70a5495f23db4d1a2f44a054a9eb04aca1e6c3c458b3b84d96e4ce049de884",
+              "mt6797-h264-controls.h": "b33fb71a659a6917eec09638033701866086e521eaa6fb1982f0bcc86a1ae766",
+              "pcm64-fixture.h": "de537d350110ef526a1ecac538246f86763e7f9d9822f2737e79bc6e4a5b224b",
+              "Kbuild": "fcd149822e2622d3e9278be7d67e27b4cd2df6072dfa08647c91e759e427dcfc"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "input": {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": true,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": true,
+              "clear_legacy": true,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": true,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073610752,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16775168,
+              "fifo_end": 16776192,
+              "read_ptr": 1073610752,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 0,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 0,
+              "pdn_module": 0,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16775168,
+              "read_ptr_before_reset": 1073610752,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 0,
+                "pdn_module": 0,
+                "auto_pdn": 1,
+                "write_ptr": 1073617024,
+                "avc_control": 2282225671,
+                "sram": 294919,
+                "irq": 4097
+              }
+            },
+            "frame": {
+              "requested": true,
+              "decode_started": true,
+              "done": false,
+              "result": -110,
+              "guards_unchanged": true,
+              "snapshot_ready": true,
+              "state": 1,
+              "irq": 4097,
+              "error": 0,
+              "message": 0,
+              "mbx": 1,
+              "mby": 1,
+              "input_first": 1706573984,
+              "input_data": 218169617,
+              "width": 64,
+              "height": 64,
+              "stride": 64,
+              "chroma_offset": 4096,
+              "output_iova": 1073348608,
+              "mv_iova": 1073217536,
+              "vld_wrapper_iova": 1073086464,
+              "pp_wrapper_iova": 1072955392
+            },
+            "comparisons": {
+              "nv12": {
+                "passed": false,
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+              },
+              "mm21": {
+                "passed": false,
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+              }
+            },
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "boot_trial_passed": true,
+          "recovered_boot_id": "7f876276-a231-4f22-ad67-2146aa72931d",
+          "final_no_writer": true
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-14",
+          "diagnostic": {
+            "passed": false,
+            "boot_id": "767d21d4-613a-4f87-935e-3da794254609",
+            "module_sha256": "23694c7932a0ac37d95f1a38c77a55741720bae552ee0d500710577330569db6",
+            "source_sha256": {
+              "fifo-probe.c": "b26dd3962404065faa4551c415230c00048c60b91a34bdf59996676eaa81888a",
+              "mt6797-h264-controls.c": "8a70a5495f23db4d1a2f44a054a9eb04aca1e6c3c458b3b84d96e4ce049de884",
+              "mt6797-h264-controls.h": "b33fb71a659a6917eec09638033701866086e521eaa6fb1982f0bcc86a1ae766",
+              "pcm64-fixture.h": "de537d350110ef526a1ecac538246f86763e7f9d9822f2737e79bc6e4a5b224b",
+              "Kbuild": "fcd149822e2622d3e9278be7d67e27b4cd2df6072dfa08647c91e759e427dcfc"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "input": {
+              "schema": 1,
+              "dma_mask_bits": 30,
+              "all_clocks": false,
+              "nonposted": true,
+              "common_reset": true,
+              "async_write": false,
+              "clear_caller_gate": true,
+              "caller_gate_after_fetch": 0,
+              "common_reset_original": 0,
+              "async_original": 0,
+              "async_after_fetch": 2103044,
+              "caller_controls": {
+                "misc_a8": 0,
+                "misc_f4": 1
+              },
+              "global_before": {
+                "clock": 273,
+                "reset": 1
+              },
+              "minimal_clocks": false,
+              "clear_legacy": false,
+              "resources_held": false,
+              "iommu_attached": true,
+              "dma_started": true,
+              "decode_started": true,
+              "compared": true,
+              "quiesced": true,
+              "fenced": false,
+              "input_unchanged": true,
+              "scratch_unchanged": true,
+              "result": 0,
+              "reset_result": 0,
+              "break_result": 0,
+              "break_status": 17,
+              "input_iova": 1073610752,
+              "fetch_status": 1041,
+              "sram_status": 196610,
+              "first": 324508639,
+              "shift": 610839806,
+              "second": 610839806,
+              "fifo_start": 16775168,
+              "fifo_end": 16776192,
+              "read_ptr": 1073610752,
+              "clock_select_original": 0,
+              "clock_select": 2,
+              "power_down": 0,
+              "power_down_programmed": 8396784,
+              "clock_rate": 338000000,
+              "pdn_spec_original": 4294967295,
+              "pdn_module_original": 4294967295,
+              "pdn_spec": 247,
+              "pdn_module": 329384192,
+              "larb_mmu": 1023,
+              "fifo_start_before_reset": 16775168,
+              "read_ptr_before_reset": 1073610752,
+              "dcm_original": 16,
+              "dcm_programmed": 17,
+              "global_after_fetch": {
+                "clock": 273,
+                "reset": 1,
+                "dcm": 17
+              },
+              "after_fetch": {
+                "clock_select": 2,
+                "pdn_spec": 247,
+                "pdn_module": 329384192,
+                "auto_pdn": 1,
+                "write_ptr": 1073617024,
+                "avc_control": 2282225671,
+                "sram": 294919,
+                "irq": 4097
+              }
+            },
+            "frame": {
+              "requested": true,
+              "decode_started": true,
+              "done": false,
+              "result": -110,
+              "guards_unchanged": true,
+              "snapshot_ready": true,
+              "state": 1,
+              "irq": 4097,
+              "error": 0,
+              "message": 0,
+              "mbx": 1,
+              "mby": 1,
+              "input_first": 1706573984,
+              "input_data": 218169617,
+              "width": 64,
+              "height": 64,
+              "stride": 64,
+              "chroma_offset": 4096,
+              "output_iova": 1073348608,
+              "mv_iova": 1073217536,
+              "vld_wrapper_iova": 1073086464,
+              "pp_wrapper_iova": 1072955392
+            },
+            "comparisons": {
+              "nv12": {
+                "passed": false,
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+              },
+              "mm21": {
+                "passed": false,
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+              }
+            },
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true,
+            "registers": {
+              "setup": {
+                "sps": 3407873,
+                "first_mb": 0,
+                "pps": 65536,
+                "shdr1": 16384,
+                "shdr2": 917632,
+                "mb_size": 196611,
+                "total_mbs": 16,
+                "prediction": 1073479680,
+                "mc_y": 1073348608,
+                "mc_chroma_offset": 4096,
+                "pp_y": 2096384,
+                "pp_c": 4192784,
+                "width_mbs": 4,
+                "mv": 67076096,
+                "vld_wrapper": 1073086464,
+                "pp_wrapper": 1072955392
+              },
+              "status": {
+                "avc_status": 469762561,
+                "avc_complete": 0,
+                "avc_control": 2282225671,
+                "vld_proc": 8388608,
+                "read_ptr": 1073610752,
+                "fetch": 2065,
+                "cycle": 0,
+                "smi_clock": 1
+              }
+            }
+          },
+          "boot_trial_passed": true,
+          "recovered_boot_id": "b1d77c30-e5d7-4d35-8192-4018052191e1",
+          "final_no_writer": true
+        }
+      ],
+      "frame_submissions": 2,
+      "successful_frame_comparisons": 0,
+      "note": "Trials 13/14 passed input and stop/idle, but frame completion timed out and all output remained 0xd3. Both explicit layouts failed. Trial 14 read back the complete frame configuration with the public H.264 masks and all three clock votes. Both full system trials and recovery passed. This is not hardware decode qualification.",
+      "input_fetch_commands": 4
+    },
+    "p_skip_fixture": {
+      "evidence": "handoff/video-resource-20261009/fixtures-p-skip/pcm64-p.json",
+      "software_decode_verified": true,
+      "frames_verified": 2,
+      "sample_bytes_verified": 12288,
+      "nal_bytes": 5,
+      "header_bit_size": 26,
+      "hardware_decode_verified": false,
+      "hashes": {
+        "pcm64-p.h264": "2fa6406d91367a5556a05ea32a070b9ea6e1d7c34768b3b51c3c4437393c4fc8",
+        "pcm64-p.nal": "8fe653422f870fe1ceee3c6e04111561090abc5cccc5670dde42d59adbea65ee",
+        "pcm64-p.yuv": "ea52cfe0417144d2d620c0d7939a66a2d5248603e9d08a6247ee88fb02a482dd"
+      }
+    },
+    "compressed_intra_fixture": {
+      "evidence": "handoff/video-resource-20261009/fixtures-compressed/grey64.json",
+      "software_decode_verified": true,
+      "sample_bytes_verified": 6144,
+      "nal_bytes": 20,
+      "header_bit_size": 28,
+      "hardware_decode_verified": false,
+      "hashes": {
+        "grey64.h264": "b62ce5bf82d54a7ea73c4ab18ed4e649496a93af8712ab1748282f6add0598ef",
+        "grey64.nal": "855a5ef2c41f93be0348d94136d49a78fba4c22829670cd2e6526ca09fc111e7",
+        "grey64.yuv": "cb11e05cb5da949c0e0f5b5a7cb310df35a96a22c45d1ada70d950859fe697d1"
+      }
     }
   },
   "related_silicon_reference": {
@@ -2027,14 +2362,33 @@
     "older_async_write_enable_offset": "VLD + 0xd0",
     "older_async_write_enable_bit": 18,
     "new_initialization_qualification": "Trial-09: both common-SRAM reset variants time out, with documented stop and unchanged buffer guards; no frame submission.",
-    "caller_misc_f4_bit0": "Clearing MISC 0xf4 bit0 before input reset, as in the public related-core caller, permits MT6797 FIFO fetch and exact barrel-word comparison in all four mask combinations. Its full hardware field meaning and frame compatibility are not inferred."
+    "caller_misc_f4_bit0": "Clearing MISC 0xf4 bit0 before input reset, as in the public related-core caller, permits MT6797 FIFO fetch and exact barrel-word comparison in all four mask combinations. Its full hardware field meaning and frame compatibility are not inferred.",
+    "encoder_resource_controls": {
+      "bank": "0x17002000",
+      "irq_status": "0x5c",
+      "irq_ack": "0x60",
+      "pause": "0xac",
+      "reset_n": "0xa8",
+      "irq_bits": {
+        "sps": 0,
+        "pps": 1,
+        "frame": 2,
+        "dram": 3,
+        "pause": 4,
+        "switch": 5,
+        "vps": 7
+      },
+      "source": "Public matching GPL MT6797 videocodec_kernel_driver.c at 51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c; resource definitions and venc_hw_reset() only",
+      "qualified_on_hardware": false,
+      "note": "Pause/reset operations are documented by the public kernel resource glue. No encoder source/reference/bitstream fields or picture command follow from these facts."
+    }
   },
   "implemented_components": {
     "inventory": "tools/codec-inventory.py; public read-only capability/format/control ioctls",
     "control_translator": "research/mt6797-vdec/mt6797-h264-controls.c; progressive 8-bit 4:2:0 SPS/PPS, slice-header fields, scaling-SRAM packing, signed fields and atomic validation",
     "register_probe": "research/mt6797-vdec/probe.c; separate temporary module, no DMA buffers, IRQ registration or frame start",
     "hardware_driver": false,
-    "fifo_probe": "research/mt6797-vdec/fifo-probe.c; proper DT/IOMMU device, bounded private input-fetch comparison, no frame start; unproven DMA kept mapped and powered until supervised reboot",
+    "fifo_probe": "research/mt6797-vdec/fifo-probe.c; proper DT/IOMMU device, bounded private input comparison and optional guarded original I_PCM frame submission; unproven DMA retains mappings and power until supervised reboot; no V4L2 node",
     "fixture_generator": "research/mt6797-vdec/make-pcm-fixture.py; original baseline I_PCM syntax and pixel gradients, every sample independently decoded by FFmpeg",
     "frame_comparator": "research/mt6797-vdec/compare-frame.py; explicit NV12/MM21 unpacking and full reference comparison, software layout tests only",
     "supplier_probe": "research/mt6797-vdec/supplier-probe.c; read-only snapshot of existing scpsys power, PLL and mux control/status registers while a separate resource vote is held; no frequency measurement"

@@ -43,14 +43,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('allocation', type=Path)
     parser.add_argument('--fixture', type=Path, required=True)
+    parser.add_argument('--prefix', default='pcm64', choices=('pcm64', 'grey64', 'pcm64-p'))
     parser.add_argument('--layout', choices=('nv12', 'mm21'), required=True)
     parser.add_argument('--stride', type=int, required=True)
     parser.add_argument('--chroma-offset', type=int, required=True)
     args = parser.parse_args()
-    metadata = json.loads((args.fixture / 'pcm64.json').read_text())
-    expected = (args.fixture / 'pcm64.yuv').read_bytes()
+    metadata = json.loads((args.fixture / (args.prefix + '.json')).read_text())
+    expected = (args.fixture / (args.prefix + '.yuv')).read_bytes()
     if not metadata['software_decode_verified'] or \
-       hashlib.sha256(expected).hexdigest() != metadata['hashes']['pcm64.yuv'] or \
+       hashlib.sha256(expected).hexdigest() != metadata['hashes'][args.prefix + '.yuv'] or \
        len(expected) != metadata['width'] * metadata['height'] * 3 // 2:
         raise ValueError('Fixture reference identity differs')
     actual = unpack(args.allocation.read_bytes(), metadata['width'], metadata['height'],

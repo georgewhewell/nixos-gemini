@@ -1411,6 +1411,25 @@ Final accepted-board state, module absence, kernel log, boot-image hash and
 untainted health are recorded under `handoff/video-resource-20261009`.
 The detailed source hashes, exact attempt data and final audit are in
 `research/mt6797-video-interface.json`. Input-fetch compatibility is established at the tested DMA30 addresses; no
-hardware frame has been submitted and no V4L2 video node is
-advertised. Decoder frame/DPB/layout/Request-API work and the encoder hardware
+V4L2 video node is advertised. Decoder frame/DPB/layout/Request-API work and the encoder hardware
 contract and implementation remain required.
+
+
+Private frame trial `handoff/boot-test-video-frame-13` submits the original
+64x64 I_PCM fixture after a successful known-word fetch. Input and output/MV/
+prediction/wrapper guards pass, both documented stop acknowledgements and idle
+reset pass, and the module unloads normally. Frame completion times out after
+one second: state `1`, error/message `0`, IRQ word `0x1001`. Every output byte
+remains `0xd3`, and both NV12/MM21 comparisons fail. No successful decoded frame
+is inferred. Full boot, paging, ordinary Nix builds, all three RTC checks and
+accepted-system recovery pass. The next diagnostic records pre-submission
+register readback and clears the full public 17-bit first-MB field.
+
+Private frame trial `handoff/boot-test-video-frame-14` repeats the timeout with
+the full public H.264 clock/control profile. Pre-submission SPS/PPS/slice,
+geometry and output/MV/wrapper address words read back correctly. State, IRQ
+and unchanged output are the same as trial 13. Input, all guards, stop/idle,
+normal unload and full system/RTC/recovery checks pass. No decoded frame is
+qualified. An independently constructed 20-byte I_16x16 DC frame decodes to
+6,144 verified grey samples; a separate original five-byte P-skip fixture
+reproduces 12,288 samples across two frames. Neither has run on hardware yet.

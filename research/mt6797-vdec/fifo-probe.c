@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Direct H.264 input DMA qualification on a real MT6797 codec DT device.
- * This is a hardware diagnostic, not a V4L2 video device or frame decoder.
+ * Private known-input and single I_PCM frame diagnostics; no V4L2 device.
  */
 #include <linux/clk.h>
 #include <linux/delay.h>
@@ -16,6 +16,9 @@
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/sizes.h>
+#include <linux/unaligned.h>
+#include "mt6797-h264-controls.h"
+#include "pcm64-fixture.h"
 
 #define FIFO_SIZE SZ_64K
 #define INPUT_ALLOC_SIZE (2 * FIFO_SIZE)
@@ -56,6 +59,15 @@
 static bool fetch;
 module_param(fetch, bool, 0444);
 MODULE_PARM_DESC(fetch, "Fetch and compare a private input pattern through the H.264 barrel shifter; no frame starts");
+static bool frame;
+module_param(frame, bool, 0444);
+MODULE_PARM_DESC(frame, "After input proof, submit the original 64x64 I_PCM fixture to guarded private buffers; requires fetch and clear_caller_gate");
+static bool frame_flat;
+module_param(frame_flat, bool, 0444);
+MODULE_PARM_DESC(frame_flat, "Use the independently verified compressed I_16x16 DC fixture instead of I_PCM");
+static bool frame_error_bypass;
+module_param(frame_error_bypass, bool, 0444);
+MODULE_PARM_DESC(frame_error_bypass, "Diagnose the related-core AVC control bits 14/15 on a known valid frame; raw errors and pixel comparisons remain required");
 static bool nonposted = true;
 module_param(nonposted, bool, 0444);
 MODULE_PARM_DESC(nonposted, "Use non-posted codec register mappings, matching the public MT6797 userspace resource mapping");
@@ -86,10 +98,20 @@ static const u8 test_bytes[] = {
 	0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
 };
 
+static const u8 *frame_nal(void)
+{
+	return frame_flat ? grey64_nal : pcm64_nal;
+}
+
+static size_t frame_nal_size(void)
+{
+	return frame_flat ? sizeof(grey64_nal) : sizeof(pcm64_nal);
+}
+
 struct fifo_probe {
 	struct device *dev;
 	struct regmap *gcon;
-	void __iomem *misc, *vld, *top, *mc, *avc, *larb_mmu_reg;
+	void __iomem *misc, *vld, *top, *mc, *avc, *mv, *pp, *larb_mmu_reg;
 	struct clk_bulk_data clocks[3];
 	void *input, *scratch;
 	dma_addr_t input_dma, scratch_dma;
@@ -111,6 +133,15 @@ struct fifo_probe {
 	bool iommu_attached, dma_started, compared, quiesced, fenced;
 	bool input_unchanged, scratch_unchanged;
 	bool resources_held;
+	void *frame_buffers[4], *frame_snapshot;
+	dma_addr_t frame_dma[4]; /* output, MV, VLD wrapper, PP wrapper */
+	struct { void __iomem *address; u32 value; } frame_saved[48];
+	unsigned int frame_saved_count;
+	u32 frame_state, frame_irq, frame_error, frame_message, frame_mbx, frame_mby;
+	u32 frame_input_first, frame_input_data;
+	u32 frame_setup[16], frame_status[8];
+	int frame_result;
+	bool slice_loaded, decode_started, frame_done, frame_guards_unchanged, snapshot_ready;
 };
 
 static int runtime_resume(struct device *dev)
@@ -157,7 +188,7 @@ static int reset_input(struct fifo_probe *p)
 	return ret;
 }
 
-static int test_input(struct fifo_probe *p)
+static int test_input(struct fifo_probe *p, bool slice)
 {
 	u32 status;
 	int ret;
@@ -227,7 +258,8 @@ static int test_input(struct fifo_probe *p)
 		write_reg(p->common_reset_original, p->vld + VLD_COMMON_SRAM_RESET);
 	}
 	write_reg(BIT(18), p->vld + VLD_READY_SWITCH);
-	write_reg(AVC_INPUT_CONTROL, p->avc + AVC_CONTROL);
+	write_reg(AVC_INPUT_CONTROL | (slice && frame_error_bypass ? (3U << 14) : 0),
+		  p->avc + AVC_CONTROL);
 	/* Internal output-buffer configuration is part of input initialization;
 	 * it does not submit a frame or enable any MC output DMA.
 	 */
@@ -239,7 +271,8 @@ static int test_input(struct fifo_probe *p)
 	/* The public newer-core interface writes the read pointer twice. */
 	write_reg(lower_32_bits(p->input_dma), p->vld + VLD_READ_PTR);
 	write_reg(lower_32_bits(p->input_dma), p->vld + VLD_READ_PTR);
-	write_reg(lower_32_bits(p->input_dma + 4096), p->vld + VLD_WRITE_PTR);
+	write_reg(lower_32_bits(p->input_dma + (slice ? ALIGN(frame_nal_size(), 128) : 4096)),
+		  p->vld + VLD_WRITE_PTR);
 	p->fifo_start_before_reset = readl(p->vld + VLD_FIFO_START);
 	p->read_ptr_before_reset = readl(p->vld + VLD_READ_PTR);
 	write_reg(1, p->avc + AVC_RESET_SUM);
@@ -266,6 +299,12 @@ static int test_input(struct fifo_probe *p)
 		return ret;
 	write_reg(BARREL_COMMAND, p->vld + VLD_PROC);
 	write_reg(0, p->avc + AVC_RESET_SUM);
+	if (slice) {
+		p->frame_input_first = readl(p->avc);
+		/* Offset is to slice_data(), including the eight-bit NAL header. */
+		p->frame_input_data = readl(p->avc + 28 * 4);
+		return p->frame_input_first == get_unaligned_be32(frame_nal()) ? 0 : -EIO;
+	}
 	/* Peek, consume 32 bits, and peek the next word. The reference uses
 	 * read offsets 0..0x80 to advance by the requested number of bits;
 	 * a shift read returns the window after advancing.
@@ -290,6 +329,222 @@ static int break_input(struct fifo_probe *p)
 				 10, 100000);
 }
 
+/* Only frame configuration registers use this helper. Never use it for
+ * commands or acknowledgement pulses. Restore these words after proven idle.
+ */
+static void frame_reg(struct fifo_probe *p, void __iomem *address, u32 value)
+{
+	unsigned int index = p->frame_saved_count++;
+	p->frame_saved[index].address = address;
+	p->frame_saved[index].value = readl(address);
+	write_reg(value, address);
+}
+
+static int test_frame(struct fifo_probe *p)
+{
+	const struct v4l2_ctrl_h264_sps sps = {
+		.profile_idc = 66, .level_idc = 10, .constraint_set_flags = 3,
+		.chroma_format_idc = 1, .max_num_ref_frames = 1,
+		.pic_width_in_mbs_minus1 = 3, .pic_height_in_map_units_minus1 = 3,
+		.flags = V4L2_H264_SPS_FLAG_FRAME_MBS_ONLY |
+			 V4L2_H264_SPS_FLAG_DIRECT_8X8_INFERENCE,
+	};
+	const struct v4l2_ctrl_h264_pps pps = {
+		.flags = V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT,
+	};
+	const struct v4l2_ctrl_h264_slice_params slice = {
+		.header_bit_size = 28, .slice_type = V4L2_H264_SLICE_TYPE_I,
+		.disable_deblocking_filter_idc = 1,
+	};
+	const struct v4l2_ctrl_h264_decode_params decode = {
+		.nal_ref_idc = 3, .flags = V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC,
+	};
+	struct mt6797_h264_header_words header;
+	struct mt6797_h264_slice_words words;
+	u32 state;
+	int ret;
+
+	ret = mt6797_h264_header_words(&sps, &pps, &header);
+	if (ret)
+		return ret;
+	ret = mt6797_h264_slice_words(&sps, &pps, &slice, &decode,
+				    frame_nal_size(), &words);
+	if (ret)
+		return ret;
+	/* Stop the known-word fetch before replacing producer bytes. */
+	ret = break_input(p);
+	if (ret)
+		return ret;
+	ret = reset_input(p);
+	if (ret)
+		return ret;
+	dma_rmb();
+	if (memcmp(p->input, test_bytes, sizeof(test_bytes)) ||
+	    memchr_inv(p->input + sizeof(test_bytes), 0xa5,
+		       INPUT_ALLOC_SIZE - sizeof(test_bytes)) ||
+	    memchr_inv(p->scratch, 0xd3, INPUT_ALLOC_SIZE))
+		return -EIO;
+	memcpy(p->input, frame_nal(), frame_nal_size());
+	/* Working data starts at zero; trailing guards retain their sentinel.
+	 * Keep output poisoned so zero/flat software storage cannot fake pixels.
+	 */
+	memset(p->scratch, 0, FIFO_SIZE);
+	memset(p->frame_buffers[1], 0, FIFO_SIZE);
+	memset(p->frame_buffers[2], 0, FIFO_SIZE);
+	memset(p->frame_buffers[3], 0, FIFO_SIZE);
+	p->slice_loaded = true;
+	/* Release the prior break request before reinitializing the input core. */
+	write_reg(p->break_original & ~BIT(0), p->misc + BREAK_CONTROL);
+	ret = test_input(p, true);
+	if (ret)
+		return ret;
+
+	/* Candidate frame contract from the pinned GPL MT8173 register interface.
+ * Every DMA destination is private, aligned, bounded and already allocated.
+ * IDR I_PCM has no reference-picture reads or scaling/transform dependency.
+ */
+	frame_reg(p, p->avc + 0x88, header.sps);
+	frame_reg(p, p->avc + 0x90, header.pps);
+	frame_reg(p, p->avc + 0x94, header.reference_counts);
+	frame_reg(p, p->avc + 0x8c, (readl(p->avc + 0x8c) & ~0x1ffff) | words.first_mb);
+	frame_reg(p, p->avc + 0x98, (readl(p->avc + 0x98) & 0x1fff) | words.header1);
+	frame_reg(p, p->avc + 0x9c, words.header2);
+	write_reg(1, p->avc + 0x228); /* reset picture-number SRAM */
+	ret = readl_poll_timeout(p->avc + 0x228, state, !(state & BIT(0)), 10, 100000);
+	if (ret)
+		return ret;
+	frame_reg(p, p->avc + 0xa0, 16);
+	frame_reg(p, p->avc + 0xa4, 0);
+	/* The public verification mask omits only its two unsupported checks.
+ * Raw error/message words are retained even if completion is observed.
+ */
+	frame_reg(p, p->avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
+	frame_reg(p, p->avc + 0x2c8, readl(p->avc + 0x2c8) & ~BIT(5));
+	frame_reg(p, p->top + 0x68, 3 | (3 << 16));
+	frame_reg(p, p->top + 0x58, 0xffffffff);
+	frame_reg(p, p->top + 0x6c, 16);
+	frame_reg(p, p->top + 0x50, 0xffffffff);
+	frame_reg(p, p->top + 0x54, readl(p->top + 0x54) | BIT(0));
+	frame_reg(p, p->top + 0x94, lower_32_bits(p->scratch_dma + (4 * 5 - 1) * 16));
+	frame_reg(p, p->top + 0x2c, readl(p->top + 0x2c) | BIT(30));
+	frame_reg(p, p->top + 0x40, (readl(p->top + 0x40) & ~GENMASK(5, 4)) | BIT(5));
+	frame_reg(p, p->misc + 0xf0, readl(p->misc + 0xf0) | BIT(0));
+	frame_reg(p, p->mc + 0x90, 4); /* candidate address-swap-off mode */
+	frame_reg(p, p->mc + 0x768, (readl(p->mc + 0x768) & ~GENMASK(2, 0)) | 4);
+	frame_reg(p, p->mc + 0x208, 64);
+	frame_reg(p, p->mc + 0x20c, 64);
+	frame_reg(p, p->mc + 0x220, 1);
+	frame_reg(p, p->mc + 0x224, lower_32_bits(p->frame_dma[0]) >> 9);
+	frame_reg(p, p->mc + 0x228, lower_32_bits(p->frame_dma[0] + 4096) >> 8);
+	frame_reg(p, p->mc + 0x22c, 4);
+	frame_reg(p, p->mc + 0x238, 3);
+	frame_reg(p, p->mc + 0x250, 1);
+	frame_reg(p, p->mc + 0x260, 3);
+	frame_reg(p, p->mc + 0x264, 3);
+	frame_reg(p, p->mc + 0x560, lower_32_bits(p->frame_dma[0]));
+	frame_reg(p, p->mc + 0x55c, 4096);
+	frame_reg(p, p->mc + 0x980, 4);
+	frame_reg(p, p->mc + 0xa20, lower_32_bits(p->frame_dma[2]));
+	frame_reg(p, p->mc + 0xa24, lower_32_bits(p->frame_dma[3]));
+	frame_reg(p, p->mc + 0x5e4, readl(p->mc + 0x5e4) | BIT(12));
+	frame_reg(p, p->mv + 0x200, 0);
+	frame_reg(p, p->mv + 0x204, 0);
+	frame_reg(p, p->mv + 0x208, 0);
+	frame_reg(p, p->mv + 0x20c, lower_32_bits(p->frame_dma[1]) >> 4);
+	frame_reg(p, p->pp + 0x804, readl(p->pp + 0x804) & ~BIT(4));
+	ret = readl_poll_timeout(p->avc + 0x25c, state, !(state & BIT(25)), 10, 100000);
+	if (ret)
+		return ret;
+	p->frame_setup[0] = readl(p->avc + 0x88);
+	p->frame_setup[1] = readl(p->avc + 0x8c);
+	p->frame_setup[2] = readl(p->avc + 0x90);
+	p->frame_setup[3] = readl(p->avc + 0x98);
+	p->frame_setup[4] = readl(p->avc + 0x9c);
+	p->frame_setup[5] = readl(p->top + 0x68);
+	p->frame_setup[6] = readl(p->top + 0x6c);
+	p->frame_setup[7] = readl(p->top + 0x28);
+	p->frame_setup[8] = readl(p->mc + 0x560);
+	p->frame_setup[9] = readl(p->mc + 0x55c);
+	p->frame_setup[10] = readl(p->mc + 0x224);
+	p->frame_setup[11] = readl(p->mc + 0x228);
+	p->frame_setup[12] = readl(p->mc + 0x980);
+	p->frame_setup[13] = readl(p->mv + 0x20c);
+	p->frame_setup[14] = readl(p->mc + 0xa20);
+	p->frame_setup[15] = readl(p->mc + 0xa24);
+	dma_wmb();
+	p->decode_started = true; /* Software submission, not decoded-frame proof. */
+	write_reg(1, p->avc + 0x238);
+	ret = readl_poll_timeout(p->avc + 0x278, p->frame_state,
+				p->frame_state & BIT(31), 100, 1000000);
+	p->frame_done = !ret;
+	p->frame_irq = readl(p->misc + IRQ_CONTROL);
+	p->frame_error = readl(p->avc + 0x284);
+	p->frame_message = readl(p->avc + 0x270);
+	p->frame_mbx = readl(p->mc + 0x28);
+	p->frame_mby = readl(p->mc + 0x2c);
+	p->frame_status[0] = readl(p->avc + 0x25c);
+	p->frame_status[1] = readl(p->avc + 0x274);
+	p->frame_status[2] = readl(p->avc + 0x84);
+	p->frame_status[3] = readl(p->vld + VLD_PROC);
+	p->frame_status[4] = readl(p->vld + VLD_READ_PTR);
+	p->frame_status[5] = readl(p->vld + VLD_FETCH_STATUS);
+	p->frame_status[6] = readl(p->top + 0x80);
+	regmap_read(p->gcon, 0x8, &p->frame_status[7]);
+	return ret;
+}
+
+static ssize_t frame_registers_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fifo_probe *p = dev_get_drvdata(dev);
+	return sysfs_emit(buf,
+		"{\"setup\":{\"sps\":%u,\"first_mb\":%u,\"pps\":%u,\"shdr1\":%u,"
+		"\"shdr2\":%u,\"mb_size\":%u,\"total_mbs\":%u,\"prediction\":%u,"
+		"\"mc_y\":%u,\"mc_chroma_offset\":%u,\"pp_y\":%u,\"pp_c\":%u,"
+		"\"width_mbs\":%u,\"mv\":%u,\"vld_wrapper\":%u,\"pp_wrapper\":%u},"
+		"\"status\":{\"avc_status\":%u,\"avc_complete\":%u,\"avc_control\":%u,"
+		"\"vld_proc\":%u,\"read_ptr\":%u,\"fetch\":%u,\"cycle\":%u,\"smi_clock\":%u}}\n",
+		p->frame_setup[0], p->frame_setup[1], p->frame_setup[2], p->frame_setup[3],
+		p->frame_setup[4], p->frame_setup[5], p->frame_setup[6], p->frame_setup[7],
+		p->frame_setup[8], p->frame_setup[9], p->frame_setup[10], p->frame_setup[11],
+		p->frame_setup[12], p->frame_setup[13], p->frame_setup[14], p->frame_setup[15],
+		p->frame_status[0], p->frame_status[1], p->frame_status[2], p->frame_status[3],
+		p->frame_status[4], p->frame_status[5], p->frame_status[6], p->frame_status[7]);
+}
+static DEVICE_ATTR_RO(frame_registers);
+
+static ssize_t frame_result_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fifo_probe *p = dev_get_drvdata(dev);
+	return sysfs_emit(buf,
+		"{\"requested\":%s,\"flat\":%s,\"error_bypass\":%s,"
+		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
+		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
+		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
+		"\"input_first\":%u,\"input_data\":%u,\"width\":64,\"height\":64,"
+		"\"stride\":64,\"chroma_offset\":4096,\"output_iova\":%llu,"
+		"\"mv_iova\":%llu,\"vld_wrapper_iova\":%llu,\"pp_wrapper_iova\":%llu}\n",
+		frame ? "true" : "false", frame_flat ? "true" : "false",
+		frame_error_bypass ? "true" : "false", p->decode_started ? "true" : "false",
+		p->frame_done ? "true" : "false", p->frame_result,
+		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
+		p->frame_state, p->frame_irq, p->frame_error, p->frame_message,
+		p->frame_mbx, p->frame_mby, p->frame_input_first, p->frame_input_data,
+		(unsigned long long)p->frame_dma[0], (unsigned long long)p->frame_dma[1],
+		(unsigned long long)p->frame_dma[2], (unsigned long long)p->frame_dma[3]);
+}
+static DEVICE_ATTR_RO(frame_result);
+
+static ssize_t frame_output_read(struct file *file, struct kobject *kobj,
+				const struct bin_attribute *attr, char *buf,
+				loff_t offset, size_t count)
+{
+	struct fifo_probe *p = dev_get_drvdata(kobj_to_dev(kobj));
+	if (!p->snapshot_ready)
+		return -ENODATA;
+	return memory_read_from_buffer(buf, count, &offset, p->frame_snapshot, INPUT_ALLOC_SIZE);
+}
+static const BIN_ATTR_RO(frame_output, INPUT_ALLOC_SIZE);
+
 static ssize_t result_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fifo_probe *p = dev_get_drvdata(dev);
@@ -303,7 +558,7 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		"\"global_before\":{\"clock\":%u,\"reset\":%u},"
 		"\"minimal_clocks\":%s,\"clear_legacy\":%s,\"resources_held\":%s,"
 		"\"iommu_attached\":%s,\"dma_started\":%s,"
-		"\"decode_started\":false,\"compared\":%s,\"quiesced\":%s,"
+		"\"decode_started\":%s,\"compared\":%s,\"quiesced\":%s,"
 		"\"fenced\":%s,\"input_unchanged\":%s,\"scratch_unchanged\":%s,"
 		"\"result\":%d,\"reset_result\":%d,"
 		"\"break_result\":%d,\"break_status\":%u,"
@@ -331,6 +586,7 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		p->resources_held ? "true" : "false",
 		p->iommu_attached ? "true" : "false",
 		p->dma_started ? "true" : "false",
+		p->decode_started ? "true" : "false",
 		p->compared ? "true" : "false", p->quiesced ? "true" : "false",
 		p->fenced ? "true" : "false", p->input_unchanged ? "true" : "false",
 		p->scratch_unchanged ? "true" : "false", p->result, p->reset_result,
@@ -348,15 +604,31 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		p->after_fetch[4], p->after_fetch[5], p->after_fetch[6], p->after_fetch[7]);
 }
 static DEVICE_ATTR_RO(result);
-static struct attribute *fifo_attrs[] = { &dev_attr_result.attr, NULL };
-ATTRIBUTE_GROUPS(fifo);
+static struct attribute *fifo_attrs[] = {
+	&dev_attr_result.attr, &dev_attr_frame_result.attr, &dev_attr_frame_registers.attr, NULL
+};
+static const struct bin_attribute *const fifo_bin_attrs[] = {
+	&bin_attr_frame_output, NULL
+};
+static const struct attribute_group fifo_group = {
+	.attrs = fifo_attrs, .bin_attrs = fifo_bin_attrs,
+};
+static const struct attribute_group *fifo_groups[] = { &fifo_group, NULL };
 
 static void free_buffers(struct fifo_probe *p)
 {
+	unsigned int i;
 	if (p->input)
 		dma_free_coherent(p->dev, INPUT_ALLOC_SIZE, p->input, p->input_dma);
 	if (p->scratch)
-		dma_free_coherent(p->dev, FIFO_SIZE, p->scratch, p->scratch_dma);
+		dma_free_coherent(p->dev, frame ? INPUT_ALLOC_SIZE : FIFO_SIZE,
+				  p->scratch, p->scratch_dma);
+	for (i = 0; i < ARRAY_SIZE(p->frame_buffers); i++) {
+		if (p->frame_buffers[i])
+			dma_free_coherent(p->dev, INPUT_ALLOC_SIZE,
+					  p->frame_buffers[i], p->frame_dma[i]);
+		p->frame_buffers[i] = NULL;
+	}
 	p->input = p->scratch = NULL;
 }
 
@@ -385,15 +657,21 @@ static int fifo_probe(struct platform_device *pdev)
 	struct device_node *larb;
 	struct resource resource;
 	int ret, pm_ret;
+	unsigned int i;
 
 	if (!of_machine_is_compatible("planet,gemini-pda"))
 		return -ENODEV;
 	if (fetch && hold_resources)
 		return -EINVAL;
+	if (frame && (!fetch || !clear_caller_gate || hold_resources))
+		return -EINVAL;
+	if (!frame && (frame_flat || frame_error_bypass))
+		return -EINVAL;
 	p = devm_kzalloc(dev, sizeof(*p), GFP_KERNEL);
 	if (!p)
 		return -ENOMEM;
 	p->dev = dev;
+	p->frame_result = -ENODATA;
 	p->gcon = syscon_regmap_lookup_by_compatible("mediatek,mt6797-vdecsys");
 	if (IS_ERR(p->gcon))
 		return dev_err_probe(dev, PTR_ERR(p->gcon), "decoder syscon unavailable\n");
@@ -419,6 +697,14 @@ static int fifo_probe(struct platform_device *pdev)
 	p->avc = map_codec_bank(pdev, "avc-vld");
 	if (IS_ERR(p->avc))
 		return PTR_ERR(p->avc);
+	if (frame) {
+		p->mv = map_codec_bank(pdev, "avc-mv");
+		if (IS_ERR(p->mv))
+			return PTR_ERR(p->mv);
+		p->pp = map_codec_bank(pdev, "pp");
+		if (IS_ERR(p->pp))
+			return PTR_ERR(p->pp);
+	}
 	larb = of_parse_phandle(dev->of_node, "mediatek,larbs", 0);
 	if (!larb)
 		return -ENODEV;
@@ -486,10 +772,32 @@ static int fifo_probe(struct platform_device *pdev)
 	 * Both shifted endpoint words must fit the diagnostic's 24-bit limit.
 	 */
 	p->input = dma_alloc_coherent(dev, INPUT_ALLOC_SIZE, &p->input_dma, GFP_KERNEL);
-	p->scratch = dma_alloc_coherent(dev, FIFO_SIZE, &p->scratch_dma, GFP_KERNEL);
+	p->scratch = dma_alloc_coherent(dev, frame ? INPUT_ALLOC_SIZE : FIFO_SIZE,
+					&p->scratch_dma, GFP_KERNEL);
 	if (!p->input || !p->scratch) {
 		ret = -ENOMEM;
 		goto free;
+	}
+	if (frame) {
+		p->frame_snapshot = devm_kmalloc(dev, INPUT_ALLOC_SIZE, GFP_KERNEL);
+		if (!p->frame_snapshot) {
+			ret = -ENOMEM;
+			goto free;
+		}
+		for (i = 0; i < ARRAY_SIZE(p->frame_buffers); i++) {
+			p->frame_buffers[i] = dma_alloc_coherent(dev, INPUT_ALLOC_SIZE,
+							      &p->frame_dma[i], GFP_KERNEL);
+			if (!p->frame_buffers[i]) {
+				ret = -ENOMEM;
+				goto free;
+			}
+			if (!IS_ALIGNED(p->frame_dma[i], 512) ||
+			    p->frame_dma[i] + INPUT_ALLOC_SIZE - 1 > DMA_BIT_MASK(TEST_DMA_BITS)) {
+				ret = -ERANGE;
+				goto free;
+			}
+			memset(p->frame_buffers[i], 0xd3, INPUT_ALLOC_SIZE);
+		}
 	}
 	if (p->input_dma + FIFO_SIZE > DMA_BIT_MASK(TEST_DMA_BITS) ||
 	    upper_32_bits(p->scratch_dma + FIFO_SIZE) ||
@@ -499,8 +807,10 @@ static int fifo_probe(struct platform_device *pdev)
 	}
 	memset(p->input, 0xa5, INPUT_ALLOC_SIZE);
 	memcpy(p->input, test_bytes, sizeof(test_bytes));
-	memset(p->scratch, 0xd3, FIFO_SIZE);
-	p->result = test_input(p);
+	memset(p->scratch, 0xd3, frame ? INPUT_ALLOC_SIZE : FIFO_SIZE);
+	p->result = test_input(p, false);
+	if (frame && !p->result)
+		p->frame_result = test_frame(p);
 	/* Capture clock/control state before cleanup reset can change it. */
 	p->after_fetch[0] = readl(p->misc + REG_SELECT);
 	p->after_fetch[1] = readl(p->misc + PDN_SPEC);
@@ -519,10 +829,22 @@ static int fifo_probe(struct platform_device *pdev)
 		p->break_result = break_input(p);
 	p->reset_result = reset_input(p);
 	dma_rmb();
-	p->input_unchanged = !memcmp(p->input, test_bytes, sizeof(test_bytes)) &&
+	p->input_unchanged = p->slice_loaded ?
+		!memcmp(p->input, frame_nal(), frame_nal_size()) &&
+		!memchr_inv(p->input + frame_nal_size(), 0xa5,
+			    INPUT_ALLOC_SIZE - frame_nal_size()) :
+		!memcmp(p->input, test_bytes, sizeof(test_bytes)) &&
 		!memchr_inv(p->input + sizeof(test_bytes), 0xa5,
 			    INPUT_ALLOC_SIZE - sizeof(test_bytes));
-	p->scratch_unchanged = !memchr_inv(p->scratch, 0xd3, FIFO_SIZE);
+	/* Prediction data can change during a frame; its trailing guard cannot. */
+	p->scratch_unchanged = !memchr_inv(p->scratch + (p->slice_loaded ? FIFO_SIZE : 0),
+					 0xd3, FIFO_SIZE);
+	if (frame) {
+		p->frame_guards_unchanged = p->input_unchanged && p->scratch_unchanged;
+		for (i = 0; i < ARRAY_SIZE(p->frame_buffers); i++)
+			if (memchr_inv(p->frame_buffers[i] + FIFO_SIZE, 0xd3, FIFO_SIZE))
+				p->frame_guards_unchanged = false;
+	}
 	if (!p->input_unchanged || !p->scratch_unchanged)
 		p->result = -EIO;
 	/* Documented break acknowledgement plus idle reset must precede freeing.
@@ -536,6 +858,24 @@ static int fifo_probe(struct platform_device *pdev)
 		__module_get(THIS_MODULE);
 		dev_err(dev, "input DMA not proven idle; retaining buffers until reboot\n");
 		return 0;
+	}
+	if (frame) {
+		/* Copy only after both stop acknowledgements and the idle reset.
+		 * Userspace receives CPU storage, never a live DMA mapping.
+		 */
+		memcpy(p->frame_snapshot, p->frame_buffers[0], INPUT_ALLOC_SIZE);
+		p->snapshot_ready = true;
+		if (!p->frame_guards_unchanged)
+			p->frame_result = -EIO;
+		if (p->decode_started) {
+			u32 irq = readl(p->misc + IRQ_CONTROL);
+			write_reg(irq | BIT(0) | BIT(4), p->misc + IRQ_CONTROL);
+			write_reg((irq | BIT(0)) & ~BIT(4), p->misc + IRQ_CONTROL);
+		}
+		while (p->frame_saved_count) {
+			i = --p->frame_saved_count;
+			write_reg(p->frame_saved[i].value, p->frame_saved[i].address);
+		}
 	}
 	write_reg(p->clock_select_original, p->misc + REG_SELECT);
 	write_reg(p->power_down, p->misc);

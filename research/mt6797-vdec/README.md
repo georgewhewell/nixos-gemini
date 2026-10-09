@@ -72,7 +72,7 @@ accepted default. The old borrowed-node probe refuses to run with larb1 enabled.
 
 The FIFO diagnostic requires an attached IOMMU domain and checks the SMI driver's
 hardware MMU mask while its supplier holds power. `fetch=0` only records resources.
-With `fetch=1`, it allocates private coherent input and parser scratch buffers,
+With `fetch=1 frame=0`, it allocates private coherent input and parser scratch buffers,
 initializes the candidate parser and issues an input-fetch command. It compares
 two known words through the barrel shifter; it never issues a frame-start command
 or enables frame-output DMA. It disables global and local automatic clock-off
@@ -172,11 +172,44 @@ not qualify the candidate for installation. No frame was submitted.
 
 ## Independent frame reference
 
+`frame=1 fetch=1 clear_caller_gate=1` adds a private single-frame diagnostic
+after the known-word input comparison. It stops input before replacing its
+bytes with the original fixture. Output, motion-vector, prediction and both
+wrapper buffers have trailing guards; all destinations exist before hardware
+configuration. Polls are bounded. Unproven stop retains every mapping, clock
+vote and the module until supervised reboot. No V4L2 node is exposed.
+
+The read-only `frame_result` attribute records the software submission,
+completion/error/IRQ words and guard checks. `frame_output` contains a CPU
+snapshot made only after documented stop and idle reset; it never exposes a
+live DMA mapping. A done bit alone is not a decoded-frame comparison. The
+supervised trial and independent NV12/MM21 comparisons remain required.
+
+Trials 13/14 submitted I_PCM but timed out without changing any output bytes.
+Trial 14 read back the SPS/PPS/slice, geometry and output/wrapper registers
+correctly, with all three decoder clock votes and the public H.264 masks.
+Both trials passed input, guards, documented stop and normal unload. Register
+readback does not establish a decoded frame.
+
+The current diagnostic also enables the public decoder cycle counter and
+starts working-buffer data at zero while keeping output and trailing guards
+poisoned. `frame_flat=1` selects an independently verified 20-byte compressed
+I_16x16 DC fixture. `frame_error_bypass=1` tests the related-core AVC bits 14/15;
+concealment is not enabled, and raw error words and pixel comparisons remain
+required. These experiments are not production controls.
+
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM
 macroblocks, original pixel gradients and deblocking disabled. It uses public
 H.264 syntax and no encoder library, then requires FFmpeg to decode all 6,144
 sample bytes exactly. It emits Annex B, a slice NAL, planar YUV and control/hash
-metadata. This fixture generator is not a hardware encoder.
+metadata, plus a generated C header containing only the original test NAL.
+This fixture generator is not a hardware encoder.
+
+With `--p-skip`, it also emits an original five-byte P-slice NAL referencing
+the I_PCM picture. FFmpeg must reproduce all 12,288 samples across both frames.
+Its separate metadata records the 26-bit slice header, frame number and POC.
+This reference checks fixture syntax; hardware reference-picture decoding
+still needs its own buffer/list programming and output comparison.
 
 ```sh
 python3 research/mt6797-vdec/make-pcm-fixture.py --out /path/to/fixtures \
