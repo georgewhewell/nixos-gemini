@@ -68,6 +68,9 @@ def main():
     print(run(SSH + [f'''set -eu
 grep -qx unattended_recovery=healthy /run/unattended-recovery.accepted
 nix-store --check-validity {system}
+# The boot volume holds every retained generation's kernel and initrd: keep
+# only the running one, which stays as the fallback entry beside the new one.
+nix-env --profile /nix/var/nix/profiles/system --delete-generations +1
 nix-env --profile /nix/var/nix/profiles/system --set {system}
 {system}/bin/switch-to-configuration boot
 gemini-boot-install --system {system} --check --json''']).splitlines()[-1])

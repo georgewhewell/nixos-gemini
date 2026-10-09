@@ -1,8 +1,8 @@
 {
-  "name": "update-normal-e6b6a2df-trial-03",
+  "name": "update-normal-e251569e-trial-01",
   "image": "/nix/store/82qm55wl83h3xslk8qly78411l9b08nm-gemini-bootloader/boot-padded-p22.img",
   "boot_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
-  "system": "/nix/store/gf6aa3cfyy9rblkfs6caf1nwqmyxxbgq-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+  "system": "/nix/store/8qf1x71wdk73lnhwxzm61hz573r5x9f1-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
   "store": "normal",
   "zswap_shrinker": "Y",
   "previous": "M69",
