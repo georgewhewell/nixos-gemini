@@ -19,6 +19,14 @@ guard bounds qualification sleeps only; the normal system pauses the watchdog
 while asleep. Generation updates go through `tools/update-system.py`, which
 requires a qualified direct-boot trial of the exact system. Hibernation needs a
 harness mode that holds rescue across the planned power cycle.
+A test_resume hibernation on the baseline (gadget soft-disconnected; mtu3
+refuses to freeze while connected to a host) wrote and restored the image on
+the same boot, but 1.4 s after restore the DVFS handoff faulted
+(`cpu-rail-transition-failed`, CCI update -EUCLEAN): the restored DVFS owners
+trust their snapshot-time view of rail and PLL state while the hardware holds
+the loader's. CPU frequency stays fenced until reboot. The owners need to
+re-adopt hardware state on restore before real hibernation is attempted
+(`handoff/hibernate-20261009`).
 
 Owner-observed 2026-10-09: setting the pwm-backlight from 1023 to 300 visibly
 dims the panel. The Gemini PDA keyboard has no backlight (owner-confirmed;
