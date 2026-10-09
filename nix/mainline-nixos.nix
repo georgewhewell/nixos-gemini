@@ -54,12 +54,23 @@ let
         return 0
       fi
       devno=$(cat "$node/dev")
-      log "hibernate-resume=checking device=''${emmc_device}p34 devno=$devno"
+      # mtu3 refuses to quiesce while the USB gadget is attached to a host,
+      # which aborts the jump into the image (-EBUSY). Detach only when the
+      # swap header carries the swsusp signature, and reattach if we return.
+      udc=/sys/class/udc/11271000.usb/soft_connect
+      sig=$(dd if="''${emmc_device}p34" bs=1 skip=4086 count=10 2>/dev/null | tr -d '\000')
+      detached=no
+      if [ "$sig" = S1SUSPEND ] && [ -w "$udc" ]; then
+        printf disconnect > "$udc" && detached=yes
+        sleep 1
+      fi
+      log "hibernate-resume=checking device=''${emmc_device}p34 devno=$devno signature=''${sig:-none} gadget_detached=$detached"
       if printf '%s\n' "$devno" > /sys/power/resume; then
         log "hibernate-resume=no-image"
       else
         log "hibernate-resume=write-failed devno=$devno"
       fi
+      [ "$detached" = no ] || printf connect > "$udc" || true
     }
 
     mount_persistent_storage() {
