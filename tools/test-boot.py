@@ -259,9 +259,11 @@ printf 'state='; cat /sys/class/udc/11271000.usb/state
 
 
 def configure(watchdog=False, pm_test=None, cycle=False):
-    if pm_test or cycle:
-        raise ValueError('Boot test supports alarms or watchdog expiry; PM/USB need separate recovery checks')
-    runner = base_configure()
+    if watchdog and (pm_test or cycle):
+        raise ValueError('Select watchdog expiry, PM diagnostics or USB cycle separately')
+    # PM/USB stages wrap the candidate innermost, so they run after its health
+    # checks; each later RTC check compares suspend counters in its own window.
+    runner = base_configure(False, pm_test, cycle)
     runner.backend.MTK = runner.backend.MTK_RTC
     if BOOTLOADER is not None:
         runner.PROFILES[p.PROFILE] = (BOOTLOADER/'boot-padded-p22.img', p.BOOT_SHA)

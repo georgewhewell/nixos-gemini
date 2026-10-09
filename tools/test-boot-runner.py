@@ -276,8 +276,12 @@ class Profile(unittest.TestCase):
                 with self.subTest(key=key),self.assertRaises(RuntimeError):
                     r.verify_handoff_tree(before,dict(after,**{key:value}),m.p.PROFILE)
 
-    def test_pm_requires_new_kernel_prerequisites(self):
-        for args in (dict(pm_test='devices'),dict(pm_test='freezer'),dict(cycle=True)):
+    def test_pm_and_usb_compose_but_not_with_watchdog_expiry(self):
+        for args in (dict(pm_test='freezer'),dict(pm_test='s2idle'),dict(cycle=True)):
+            with self.subTest(args=args):
+                r=m.configure(**args)
+                self.assertEqual((r.pm_test_last_stage,r.usb_cycle_requested),(args.get('pm_test'),args.get('cycle',False)))
+        for args in (dict(watchdog=True,pm_test='s2idle'),dict(watchdog=True,cycle=True)):
             with self.subTest(args=args),self.assertRaises(ValueError):m.configure(**args)
 
     def test_missing_rtc_proof_still_runs_existing_recovery_and_retention_audit(self):
