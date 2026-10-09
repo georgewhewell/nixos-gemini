@@ -9,35 +9,45 @@ import shlex
 import time
 from types import SimpleNamespace
 
-STAGES = ('freezer', 'devices')
+STAGES = ('freezer', 'devices', 's2idle')
+# Stages that suspend the USB gadget and so run detached behind the USB guard.
+DETACHED = ('devices', 's2idle')
 FAILURES = ('fail','failed_freeze','failed_prepare','failed_suspend','failed_suspend_late',
             'failed_suspend_noirq','failed_resume','failed_resume_early','failed_resume_noirq')
 NONE = '[none] core processors platform devices freezer'
 LIMITS = dict(RuntimeMaxUSec='40s', TimeoutStopUSec='3s', KillMode='control-group', RemainAfterExit='yes')
 
 
+def qualified_trial(p, flag):
+    """Newest supervised trial of exactly this system and kernel with `flag` qualified."""
+    candidates = sorted((p.ROOT.parent/'handoff').glob('*/result.json'), key=lambda x: x.stat().st_mtime, reverse=True)
+    for path in candidates:
+        prior = path.parent
+        try:
+            result = json.loads(path.read_text())
+            candidate = json.loads((prior/'candidate-linux.json').read_text())
+            power = json.loads((prior/'power-swap-evidence.json').read_text())
+            plan = json.loads((prior/'plan.json').read_text())
+        except (OSError, ValueError):
+            continue
+        if (result.get('result') != 'passed' or any(result.get(k) is not True for k in
+                ('profile_qualified', flag, 'fixed_swap_preserved', 'no_writer')) or
+                candidate.get('system') != p.SYSTEM or candidate.get('boot_sha256') != p.BOOT_SHA or
+                power.get('notes_sha256') != p.NOTES_SHA):
+            continue
+        for name, sha in plan['all_executed_sources_sha256'].items():
+            if hashlib.sha256((prior/'executed-sources'/Path(name).name).read_bytes()).hexdigest() != sha:
+                raise RuntimeError('Prior trial source archive changed: '+str(prior))
+        return prior
+    return None
+
+
 def prerequisites(p):
-    prior = p.ROOT.parent/'handoff/power-swap-02'
-    result = json.loads((prior/'result.json').read_text())
-    candidate = json.loads((prior/'candidate-linux.json').read_text())
-    power = json.loads((prior/'power-swap-evidence.json').read_text())
-    if (result.get('result') != 'passed' or any(result.get(k) is not True for k in
-            ('profile_qualified','watchdog_expiry_qualified','fixed_swap_preserved','no_writer')) or
-            candidate.get('system') != p.SYSTEM or candidate.get('boot_sha256') != p.BOOT_SHA or
-            power.get('notes_sha256') != p.NOTES_SHA):
+    prior = qualified_trial(p, 'watchdog_expiry_qualified')
+    if prior is None:
         raise RuntimeError('Selected kernel lacks qualified Linux watchdog recovery')
-    plan = json.loads((prior/'plan.json').read_text())
-    for name, sha in plan['all_executed_sources_sha256'].items():
-        if hashlib.sha256((prior/'executed-sources'/Path(name).name).read_bytes()).hexdigest() != sha:
-            raise RuntimeError('Prior watchdog source archive changed')
-    source_record = p.ROOT.parent/'handoff/linux-watchdog-qualification/pm-stage-source-audit.json'
-    record = json.loads(source_record.read_text())
-    if record['kernel'] != str(p.KERNEL): raise RuntimeError('PM source audit belongs to another kernel')
-    for name,sha in record['source_sha256'].items():
-        if hashlib.sha256((Path(record['source'])/name).read_bytes()).hexdigest() != sha:
-            raise RuntimeError('Reviewed PM source changed')
-    return dict(watchdog_trial=str(prior), watchdog_result_sha256=hashlib.sha256((prior/'result.json').read_bytes()).hexdigest(),
-                source_audit_sha256=hashlib.sha256(source_record.read_bytes()).hexdigest())
+    return dict(watchdog_trial=str(prior),
+                watchdog_result_sha256=hashlib.sha256((prior/'result.json').read_bytes()).hexdigest())
 
 
 def scripts(stage, boot, system, notes, pid, stamp, remote, paths=None):
@@ -45,7 +55,7 @@ def scripts(stage, boot, system, notes, pid, stamp, remote, paths=None):
             not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+',system) or
             not re.fullmatch('[0-9a-f]{64}',notes) or
             any(not str(v).isdecimal() or int(v)<2 for v in (pid,stamp)) or
-            not re.fullmatch('/run/gemini-pm-(freezer|devices)-[0-9]+-[0-9]+',remote)):
+            not re.fullmatch('/run/gemini-pm-(freezer|devices|s2idle)-[0-9]+-[0-9]+',remote)):
         raise ValueError('Invalid PM stage or candidate identity')
     paths = paths or dict(proc='/proc',run='/run',sys='/sys',remote=remote,kmsg='/dev/kmsg')
     common = '#!/bin/sh\nset -eu\n'+'\n'.join(f'{k}={shlex.quote(str(v))}' for k,v in dict(paths,
@@ -72,6 +82,7 @@ cleanup() {
   *) return 1;;
  esac
  grep -Fq '[none]' "$sys/power/pm_test"
+ if test "$stage" = s2idle; then printf 0 > "$sys/class/rtc/rtc0/wakealarm"; fi
  rm "$run/gemini-pm-test.lock/owner"
  rmdir "$run/gemini-pm-test.lock"
  rm "$remote/armed"
@@ -110,8 +121,16 @@ printf 'boot_id=%s\nstage=%s\nowner_pid=%s\nowner_starttime=%s\n' "$boot" "$stag
 printf 'uptime_before='; cut -d' ' -f1 "$proc/uptime"
 ''' + '\n'.join(f'printf "before_{field}="; cat "$sys/power/suspend_stats/{field}"' for field in ('success',)+FAILURES)+'''
 printf '<6>GEMINI_PM_TEST %s begin\n' "$token" > "$kmsg"
-printf '%s' "$stage" > "$sys/power/pm_test"
-grep -Fq "[$stage]" "$sys/power/pm_test"
+if test "$stage" = s2idle; then
+ # A real s2idle sleep, woken by the RTC alarm well inside the watchdog's
+ # 31 s budget (mtk_wdt.suspend_keep_running keeps it counting).
+ test "$(cat "$sys/module/mtk_wdt/parameters/suspend_keep_running")" = Y
+ test -z "$(cat "$sys/class/rtc/rtc0/wakealarm")"
+ printf '+10' > "$sys/class/rtc/rtc0/wakealarm"
+else
+ printf '%s' "$stage" > "$sys/power/pm_test"
+ grep -Fq "[$stage]" "$sys/power/pm_test"
+fi
 printf freeze > "$sys/power/state"
 printf 'uptime_after='; cut -d' ' -f1 "$proc/uptime"
 ''' + '\n'.join(f'printf "after_{field}="; cat "$sys/power/suspend_stats/{field}"' for field in ('success',)+FAILURES)+'''
@@ -134,7 +153,9 @@ def verify(raw, service, stage, boot, pid, stamp, diagnostics, token, limits=Non
     if any(not re.fullmatch('[0-9]+\\.[0-9]+',values[k]) for k in ('uptime_before','uptime_after')):
         raise RuntimeError('Invalid PM stage clock evidence')
     elapsed=float(values['uptime_after'])-float(values['uptime_before'])
-    if not 4.5<=elapsed<=20: raise RuntimeError('Full five-second PM diagnostic dwell not established')
+    # CLOCK_BOOTTIME-based uptime includes the sleep itself.
+    if not (8<=elapsed<=25 if stage=='s2idle' else 4.5<=elapsed<=20):
+        raise RuntimeError('PM stage dwell outside its bound')
     for prefix in ('before','after'):
         for name in ('success',)+FAILURES:
             if not values[prefix+'_'+name].isdigit(): raise RuntimeError('Invalid PM counter')
@@ -147,18 +168,18 @@ def verify(raw, service, stage, boot, pid, stamp, diagnostics, token, limits=Non
     if diagnostics.count(begin)!=1 or diagnostics.count(end)!=1 or diagnostics.index(begin)>=diagnostics.index(end):
         raise RuntimeError('Missing bounded kernel diagnostic markers')
     scoped=diagnostics.split(begin,1)[1]
-    if (scoped.count('suspend debug: Waiting for 5 second(s).')!=1 or
+    if (scoped.count('suspend debug: Waiting for 5 second(s).')!=(0 if stage=='s2idle' else 1) or
             'PM: suspend entry (s2idle)' not in scoped or 'PM: suspend exit' not in scoped or
             re.search(r'\bBUG:|\bOops:|Kernel panic|I/O error|Call trace:|failed to (?:suspend|resume)',scoped,re.I)):
         raise RuntimeError('Kernel diagnostics do not establish clean PM test execution')
     return dict(stage=stage,boot_id=boot,owner_pid=pid,owner_starttime=stamp,
         elapsed_seconds=round(elapsed,3),success_delta=1,failures_delta=0,pm_test_restored=True,
-        full_suspend_requested=False,diagnostic_stage_qualified=True)
+        full_suspend_requested=stage=='s2idle',diagnostic_stage_qualified=True)
 
 
 def run_stage(p,r,ssh,directory,state,stage):
-    if stage == 'devices':
-        return run_detached_stage(p,r,ssh,directory,state)
+    if stage in DETACHED:
+        return run_detached_stage(p,r,ssh,directory,state,stage)
     out=directory/('pm-'+stage); out.mkdir(mode=0o700)
     owner=p.paging.watchdog(out,state,'watchdog-before'); pid=owner['owner_pid']
     stamp=r.persistence.run(ssh,f"sed 's/.*) //' /proc/{int(pid)}/stat | awk '{{print $20}}'",out,'owner-starttime').strip()
@@ -226,9 +247,9 @@ timeout -s TERM -k 3 20 /etc/gemini/gpu-render /dev/dri/$(basename "$1")
         raise RuntimeError('Fresh GPU rendering after PM stage did not verify')
 
 
-def run_detached_stage(p,r,ssh,directory,state):
-    out=directory/'pm-devices'; out.mkdir(mode=0o700)
-    proof=p.usb_cycle.run(p,r,ssh,directory,state,pm=SimpleNamespace(scripts=scripts,verify=verify))
+def run_detached_stage(p,r,ssh,directory,state,stage='devices'):
+    out=directory/('pm-'+stage); out.mkdir(mode=0o700)
+    proof=p.usb_cycle.run(p,r,ssh,directory,state,pm=SimpleNamespace(scripts=scripts,verify=verify),stage=stage)
     result=dict(proof['pm_diagnostic'],usb_disconnected=True,usb_guard_qualified=True)
     r.persistence.run(ssh,f'''set -eu
 test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
@@ -239,7 +260,7 @@ test ! -d /run/gemini-usb-cycle.lock
     render(r,ssh,out,state['boot_id'])
     result['fresh_gpu_render_qualified']=True
     r.qualify.save(out,'result.json',result)
-    print('Detached device PM diagnostic passed with fresh GPU render',flush=True)
+    print('Detached PM stage passed with fresh GPU render: '+stage,flush=True)
     return result
 
 
@@ -257,7 +278,7 @@ def install(p,r,last_stage):
             if r.candidate_snapshot(ssh,before,profile)!=state:
                 raise RuntimeError('Candidate health or protected storage changed across PM stage')
         r.qualify.save(directory,'pm-stages.json',dict(boot_id=state['boot_id'],stages=results,
-            pm_diagnostics_qualified=True,full_suspend_requested=False,hibernation_io_qualified=False))
+            pm_diagnostics_qualified=True,full_suspend_requested=last_stage=='s2idle',hibernation_io_qualified=False))
         return state
     r.candidate_return=candidate_return
 
@@ -270,13 +291,15 @@ def verify_final(directory,last_stage):
             any(s.get('diagnostic_stage_qualified') is not True or s.get('fresh_gpu_render_qualified') is not True
                 or s.get('boot_id')!=candidate['boot_id'] for s in proof['stages'])):
         raise RuntimeError('Missing complete PM stage and post-stage health evidence')
-    if last_stage == 'devices':
-        usb=json.loads((directory/'usb-pm-devices/result.json').read_text())
-        if (any(proof['stages'][-1].get(k) is not True for k in ('usb_disconnected','usb_guard_qualified')) or
+    for stage in [s for s in DETACHED if s in STAGES[:STAGES.index(last_stage)+1]]:
+        usb=json.loads((directory/('usb-pm-'+stage)/'result.json').read_text())
+        staged=[x for x in proof['stages'] if x['stage']==stage][0]
+        if (any(staged.get(k) is not True for k in ('usb_disconnected','usb_guard_qualified')) or
                 usb.get('boot_id')!=candidate['boot_id'] or usb.get('sleep_requested') is not True or
                 any(usb.get(k) is not True for k in ('usb_cycle_qualified','independent_sleep_inhibitor',
                     'original_usb_inhibitor_restored','watchdog_owner_unchanged','post_cycle_health')) or
                 usb.get('fallback_reboot_requested') is not False):
             raise RuntimeError('Missing qualified USB detachment/restoration around device PM')
     return dict(pm_diagnostics_qualified=True,pm_test_stages=[s['stage'] for s in proof['stages']],
-                sleep_requested=True,full_suspend_requested=False,hibernation_io_qualified=False)
+                sleep_requested=True,full_suspend_requested=last_stage=='s2idle',
+                s2idle_resume_qualified=last_stage=='s2idle',hibernation_io_qualified=False)

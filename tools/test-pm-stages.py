@@ -153,10 +153,33 @@ class Integration(unittest.TestCase):
                         r.candidate_return('ssh','before',root,'profile')
                         self.assertEqual([c.args[-1] for c in run.call_args_list],['freezer','devices'])
 
-    def test_final_proof_rejects_missing_device_stage_or_gpu_check(self):
+    def test_s2idle_final_proof_requires_both_detached_stages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'candidate-linux.json').write_text(json.dumps({'boot_id':BOOT}))
             stages=[dict(stage=s,boot_id=BOOT,diagnostic_stage_qualified=True,fresh_gpu_render_qualified=True) for s in m.STAGES]
+            for stage in stages[1:]: stage.update(usb_disconnected=True,usb_guard_qualified=True)
+            usb=dict(boot_id=BOOT,sleep_requested=True,usb_cycle_qualified=True,independent_sleep_inhibitor=True,
+                     original_usb_inhibitor_restored=True,watchdog_owner_unchanged=True,post_cycle_health=True,
+                     fallback_reboot_requested=False)
+            (root/'pm-stages.json').write_text(json.dumps(dict(boot_id=BOOT,pm_diagnostics_qualified=True,stages=stages)))
+            (root/'usb-pm-devices').mkdir();(root/'usb-pm-devices/result.json').write_text(json.dumps(usb))
+            with self.assertRaises(OSError):m.verify_final(root,'s2idle')
+            (root/'usb-pm-s2idle').mkdir();(root/'usb-pm-s2idle/result.json').write_text(json.dumps(usb))
+            final=m.verify_final(root,'s2idle')
+            self.assertTrue(final['full_suspend_requested'] and final['s2idle_resume_qualified'])
+
+    def test_s2idle_script_arms_rtc_and_never_sets_pm_test(self):
+        action,cleanup=m.scripts('s2idle',BOOT,'/nix/store/'+'a'*32+'-system','b'*64,123,456,'/run/gemini-pm-s2idle-1-2')
+        body=action.rsplit('if test "$stage" = s2idle; then',1)[1].split('else',1)[0]
+        self.assertIn("printf '+10' > \"$sys/class/rtc/rtc0/wakealarm\"",body)
+        self.assertIn('suspend_keep_running',body)
+        self.assertNotIn('pm_test',body)
+        self.assertIn('wakealarm',cleanup)
+
+    def test_final_proof_rejects_missing_device_stage_or_gpu_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'candidate-linux.json').write_text(json.dumps({'boot_id':BOOT}))
+            stages=[dict(stage=s,boot_id=BOOT,diagnostic_stage_qualified=True,fresh_gpu_render_qualified=True) for s in m.STAGES[:2]]
             stages[-1].update(usb_disconnected=True,usb_guard_qualified=True)
             usb=dict(boot_id=BOOT,sleep_requested=True,usb_cycle_qualified=True,independent_sleep_inhibitor=True,
                      original_usb_inhibitor_restored=True,watchdog_owner_unchanged=True,post_cycle_health=True,

@@ -189,9 +189,10 @@ def preflight(r, directory, execute):
         if r.pm_test_last_stage or r.usb_cycle_requested:
             r.qualify.save(directory, 'pm-prerequisites.json', pm_stages.prerequisites(
                 SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, KERNEL=KERNEL, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA)))
-        if r.pm_test_last_stage == 'devices':
+        if r.pm_test_last_stage in pm_stages.DETACHED:
             r.qualify.save(directory, 'usb-prerequisites.json', usb_cycle.prerequisites(
-                SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA)))
+                SimpleNamespace(ROOT=ROOT, SYSTEM=SYSTEM, NOTES_SHA=NOTES_SHA, BOOT_SHA=BOOT_SHA,
+                                pm_stages=pm_stages)))
         plan = json.loads((directory/'plan.json').read_text())
         names = {('nix/' if name == 'generate-late-cpu-provenance.py' else 'tools/') + name
                  for name in plan['executed_sources_sha256']}
