@@ -60,10 +60,13 @@ Input, stop/idle, guards and normal unload passed in both, as did full boot/
 paging/Nix/RTC/recovery. Trial 14 read back the complete frame configuration
 with the public H.264 masks and all three clock votes. Trial 15 also times out
 on all four PCM/compressed-DC and error-bypass combinations without writing any
-output; input, guards, idle/unload and full system/RTC/recovery pass. Six frames
-have been submitted and none has compared successfully. The current probe makes
-three wrapper writes optional after finding them in a disabled reference block,
-and records working-buffer changes for the next clock/path experiment. A
+output; input, guards, idle/unload and full system/RTC/recovery pass. Trial 16
+also fails on all six wrapper/clock-path variants; twelve frame submissions have
+zero successful comparisons. MV working memory changes, and prediction changes
+with the wrapper extension; these flags include setup/reset activity. Guards,
+idle/unload and full system/RTC/recovery pass. The next probe records pipeline
+status and CPU working-memory snapshots after idle, with a configuration-only
+control and a smaller DMA aperture to check a truncated address field. A
 27-byte patterned compressed intra reference passes all 6,144 samples against
 FFmpeg; it has not run on hardware. Hardware video decoding and encoding remain
 unqualified. The target is

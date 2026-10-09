@@ -74,6 +74,12 @@ MODULE_PARM_DESC(frame_error_bypass, "Diagnose the related-core AVC control bits
 static bool frame_wrapper_bypass;
 module_param(frame_wrapper_bypass, bool, 0444);
 MODULE_PARM_DESC(frame_wrapper_bypass, "Diagnose the small-picture wrapper extension from a disabled public reference block; default uses its active path");
+static bool frame_config_only;
+module_param(frame_config_only, bool, 0444);
+MODULE_PARM_DESC(frame_config_only, "Configure and observe the private frame without submitting its decode command");
+static unsigned int dma_bits = TEST_DMA_BITS;
+module_param(dma_bits, uint, 0444);
+MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
 static bool nonposted = true;
 module_param(nonposted, bool, 0444);
 MODULE_PARM_DESC(nonposted, "Use non-posted codec register mappings, matching the public MT6797 userspace resource mapping");
@@ -139,14 +145,15 @@ struct fifo_probe {
 	bool iommu_attached, dma_started, compared, quiesced, fenced;
 	bool input_unchanged, scratch_unchanged;
 	bool resources_held;
-	void *frame_buffers[4], *frame_snapshot;
+	void *frame_buffers[4], *frame_snapshot, *frame_work_snapshot;
 	dma_addr_t frame_dma[4]; /* output, MV, VLD wrapper, PP wrapper */
 	struct { void __iomem *address; u32 value; } frame_saved[48];
 	unsigned int frame_saved_count;
 	u32 frame_state, frame_irq, frame_error, frame_message, frame_mbx, frame_mby;
 	u32 frame_input_first, frame_input_data;
-	u32 frame_setup[16], frame_status[8], frame_clock_status[6];
+	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[16];
 	bool frame_work_changed[4]; /* prediction, MV, VLD wrapper, PP wrapper */
+	bool frame_work_before[4];
 	int frame_result;
 	bool slice_loaded, decode_started, frame_done, frame_guards_unchanged, snapshot_ready;
 };
@@ -375,6 +382,7 @@ static int test_frame(struct fifo_probe *p)
 	};
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words words;
+	unsigned int i;
 	u32 state;
 	int ret;
 
@@ -490,12 +498,21 @@ static int test_frame(struct fifo_probe *p)
 	p->frame_setup[13] = readl(p->mv + 0x20c);
 	p->frame_setup[14] = readl(p->mc + 0xa20);
 	p->frame_setup[15] = readl(p->mc + 0xa24);
-	dma_wmb();
-	p->decode_started = true; /* Software submission, not decoded-frame proof. */
-	write_reg(1, p->avc + 0x238);
-	ret = readl_poll_timeout(p->avc + 0x278, p->frame_state,
-				p->frame_state & BIT(31), 100, 1000000);
-	p->frame_done = !ret;
+	dma_rmb();
+	p->frame_work_before[0] = !!memchr_inv(p->scratch, 0, FIFO_SIZE);
+	for (i = 1; i < ARRAY_SIZE(p->frame_buffers); i++)
+		p->frame_work_before[i] = !!memchr_inv(p->frame_buffers[i], 0, FIFO_SIZE);
+	ret = 0;
+	if (!frame_config_only) {
+		dma_wmb();
+		p->decode_started = true; /* Software submission, not decoded-frame proof. */
+		write_reg(1, p->avc + 0x238);
+		ret = readl_poll_timeout(p->avc + 0x278, p->frame_state,
+					p->frame_state & BIT(31), 100, 1000000);
+		p->frame_done = !ret;
+	} else {
+		p->frame_state = readl(p->avc + 0x278);
+	}
 	p->frame_irq = readl(p->misc + IRQ_CONTROL);
 	p->frame_error = readl(p->avc + 0x284);
 	p->frame_message = readl(p->avc + 0x270);
@@ -515,6 +532,25 @@ static int test_frame(struct fifo_probe *p)
 	p->frame_clock_status[3] = readl(p->top + 0x2c);
 	p->frame_clock_status[4] = readl(p->top + 0x40);
 	p->frame_clock_status[5] = readl(p->top + 0x94);
+	/* Public RO/status and stable configuration words; no advancing barrel,
+	 * command, acknowledgement or debug-selector access in this snapshot.
+	 */
+	p->frame_pipeline[0] = readl(p->mc + 0x94);
+	p->frame_pipeline[1] = readl(p->mc + 0x64);
+	p->frame_pipeline[2] = readl(p->mc + 0x6c);
+	p->frame_pipeline[3] = readl(p->mc + 0x68);
+	p->frame_pipeline[4] = readl(p->mc + 0x3c);
+	p->frame_pipeline[5] = readl(p->mc + 0x220);
+	p->frame_pipeline[6] = readl(p->mc + 0x250);
+	p->frame_pipeline[7] = readl(p->mc + 0x24);
+	p->frame_pipeline[8] = readl(p->mc + 0x7fc);
+	p->frame_pipeline[9] = readl(p->mc + 0x800);
+	p->frame_pipeline[10] = readl(p->mc + 0x834);
+	p->frame_pipeline[11] = readl(p->mc + 0x5e4);
+	p->frame_pipeline[12] = readl(p->pp + 0x804);
+	p->frame_pipeline[13] = readl(p->top + 0x54);
+	p->frame_pipeline[14] = readl(p->vld + 0xfc);
+	p->frame_pipeline[15] = readl(p->vld + 0xec);
 	return ret;
 }
 
@@ -529,7 +565,11 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		"\"status\":{\"avc_status\":%u,\"avc_complete\":%u,\"avc_control\":%u,"
 		"\"vld_proc\":%u,\"read_ptr\":%u,\"fetch\":%u,\"cycle\":%u,\"smi_clock\":%u},"
 		"\"local\":{\"pdn_spec\":%u,\"pdn_module\":%u,\"pdn_legacy\":%u,"
-		"\"wrapper_control\":%u,\"wrapper_burst\":%u,\"prediction_end\":%u}}\n",
+		"\"wrapper_control\":%u,\"wrapper_burst\":%u,\"prediction_end\":%u},"
+		"\"pipeline\":{\"mc_status\":%u,\"mb_intra\":%u,\"cbp\":%u,\"frame_dct\":%u,"
+		"\"mv_valid\":%u,\"pp_enable\":%u,\"post_writeback\":%u,\"opbuf\":%u,"
+		"\"ddr0\":%u,\"ddr1\":%u,\"ddr3\":%u,\"mc_mode\":%u,\"pp_wrapper_control\":%u,"
+		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u}}\n",
 		p->frame_setup[0], p->frame_setup[1], p->frame_setup[2], p->frame_setup[3],
 		p->frame_setup[4], p->frame_setup[5], p->frame_setup[6], p->frame_setup[7],
 		p->frame_setup[8], p->frame_setup[9], p->frame_setup[10], p->frame_setup[11],
@@ -537,7 +577,11 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		p->frame_status[0], p->frame_status[1], p->frame_status[2], p->frame_status[3],
 		p->frame_status[4], p->frame_status[5], p->frame_status[6], p->frame_status[7],
 		p->frame_clock_status[0], p->frame_clock_status[1], p->frame_clock_status[2],
-		p->frame_clock_status[3], p->frame_clock_status[4], p->frame_clock_status[5]);
+		p->frame_clock_status[3], p->frame_clock_status[4], p->frame_clock_status[5],
+		p->frame_pipeline[0], p->frame_pipeline[1], p->frame_pipeline[2], p->frame_pipeline[3],
+		p->frame_pipeline[4], p->frame_pipeline[5], p->frame_pipeline[6], p->frame_pipeline[7],
+		p->frame_pipeline[8], p->frame_pipeline[9], p->frame_pipeline[10], p->frame_pipeline[11],
+		p->frame_pipeline[12], p->frame_pipeline[13], p->frame_pipeline[14], p->frame_pipeline[15]);
 }
 static DEVICE_ATTR_RO(frame_registers);
 
@@ -545,17 +589,19 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 {
 	struct fifo_probe *p = dev_get_drvdata(dev);
 	return sysfs_emit(buf,
-		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,"
+		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,\"config_only\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
 		"\"input_first\":%u,\"input_data\":%u,\"width\":64,\"height\":64,"
 		"\"work_changed\":{\"prediction\":%s,\"mv\":%s,\"vld_wrapper\":%s,\"pp_wrapper\":%s},"
+		"\"work_before\":{\"prediction\":%s,\"mv\":%s,\"vld_wrapper\":%s,\"pp_wrapper\":%s},"
 		"\"stride\":64,\"chroma_offset\":4096,\"output_iova\":%llu,"
 		"\"mv_iova\":%llu,\"vld_wrapper_iova\":%llu,\"pp_wrapper_iova\":%llu}\n",
 		frame ? "true" : "false", frame_flat ? "true" : "false",
 		frame_pattern ? "true" : "false",
 		frame_error_bypass ? "true" : "false", frame_wrapper_bypass ? "true" : "false",
+		frame_config_only ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -563,6 +609,8 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		p->frame_mbx, p->frame_mby, p->frame_input_first, p->frame_input_data,
 		p->frame_work_changed[0] ? "true" : "false", p->frame_work_changed[1] ? "true" : "false",
 		p->frame_work_changed[2] ? "true" : "false", p->frame_work_changed[3] ? "true" : "false",
+		p->frame_work_before[0] ? "true" : "false", p->frame_work_before[1] ? "true" : "false",
+		p->frame_work_before[2] ? "true" : "false", p->frame_work_before[3] ? "true" : "false",
 		(unsigned long long)p->frame_dma[0], (unsigned long long)p->frame_dma[1],
 		(unsigned long long)p->frame_dma[2], (unsigned long long)p->frame_dma[3]);
 }
@@ -578,6 +626,18 @@ static ssize_t frame_output_read(struct file *file, struct kobject *kobj,
 	return memory_read_from_buffer(buf, count, &offset, p->frame_snapshot, INPUT_ALLOC_SIZE);
 }
 static const BIN_ATTR_RO(frame_output, INPUT_ALLOC_SIZE);
+
+/* Four 64-KiB working regions in order: prediction, MV, VLD, PP. */
+static ssize_t frame_work_read(struct file *file, struct kobject *kobj,
+			      const struct bin_attribute *attr, char *buf,
+			      loff_t offset, size_t count)
+{
+	struct fifo_probe *p = dev_get_drvdata(kobj_to_dev(kobj));
+	if (!p->snapshot_ready)
+		return -ENODATA;
+	return memory_read_from_buffer(buf, count, &offset, p->frame_work_snapshot, 4 * FIFO_SIZE);
+}
+static const BIN_ATTR_RO(frame_work, 4 * FIFO_SIZE);
 
 static ssize_t result_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -609,7 +669,7 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		"\"after_fetch\":{\"clock_select\":%u,\"pdn_spec\":%u,"
 		"\"pdn_module\":%u,\"auto_pdn\":%u,\"write_ptr\":%u,"
 		"\"avc_control\":%u,\"sram\":%u,\"irq\":%u}}\n",
-		TEST_DMA_BITS, all_clocks ? "true" : "false",
+		dma_bits, all_clocks ? "true" : "false",
 		nonposted ? "true" : "false",
 		common_reset ? "true" : "false", async_write ? "true" : "false",
 		clear_caller_gate ? "true" : "false", p->caller_gate_after_fetch,
@@ -642,7 +702,7 @@ static struct attribute *fifo_attrs[] = {
 	&dev_attr_result.attr, &dev_attr_frame_result.attr, &dev_attr_frame_registers.attr, NULL
 };
 static const struct bin_attribute *const fifo_bin_attrs[] = {
-	&bin_attr_frame_output, NULL
+	&bin_attr_frame_output, &bin_attr_frame_work, NULL
 };
 static const struct attribute_group fifo_group = {
 	.attrs = fifo_attrs, .bin_attrs = fifo_bin_attrs,
@@ -699,8 +759,10 @@ static int fifo_probe(struct platform_device *pdev)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only)) ||
 	    (frame_flat && frame_pattern))
+		return -EINVAL;
+	if (dma_bits < 28 || dma_bits > TEST_DMA_BITS)
 		return -EINVAL;
 	p = devm_kzalloc(dev, sizeof(*p), GFP_KERNEL);
 	if (!p)
@@ -762,7 +824,7 @@ static int fifo_probe(struct platform_device *pdev)
 	 * deliberately conservative diagnostic limit does not establish the
 	 * actual MT6797 address width; high-address DMA still needs testing.
 	 */
-	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(TEST_DMA_BITS));
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(dma_bits));
 	if (ret)
 		return ret;
 	pm_runtime_enable(dev);
@@ -815,7 +877,8 @@ static int fifo_probe(struct platform_device *pdev)
 	}
 	if (frame) {
 		p->frame_snapshot = devm_kmalloc(dev, INPUT_ALLOC_SIZE, GFP_KERNEL);
-		if (!p->frame_snapshot) {
+		p->frame_work_snapshot = devm_kmalloc(dev, 4 * FIFO_SIZE, GFP_KERNEL);
+		if (!p->frame_snapshot || !p->frame_work_snapshot) {
 			ret = -ENOMEM;
 			goto free;
 		}
@@ -827,14 +890,14 @@ static int fifo_probe(struct platform_device *pdev)
 				goto free;
 			}
 			if (!IS_ALIGNED(p->frame_dma[i], 512) ||
-			    p->frame_dma[i] + INPUT_ALLOC_SIZE - 1 > DMA_BIT_MASK(TEST_DMA_BITS)) {
+			    p->frame_dma[i] + INPUT_ALLOC_SIZE - 1 > DMA_BIT_MASK(dma_bits)) {
 				ret = -ERANGE;
 				goto free;
 			}
 			memset(p->frame_buffers[i], 0xd3, INPUT_ALLOC_SIZE);
 		}
 	}
-	if (p->input_dma + FIFO_SIZE > DMA_BIT_MASK(TEST_DMA_BITS) ||
+	if (p->input_dma + FIFO_SIZE > DMA_BIT_MASK(dma_bits) ||
 	    upper_32_bits(p->scratch_dma + FIFO_SIZE) ||
 	    !IS_ALIGNED(p->input_dma, 64)) {
 		ret = -ERANGE;
@@ -899,6 +962,9 @@ static int fifo_probe(struct platform_device *pdev)
 		 * Userspace receives CPU storage, never a live DMA mapping.
 		 */
 		memcpy(p->frame_snapshot, p->frame_buffers[0], INPUT_ALLOC_SIZE);
+		memcpy(p->frame_work_snapshot, p->scratch, FIFO_SIZE);
+		for (i = 1; i < ARRAY_SIZE(p->frame_buffers); i++)
+			memcpy(p->frame_work_snapshot + i * FIFO_SIZE, p->frame_buffers[i], FIFO_SIZE);
 		p->snapshot_ready = true;
 		if (p->slice_loaded) {
 			p->frame_work_changed[0] = !!memchr_inv(p->scratch, 0, FIFO_SIZE);

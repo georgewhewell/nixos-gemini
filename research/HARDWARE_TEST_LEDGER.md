@@ -1454,3 +1454,17 @@ QP 46. Independent H.264 DC prediction/inverse-scaling calculations match all
 6,144 FFmpeg sample bytes. Its sixteen luma blocks vary, allowing a useful tile
 layout comparison once decoding works; chroma stays neutral and cannot establish
 UV ordering. It remains a software fixture, not hardware decode or encode proof.
+
+Private frame trial `handoff/boot-test-video-frame-16` submits six PCM/compressed
+DC variants using the active wrapper path with either all local clocks enabled
+or the public H.264 masks, and the extended wrapper path with all local clocks
+enabled. All use all three framework votes. Every command times out with output
+unchanged. MV memory changes in all six runs; prediction changes only with the
+extension. These observations cover setup/reset as well as the frame command,
+so they are not completed-macroblock proof. TOP `0x94` reads back only the lower
+28 address bits of the extension's programmed prediction-end value.
+Input, guards, stop/idle and normal unload pass. Full boot/paging/Nix/all RTC/
+recovery and final source/no-writer checks pass; the accepted board is healthy
+and untainted at `64af6f66-356e-4451-971e-b738014b4974`. Twelve frame submissions
+have no successful pixel comparison. A configuration-only control, DMA28
+comparison and post-idle working-memory snapshots are prepared for diagnosis.

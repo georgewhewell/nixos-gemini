@@ -204,6 +204,15 @@ Its chroma is neutral, so it does not qualify colour ordering.
 inside a disabled reference block. The default now follows the active path.
 Cached local register words and post-idle prediction/MV/wrapper change flags
 record setup and working-memory activity without exposing live DMA storage.
+Trial 16 timed out with all framework votes and either all local clocks enabled
+or the public masks, with both wrapper paths tested. MV working memory changed,
+and prediction changed with the extension. This includes setup/reset activity.
+`frame_config_only=1` omits the decode command after configuration to identify
+that baseline. `dma_bits=28` tests smaller IOVAs after observing a truncated
+prediction-end word; the default remains 30 and only 28..30 are admitted.
+`frame_work` contains four CPU snapshots in prediction/MV/VLD-wrapper/PP-wrapper
+order, each 64 KiB, captured only after documented stop and idle reset.
+Cached pipeline words read public status/configuration registers only.
 These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM
