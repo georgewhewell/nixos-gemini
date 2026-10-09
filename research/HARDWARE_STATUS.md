@@ -1,5 +1,28 @@
 # Gemini completion status, 2026-10-09
 
+2026-10-09 cleanup: Linux `21ac47a970d7` is installed as the accepted default
+(`research/accepted-baseline.json`, `handoff/cleanup-thermal-20261009/update.log`).
+Eleven redundant activation parameters are removed from the validated GPU,
+CONSYS and MD1/CCCI paths; DT resource checks, ownership/attestation, privileged
+filesystem admission and failure reporting remain. Routine CPU hotplug/cache/GIC
+and CCCI filesystem messages are debug-level; audio ioctl traces go to
+`/run/gemini-audio/stream.log` instead of dmesg. The normal command line drops
+`ignore_loglevel`, `initcall_debug` and `efi=debug`. The candidate log contains no
+routine hotplug, audio sequence, CCCI FS transaction or initcall traces.
+
+Passive cooling now starts at 85°C, with 20°C hysteresis retaining the previously
+qualified 65°C release point. The 95°C emergency and 117°C critical trips remain.
+The initial 85°C/15°C candidate reached 98.9°C in the bounded test and was rejected;
+it was never installed. The revised ten-core test completed 10,061 checked
+computations in 45 seconds and peaked at 87.2°C, with physical throttling on all
+three clusters and clean kernel/rail checks (`handoff/cleanup-trial-02/thermal.json`).
+The full supervised boot, paging, ordinary Nix build, RTC delivery/cancel/delivery,
+automatic recovery and final no-writer audit pass. Genuine hibernation through
+reboot also passes on the installed generation, preserving the boot ID and DVFS
+readiness with zero kernel errors (`handoff/cleanup-thermal-20261009/hibernate`).
+Host driver/admission tests, the package checks and flake checks pass. Existing
+uncommitted Grok allocator diagnostics in `mm/slab.h` and `mm/slub.c` were preserved.
+
 2026-10-09: the device baseline is now U-Boot -> systemd-boot -> NixOS
 (p22 `095640ea`, recorded in `research/accepted-baseline.json`); M69 is
 retired to the frozen `recovery` package and `research/baselines/m69.json`.
@@ -17,8 +40,7 @@ the same kernel. The bq25890 status poll touched I2C during suspend; Linux
 30ac5ff8 stops it across sleep. The opt-in `mtk_wdt.suspend_keep_running`
 guard bounds qualification sleeps only; the normal system pauses the watchdog
 while asleep. Generation updates go through `tools/update-system.py`, which
-requires a qualified direct-boot trial of the exact system. Hibernation needs a
-harness mode that holds rescue across the planned power cycle.
+requires a qualified direct-boot trial of the exact system.
 Hibernation works on the U-Boot baseline: `tools/hibernate-test.sh reboot`
 writes the image, reboots through LK, U-Boot and systemd-boot, and stage 1
 resumes the same session (same boot id, DVFS ready, no kernel errors;
