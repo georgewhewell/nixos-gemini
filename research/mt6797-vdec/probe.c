@@ -35,7 +35,8 @@ static struct platform_device *probe_device;
 static int probe_result = -ENODEV;
 static bool probe_completed, power_vote_released;
 static u32 original[3], observed[3], restored[3], sram_status;
-static u32 gcon_clock_status, gcon_reset_status, local_clock_select, local_power_down;
+static u32 gcon_clock_status, gcon_smi_clock_status, gcon_reset_status;
+static u32 local_clock_select, local_power_down;
 static u32 h264_clock_select, restored_clock_select;
 static u32 original_avc_control, enabled_avc_control, restored_avc_control;
 static unsigned long clock_rate;
@@ -49,6 +50,7 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr,
 		"\"decode_started\":false,\"power_vote_released\":%s,"
 		"\"clock_hz\":%lu,\"sram_status\":%u,"
 		"\"gcon_clock_status\":%u,\"gcon_reset_status\":%u,"
+		"\"gcon_smi_clock_status\":%u,"
 		"\"local_clock_select\":%u,\"local_power_down\":%u,"
 		"\"h264_clock_select\":%u,\"restored_clock_select\":%u,"
 		"\"original_avc_control\":%u,\"enabled_avc_control\":%u,"
@@ -57,7 +59,8 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr,
 		"\"restored\":[%u,%u,%u],\"result\":%d}\n",
 		test_controls ? "true" : "false",
 		power_vote_released ? "true" : "false", clock_rate, sram_status,
-		gcon_clock_status, gcon_reset_status, local_clock_select, local_power_down,
+		gcon_clock_status, gcon_reset_status, gcon_smi_clock_status,
+		local_clock_select, local_power_down,
 		h264_clock_select, restored_clock_select,
 		original_avc_control, enabled_avc_control, restored_avc_control,
 		original[0], original[1], original[2],
@@ -77,8 +80,8 @@ static int probe_registers(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node;
-	struct clk_bulk_data clocks[3] = { { .id = "bus" },
-		{ .id = "active" }, { .id = "engine" } };
+	struct clk_bulk_data clocks[4] = { { .id = "bus" },
+		{ .id = "active" }, { .id = "engine" }, { .id = "smi" } };
 	struct of_phandle_args spec = { .args_count = 1 };
 	const unsigned int clock_ids[] = { CLK_VDEC_ACTIVE, CLK_VDEC_CKEN_ENG };
 	struct regmap *gcon;
@@ -124,6 +127,11 @@ static int probe_registers(struct platform_device *pdev)
 	clocks[0].clk = devm_clk_get(dev, "apb");
 	if (IS_ERR(clocks[0].clk)) {
 		ret = PTR_ERR(clocks[0].clk);
+		goto done;
+	}
+	clocks[3].clk = devm_clk_get(dev, "smi");
+	if (IS_ERR(clocks[3].clk)) {
+		ret = PTR_ERR(clocks[3].clk);
 		goto done;
 	}
 	spec.np = of_parse_phandle(node, "clocks", 0);
@@ -180,6 +188,9 @@ static int probe_registers(struct platform_device *pdev)
 	ret = regmap_read(gcon, 0x10, &gcon_reset_status);
 	if (ret)
 		goto disable_clk;
+	ret = regmap_read(gcon, 8, &gcon_smi_clock_status);
+	if (ret)
+		goto disable_clk;
 	local_clock_select = readl(regs + LOCAL_CLOCK_SELECT);
 	local_power_down = readl(regs);
 	original_avc_control = readl(regs + AVC_CONTROL);
@@ -228,7 +239,7 @@ static int probe_registers(struct platform_device *pdev)
 	for (i = 0; i < ARRAY_SIZE(offsets); i++)
 		observed[i] = readl(regs + offsets[i]);
 	/* Restore all registers before evaluating a mismatch. No early return
-	 * after writes, and no writes to any command or DMA address register.
+	 * after writes, and no FIFO/frame commands or DMA address writes.
 	 */
 	if (test_controls)
 		for (i = 0; i < ARRAY_SIZE(offsets); i++)

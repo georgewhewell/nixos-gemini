@@ -29,11 +29,24 @@ uncommitted Grok allocator diagnostics in `mm/slab.h` and `mm/slub.c` were prese
 2026-10-09 video: independent GPL H.264 SPS/PPS, progressive slice-header and
 scaling-SRAM translation is implemented and passes ASan/UBSan host tests in
 `research/mt6797-vdec`. A pinned public MT8173 GPL hardware test interface has
-the same seven H.264 bank bases as the published MT6797 specification. A temporary
-non-DMA probe observes the 338 MHz clock and local selector roundtrip `0 -> 2 -> 0`.
-AVC control readback remains zero and is inconclusive: the reference reads
-status fields from the control register but never reads SPS/PPS back. No frame
-was submitted; video decoding and encoding remain unimplemented. The target is
+the same seven H.264 bank bases as the published MT6797 specification. The isolated
+kernel branch `gemini-video-cleanroom` at `e87e65549920` adds the direct decoder
+resources, existing clock provider and enabled larb1. Its resource-only supervised
+boot, paging, Nix, RTC and automatic recovery trial passes; the accepted default
+is unchanged. A bounded FIFO diagnostic has an attached IOMMU domain and observes
+all ten larb1 MMU ports enabled, a configured 338 MHz rate and accepted local power controls.
+Seventeen input-fetch commands timed out with zero FIFO status/pointer readback,
+including synchronized writes, both local control masks, the vendor's bus-clock
+sequence, an allocation keeping both FIFO endpoints below 1 GiB and the vendor's
+non-posted register memory attributes. Trials 01-04
+pinned mappings and power until reboot. Trial 05, all eight trial-07 fetches and the four trial-08 fetches
+passed the documented break/idle acknowledgement and released resources normally.
+Trial 06's SSH guard timed out before any module load; it is recorded as not run.
+Read-only supplier observations match the public MT6797 power-driver SRAM mask;
+they establish control state, not measured frequency or decoding. A verified
+original 64x64 H.264 I_PCM fixture and explicit
+NV12/MM21 sample comparator are ready, but no hardware frame was submitted.
+Video decoding and encoding remain unimplemented. The target is
 V4L2 stateless Request API decoding without proprietary codec firmware or
 `libvcodec`. The source ledger, qualification results and remaining hardware
 contracts are in `research/mt6797-video-interface.json`.

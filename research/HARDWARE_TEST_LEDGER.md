@@ -1325,3 +1325,69 @@ The MT6797 DDP debugfs file was still absent in Cycle 18.  The first follow-up
 matched copied graph driver data by pointer and was therefore insufficient;
 Linux commit `28c471502` now matches the actual parent MMSYS OF node instead.
 That diagnostic-only correction is committed but not yet hardware-tested.
+
+
+## Independent video interface qualification — 2026-10-09 UTC
+
+The accepted system remains Linux `21ac47a970d7`, system
+`/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade`.
+The normal and frozen recovery pins were not changed. Existing Grok edits in
+`mm/slab.h` and `mm/slub.c` retain diff SHA256
+`49f1f92c6c37667a2e2f2205b282764d8be9b0e1728204d4fcbc22a3fd6c687f`.
+
+The isolated `gemini-video-cleanroom` kernel commit
+`e87e655499203294c6a8855830d521f73be241b8` enables the existing VDECSYS clock
+provider and larb1, and describes a direct decoder DT device with seven banks,
+SPI 240 level-low, runtime power/clocks and all ten larb1 IOMMU ports.
+The candidate system is
+`/nix/store/k2mma7h5y137qc3qwph1ssh2sjjzwhrr-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade`;
+configuration SHA256 is
+`a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6`.
+Its resource-only trial `handoff/boot-test-video-resource-02` passes the full
+boot/paging/Nix/RTC/recovery qualification. This is not media acceleration proof.
+
+Original GPL diagnostics require the proper IOMMU domain and observe hardware
+larb1 MMU mask `0x3ff`. Input tests issue a private FIFO fetch, check known barrel
+words and all input/scratch guards, and never start a frame. The exact compiled
+module configuration and version match the candidate. Strict modpost uses 12,092
+genuine exports from the exact candidate ELF; zero CRCs are valid only because
+`CONFIG_MODVERSIONS` is disabled. The control translator passes ASan/UBSan tests.
+All three research modules build with strict symbol checking.
+
+| Evidence | Input result | Resource release |
+| --- | --- | --- |
+| `handoff/boot-test-video-fifo-01` through `04` | Four fetch timeouts, no known bytes | Mappings, clocks and module pinned until supervisor reboot |
+| `handoff/boot-test-video-fifo-05` | Fetch timeout with both global/local auto clock-off disabled | MT6797 break ACK `0x11` and idle reset passed; normal unload |
+| `handoff/boot-test-video-fifo-06` | Not run: initial read-only SSH health guard timed out before upload/load | No module loaded; connectivity recheck healthy and untainted |
+| `handoff/boot-test-video-fifo-07/fifo-probe` | Four bus-only fetch timeouts across local/legacy mask combinations, synchronized writes and IRQ-clear mode initialized | All four break/idle sequences and guards passed; normal unload |
+| `handoff/boot-test-video-fifo-07/fifo-padding-probe` | Four more timeouts with the exclusive FIFO end kept below 1 GiB | All four break/idle sequences and guards passed; normal unload |
+| `handoff/boot-test-video-fifo-08/fifo-probe` | Four fetch timeouts with non-posted register mappings matching the public vendor mmap attributes | All four break/idle sequences and guards passed; normal unload |
+
+The first DMA30 allocation could end exactly at the aperture boundary. Current
+code maps a trailing guard and rejects an out-of-range exclusive endpoint.
+The corrected endpoint matrix still failed. The source and binary are archived
+separately for each diagnostic; `dma_started` denotes a software command, not
+proof of hardware transfer. All completed supervised FIFO boot trials pass
+paging, ordinary Nix builds, RTC delivery/cancel/delivery, automatic restoration
+and final source/no-writer checks. None qualifies hardware video.
+
+The read-only supplier snapshot reports VDEC power `0xe0d`, PLL control `0x121`,
+PCW `0xd0000`, PLL power `0x80000001` and mux `0x81010100`. The configured rate is
+338 MHz, not independently measured. The matching public MT6797 power driver
+uses only SRAM PDN bit 8 and ACK bit 12, matching the current framework; other
+set bits do not establish missing SRAM power. No extra supplier-register writes
+were made by the snapshot module.
+
+An original 64x64 Baseline H.264 I_PCM fixture is constructed without an encoder
+library and independently decoded by FFmpeg; all 6,144 sample bytes match.
+Explicit NV12/MM21 unpackers pass against independently packed software images,
+and reject invalid geometry, overlapping planes and short allocations. These
+are software reference checks, not a qualified hardware layout or encoder.
+
+Final accepted-board state, module absence, kernel log, boot-image hash and
+untainted health are recorded under `handoff/video-resource-20261009`.
+The detailed source hashes, exact attempt data and final audit are in
+`research/mt6797-video-interface.json`. Input-fetch compatibility remains
+unqualified; no hardware frame has been submitted and no V4L2 video node is
+advertised. Decoder frame/DPB/layout/Request-API work and the encoder hardware
+contract and implementation remain required.
