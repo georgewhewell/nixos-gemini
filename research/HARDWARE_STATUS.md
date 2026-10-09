@@ -19,14 +19,16 @@ guard bounds qualification sleeps only; the normal system pauses the watchdog
 while asleep. Generation updates go through `tools/update-system.py`, which
 requires a qualified direct-boot trial of the exact system. Hibernation needs a
 harness mode that holds rescue across the planned power cycle.
-A test_resume hibernation on the baseline (gadget soft-disconnected; mtu3
-refuses to freeze while connected to a host) wrote and restored the image on
-the same boot, but 1.4 s after restore the DVFS handoff faulted
-(`cpu-rail-transition-failed`, CCI update -EUCLEAN): the restored DVFS owners
-trust their snapshot-time view of rail and PLL state while the hardware holds
-the loader's. CPU frequency stays fenced until reboot. The owners need to
-re-adopt hardware state on restore before real hibernation is attempted
-(`handoff/hibernate-20261009`).
+Hibernation works on the U-Boot baseline: `tools/hibernate-test.sh reboot`
+writes the image, reboots through LK, U-Boot and systemd-boot, and stage 1
+resumes the same session (same boot id, DVFS ready, no kernel errors;
+`handoff/hibernate-20261009/reboot-05`). Fixes: stage 1 detaches the USB gadget
+before resuming a signed image (mtu3 refuses to quiesce while hosted); the DA9214
+voltage registers are volatile; CCI re-adopts the fabric and the CPU clock
+provider re-initializes FHCTL channels on restore. The tool restores the swsusp
+fields left in the swap header tail so the pinned layout holds. Policy keeps
+AllowHibernation=false; `HibernateMode=shutdown` resumes the same way but needs
+the power key to boot.
 
 Owner-observed 2026-10-09: setting the pwm-backlight from 1023 to 300 visibly
 dims the panel. The Gemini PDA keyboard has no backlight (owner-confirmed;
