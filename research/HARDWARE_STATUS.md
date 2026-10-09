@@ -21,9 +21,8 @@ requires a qualified direct-boot trial of the exact system. Hibernation needs a
 harness mode that holds rescue across the planned power cycle.
 
 Owner-observed 2026-10-09: setting the pwm-backlight from 1023 to 300 visibly
-dims the panel. No keyboard backlight control exists in the vendor kernel,
-board pin map or AW9523 driver, and the owner could not confirm one exists;
-it is recorded as unconfirmed hardware, not a missing driver. The text below
+dims the panel. The Gemini PDA keyboard has no backlight (owner-confirmed;
+the vendor kernel, board pin map and AW9523 driver have no control for one). The text below
 predates this and describes M69 as installed.
 
 The objective remains complete hardware enablement and consolidation. Camera
