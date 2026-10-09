@@ -9,7 +9,16 @@ the standard NixOS path (`switch-to-configuration boot`, `handoff/system-update-
 and supervised trials from the new baseline pass end to end with rescue to
 the bootloader (`handoff/post-promotion-trial-06`). Fixes found on the way:
 MT6351 RTC alarm status latched across cancel (Linux 3780e3d8) and a stage-1
-race that lost the charger-preflight marker (repo 021da60). The text below
+race that lost the charger-preflight marker (repo 021da60).
+
+Suspend-to-idle is qualified (`handoff/suspend-s2idle-02`): freezer, devices and
+a real 11 s s2idle with RTC wake, after watchdog-expiry and USB-cycle trials on
+the same kernel. The bq25890 status poll touched I2C during suspend; Linux
+30ac5ff8 stops it across sleep. The opt-in `mtk_wdt.suspend_keep_running`
+guard bounds qualification sleeps only; the normal system pauses the watchdog
+while asleep. Generation updates go through `tools/update-system.py`, which
+requires a qualified direct-boot trial of the exact system. Hibernation needs a
+harness mode that holds rescue across the planned power cycle. The text below
 predates this and describes M69 as installed.
 
 The objective remains complete hardware enablement and consolidation. Camera
