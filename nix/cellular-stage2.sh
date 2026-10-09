@@ -48,8 +48,7 @@ watchdog_ok() {
 }
 identity_ok() {
     grep -wFq GEMINI_A72_CI9_M39 /proc/cmdline
-    test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable)" = Y
-    test "$(cat /sys/module/mt6797_md1_fs_provider/parameters/enable_volatile)" = Y
+    test -c /dev/mt6797-md1-fs-provider
     watchdog_ok
 }
 protocol_ok() {

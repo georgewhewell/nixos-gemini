@@ -94,37 +94,23 @@ let
     }
     check_usb
     cat /sys/kernel/debug/regulator/regulator_summary > /run/gemini-audio/regulators-before.txt
-    # Write boundaries synchronously to the kernel log before the ioctl. A
-    # pipe reader might not run before a global stall. Remove only the kmsg
-    # rate limit for this bounded diagnostic and restore it on every return.
-    kmsg_mode=$(cat /proc/sys/kernel/printk_devkmsg)
-    case "$kmsg_mode" in on|off|ratelimit) ;; *) exit 1 ;; esac
-    restore_logging() {
-      echo "$kmsg_mode" > /proc/sys/kernel/printk_devkmsg
-      dmesg > /run/gemini-audio/stream.log
-    }
-    if test "$kmsg_mode" != on; then
-      echo on > /proc/sys/kernel/printk_devkmsg
-      trap restore_logging EXIT
-    else
-      trap 'dmesg > /run/gemini-audio/stream.log' EXIT
-    fi
-    test "$(cat /proc/sys/kernel/printk_devkmsg)" = on
+    # Keep ioctl traces in the audio evidence file instead of flooding dmesg.
+    # stderr writes directly to the file, preserving the last boundary on failure.
+    trap 'dmesg > /run/gemini-audio/kernel-after.txt' EXIT
     amixer -c mt6797mt6351 cget "name='Speaker Switch'" | grep -Fq ': values=off'
-    if timeout --signal=TERM --kill-after=5 15 ${playback}/bin/gemini-audio-playback --activate 2>/dev/kmsg; then
-      dmesg > /run/gemini-audio/stream.log
+    if timeout --signal=TERM --kill-after=5 15 ${playback}/bin/gemini-audio-playback --activate 2>/run/gemini-audio/stream.log; then
       grep -Fq 'gemini-audio-playback: result=stream-and-route-restoration-passed' /run/gemini-audio/stream.log
     else
-      echo 'gemini-audio: playback qualification failed' > /dev/kmsg
+      echo 'gemini-audio: playback qualification failed'
       exit 1
     fi
-    if timeout --signal=TERM --kill-after=5 15 ${capture}/bin/gemini-audio-capture --stage capture --activate 2>/dev/kmsg; then
-      dmesg > /run/gemini-audio/stream.log
+    if timeout --signal=TERM --kill-after=5 15 ${capture}/bin/gemini-audio-capture --stage capture --activate 2>>/run/gemini-audio/stream.log; then
+      dmesg > /run/gemini-audio/kernel-capture.txt
       grep -Fq 'gemini-audio-capture: result=stream-and-route-restoration-passed' /run/gemini-audio/stream.log
-      grep -Fq 'Gemini microphone gate after enable=1 readback=1' /run/gemini-audio/stream.log
-      grep -Fq 'Gemini microphone gate after enable=0 readback=0' /run/gemini-audio/stream.log
+      grep -Fq 'Gemini microphone gate after enable=1 readback=1' /run/gemini-audio/kernel-capture.txt
+      grep -Fq 'Gemini microphone gate after enable=0 readback=0' /run/gemini-audio/kernel-capture.txt
     else
-      echo 'gemini-audio: capture qualification failed' > /dev/kmsg
+      echo 'gemini-audio: capture qualification failed'
       exit 1
     fi
     check_usb
@@ -132,7 +118,7 @@ let
     # Keep these four digital interconnects as the normal application
     # baseline; stream close still powers down the analog paths.
     ${config.system.build.geminiAudioDigitalRoutes}
-    echo 'gemini-audio: digital routes ready' > /dev/kmsg
+    echo 'gemini-audio: digital routes ready'
     # Exercise the public ALSA default, including its control-preservation
     # hooks and plug conversion. Captured sound is discarded, never saved.
     # Jack detection is asynchronous; wait for its first physical report.
@@ -146,24 +132,24 @@ let
     amixer -c mt6797mt6351 cget "iface=CARD,name='Headphone Jack'" > /run/gemini-audio/headphone-jack-before.txt
     amixer -c mt6797mt6351 cget "iface=CARD,name='Headset Mic Jack'" > /run/gemini-audio/headset-mic-jack-before.txt
     ${controlSnapshot}/bin/gemini-audio-controls > /run/gemini-audio/controls-before.txt
-    echo 'gemini-audio: default playback before' > /dev/kmsg
+    echo 'gemini-audio: default playback before'
     timeout --signal=TERM --kill-after=5 10 aplay -q -D default ${tone}
-    echo 'gemini-audio: default playback passed' > /dev/kmsg
+    echo 'gemini-audio: default playback passed'
     dmesg > /run/gemini-audio/speaker-playback.txt
     amixer -c mt6797mt6351 cget "name='Speaker Switch'" | grep -Fq ': values=off'
     speaker_starts=$(grep -Fc 'Gemini speaker amplifiers before enable=1' /run/gemini-audio/speaker-playback.txt || :)
-    echo 'gemini-audio: named headphone playback before' > /dev/kmsg
+    echo 'gemini-audio: named headphone playback before'
     timeout --signal=TERM --kill-after=5 10 aplay -q -D gemini_headphones ${tone}
     dmesg > /run/gemini-audio/headphone-playback.txt
     test "$(grep -Fc 'Gemini speaker amplifiers before enable=1' /run/gemini-audio/headphone-playback.txt || :)" = "$speaker_starts"
-    echo 'gemini-audio: named headphone playback kept speakers off' > /dev/kmsg
-    echo 'gemini-audio: default capture before' > /dev/kmsg
+    echo 'gemini-audio: named headphone playback kept speakers off'
+    echo 'gemini-audio: default capture before'
     timeout --signal=TERM --kill-after=5 10 arecord -q -D default -t raw -f S16_LE -r 48000 -c 2 -d 1 /dev/null
-    echo 'gemini-audio: default capture passed' > /dev/kmsg
-    echo 'gemini-audio: mono headset capture before' > /dev/kmsg
+    echo 'gemini-audio: default capture passed'
+    echo 'gemini-audio: mono headset capture before'
     timeout --signal=TERM --kill-after=5 15 ${headsetQualification}
     grep -Fxq 'headset-capture=mono-left-route-and-restoration-passed' /run/gemini-audio/headset/result
-    echo 'gemini-audio: mono headset capture, bias handoff and restoration passed' > /dev/kmsg
+    echo 'gemini-audio: mono headset capture, bias handoff and restoration passed'
     ${controlSnapshot}/bin/gemini-audio-controls > /run/gemini-audio/controls-after.txt
     cmp /run/gemini-audio/controls-before.txt /run/gemini-audio/controls-after.txt
     alsaucm -c hw:mt6797mt6351 list _verbs > /run/gemini-audio/ucm-verbs.txt
@@ -183,10 +169,10 @@ let
     # the next ordinary ALSA open. Empty input tests this without a new tone.
     timeout --signal=TERM --kill-after=5 10 aplay -q -D default \
       -t raw -f S16_LE -r 48000 -c 2 /dev/null
-    echo 'gemini-audio: UCM enable-disable and subsequent default open passed' > /dev/kmsg
+    echo 'gemini-audio: UCM enable-disable and subsequent default open passed'
     check_usb
     cat /sys/kernel/debug/regulator/regulator_summary > /run/gemini-audio/regulators-after.txt
-    echo 'gemini-audio: USB device, carrier and shared regulator claims preserved' > /dev/kmsg
+    echo 'gemini-audio: USB device, carrier and shared regulator claims preserved'
     dmesg > /run/gemini-audio/kernel-after.txt
     speaker_starts=$(grep -Fc 'Gemini speaker amplifiers before enable=1' /run/gemini-audio/kernel-after.txt || :)
     if test "$speaker_starts" = 0; then
@@ -203,8 +189,8 @@ let
     if grep -Fq 'headset detector stopped after register error' /run/gemini-audio/kernel-after.txt; then exit 1; fi
     amixer -c mt6797mt6351 cget "iface=CARD,name='Headphone Jack'" > /run/gemini-audio/headphone-jack-after.txt
     amixer -c mt6797mt6351 cget "iface=CARD,name='Headset Mic Jack'" > /run/gemini-audio/headset-mic-jack-after.txt
-    echo 'gemini-audio: speaker amplifier accounting and shutdown passed' > /dev/kmsg
-    echo 'gemini-audio: PMIC jack reporting and stable mixer restoration passed' > /dev/kmsg
+    echo 'gemini-audio: speaker amplifier accounting and shutdown passed'
+    echo 'gemini-audio: PMIC jack reporting and stable mixer restoration passed'
     echo 'audio=playback-capture-and-route-restoration-passed' > /run/gemini-audio/result
   '';
 in {

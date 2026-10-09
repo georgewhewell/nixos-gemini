@@ -13,7 +13,7 @@ let
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/timeout)" = 31
-    test "$(cat /sys/module/mt6797_consys_emi_mpu/parameters/enable_experimental_ownership)" = Y
+    test "$(basename "$(readlink -f /sys/bus/platform/devices/10203000.emi-mpu/driver)")" = mt6797-consys-emi-mpu
     mkdir /run/gemini-connectivity
     cat /proc/sys/kernel/random/boot_id > /run/gemini-connectivity/boot-id
     capture_final() {

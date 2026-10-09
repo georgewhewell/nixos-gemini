@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import tempfile
 
-source = Path(__file__).with_name('cellular-stage2.sh').read_text()
+source = Path(__file__).with_name('cellular-stage2.sh').read_text().replace('test -c /dev/mt6797-md1-fs-provider', 'test -f /dev/mt6797-md1-fs-provider')
 realcat = shutil.which('cat')
 python = shutil.which('python3')
 realcp = shutil.which('cp')
@@ -75,14 +75,13 @@ def fixture(directory, case):
   'proc/sys/kernel/random/boot_id':'fixture-boot\n', 'proc/cmdline':'GEMINI_A72_CI9_M39\n',
   'run/unattended-recovery.lease-deadline':'format=gemini-unattended-recovery-lease-v1\nclock=monotonic-uptime-seconds\nstarted=10\ndeadline=730\nlease_seconds=720\n',
   'proc/uptime':'100.0 10\n', 'proc/self/mountinfo':'fixture\n',
-  'sys/module/mt6797_md1_fs_provider/parameters/enable':'Y\n',
-  'sys/module/mt6797_md1_fs_provider/parameters/enable_volatile':'Y\n',
   'sys/class/watchdog/watchdog0/identity':'mtk-wdt\n',
   'sys/class/watchdog/watchdog0/state':'active\n',
   'sys/class/watchdog/watchdog0/nowayout':'1\n',
   'sys/class/watchdog/watchdog0/timeout':'31\n',
   'run/unattended-recovery.watchdog-owner':str(os.getpid())+'\n',
   f'proc/{os.getpid()}/cmdline':f'fixture-busybox\0watchdog\0-F\0-t\010\0-T\031\0{root}/dev/watchdog\0',
+  'dev/mt6797-md1-fs-provider':'fixture\n',
   'dev/mmcblk0p19':'persistent backup fixture\n',
   'dev/mmcblk0p6':'persistent fixture Z\n',
   'dev/mmcblk0p8':'persistent fixture X\n',
