@@ -36,7 +36,7 @@ nix build .#efiBootFiles   # Versioned systemd-boot entry, kernel, DTB and initr
 nix build .#uboot          # U-Boot with display, keyboard and EFI storage support
 nix build .#bootloader     # Flashable U-Boot image with the normal Linux fallback
 nix build .#mtkclient      # Open-source flashing tool, including RTC preservation
-nix build .#recovery       # Exact installed M69 recovery bundle
+nix build .#recovery       # Frozen M69 bundle (historical eMMC swap policy)
 ```
 
 The maintained Linux source is branch `gemini-7.2.9`, pinned by `flake.lock`.
@@ -112,7 +112,8 @@ It briefly remounts the boot volume writable and restores it read-only, with
 the ext4 journal enabled throughout. Recovery retains its original `noload`
 mount and cannot run this installer. `gemini-boot-install --system SYSTEM
 --check` verifies an installed default without writes. These generation changes
-have passed host builds/tests; the device migration is being tested.
+have passed host builds/tests; GNOME and RAM-only paging still require device
+qualification after the recovery baseline is migrated.
 The earlier installation trials include automatic recovery after an allocator
 panic. Subsequent boot and update results describe their exact recorded images;
 they do not qualify the new GNOME or RAM-only paging configuration.
@@ -138,8 +139,11 @@ Linux verified the native CPU tree, both A72s, the full 4 GiB EFI memory map
 and LK reservations. Linux health, real paging, an unprivileged Nix build,
 native RTC startup/UTC/awake alarms and automatic M69 recovery all passed.
 The final audit retained home, previous EFI entries and all 26 ordinary Nix
-outputs. The installed recovery system remains M69. Permanent promotion and
-normal `nixos-rebuild` generation installation remain unfinished.
+outputs. These are historical installation results. The accepted installed
+baseline is now the persistent-store 7.1.3 generation recorded in
+[accepted-baseline.json](research/accepted-baseline.json). Its old physical
+swap policy is disabled only for the current boot; GNOME and zram have not
+been installed or qualified on the device.
 mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 
@@ -150,7 +154,7 @@ Native RTC startup, UTC write/read, awake alarms and hardware watchdog recovery
 pass. Display scanout still bypasses IOMMU translation. USB is currently
 configured and observed at USB2 speeds.
 
-Remaining work includes suspend/wake and hibernation, battery capacity and
+Remaining work includes suspend/wake, battery capacity and
 power policy, cellular/eSIM calls/SMS/data, GNSS, Bluetooth profiles, hardware
 video, USB3, and normal NixOS boot-generation updates. The separate suspend
 guard is an untested experiment and is excluded from the default kernel.

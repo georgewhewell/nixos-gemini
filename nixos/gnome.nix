@@ -1,5 +1,8 @@
 # The normal desktop uses the same cross package set as the rest of NixOS.
 { config, lib, pkgs, geminiDesktop, geminiDesktopKeyboard, ... }: {
+  disabledModules = ["i18n/input-method/default.nix"];
+  imports = [./cross-input-method.nix];
+
   hardware.graphics = {
     enable = true;
     package = geminiDesktop.mesa;

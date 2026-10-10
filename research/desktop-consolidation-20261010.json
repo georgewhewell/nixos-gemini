@@ -156,13 +156,13 @@
     "nix/kernel.nix": "f16cac28ef9f0c623e56c2c0742a6f54397abbb89f5974d7b852f255ca40a222",
     "nix/gemini-zram-probe.c": "07c8db0ea58cfc074b23b6635fe3743d329994807aaf67da3fb99aa10013a19f",
     "nix/zram-probe.nix": "83b93157fdc41024b2dc409badc905ae2a7bdd6ef722f7e021510ad116023245",
-    "nix/cross-fixes.nix": "2fd28084e4b2bb9bba6d63e3fb633dedc9a5b73fb5b1455969b24a42b89ff6d3",
+    "nix/cross-fixes.nix": "cf6b27bd07b9992ce56990e18974925c4803c6bc399a6304d405a6d424042929",
     "nix/desktop-keyboard.nix": "caac70f0168b3bf4ebcb5360a51bbbe0b2dd1a3f6caff99f727d110e8d07b0b7",
     "nix/mesa.nix": "5215471874a15ef03e4e046e658faf832dfe67ee66f23bbbe35713f397aa8b20",
     "nix/mainline-nixos.nix": "b85aab55c427d4ec088b24aa12acf6322126164dca0fe2d26de3a38700dc53e5",
     "nix/keyboard/test-registry.py": "7cb2178a04f51cb05f170bd72f2deedf72887f3ef9dba904396c531432f53eda",
     "nixos/mainline-configuration.nix": "58d137bb00a3785f83af25c0a8996d6cc8468c25d84045c1901a22c86afb0e38",
-    "nixos/gnome.nix": "b61e489ad4f976928f4ef4eade646f7bb1cc072773189fc4e41383e9be5e3f7d",
+    "nixos/gnome.nix": "9a48d91a53ca30d203d9bbaad3f435f27591f4947df0fad676e3eb4dc3c7fa6f",
     "nixos/storage.nix": "3d4d07e90d38848852873d6743a2b54e8bc0c2c50248b86e7559fa027ff2b7c5",
     "nixos/power-policy.nix": "3ab7dfe76864eefe71aa5991d6f0a702282a84e485616bf5eeb5b65c60461325",
     "nixos/bluetooth.nix": "3f51e96a0778602bc2e0cdd9b2dff05e20468b5c90a9c13768b4b04faa0842db",
@@ -173,6 +173,72 @@
     "tools/qualify-mtkclient.py": "b1d188b3488116357c11fa97b426ea9531d21d8f248aaf14c8a304e2330656aa",
     "tools/qualify-fixed-swap.py": "74478f16baf203df05d878eb89cf1cc3b9497ab1e48692cc8b91b6d8ce5e9380",
     "tools/qualify-uboot-recovery.py": "12f38b6a918c72e22e64486411a163c668154bc80fcba5a002e16323979c9307",
-    "nix/patches/gupnp-av-native-docgen.patch": "f7c1f92d417a4716d6c26ee466f51c132f326496d34152b3bf022abd1e58a11d"
+    "nix/patches/gupnp-av-native-docgen.patch": "f7c1f92d417a4716d6c26ee466f51c132f326496d34152b3bf022abd1e58a11d",
+    "nixos/cross-input-method.nix": "4da09c3e787f4e18b26d8a2900f30bbdf0778e1a21d7e422a48b631f56e89cac"
+  },
+  "cross_build_components": {
+    "thumbnailers": {
+      ".gst-video-thumbnailer-wrapped": {
+        "path": "/nix/store/710jndgp4xvpbpph4kdr2k4hcfhk3f08-gst-thumbnailers-aarch64-unknown-linux-gnu-1.0.0/bin/.gst-video-thumbnailer-wrapped",
+        "machine": 183
+      },
+      "gst-video-thumbnailer": {
+        "path": "/nix/store/710jndgp4xvpbpph4kdr2k4hcfhk3f08-gst-thumbnailers-aarch64-unknown-linux-gnu-1.0.0/bin/gst-video-thumbnailer",
+        "machine": 183
+      },
+      ".gst-audio-thumbnailer-wrapped": {
+        "path": "/nix/store/710jndgp4xvpbpph4kdr2k4hcfhk3f08-gst-thumbnailers-aarch64-unknown-linux-gnu-1.0.0/bin/.gst-audio-thumbnailer-wrapped",
+        "machine": 183
+      },
+      "gst-audio-thumbnailer": {
+        "path": "/nix/store/710jndgp4xvpbpph4kdr2k4hcfhk3f08-gst-thumbnailers-aarch64-unknown-linux-gnu-1.0.0/bin/gst-audio-thumbnailer",
+        "machine": 183
+      },
+      ".glycin-thumbnailer-wrapped": {
+        "path": "/nix/store/ndf6npx3mcs877pwsyvkdpfqqpsgqm2r-glycin-thumbnailer-aarch64-unknown-linux-gnu-2.1.5/bin/.glycin-thumbnailer-wrapped",
+        "machine": 183
+      },
+      "glycin-thumbnailer": {
+        "path": "/nix/store/ndf6npx3mcs877pwsyvkdpfqqpsgqm2r-glycin-thumbnailer-aarch64-unknown-linux-gnu-2.1.5/bin/glycin-thumbnailer",
+        "machine": 183
+      }
+    },
+    "gnome_tour": {
+      ".gnome-tour-wrapped": {
+        "path": "/nix/store/6ldkandylgwp3xglrrm3sm7rx527g2i3-gnome-tour-aarch64-unknown-linux-gnu-50.0/bin/.gnome-tour-wrapped",
+        "machine": 183,
+        "sha256": "62c4975d7a29ab87933291aca591867bfd3397f60be1049cc50823b7c4b71fcc"
+      },
+      "gnome-tour": {
+        "path": "/nix/store/6ldkandylgwp3xglrrm3sm7rx527g2i3-gnome-tour-aarch64-unknown-linux-gnu-50.0/bin/gnome-tour",
+        "machine": 183,
+        "sha256": "674b184d24dac6cc2cee11dd204d98df1198f7c556781b0e93f9813c8cd27cc4"
+      }
+    },
+    "gtk_input_method_cache": {
+      "output": "/nix/store/5kw038a60b56cw63v5r9mjxnqv0hkizy-gtk3-immodule.cache",
+      "cache_sha256": "25ca226f8f57a44f5bd28b56e9074b4d8b99e6fba90db2fa99b578a490564584",
+      "ibus_registered": true,
+      "target_tool_emulated": true,
+      "gtk_development_output_retained": false,
+      "references": [
+        "/nix/store/5v96n0cynz7v0gzpgh1fx835j3kk0d1n-gtk+3-aarch64-unknown-linux-gnu-3.24.52",
+        "/nix/store/aziy84adka58gkx0i18l9h2jh09f033c-ibus-with-plugins-1.5.34"
+      ]
+    }
+  },
+  "live_mitigation_final_audit": {
+    "command": "set -eu\ntest \"$(cat /proc/sys/kernel/random/boot_id)\" = 214b3268-b481-4ccb-a693-260b114b1e9b\ntest \"$(readlink /run/current-system)\" = /nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade\ntest \"$(wc -l < /proc/swaps)\" -eq 1\ntest \"$(readlink /run/systemd/system/dev-mmcblk0p34.swap)\" = /dev/null\ntest \"$(cat /sys/module/zswap/parameters/enabled)\" = N\ntest \"$(cat /sys/module/zswap/parameters/shrinker_enabled)\" = N\ncat /proc/sys/kernel/random/boot_id\ncat /proc/swaps\ncat /sys/module/zswap/parameters/enabled /sys/module/zswap/parameters/shrinker_enabled\ncat /sys/class/block/mmcblk0p34/stat\n",
+    "returncode": 0,
+    "stdout": "214b3268-b481-4ccb-a693-260b114b1e9b\nFilename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\nN\nN\n      66        0     4720      841        0        0        0        0        0      612      841        0        0        0        0        0        0\n",
+    "stderr": "",
+    "runtime_only": true
+  },
+  "media_ram_only_source": {
+    "revision": "c22f516a93aee65f2a6a6741d5e7e9873d56c852",
+    "remote_branch": "gemini-video-7.2.9",
+    "build_complete": false,
+    "modules_rebuilt": false,
+    "hardware_tested": false
   }
 }

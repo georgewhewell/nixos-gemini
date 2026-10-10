@@ -15,4 +15,34 @@ final: prev: {
     # for a target executable; documentation generation runs on the host.
     patches = (old.patches or []) ++ [./patches/gupnp-av-native-docgen.patch];
   });
+  # These Meson custom targets invoke Cargo without selecting its target.
+  # Keep Cargo's output directory and Meson's installed binary in agreement.
+  gst-thumbnailers = prev.gst-thumbnailers.overrideAttrs (old:
+    prev.lib.optionalAttrs (prev.stdenv.buildPlatform.config != prev.stdenv.hostPlatform.config) {
+      env = (old.env or {}) // { CARGO_BUILD_TARGET = prev.stdenv.hostPlatform.rust.rustcTargetSpec; };
+      postPatch = (old.postPatch or "") + ''
+        substituteInPlace meson.build --replace-fail \
+          'cargo_target_dir / rust_target' \
+          "cargo_target_dir / '${prev.stdenv.hostPlatform.rust.rustcTarget}' / rust_target"
+      '';
+      doCheck = prev.stdenv.buildPlatform.canExecute prev.stdenv.hostPlatform;
+    });
+  glycin-thumbnailer = prev.glycin-thumbnailer.overrideAttrs (old:
+    prev.lib.optionalAttrs (prev.stdenv.buildPlatform.config != prev.stdenv.hostPlatform.config) {
+      env = (old.env or {}) // { CARGO_BUILD_TARGET = prev.stdenv.hostPlatform.rust.rustcTargetSpec; };
+      postPatch = (old.postPatch or "") + ''
+        substituteInPlace glycin-thumbnailer/meson.build --replace-fail \
+          'cargo_target_dir / rust_target' \
+          "cargo_target_dir / '${prev.stdenv.hostPlatform.rust.rustcTarget}' / rust_target"
+      '';
+    });
+  gnome-tour = prev.gnome-tour.overrideAttrs (old:
+    prev.lib.optionalAttrs (prev.stdenv.buildPlatform.config != prev.stdenv.hostPlatform.config) {
+      env = (old.env or {}) // { CARGO_BUILD_TARGET = prev.stdenv.hostPlatform.rust.rustcTargetSpec; };
+      postPatch = (old.postPatch or "") + ''
+        substituteInPlace src/meson.build --replace-fail \
+          "'src' / rust_target" \
+          "'src' / '${prev.stdenv.hostPlatform.rust.rustcTarget}' / rust_target"
+      '';
+    });
 }
