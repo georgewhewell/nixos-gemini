@@ -100,6 +100,12 @@ MODULE_PARM_DESC(frame_pixels, "Program the newer public TOP 0x70 pixel-size wor
 static bool frame_crc;
 module_param(frame_crc, bool, 0444);
 MODULE_PARM_DESC(frame_crc, "Test the newer public MISC 0x4 bit4 setting before frame submission");
+static unsigned int frame_padding;
+module_param(frame_padding, uint, 0444);
+MODULE_PARM_DESC(frame_padding, "Frame ending: 0 poisoned padding, 1 zero padding, 2 Annex B end-of-sequence followed by zeros");
+static bool frame_ref_first;
+module_param(frame_ref_first, bool, 0444);
+MODULE_PARM_DESC(frame_ref_first, "Reset picture-number SRAM before SPS/PPS, matching the public reference initialization order");
 static unsigned int dma_bits = TEST_DMA_BITS;
 module_param(dma_bits, uint, 0444);
 MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
@@ -146,6 +152,16 @@ static size_t frame_nal_size(void)
 	return frame_pattern ? sizeof(pattern64_nal) : frame_flat ? sizeof(grey64_nal) : sizeof(pcm64_nal);
 }
 
+/* Original Annex B test bytes: four-byte prefix, nal_ref_idc=0, type=10.
+ * end_of_seq_rbsp() is empty (ITU-T H.264 7.3.2.5).
+ */
+static const u8 frame_end_sequence[] = { 0, 0, 0, 1, 0x0a };
+
+static size_t frame_stream_size(void)
+{
+	return frame_nal_size() + (frame_padding == 2 ? sizeof(frame_end_sequence) : 0);
+}
+
 struct fifo_probe {
 	struct device *dev;
 	struct regmap *gcon;
@@ -186,6 +202,22 @@ struct fifo_probe {
 	int frame_result;
 	bool slice_loaded, decode_started, frame_done, frame_guards_unchanged, snapshot_ready;
 };
+
+static bool frame_input_unchanged(struct fifo_probe *p)
+{
+	size_t nal_size = frame_nal_size(), stream_size = frame_stream_size();
+
+	if (memcmp(p->input, frame_nal(), nal_size))
+		return false;
+	if (!frame_padding)
+		return !memchr_inv(p->input + nal_size, 0xa5,
+				   INPUT_ALLOC_SIZE - nal_size);
+	if (frame_padding == 2 &&
+	    memcmp(p->input + nal_size, frame_end_sequence, sizeof(frame_end_sequence)))
+		return false;
+	return !memchr_inv(p->input + stream_size, 0, FIFO_SIZE - stream_size) &&
+		!memchr_inv(p->input + FIFO_SIZE, 0xa5, INPUT_ALLOC_SIZE - FIFO_SIZE);
+}
 
 static int runtime_resume(struct device *dev)
 {
@@ -365,7 +397,7 @@ static int test_input(struct fifo_probe *p, bool slice)
 	/* The public newer-core interface writes the read pointer twice. */
 	write_reg(lower_32_bits(p->input_dma), p->vld + VLD_READ_PTR);
 	write_reg(lower_32_bits(p->input_dma), p->vld + VLD_READ_PTR);
-	write_reg(lower_32_bits(p->input_dma + (slice ? ALIGN(frame_nal_size(), 128) : 4096)),
+	write_reg(lower_32_bits(p->input_dma + (slice ? ALIGN(frame_stream_size(), 128) : 4096)),
 		  p->vld + VLD_WRITE_PTR);
 	p->fifo_start_before_reset = readl(p->vld + VLD_FIFO_START);
 	p->read_ptr_before_reset = readl(p->vld + VLD_READ_PTR);
@@ -487,6 +519,12 @@ static int test_frame(struct fifo_probe *p)
 	    memchr_inv(p->scratch, 0xd3, INPUT_ALLOC_SIZE))
 		return -EIO;
 	memcpy(p->input, frame_nal(), frame_nal_size());
+	if (frame_padding) {
+		memset(p->input + frame_nal_size(), 0, FIFO_SIZE - frame_nal_size());
+		if (frame_padding == 2)
+			memcpy(p->input + frame_nal_size(), frame_end_sequence,
+			       sizeof(frame_end_sequence));
+	}
 	/* Working data starts at zero; trailing guards retain their sentinel.
 	 * Keep output poisoned so zero/flat software storage cannot fake pixels.
 	 */
@@ -505,18 +543,28 @@ static int test_frame(struct fifo_probe *p)
  * Every DMA destination is private, aligned, bounded and already allocated.
  * IDR I_PCM has no reference-picture reads or scaling/transform dependency.
  */
+	if (frame_ref_first) {
+		write_reg(1, p->avc + 0x228);
+		ret = readl_poll_timeout(p->avc + 0x228, state, !(state & BIT(0)), 10, 100000);
+		if (ret)
+			return ret;
+		frame_reg(p, p->avc + 0xa0, 16);
+		frame_reg(p, p->avc + 0xa4, 0);
+	}
 	frame_reg(p, p->avc + 0x88, header.sps);
 	frame_reg(p, p->avc + 0x90, header.pps);
 	frame_reg(p, p->avc + 0x94, header.reference_counts);
 	frame_reg(p, p->avc + 0x8c, (readl(p->avc + 0x8c) & ~0x1ffff) | words.first_mb);
 	frame_reg(p, p->avc + 0x98, (readl(p->avc + 0x98) & 0x1fff) | words.header1);
 	frame_reg(p, p->avc + 0x9c, words.header2);
-	write_reg(1, p->avc + 0x228); /* reset picture-number SRAM */
-	ret = readl_poll_timeout(p->avc + 0x228, state, !(state & BIT(0)), 10, 100000);
-	if (ret)
-		return ret;
-	frame_reg(p, p->avc + 0xa0, 16);
-	frame_reg(p, p->avc + 0xa4, 0);
+	if (!frame_ref_first) {
+		write_reg(1, p->avc + 0x228); /* reset picture-number SRAM */
+		ret = readl_poll_timeout(p->avc + 0x228, state, !(state & BIT(0)), 10, 100000);
+		if (ret)
+			return ret;
+		frame_reg(p, p->avc + 0xa0, 16);
+		frame_reg(p, p->avc + 0xa4, 0);
+	}
 	/* The public verification mask omits only its two unsupported checks.
  * Raw error/message words are retained even if completion is observed.
  */
@@ -693,6 +741,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,\"config_only\":%s,"
 		"\"h264_pp\":%s,\"mc_output\":%s,\"extended_clocks\":%u,\"bank8\":%s,\"frame_format\":%s,"
 		"\"pixel_size_programmed\":%s,\"crc_programmed\":%s,"
+		"\"input_padding\":%u,\"reference_reset_first\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
@@ -709,6 +758,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		frame_mc_output ? "true" : "false",
 		extended_clocks, frame_bank8 ? "true" : "false", frame_format ? "true" : "false",
 		frame_pixels ? "true" : "false", frame_crc ? "true" : "false",
+		frame_padding, frame_ref_first ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -875,10 +925,10 @@ static int fifo_probe(struct platform_device *pdev)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc || frame_padding || frame_ref_first)) ||
 	    (frame_flat && frame_pattern))
 		return -EINVAL;
-	if (extended_clocks > 2)
+	if (extended_clocks > 2 || frame_padding > 2)
 		return -EINVAL;
 	if (dma_bits < 28 || dma_bits > TEST_DMA_BITS)
 		return -EINVAL;
@@ -1059,9 +1109,7 @@ static int fifo_probe(struct platform_device *pdev)
 	p->reset_result = reset_input(p);
 	dma_rmb();
 	p->input_unchanged = p->slice_loaded ?
-		!memcmp(p->input, frame_nal(), frame_nal_size()) &&
-		!memchr_inv(p->input + frame_nal_size(), 0xa5,
-			    INPUT_ALLOC_SIZE - frame_nal_size()) :
+		frame_input_unchanged(p) :
 		!memcmp(p->input, test_bytes, sizeof(test_bytes)) &&
 		!memchr_inv(p->input + sizeof(test_bytes), 0xa5,
 			    INPUT_ALLOC_SIZE - sizeof(test_bytes));

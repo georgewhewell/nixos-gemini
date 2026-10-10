@@ -1,8 +1,9 @@
 # Independent MT6797 H.264 implementation
 
 This directory contains original GPL-2.0-only control translation, temporary
-kernel diagnostics and independently verified H.264 fixtures. It produces partial
-decoded pixels but no complete qualified frame or video device. Encoding is not implemented.
+kernel diagnostics and independently verified H.264 fixtures. Four fixed 64x64 frames
+complete with exact pixel comparisons and raw completion warning `0x40`.
+A production decoder or video device is not yet qualified. Encoding is not implemented.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
@@ -186,8 +187,10 @@ live DMA mapping. A done bit alone is not a decoded-frame comparison. The
 supervised trial and independent NV12/MM21 comparisons remain required.
 
 Trials 13/14 submitted I_PCM but timed out without changing any output bytes.
-Trial 14 read back the SPS/PPS/slice, geometry and output/wrapper registers
-correctly, with all three decoder clock votes and the public H.264 masks.
+Trial 14 captured SPS/PPS/slice, geometry and output/wrapper readback with all
+three decoder clock votes and the public H.264 masks. The programmed SPS
+`0x342001` reads as `0x340001`, including without a frame command; its candidate
+max-reference bit remains unqualified.
 Both trials passed input, guards, documented stop and normal unload. Register
 readback does not establish a decoded frame.
 
@@ -245,7 +248,8 @@ recovery pass. Partial matches do not qualify the entire layout or a frame.
 `frame_pixels=1` tests the newer TOP `0x70` width/height word for the fixed
 64x64 fixture. `frame_crc=1` separately tests the newer MISC `0x4[4]` setting,
 preserving other bits. Both words use the existing post-idle save/restore path;
-they are compiled but not yet hardware tested.
+trial 20 verifies complete exact 64x64 output with pixel dimensions set. The
+CRC/access bit makes no observed difference to PCM output or raw warning.
 These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM
@@ -302,3 +306,29 @@ IOMMU/DMA setup, bounded reset/completion recovery and actual frame submission.
 Then add V4L2 request/queue handling and compare output with software-decoded
 fixtures before exposing supported formats. Encode needs its own hardware
 contract and implementation. These are required work, not completed features.
+
+Private frame trial `handoff/boot-test-video-frame-20` supplies TOP `0x70`
+pixel dimensions. Four frame commands complete with state `0x80000001` and
+match all 6,144 sample bytes in MM21: PCM with PP mode 0/1 and CRC off/on,
+plus compressed grey. PCM confirms non-neutral U/V ordering; flat grey alone
+cannot distinguish layouts. Direct MC output still times out with output untouched.
+All completed jobs report raw error/message `0x40` and IRQ `0x3001`; the
+original observer requires zero error, so its result remains failed and the
+patterned fixture was not submitted. A subsequently inspected pinned GPL
+MT6795 verifier (`verify/vdec_verify_vdecode.c`, SHA256
+`d74a9ec6e6ac703ac9710308f6d97c71577c4dfbd9445bca05cf3d71452b99ff`)
+accepts exactly `0x40` only with picture-complete set. This policy does not
+establish the bit's meaning or an error-free job. Raw evidence is preserved.
+Thirty actual commands now include four complete exact pixel comparisons and
+zero strict error-free comparisons. Input, guards, stop/idle and normal unload
+pass; full boot/paging/Nix/all RTC/recovery and final no-writer audit pass. The
+accepted system is healthy and untainted at `c4d13cb9-c801-437c-b187-b6cdcc533d42`.
+References, varied geometry, production IRQ handling, V4L2 lifecycle and encoding
+remain unqualified.
+
+The next optional diagnostics compare poisoned FIFO padding with valid zero
+padding and an original Annex B end-of-sequence NAL, retaining the outer guard.
+Both endings independently decode to every expected FFmpeg sample for all three
+fixtures. `frame_ref_first=1` separately resets picture-number SRAM before
+programming SPS/PPS, matching the public reference order. Both changes build
+against the exact candidate kernel; hardware results are still pending.

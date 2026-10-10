@@ -1427,7 +1427,8 @@ register readback and clears the full public 17-bit first-MB field.
 
 Private frame trial `handoff/boot-test-video-frame-14` repeats the timeout with
 the full public H.264 clock/control profile. Pre-submission SPS/PPS/slice,
-geometry and output/MV/wrapper address words read back correctly. State, IRQ
+geometry and output/MV/wrapper readback was captured. The SPS max-reference
+candidate bit does not read back and remains unqualified. State, IRQ
 and unchanged output are the same as trial 13. Input, all guards, stop/idle,
 normal unload and full system/RTC/recovery checks pass. No decoded frame is
 qualified. An independently constructed 20-byte I_16x16 DC frame decodes to
@@ -1536,3 +1537,29 @@ and MISC `0x4[4]`. Separate optional diagnostics preserve unrelated bits and
 restore both words only after proven idle. The fixed 64x64 picture and all DMA
 bounds remain the same. These changes build against the exact kernel; the next
 trial tests pixel dimensions, PP modes/direct MC output and the MISC setting.
+
+Private frame trial `handoff/boot-test-video-frame-20` supplies TOP `0x70`
+pixel dimensions. Four frame commands complete with state `0x80000001` and
+match all 6,144 sample bytes in MM21: PCM with PP mode 0/1 and CRC off/on,
+plus compressed grey. PCM confirms non-neutral U/V ordering; flat grey alone
+cannot distinguish layouts. Direct MC output still times out with output untouched.
+All completed jobs report raw error/message `0x40` and IRQ `0x3001`; the
+original observer requires zero error, so its result remains failed and the
+patterned fixture was not submitted. A subsequently inspected pinned GPL
+MT6795 verifier (`verify/vdec_verify_vdecode.c`, SHA256
+`d74a9ec6e6ac703ac9710308f6d97c71577c4dfbd9445bca05cf3d71452b99ff`)
+accepts exactly `0x40` only with picture-complete set. This policy does not
+establish the bit's meaning or an error-free job. Raw evidence is preserved.
+Thirty actual commands now include four complete exact pixel comparisons and
+zero strict error-free comparisons. Input, guards, stop/idle and normal unload
+pass; full boot/paging/Nix/all RTC/recovery and final no-writer audit pass. The
+accepted system is healthy and untainted at `c4d13cb9-c801-437c-b187-b6cdcc533d42`.
+References, varied geometry, production IRQ handling, V4L2 lifecycle and encoding
+remain unqualified.
+
+The next optional diagnostics compare poisoned FIFO padding with valid zero
+padding and an original Annex B end-of-sequence NAL, retaining the outer guard.
+Both endings independently decode to every expected FFmpeg sample for all three
+fixtures. `frame_ref_first=1` separately resets picture-number SRAM before
+programming SPS/PPS, matching the public reference order. Both changes build
+against the exact candidate kernel; hardware results are still pending.
