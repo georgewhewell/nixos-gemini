@@ -13,7 +13,8 @@ reference. Trial 41 checks 106 exact pictures, including 720p and 1080p,
 five resolution/profile segments and visible-height I420 conversion. All 57
 default media checks and normal unload pass. Its cached private DMA buffers
 use explicit CPU/device ownership and picture storage is allocated only for
-valid decoding requests. Trial 39 separately checks two concurrent SD streams.
+valid decoding requests. Trial 42 checks two concurrent cached-buffer Main 1280x720 / Baseline
+640x480 streams; all sixteen pictures match.
 Hardware encoding, broader codec features, interrupt completion and production
 integration remain unfinished. All RTC/system checks and strict accepted-system recovery pass. Trial 38's
 RTC miss and trial 40's failed unlimited-open check remain recorded.
@@ -262,6 +263,16 @@ power and allocations until reboot. All 106 positive pictures match, the
 malformed-input and stale-reference checks pass, and all 57 media checks pass,
 including unlimited opens. The final sampled Main 1080p engine work is about
 17 ms, measured before capture copying; sustained playback is unqualified.
+
+Trial 42 repeats the cached HD, mixed-resolution, fault and media checks and
+adds concurrent 1280x720 Main / 640x480 Baseline streams, with sixteen exact
+pictures. A clocked eight-picture 1080p I420 pipeline uses valid 25 fps
+timestamps, synchronization, QoS and a 20 ms lateness limit. All eight decoder
+requests complete, but only six pictures reach the sink; its own drop counter
+is zero. Those six pictures match their timestamped references in a separate
+offline comparison. The strict eight-picture clock check fails and remains
+archived. All 57 media checks, normal unload and full RTC/system/recovery/audit
+pass. This result does not qualify real-time playback.
 
 The encoder, interrupt completion, general codec features beyond this scope,
 system suspend and untested stream configurations remain unqualified. These experimental

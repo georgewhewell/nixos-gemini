@@ -23,23 +23,26 @@ def unpack(data, width, height, stride, chroma_offset, layout):
         if len(data) < chroma_offset + stride * padded_height // 2:
             raise ValueError('Decoder allocation lacks complete MM21 storage tiles')
 
-    def offset(x, y, tile_height):
-        if layout == 'nv12':
-            return y * stride + x
-        return ((y // tile_height) * (stride // 16) + x // 16) * 16 * tile_height + \
-               (y % tile_height) * 16 + x % 16
-
     result = bytearray()
-    try:
-        for row in range(height):
-            for x in range(width):
-                result.append(data[offset(x, row, 32)])
-        for component in (0, 1):
-            for row in range(height // 2):
-                for x in range(width // 2):
-                    result.append(data[chroma_offset + offset(x * 2 + component, row, 16)])
-    except IndexError as error:
-        raise ValueError('Decoder allocation is too short') from error
+    for component in (None, 0, 1):
+        rows = height if component is None else height // 2
+        plane = 0 if component is None else chroma_offset
+        for row in range(rows):
+            if layout == 'nv12':
+                line = data[plane + row * stride:plane + row * stride + width]
+                if len(line) != width:
+                    raise ValueError('Decoder allocation is too short')
+                result.extend(line if component is None else line[component::2])
+                continue
+            tile_height = 32 if component is None else 16
+            line_base = plane + (row // tile_height) * stride * tile_height + \
+                        (row % tile_height) * 16
+            for x in range(0, width, 16):
+                start = line_base + (x // 16) * 16 * tile_height
+                line = data[start:start + min(16, width - x)]
+                result.extend(line if component is None else line[component::2])
+    if len(result) != width * height * 3 // 2:
+        raise ValueError('Decoder allocation is too short')
     return bytes(result)
 
 

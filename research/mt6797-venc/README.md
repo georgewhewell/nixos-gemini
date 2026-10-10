@@ -31,3 +31,19 @@ disabled, returning EBUSY before encoder register access. Trial 35 qualifies the
 and local gate control is `0xffffffff`. Power-vote release, normal unload and
 supervisor/recovery/audit pass. These are command-free resource observations,
 with no encoded output or hardware frame command.
+
+A usable direct encoder backend still needs the source-plane address and pitch
+fields, reference/reconstruction layout, bitstream address and limit fields,
+scratch sizes and address units, picture geometry/QP controls, start sequence,
+and completion/error/stop conditions. The public
+[2016 MT8173 encoder patch](https://lkml.indiana.edu/hypermail/linux/kernel/1602.2/05539.html)
+reads the output byte count at `0x98` but delegates SPS, PPS and frame commands
+to the VPU. Its register-write helper is unused. That supplies no direct frame
+setup to port. The
+[public Chromium EC handler](https://chromium.googlesource.com/chromiumos/platform/ec/+/08f5a1e6fc2c9467230444ac9b582dcf4d9f0068/baseboard/mtscp-rv32i/venc.c)
+is a stub unless a private overlay is present. These findings are limited to
+the inspected sources; they do not establish that MT6797 requires firmware.
+
+The resource probe also passes in trials 36–41, with normal unload and released
+power votes. Trial 38 separately misses the supervisor's final RTC alarm; that
+failure remains recorded. No trial produces an encoded picture.
