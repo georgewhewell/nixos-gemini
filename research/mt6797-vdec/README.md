@@ -121,6 +121,46 @@ the generator rejects these variants and they remain hardware-unqualified.
 This does not establish all POC-type or field combinations. Multislice,
 interlace, IRQ completion, production integration and encoding remain unfinished.
 
+Trials 58 and 59 qualify complete multislice packets in the private diagnostic.
+Trial 58's original two-slice I_PCM picture matches all 6,144 sample bytes,
+with zero hardware errors and final macroblock coordinates 3/3. Its isolated
+eight-macroblock halves never signal picture completion; even the first half
+has unfinished output after its bounded timeout. Zero error words and an
+expected macroblock coordinate do not prove that the pixel pipeline finished.
+All five cases prove break and idle reset, unchanged guards and normal unload.
+Trial 58's full RTC/system/recovery checks and strict recovered-board audit pass.
+
+Trial 59 checks eleven exact complete pictures: original I_PCM/P_Skip pairs
+partitioned into two, four, sixteen, and uneven 1/5/3/7-macroblock slices, plus
+one-slice gradient and existing PCM controls. Every P packet reads a guarded
+copy of its exact hardware-decoded I reference; the reference remains unchanged.
+All completed pictures have zero hardware error/message words, final coordinates
+3/3 and proven stop/guard checks. Every temporary module unloads normally.
+Trial 59's full RTC/system/recovery checks and strict recovered-board audit pass.
+This qualifies these fixed 64x64 CAVLC packets. V4L2 Request accumulation and
+other per-slice header, reference, weighting, entropy and deblocking variations
+remain unqualified; the Request driver still advertises its trial-57 scope.
+
+`make-multislice-pcm-fixture.py` builds original nonuniform I_PCM/P_Skip pairs
+using `--partition one|two|four|sixteen|uneven`. It checks every output sample
+against independent mathematics and FFmpeg before writing the fixtures;
+54 independently traced slice headers also match. For each partition, generate
+an output directory named `multislice-pcm-<partition>`, then reproduce the
+checked-in diagnostic header with:
+
+```sh
+python3 make-multislice-probe-header.py --fixtures /path/to/fixtures \
+  --out multislice64-fixture.h
+```
+
+The private probe's read-only `frame_slice` parameter selects the existing PCM
+control (0), isolated first/last eight-MB slices (1/2), two-slice packet (3),
+full gradient control (4), four-slice packet (5), sixteen-slice packet (6), or
+uneven packet (7). `frame_p_skip=1` chains a matching P packet for modes 3..7.
+Isolated slices are diagnostics of incomplete pictures, never valid references.
+The supervised experiments and exact module/source identities are retained in
+`qualification.multislice_private_probe` in the interface ledger.
+
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
 There is no proprietary codec firmware or `libvcodec` dependency in this work.

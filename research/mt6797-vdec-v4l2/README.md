@@ -235,6 +235,18 @@ the generator rejects these variants and they remain hardware-unqualified.
 This does not establish all POC-type or field combinations. Multislice,
 interlace, IRQ completion, production integration and encoding remain unfinished.
 
+Private diagnostic trials 58/59 establish a next step for multislice support:
+complete original 64x64 CAVLC I_PCM/P_Skip packets with two, four, sixteen and
+uneven slices produce exact pixels and safely retain their hardware-decoded
+references. Isolated eight-macroblock slices do not finish the picture or flush
+all output. These packet results do not enable multislice in this Request driver.
+It still rejects a nonzero first macroblock and has no request accumulation.
+The planned extension must collect slices per picture, validate their identity,
+retain capture ownership, and submit the whole packet after the final request.
+Abandoned or inconsistent batches must return errors before any DMA and leave
+retained references usable. See the [private diagnostic](../mt6797-vdec/README.md)
+and `qualification.multislice_private_probe` in the interface ledger.
+
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
 or DMA ownership transfer. It handles emulation-prevention bytes, signed and

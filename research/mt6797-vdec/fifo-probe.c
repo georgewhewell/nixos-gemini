@@ -22,6 +22,7 @@
 #include <linux/unaligned.h>
 #include "mt6797-h264-controls.h"
 #include "pcm64-fixture.h"
+#include "multislice64-fixture.h"
 
 #define FIFO_SIZE SZ_64K
 #define INPUT_ALLOC_SIZE (2 * FIFO_SIZE)
@@ -73,6 +74,9 @@ MODULE_PARM_DESC(frame_flat, "Use the independently verified compressed I_16x16 
 static bool frame_pattern;
 module_param(frame_pattern, bool, 0444);
 MODULE_PARM_DESC(frame_pattern, "Use the independently verified patterned compressed intra fixture; exclusive with frame_flat");
+static unsigned int frame_slice;
+module_param(frame_slice, uint, 0444);
+MODULE_PARM_DESC(frame_slice, "Original fixed 64x64 I_PCM/P_Skip diagnostics: 0 existing PCM, 1 first eight MBs, 2 last eight MBs, 3 two-slice packet, 4 full gradient picture, 5 four slices, 6 sixteen slices, 7 uneven slices; partial completion is not qualified");
 static bool frame_error_bypass;
 module_param(frame_error_bypass, bool, 0444);
 MODULE_PARM_DESC(frame_error_bypass, "Diagnose the related-core AVC control bits 14/15 on a known valid frame; raw errors and pixel comparisons remain required");
@@ -153,12 +157,45 @@ static const u8 test_bytes[] = {
 
 static const u8 *frame_nal(bool predicted)
 {
+	if (frame_slice == 1)
+		return multislice_first_nal;
+	if (frame_slice == 2)
+		return multislice_last_nal;
+	if (frame_slice == 3)
+		return predicted ? multislice_two_p_packet : multislice_packet;
+	if (frame_slice == 4)
+		return predicted ? multislice_full_p_nal : multislice_full_nal;
+	if (frame_slice == 5)
+		return predicted ? multislice_four_p_packet : multislice_four_packet;
+	if (frame_slice == 6)
+		return predicted ? multislice_sixteen_p_packet : multislice_sixteen_packet;
+	if (frame_slice == 7)
+		return predicted ? multislice_uneven_p_packet : multislice_uneven_packet;
 	return predicted ? pskip64_nal : frame_pattern ? pattern64_nal : frame_flat ? grey64_nal : pcm64_nal;
 }
 
 static size_t frame_nal_size(bool predicted)
 {
+	if (frame_slice == 1)
+		return sizeof(multislice_first_nal);
+	if (frame_slice == 2)
+		return sizeof(multislice_last_nal);
+	if (frame_slice == 3)
+		return predicted ? sizeof(multislice_two_p_packet) : sizeof(multislice_packet);
+	if (frame_slice == 4)
+		return predicted ? sizeof(multislice_full_p_nal) : sizeof(multislice_full_nal);
+	if (frame_slice == 5)
+		return predicted ? sizeof(multislice_four_p_packet) : sizeof(multislice_four_packet);
+	if (frame_slice == 6)
+		return predicted ? sizeof(multislice_sixteen_p_packet) : sizeof(multislice_sixteen_packet);
+	if (frame_slice == 7)
+		return predicted ? sizeof(multislice_uneven_p_packet) : sizeof(multislice_uneven_packet);
 	return predicted ? sizeof(pskip64_nal) : frame_pattern ? sizeof(pattern64_nal) : frame_flat ? sizeof(grey64_nal) : sizeof(pcm64_nal);
+}
+
+static unsigned int frame_header_bits(bool predicted)
+{
+	return frame_slice == 2 ? 34 : predicted ? 26 : frame_pattern ? 38 : 28;
 }
 
 /* Original Annex B test bytes: four-byte prefix, nal_ref_idc=0, type=10.
@@ -481,7 +518,7 @@ static int test_input(struct fifo_probe *p, bool slice)
 	write_reg(BARREL_COMMAND, p->vld + VLD_PROC);
 	write_reg(0, p->avc + AVC_RESET_SUM);
 	if (slice) {
-		unsigned int remaining = p->predicted_picture ? 26 : frame_pattern ? 38 : 28;
+		unsigned int remaining = frame_header_bits(p->predicted_picture);
 		p->frame_input_first = readl(p->avc);
 		/* Offset is to slice_data(), including the eight-bit NAL header. */
 		while (remaining) {
@@ -539,7 +576,8 @@ static int test_frame(struct fifo_probe *p)
 		.flags = V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT,
 	};
 	const struct v4l2_ctrl_h264_slice_params slice = {
-		.header_bit_size = p->predicted_picture ? 26 : frame_pattern ? 38 : 28,
+		.header_bit_size = frame_header_bits(p->predicted_picture),
+		.first_mb_in_slice = frame_slice == 2 ? 8 : 0,
 		.slice_qp_delta = frame_pattern ? 20 : 0,
 		.slice_type = p->predicted_picture ? V4L2_H264_SLICE_TYPE_P : V4L2_H264_SLICE_TYPE_I,
 		.disable_deblocking_filter_idc = 1,
@@ -921,6 +959,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		"\"h264_pp\":%s,\"mc_output\":%s,\"extended_clocks\":%u,\"bank8\":%s,\"frame_format\":%s,"
 		"\"pixel_size_programmed\":%s,\"crc_programmed\":%s,"
 		"\"input_padding\":%u,\"reference_reset_first\":%s,"
+		"\"slice_fixture\":%u,\"first_mb\":%u,\"header_bits\":%u,"
 		"\"interrupt_mode\":%s,\"interrupt_seen\":%s,\"interrupt_count\":%u,"
 		"\"interrupt_completed\":%u,\"interrupt_unexpected\":%u,\"interrupt_last_state\":%u,"
 		"\"interrupt_storm\":%s,"
@@ -941,6 +980,8 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		extended_clocks, frame_bank8 ? "true" : "false", frame_format ? "true" : "false",
 		frame_pixels ? "true" : "false", frame_crc ? "true" : "false",
 		frame_padding, frame_ref_first ? "true" : "false",
+		frame_slice, frame_slice == 2 ? 8 : 0,
+		frame_header_bits(p->predicted_picture),
 		frame_interrupt ? "true" : "false", p->frame_irq_seen ? "true" : "false",
 		p->irq_count, p->irq_completed, p->irq_unexpected, p->irq_last_state,
 		p->irq_storm ? "true" : "false",
@@ -1144,6 +1185,10 @@ static int fifo_probe(struct platform_device *pdev)
 	if (subsystem_reset && !fetch)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
+		return -EINVAL;
+	if (frame_slice > 7 || (frame_slice &&
+	    (!frame || frame_flat || frame_pattern || frame_interrupt ||
+	     (frame_p_skip && frame_slice < 3))))
 		return -EINVAL;
 	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc || frame_padding || frame_ref_first || frame_p_skip || frame_interrupt)) ||
 	    (frame_flat && frame_pattern))
