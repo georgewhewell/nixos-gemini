@@ -29,6 +29,12 @@ Current development pins `6a338355fefbc5ec31baee53f7ad22ca9098111c`, which
 enables built-in LZ4 zram and disables both zswap and zram writeback. The new
 configuration has built successfully, but has not been boot-qualified. The
 older paging evidence exercised eMMC-backed swap and does not qualify zram.
+The experimental `gemini-video-7.2.9` branch also uses this RAM-only policy at
+`c22f516a93aee65f2a6a6741d5e7e9873d56c852`. Its kernel and all three original
+media modules build with strict MODPOST, matching configuration and release
+string. This is a host build result; none of these new modules has been loaded
+on the device. Their identities are recorded in
+[`desktop-consolidation-20261010.json`](desktop-consolidation-20261010.json).
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the

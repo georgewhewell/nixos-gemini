@@ -237,8 +237,54 @@
   "media_ram_only_source": {
     "revision": "c22f516a93aee65f2a6a6741d5e7e9873d56c852",
     "remote_branch": "gemini-video-7.2.9",
-    "build_complete": false,
-    "modules_rebuilt": false,
-    "hardware_tested": false
+    "build_complete": true,
+    "modules_rebuilt": true,
+    "hardware_tested": false,
+    "build_result": {
+      "result": "passed",
+      "hardware_tested": false,
+      "kernel_revision": "c22f516a93aee65f2a6a6741d5e7e9873d56c852",
+      "kernel_package": "/nix/store/gi6b7392qcv90d8x6nyq9knzim43b8w5-linux-gemini-7.2.9",
+      "kernel_config_sha256": "b0a32737108453aa57e16dae879348f8b48ecc7cd5702e9e4ae6151b255fdb8e",
+      "module_symvers_sha256": "8bde2f76e34482704011cc94fee3861c2cd27f4726697971547ef24a7dd9a019",
+      "paging_policy": "zram",
+      "strict_modpost": true,
+      "source_sha256": {
+        "mt6797-vdec-v4l2/v4l2.c": "363c8b9b43c411d2545a930812c14ac0b7baed4034a90c44bb41c8fc1da84dcd",
+        "mt6797-vdec-v4l2/engine.c": "a59b6d3150e34280ec09ba4bc27fbbd20e6bf1ed1a65a4b5d34993e738713984",
+        "mt6797-vdec-v4l2/engine.h": "1fa9f1de6f094acf6ec277f29c7e9e1ea3fc9af3d358d9b940d5665e370c5c38",
+        "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+        "mt6797-vdec-v4l2/Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+        "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+        "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023",
+        "mt6797-venc/resource-probe.c": "187a1933db36f57693f0ccfc29494b110f10b28fe895aaa28eaa1397c9093689",
+        "mt6797-venc/Kbuild": "a68969d4f9be91c87198e0afde136f4be14633ca947a239d7518943dbc53c0bc",
+        "idle-reset/probe.c": "936c52ae62b57b65d2d8eda8f2cfb8984380c724eeb4a394390c5096821bdd8a",
+        "idle-reset/Kbuild": "5963aa861c642b9e8d14a32f596088672106feaf419fc43b8d084b9b2a135a1c"
+      },
+      "modules": {
+        "mt6797_vdec.ko": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/media-zram-build-input/mt6797-vdec-v4l2/mt6797_vdec.ko",
+          "sha256": "9b2befd44d17a652ac0009048f6fa373d5aee2fd4c90256acd920562934005d5",
+          "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+          "machine": 183
+        },
+        "mt6797_venc_resource_probe.ko": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/media-zram-build-input/mt6797-venc/mt6797_venc_resource_probe.ko",
+          "sha256": "f44c2f14cd6b6063cfaa8b0523076974ca227d6dd45ba5033df1592b038e89e5",
+          "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+          "machine": 183
+        },
+        "mt6797_venc_idle_reset_probe.ko": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/media-zram-build-input/idle-reset/mt6797_venc_idle_reset_probe.ko",
+          "sha256": "2c40de2a87e4b200bcea883629b1b11b57d248fe36d2dd99cce7f3e80b3a5da4",
+          "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+          "machine": 183
+        }
+      },
+      "build_script_sha256": "e6e56644085a42e503e721f556f5cb9c0264c2aa8b5c40f2f49e22be0cfda9b7"
+    },
+    "build_evidence": "handoff/kernel-7.2.9-20261010/media-zram-kernel-build.log",
+    "module_build_evidence": "handoff/kernel-7.2.9-20261010/media-zram-modules-build-final.log"
   }
 }
