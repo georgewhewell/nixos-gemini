@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "scope": "Current accepted kernel Bluetooth controller registration, BlueZ power/discovery, and normal-image boot integration; no pairing or profile qualification.",
+  "installed": {
+    "accepted_baseline": "boot-test-87",
+    "boot_id": "eff3eca4-bb13-41c6-b37f-46e1932b4e23",
+    "kernel": "/nix/store/f7hb96326nxx9inzq5clkyng878nbfa0-linux-gemini-7.2.9",
+    "kernel_source_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+    "kernel_config_sha256": "8a01e364ec6dd2cd57d337dbca17f41905552b64a543290e885acc353f2cd2cb",
+    "bluez_version": "5.87",
+    "system": "/nix/store/g8xdcmbiphla25d2g0pzdj781r6l3x7j-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "boot_integration_changes_installed": false
+  },
+  "cause": {
+    "driver_and_device_tree_integrated": true,
+    "gnome_bluetooth_panel_installed": true,
+    "registration_service_not_wanted_at_boot": true,
+    "old_power_on_boot": false,
+    "before_hci_controller_present": false,
+    "before_bluez_daemon_active": false,
+    "historical_manual_start_commit": "16e6c26",
+    "historical_m45_compatibility_commit": "4fe6cee",
+    "note": "M41 kept registration manual during bring-up. M45 added controller compatibility and reports LE discovery, but boot registration stayed manual."
+  },
+  "current_hardware_check": {
+    "existing_registration_service_started_once": true,
+    "start_exit": 0,
+    "controller_configured": true,
+    "controller_powered": true,
+    "bluez_daemon_active": true,
+    "discovery_active": true,
+    "rssi_observed_device_objects": 12,
+    "paired_device_objects": 0,
+    "new_bluetooth_or_consys_transport_faults": 0,
+    "native_null_stdin_btmgmt_info_succeeded": true,
+    "native_null_stdin_btmgmt_info_elapsed_ms": 60,
+    "continuous_hci_trace_stopped": true,
+    "discovery_note": "After powering the adapter through BlueZ, an existing desktop client owned discovery. The check did not stop another client\u2019s discovery session. Only aggregate nearby-device counts were retained.",
+    "wlan_present_before": false,
+    "wlan_present_after": false,
+    "pre_existing_wlan_failure": "WLAN had already hit three scan-worker HIF errors -125 within 600 seconds and removed its netdev before any Bluetooth mutation."
+  },
+  "new_normal_image_configuration": {
+    "module": "nixos/bluetooth.nix",
+    "module_sha256": "3385bb4eef3ef202b4b2a591e468cd2d7fe44c92d426f3bb77cc4df2201a14dc",
+    "evaluated": {
+      "baseline": {
+        "after": [
+          "gemini-mainline-success.service",
+          "gemini-manager-bus-check.service",
+          "gemini-watchdog-takeover.service",
+          "gemini-mainline-usb.service",
+          "gemini-input-observe.service",
+          "sshd.service",
+          "gemian.mount",
+          "gemini-cellular.service",
+          "gemini-gpu.service",
+          "gemini-connectivity.service",
+          "bluetooth.service",
+          "NetworkManager.service",
+          "ModemManager.service",
+          "gemini-audio.service",
+          "gemini-gnome-qualify.service"
+        ],
+        "requires": [
+          "gemini-manager-bus-check.service",
+          "gemini-cellular.service",
+          "gemini-gpu.service",
+          "gemini-connectivity.service",
+          "bluetooth.service",
+          "NetworkManager.service",
+          "ModemManager.service",
+          "gemini-audio.service",
+          "gemini-gnome-qualify.service"
+        ]
+      },
+      "daemon": {
+        "after": [
+          "gemini-bluetooth.service"
+        ],
+        "requires": [
+          "gemini-bluetooth.service"
+        ]
+      },
+      "powerOnBoot": true,
+      "registration": {
+        "after": [
+          "gemini-connectivity.service",
+          "gemini-bluetooth-trace.service"
+        ],
+        "before": [
+          "bluetooth.service"
+        ],
+        "requires": [
+          "gemini-connectivity.service"
+        ],
+        "wantedBy": [
+          "multi-user.target"
+        ]
+      },
+      "trace": {
+        "wantedBy": []
+      }
+    },
+    "old_bluez_5_66_idle_pipe_removed": true,
+    "trace_requires_explicit_start": true,
+    "cold_boot_acceptance_pending": false
+  },
+  "remaining": [
+    "Pairing, keyboard/audio/other profiles, sustained coexistence, suspend/resume and power consumption remain unqualified."
+  ],
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/bluetooth-integration-20261011",
+  "evidence_files": {
+    "start-existing.sh": {
+      "sha256": "01535d93b4a218f622a0597a3aae1d87e5800a721c23abb5ad976befc2b3448a",
+      "bytes": 1368
+    },
+    "start-existing.stdout": {
+      "sha256": "f8cc3e05816a4457b9e55b86a85c9af4695c6e7d3e7fec67dcd4fda7d534b1d6",
+      "bytes": 1964
+    },
+    "start-existing.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "start-existing-exit.json": {
+      "sha256": "1705100b804832349bf8510d9172fbc38837c0055846633a949ac3085b780396",
+      "bytes": 57
+    },
+    "power-discovery.sh": {
+      "sha256": "619356179d01945d6343df1bba6db9acedc0b3b13a02a5ef9c4af284ec4064ba",
+      "bytes": 1450
+    },
+    "power-discovery.stdout": {
+      "sha256": "ebd6f070338924da5c391e0c955744e52c9627b91b77fb269cfeeb2cef8a544d",
+      "bytes": 116
+    },
+    "power-discovery.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "power-discovery-exit.json": {
+      "sha256": "b3ff15cc174f603b71c076512d016cbd21d4cce56c44cf3f60bfaa375f1205b5",
+      "bytes": 56
+    },
+    "final-read.sh": {
+      "sha256": "6bc6c4abc2c955341d0e9facc126b1ba3d80ca3c150732d89239b793e81883df",
+      "bytes": 1667
+    },
+    "final-read.stdout": {
+      "sha256": "f56c4c67098dc2bc9ba35e47a8e1bbd8b2b64a75a253c0cf74c59a21dfba32b8",
+      "bytes": 449
+    },
+    "final-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "final-read-exit.json": {
+      "sha256": "96d14762918caa926f8e66713383cb48734d81944ea4521246a79e312d46284e",
+      "bytes": 57
+    },
+    "evaluated-integration.json": {
+      "sha256": "843d32e0dda0d3f698506093c7cb0c5c5eb2fb93ccc36700598bdb6bbb335137",
+      "bytes": 994
+    }
+  },
+  "note": "The attempted busctl tree with an object-path argument in the intermediate diagnostic was rejected. The final snapshot uses the correct service-only tree and retains only counts; its twelve RSSI-bearing objects are the recorded observation.",
+  "normal_image_hardware": {
+    "trial": "boot-test-88",
+    "boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_source_revision": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+    "automatically_registered": true,
+    "automatically_powered": true,
+    "bluez_active": true,
+    "trace_inactive": true,
+    "independent_terminal_audit": "passed",
+    "evidence": "desktop-responsiveness-20261011.json"
+  }
+}

@@ -1,5 +1,7 @@
 # Sensors, thermal and SCP
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: raw SoC thermal readout is VERIFIED WORKING; Hall and keyboard input
 are BOUND-UNVERIFIED; IMU/SCP remain IMPLEMENTED-INACTIVE or UNKNOWN.
 

@@ -1,5 +1,7 @@
 # Display and DRM/KMS
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: display pipeline is BOUND-UNVERIFIED; physical pixels remain
 UNKNOWN.
 

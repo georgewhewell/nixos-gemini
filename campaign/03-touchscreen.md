@@ -1,5 +1,7 @@
 # Touchscreen
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: SOURCE EXISTS; the normal full NixOS image keeps the client INACTIVE;
 Cycle18 established the NT36772 identity and clean overlay teardown;
 physical touch behavior remains UNKNOWN.

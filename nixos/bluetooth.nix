@@ -15,9 +15,9 @@ let
       sleep 0.2
     done
     test -e /sys/class/bluetooth/hci0
-    # bluez 5.66's shell quits at once when stdin cannot be polled, which
-    # is the case for systemd's /dev/null; give btmgmt an idle pipe.
-    mgmt() { timeout 10 btmgmt "$@" < <(sleep 10); }
+    # The current BlueZ handles a command with systemd's /dev/null stdin.
+    # The old 5.66 idle-pipe workaround added ten seconds to each query.
+    mgmt() { timeout 10 btmgmt "$@" </dev/null; }
     configured() { mgmt info 2>&1 | grep -q '^hci0:'; }
     sleep 1
     if ! configured; then
@@ -43,20 +43,22 @@ let
     configured
   '';
 in {
-  # bluetoothd and bluetoothctl; the adapter stays off until asked.
+  # Register and configure the HCI endpoint before BlueZ powers it on.
   hardware.bluetooth = {
     enable = true;
     package = bluez;
-    powerOnBoot = false;
+    powerOnBoot = true;
   };
-  # HCI trace of every Bluetooth bring-up while the controller is being
-  # qualified (read with: btmon -r /run/gemini-bluetooth/hci.btsnoop).
+  # Explicit diagnostic: start this before gemini-bluetooth when an HCI
+  # trace is needed (read with: btmon -r /run/gemini-bluetooth/hci.btsnoop).
+  # Normal desktop use must not continuously record HCI traffic.
   systemd.services.gemini-bluetooth-trace = {
     description = "Capture MT6797 Bluetooth HCI traffic";
     serviceConfig = {
       Type = "simple";
       RuntimeDirectory = "gemini-bluetooth";
       RuntimeDirectoryPreserve = true;
+      UMask = "0077";
       ExecStartPre = "${pkgs.kmod}/bin/modprobe -d ${geminiConnectivityKernel} bluetooth";
       ExecStart = "${bluez}/bin/btmon -w /run/gemini-bluetooth/hci.btsnoop";
       ExecStartPost = "${pkgs.coreutils}/bin/sleep 1";
@@ -64,18 +66,27 @@ in {
   };
   systemd.services.gemini-bluetooth = {
     description = "Register the MT6797 CONSYS Bluetooth HCI endpoint";
+    wantedBy = ["multi-user.target"];
     after = ["gemini-connectivity.service" "gemini-bluetooth-trace.service"];
     requires = ["gemini-connectivity.service"];
-    wants = ["gemini-bluetooth-trace.service"];
-    # Deliberately not wanted at boot: hci_register_dev() runs setup at once,
-    # and a failed WMT Bluetooth transaction fences the shared CONSYS radio,
-    # which would also stop Wi-Fi. Start it explicitly until qualified.
+    before = ["bluetooth.service"];
+    # This uses the shared CONSYS firmware initialized by connectivity;
+    # it must not race that owner or power the adapter with a blank address.
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
       Restart = "no";
       TimeoutStartSec = "60s";
+      UMask = "0077";
       ExecStart = start;
     };
+  };
+  systemd.services.bluetooth = {
+    requires = ["gemini-bluetooth.service"];
+    after = ["gemini-bluetooth.service"];
+  };
+  systemd.services.gemini-baseline-self-accept = {
+    requires = ["bluetooth.service"];
+    after = ["bluetooth.service"];
   };
 }

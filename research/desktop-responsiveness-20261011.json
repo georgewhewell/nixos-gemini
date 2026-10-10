@@ -1,0 +1,402 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "kernel_source_revision": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+  "cause": "Normal GPU DT profile exposed only 238 MHz. The CPU all-online comparison remained sluggish.",
+  "operating_points_hz": [
+    238000000,
+    365000000,
+    442500000,
+    520000000,
+    610000000,
+    780000000,
+    900000000
+  ],
+  "normal_policy": "simple_ondemand with existing CPU parking",
+  "voltage_owner": "SCPSYS GPULDO provider retains the shared rail vote and accepts OPP voltage changes through native OPP config_regulators",
+  "thermal_policy": "Native devfreq cooling on existing 85 C SoC throttle trip",
+  "host_checks": {
+    "compiler": "native GCC 15.3.0",
+    "gpu_voltage_ordering_and_failure_cases": "passed",
+    "provider_power_lifetime": "passed",
+    "compiled_dt_admission": "passed, valid/default and 18 corruptions",
+    "arm64_W1_changed_objects": "passed"
+  },
+  "hardware": "passed supervised trial and independent terminal audit",
+  "subjective_responsiveness": "no user response yet; not qualified",
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011",
+  "evidence_files": {
+    "check-host.sh": {
+      "sha256": "aed1b53a0c8202709b8c7d990320405689c7f922f4812aeca66dc7757786c954",
+      "bytes": 530
+    },
+    "cross-check.sh": {
+      "sha256": "379fe2e1e90da7f5f57a8c896581e9abd3ca383786987ddc8bd154f23cec56a5",
+      "bytes": 773
+    },
+    "cross-check.stdout": {
+      "sha256": "7fad6b948d643f7a679c8844a827acbb5f26c2f16f0a20592872c9b3632df25c",
+      "bytes": 1722
+    },
+    "cross-check.stderr": {
+      "sha256": "be0778f53d4c48f0596d9be7125fa4b48e809206e8df90da0f07654590f03b2c",
+      "bytes": 1279
+    },
+    "cross-check-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "hold-cores.sh": {
+      "sha256": "987c9554c14edf92f84dcf4333209ac63908bad394688d6bb811510937d1ce02",
+      "bytes": 1052
+    },
+    "hold-cores.stdout": {
+      "sha256": "4a3ee3633c2e5a535c8a1c27428515c0517fe1c4037325e5ea0e6952d5cf4515",
+      "bytes": 477
+    },
+    "hold-cores.stderr": {
+      "sha256": "b62dfef1274c39443f84097898d3159b9ddc416364649cbaaded28b30606ed17",
+      "bytes": 147
+    },
+    "hold-cores-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "graphics-read.sh": {
+      "sha256": "a2ba30f393770d2d59badcb37a92481f7d3240fbe63a5e20033c04677f12b449",
+      "bytes": 794
+    },
+    "graphics-read.stdout": {
+      "sha256": "23cc01d35edb5c921c84717d7d769c29e4d592fcb59971d142e2c7dc94b30add",
+      "bytes": 5867
+    },
+    "graphics-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "graphics-read-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "host-check.stdout": {
+      "sha256": "db8bd0b60d7e40e3e188fc1500b1754a00e44a08b577a221b664ff48ca9e6277",
+      "bytes": 750
+    },
+    "host-check.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "host-check-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "kernel-build-command.json": {
+      "sha256": "498936c7a5ae0ddc698dcb4c8e4b54e2031bd4c047c762b8b1e40029d1450683",
+      "bytes": 147
+    },
+    "kernel-build.json": {
+      "sha256": "346ab91a35d79c07f5e442b36ac1c72c8c8224fbdc52effc1b66ba0c4cc3fd2c",
+      "bytes": 166
+    },
+    "kernel-build.log": {
+      "sha256": "97b5cbd835415c2030124eba0170db19e5f72a050d88249d1eea9bd557128829",
+      "bytes": 306
+    },
+    "kernel-build-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "kernel-full-build.log": {
+      "sha256": "c5a699c57763c872d25bc2ee81941658f8b0be0ed72a205513f1e0eb905d87d1",
+      "bytes": 373067
+    },
+    "image-build-command.json": {
+      "sha256": "bbbef86e61ec396a99ce8102d87b15bee162e8461db0efd6e60f0c8ad9274b8c",
+      "bytes": 147
+    },
+    "image-build.json": {
+      "sha256": "df5e736da2e45f88be3a1157767e98e07ff2d8c58c38f07a5a606c78b4194424",
+      "bytes": 186
+    },
+    "image-build.log": {
+      "sha256": "8cd670b125256f437cf46b7035635544d1d7948774aa6343ca3918d13b0625f3",
+      "bytes": 7655
+    },
+    "image-build-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "copy-command.json": {
+      "sha256": "1de075eeff835b1d0b2f54331900d032b5099c160e5bc35e7ba7af18f159da15",
+      "bytes": 167
+    },
+    "copy.log": {
+      "sha256": "9dd03d81aa88eb1672c3605f482953add6377956a30f05415468649da9266194",
+      "bytes": 4979
+    },
+    "copy-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "boot-test-88-command.json": {
+      "sha256": "2dedb16274c06e3b689a99b7710ec43273956a37f14a9e30abd730fd0efc9b19",
+      "bytes": 258
+    },
+    "boot-test-88.log": {
+      "sha256": "a14f12b219270fad03f071cb68a3d4f638168a9b0802db6b8cf2725cc75c542c",
+      "bytes": 929
+    },
+    "boot-test-88-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "audit-command.json": {
+      "sha256": "26357642d7d91aa2c819193454adbfc815323b0adf709f08374d0c15f33fca29",
+      "bytes": 248
+    },
+    "audit.log": {
+      "sha256": "4aef483bbf1f869b004a2dafcaa09a87a7a6a1141ce502784a05436b80e01ff9",
+      "bytes": 69
+    },
+    "audit-exit.json": {
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+      "bytes": 17
+    },
+    "final-integration-read.stdout": {
+      "sha256": "4017e4a0c4f20dd72342aaebbb250bb749088ec50dca6a0709e435a76cd40924",
+      "bytes": 300
+    },
+    "final-integration-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "independent-audit-88/result.json": {
+      "sha256": "8616a86b4ee68108ad7a46ae2ca395b570fc481219cac8bb9d9999ce6c0c0381",
+      "bytes": 2629
+    },
+    "cooling-read.stdout": {
+      "sha256": "39a88241b717793e4d0a6d8fe85e137b1e4558664f8e19443f751d5d0372b9fe",
+      "bytes": 118
+    },
+    "cooling-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  },
+  "kernel_build": {
+    "result": "passed",
+    "kernel": "/nix/store/v41dw4787dlfr0v7yadb9mik7i2k4hgj-linux-gemini-7.2.9",
+    "derivation": "/nix/store/wrs7jz5ccnjwxqmxy0xhrw0jb3lgyd6g-linux-gemini-7.2.9.drv",
+    "config_sha256": "8d0c7a2e3d3e9ad16549d1846cb8abd60904f10a3bf63ac91080234b695df901",
+    "all_required_host_checks": "passed",
+    "FUSE_FS": "built-in",
+    "flash_swap": "absent"
+  },
+  "first_build_attempt": {
+    "result": "failed required test fixture, corrected",
+    "evidence": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/kernel-build-attempt-1",
+    "cause": "TX lifecycle fixture omitted new cancellation helper; followup kernel commit a25cb83 fixes fixture only."
+  },
+  "trial": "boot-test-88",
+  "bundle": "/nix/store/fkwr96cfx9xl45xhami6nh0i154r1nav-gemini-mainline-nixos-bundle",
+  "accepted_baseline": {
+    "name": "boot-test-88",
+    "image": "/nix/store/kvwx7hqhxzaxafzdanqylaw8gbw8dama-gemini-mainline-nixos-padded.img",
+    "boot_sha256": "24a31a771580755bd65a14911f39f01dc29ac381129aef6b7c1d5b91c498137d",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "store": "normal",
+    "zswap_shrinker": "absent",
+    "boot": "direct",
+    "rtc_epoch": "native",
+    "previous": "boot-test-87",
+    "paging_policy": "zram",
+    "desktop": "gnome"
+  },
+  "hardware_gpu": {
+    "result": "passed",
+    "boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel": "/nix/store/v41dw4787dlfr0v7yadb9mik7i2k4hgj-linux-gemini-7.2.9",
+    "governor": "simple_ondemand",
+    "operating_points": [
+      {
+        "hz": 238000000,
+        "microvolts": 850000
+      },
+      {
+        "hz": 365000000,
+        "microvolts": 912500
+      },
+      {
+        "hz": 442500000,
+        "microvolts": 937500
+      },
+      {
+        "hz": 520000000,
+        "microvolts": 975000
+      },
+      {
+        "hz": 610000000,
+        "microvolts": 1018750
+      },
+      {
+        "hz": 780000000,
+        "microvolts": 1106250
+      },
+      {
+        "hz": 900000000,
+        "microvolts": 1156250
+      }
+    ],
+    "pixel_checks": 13,
+    "pixels_per_check": 8192,
+    "job_irq_delta": 104,
+    "program": "/nix/store/iphrh9xjhqx878vrgs824b6vpndbsmb0-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/gpu-render-smoke",
+    "program_sha256": "4ec1b0c0920c0a8cc20a94729b68d9af6c785d171ac695585a7dc0bc2aa4cc49",
+    "normal_cpu_parking_retained": true,
+    "policy_restored": true,
+    "bluetooth_boot_registration": true,
+    "document_portal_mounted": true,
+    "wlan_netdev_present": true,
+    "sustained_thermal_qualified": false,
+    "subjective_desktop_responsiveness_qualified": false,
+    "clock_readbacks_hz": [
+      237999817,
+      364999756,
+      442499878,
+      520000000,
+      609999451,
+      780000000,
+      899999268,
+      780000000,
+      609999451,
+      520000000,
+      442499878,
+      364999756,
+      237999817
+    ],
+    "thermal_cooling": {
+      "type": "devfreq-13040000.gpu",
+      "max_state": 6,
+      "current_state": 0,
+      "sustained_load_qualified": false
+    }
+  },
+  "installation_result": {
+    "result": "passed",
+    "profile": "boot-test",
+    "kept_boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "proof": "candidate-self-accepted-by-supervisor",
+    "profile_qualified": true,
+    "linux_handoff_proven": true,
+    "promoted": true,
+    "fixed_swap_preserved": true,
+    "default_policy_paging_qualified": true,
+    "recovered_boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "source_hashes_match": true,
+    "no_writer": true,
+    "paging_policy": "zram",
+    "ram_only_paging_qualified": true,
+    "rtc_alarm_diagnostics_qualified": true,
+    "rtc_alarm_delivery_qualified": true,
+    "rtc_alarm_cancellation_qualified": true,
+    "sleep_requested": false,
+    "wake_from_suspend_qualified": false,
+    "rtc_utc_write_read_qualified": true,
+    "rtc_reboot_persistence_qualified": null,
+    "kernel_periodic_rtc_updates": false,
+    "rtc_startup_qualified": true,
+    "runtime_clock_policy_restored": true,
+    "boot_id": "d7373628-30ae-4161-826a-4dca951d2156"
+  },
+  "independent_audit": {
+    "result": "passed",
+    "baseline": {
+      "name": "boot-test-88",
+      "image": "/nix/store/kvwx7hqhxzaxafzdanqylaw8gbw8dama-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "24a31a771580755bd65a14911f39f01dc29ac381129aef6b7c1d5b91c498137d",
+      "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "store": "normal",
+      "zswap_shrinker": "absent",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "previous": "boot-test-87",
+      "paging_policy": "zram",
+      "desktop": "gnome"
+    },
+    "final_boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "kept_candidate": true,
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 44,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "normal_startup": {
+    "graphical_target_seconds": 95.055925,
+    "kernel_seconds": 50.843,
+    "userspace_seconds": 44.212,
+    "automatic_bluetooth_power": true,
+    "hci_trace_active": false,
+    "document_portal": "active, fuse.portal mounted",
+    "cpu_online": "0-2",
+    "cpu_hold_or_pause": false
+  },
+  "wifi_hardware": {
+    "result": "passed controlled cancellation and passive observation",
+    "one_controlled_NM_abort": "aborted completion drained after 2.660491 seconds, no HIF restart",
+    "observation_uptime_start": 320.59,
+    "observation_uptime_end": 601.7,
+    "samples": 26,
+    "HIF_faults": 0,
+    "radio_restarts": 0,
+    "interface_remained_registered": true,
+    "association_and_data_qualified": false,
+    "evidence": "wifi-scan-regression-20261011.json"
+  },
+  "gpu_raw_evidence": {
+    "gpu-dvfs/points.stdout": {
+      "sha256": "45df20f59f0e674be3bdf484bd0229e3cffad5f5726dff8de652e4c99b72cc3d",
+      "bytes": 3862
+    },
+    "gpu-dvfs/points.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "gpu-dvfs/kernel.stdout": {
+      "sha256": "57c30c84a13a2bfd7da09a568ac2beefa4c3bd1666fc98d1d53113c48d8090d5",
+      "bytes": 71042
+    },
+    "gpu-dvfs/kernel-check.stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "gpu-dvfs/kernel-check.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "gpu-dvfs/result.json": {
+      "sha256": "c50e7b36826dd5add189d4447ba5eff239ce9d0a5af6fc284440cb03fb55a777",
+      "bytes": 2660
+    },
+    "promoted-baseline.json": {
+      "sha256": "15077658a1c50038916f5c2da3882a0fcf6d171b57cbd033e9f346a8e31b3a49",
+      "bytes": 497
+    },
+    "result.json": {
+      "sha256": "4e7a28a18a0165b35c8eaf3d54e8b38a25172261c3ec12f1828dffdce7ed71b0",
+      "bytes": 2324
+    }
+  },
+  "matching_decoder_build": {
+    "result": "passed W=1 and strict MODPOST, hardware unqualified",
+    "module": "/mnt/Home/src/nixos-gemini/handoff/media-module-boot88-20261011/module-input/mt6797-vdec-v4l2/mt6797_vdec.ko",
+    "module_sha256": "79c9613c7d30f5da0e37823470037e8cd71aedbb60925fba27a56e3ac2766689",
+    "kernel_config_sha256": "8d0c7a2e3d3e9ad16549d1846cb8abd60904f10a3bf63ac91080234b695df901",
+    "kernel_symvers_sha256": "1c226cc2ce3678d1f29d0549e498f4c15590c5b66c793ffa064ddf9f07e55aef",
+    "evidence": "/mnt/Home/src/nixos-gemini/handoff/media-module-boot88-20261011/module-build-result.json",
+    "proof_sha256": "eb4804cf4ee517ff3d05ef9ec8a851ae2e1e164b89932de98c85f6a1b634838c"
+  }
+}

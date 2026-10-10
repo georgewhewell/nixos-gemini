@@ -1,5 +1,7 @@
 # Storage: eMMC and MicroSD
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: eMMC is VERIFIED WORKING for bounded read-only access; MicroSD is
 IMPLEMENTED-INACTIVE in the current image and remains UNKNOWN.
 

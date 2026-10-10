@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "scope": "Bounded source and read-only device inventory after consolidation; presence checks do not requalify historical physical, load, transition or endurance results.",
+  "installed": {
+    "accepted_baseline": "boot-test-87",
+    "boot_id": "eff3eca4-bb13-41c6-b37f-46e1932b4e23",
+    "system": "/nix/store/g8xdcmbiphla25d2g0pzdj781r6l3x7j-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel": "/nix/store/f7hb96326nxx9inzq5clkyng878nbfa0-linux-gemini-7.2.9",
+    "kernel_source_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+    "kernel_config_sha256": "8a01e364ec6dd2cd57d337dbca17f41905552b64a543290e885acc353f2cd2cb",
+    "packaging_head_at_audit": "1523b1a1e0fe9f7047b2d6b0024a7691b1b96cff",
+    "compiler": "GCC 15.3.0 / binutils 2.46",
+    "hardware_or_service_mutations_by_this_audit": false,
+    "note": "Bluetooth was manually registered and powered by the separately recorded Bluetooth integration task before the retained read-only snapshot."
+  },
+  "confirmed_gaps": [
+    {
+      "area": "Bluetooth normal startup",
+      "previous_evidence": "M45 LE discovery; research/bluetooth-integration-20261011.json",
+      "cause": "Registration stayed manual from M41 despite retained driver, BlueZ and later discovery evidence.",
+      "current_state": "Separate task manually registered/powered hci0 and verified discovery on accepted trial 87.",
+      "source_fix": "nixos/bluetooth.nix now orders normal HCI registration before BlueZ and enables power-on-boot.",
+      "new_image_cold_boot_pending": true,
+      "pairing_or_profiles_qualified": false
+    },
+    {
+      "area": "Wi-Fi lifetime under the new manager",
+      "previous_evidence": "campaign/05-wifi-bluetooth.md records M51 WPA3 traffic/reconnects and M69 associated WPA2 scans/traffic.",
+      "current_state": "wlan0 disappeared after scan-worker HIF faults -125; driver logs three restarts within 600 s followed by leaving it down. Connectivity oneshot remains active with a stale firmware-ready marker.",
+      "cause_status": "Wi-Fi task is investigating scan cancellation/recovery; this audit establishes the failure, not its complete cause.",
+      "new_image_cold_boot_pending": true
+    },
+    {
+      "area": "GNOME document portal",
+      "current_state": "/dev/fuse absent; user xdg-document-portal.service failed exit 6. Journal records fuse device not found and mount initialization failure.",
+      "cause": "CONFIG_FUSE_FS=m is retained but not auto-loaded from the custom kernel module closure.",
+      "source_fix": {
+        "path": "arch/arm64/configs/gemini_defconfig",
+        "old": "CONFIG_FUSE_FS=m",
+        "new": "CONFIG_FUSE_FS=y",
+        "source_revision_with_fix": "06e0b19e90f1e67a442f0144749e1ee1b8b5e8fe",
+        "diff_check_passed": true
+      },
+      "verification_pending": [
+        "Built kernel contains CONFIG_FUSE_FS=y.",
+        "New image publishes /dev/fuse and document portal starts successfully."
+      ],
+      "new_image_cold_boot_pending": true
+    },
+    {
+      "area": "GPU performance ceiling",
+      "current_state": "Only available GPU frequency is 238000000 Hz.",
+      "source_fix_owner": "Parent task; no GPU source or operating-point changes were made by this audit.",
+      "new_image_cold_boot_pending": true
+    }
+  ],
+  "retained_integration": [
+    {
+      "area": "GNOME/display",
+      "source": "nixos/gnome.nix",
+      "observed": "GDM active; DSI connected/enabled and backlight present.",
+      "existing_proof": "research/default-toolchain-20261010.json and research/desktop-ui-20261010.json retain local Wayland, 200% scaling and dock checks."
+    },
+    {
+      "area": "Audio",
+      "source": "nixos/audio.nix and nixos/audio-routes.nix",
+      "observed": "ALSA mt6797mt6351 card/PCMs present; PipeWire, Pulse compatibility and WirePlumber active; internal speaker and microphone endpoints appear in wpctl.",
+      "limit": "No playback, capture or physical jack test was run during this audit."
+    },
+    {
+      "area": "Input",
+      "source": "Maintained board DTS and nixos/gnome.nix keyboard composition",
+      "observed": "NT36xxx touchscreen, matrix keyboard, Hall gpio-keys, PMIC keys and headset input devices present.",
+      "existing_proof": "research/DESKTOP_KEYBOARD.md retains the historical 416-key-combination delivered-map comparison.",
+      "limit": "Presence does not requalify physical input events or the delivered map under a different compositor."
+    },
+    {
+      "area": "JPEG",
+      "source": "nixos/media.nix",
+      "observed": "gemini-jpeg active; mtk-jpeg-enc and mtk-jpeg-dec video nodes present.",
+      "limit": "No JPEG frame was submitted during this audit."
+    },
+    {
+      "area": "CPU power",
+      "source": "nixos/core-parking.nix and maintained CPU/CCI drivers",
+      "observed": "Ten possible CPUs, schedutil, active parking and three CPU cooling devices; temporary parking hold absent.",
+      "limit": "Historical transition and thermal results remain scoped to their recorded builds."
+    },
+    {
+      "area": "Battery/charger",
+      "source": "Maintained MT6351/BQ25890 drivers",
+      "observed": "Battery/USB power supplies and charger/fuel-gauge thermal devices present.",
+      "limit": "Percentage accuracy, discharge calibration and charging endurance remain unqualified."
+    },
+    {
+      "area": "Sensors/LEDs",
+      "source": "Maintained board DTS; BMI160/STK3310/AW9120 drivers",
+      "observed": "bmi160 and stk3310 IIO devices; six RGB and blue/red indicator LED class entries present.",
+      "limit": "No physical sensor or light-output test was run."
+    },
+    {
+      "area": "RTC/watchdog",
+      "source": "nixos/m39.nix and normal watchdog services",
+      "observed": "Native MT6351 RTC class present and watchdog active.",
+      "existing_proof": "research/default-toolchain-20261010.json retains startup/UTC/awake-alarm and terminal-audit results.",
+      "limit": "No new alarm, clock write, watchdog-expiry or sleep test was run."
+    },
+    {
+      "area": "Persistent storage/Nix",
+      "source": "nixos/storage.nix and normal boot composition",
+      "observed": "Persistent ext4 home/store mounts and active Nix daemon/socket.",
+      "existing_proof": "research/default-toolchain-20261010.json retains ordinary-build and protected-data audit."
+    },
+    {
+      "area": "Flash-safe paging",
+      "source": "nixos/storage.nix",
+      "observed": "Only /dev/zram0 appears in /proc/swaps.",
+      "existing_proof": "research/networkmanager-image-20261010.json records actual RAM-only paging with zero flash-swap writes.",
+      "limit": "No new paging workload was run."
+    },
+    {
+      "area": "Networking/USB/cellular control",
+      "source": "nixos/networking.nix and nixos/cellular.nix",
+      "observed": "NM/MM active; wired ethernet connected, USB ethernet unmanaged, wwan interface present; IPv6 disable flag is 0.",
+      "existing_proof": "research/networkmanager-image-20261010.json records wired DHCP and modem discovery; research/desktop-ui-20261010.json records USB IPv6 ping/SSH.",
+      "limit": "WLAN failure is listed above. Cellular data and external IPv6 routing remain unqualified."
+    },
+    {
+      "area": "U-Boot/EFI",
+      "source": "flake.nix retains maintained bootloader and EFI outputs; nixos/boot.nix remains imported.",
+      "observed": "Source/artifact paths retained; accepted trial 87 uses direct Linux boot.",
+      "limit": "The audit did not execute or qualify U-Boot/EFI with the new kernel."
+    }
+  ],
+  "unfinished_not_lost": [
+    "H.264 IRQ completion on Linux 7.2.9, shared hardware DMA-buf surfaces and production decoder integration.",
+    "Hardware video encoding; no encoded frame has been produced.",
+    "GNSS location fix and FM qualification.",
+    "Bluetooth pairing/profiles and sustained Wi-Fi/Bluetooth coexistence.",
+    "Cellular registration/data and applicable SIM/eSIM services.",
+    "Suspend, hibernation, deep idle and endurance.",
+    "MicroSD I/O, USB SuperSpeed and left-port host operation."
+  ],
+  "stale_campaign_pages": [
+    "campaign/00-roadmap-and-status.md",
+    "campaign/01-display-drm-kms.md",
+    "campaign/02-gpu-panfrost.md",
+    "campaign/03-touchscreen.md",
+    "campaign/04-audio-routing-codecs.md",
+    "campaign/07-sensors-and-coprocessor.md",
+    "campaign/11-storage-emmc-sdcard.md",
+    "campaign/12-keyboard-and-leds.md"
+  ],
+  "stale_page_change": "A short notice points to research/HARDWARE_STATUS.md; historical observations and qualification boundaries remain intact.",
+  "new_combined_image": {
+    "cold_boot_acceptance_pending": true,
+    "includes_requested_fixes": [
+      "GPU",
+      "Wi-Fi",
+      "FUSE",
+      "Bluetooth"
+    ],
+    "note": "This inventory does not claim that the combined candidate has booted or fixed the observed failures."
+  },
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/integration-audit-20261011",
+  "evidence_files": {
+    "audio-read-exit.json": {
+      "sha256": "30dae007fb83f48569035c884f0c59ab28f25d520a0bf7af21698861620dea30",
+      "bytes": 142
+    },
+    "audio-read.sh": {
+      "sha256": "b505a36cb20d3fa821928971ecac1a9f72b8852fb124cead6e824e9098c38e00",
+      "bytes": 314
+    },
+    "audio-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "audio-read.stdout": {
+      "sha256": "f3bcc64b03a84afae5605315f2dcd24b200a22aa53935e021a904e0d3f756f1e",
+      "bytes": 1442
+    },
+    "device-read-exit.json": {
+      "sha256": "8f12075dab1dca161240ca176d9c156d222b24152c38932f6bdd929f13cbb722",
+      "bytes": 204
+    },
+    "device-read.sh": {
+      "sha256": "6161f10176be48ac7e5ea750812c1eb761ae1e6ccd31ab43d6224b55486b4e66",
+      "bytes": 2469
+    },
+    "device-read.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "device-read.stdout": {
+      "sha256": "90720ee842f93bc1ebfc2d101a90aeacb80f067464540dda8847a79bb017fca6",
+      "bytes": 4422
+    }
+  },
+  "related_proof_files": {
+    "research/baselines/boot-test-87.json": {
+      "sha256": "90042ec083042f3fcdb0e8fbcaf3d511193d01cd56974e4b542c09ff701a0b97",
+      "bytes": 497
+    },
+    "research/bluetooth-integration-20261011.json": {
+      "sha256": "f277ca6c7a89c17d64f2bb85b7dcb57d69c1e98879dadd17e33fd3d2d5f7ff0c",
+      "bytes": 6621
+    },
+    "research/default-toolchain-20261010.json": {
+      "sha256": "aa4b1e8dfd54399dc89119f77c79bf249a1f7fc173e0da80503a40b098cb4ef8",
+      "bytes": 13403
+    },
+    "research/desktop-ui-20261010.json": {
+      "sha256": "9a59a869e13b1f844599790f92ff302371bee926b7e849a40263370c3df1e7b7",
+      "bytes": 15555
+    },
+    "research/networkmanager-image-20261010.json": {
+      "sha256": "7c28151c9f7e45eb4535b8d71205110358c3cb922958f4d966e1cd7910591b69",
+      "bytes": 5267
+    }
+  },
+  "followup_image": {
+    "trial": "boot-test-88",
+    "boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_source_revision": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+    "gpu_seven_operating_point_rendering": "passed",
+    "bluetooth_boot_registration_and_power": "passed",
+    "FUSE_document_portal": "mounted and active",
+    "wifi_scan_cancellation": "passed controlled cancellation and 26 passive samples through 601.70 seconds uptime, zero faults/restarts; association/data unqualified",
+    "independent_terminal_audit": "passed",
+    "evidence": "desktop-responsiveness-20261011.json",
+    "wifi_evidence": "wifi-scan-regression-20261011.json"
+  }
+}

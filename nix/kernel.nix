@@ -13,6 +13,7 @@
       (with buildPkgs; [
         bc
         bison
+        dtc
         elfutils
         flex
         git
@@ -48,6 +49,7 @@
       grep -Fqx CONFIG_DYNAMIC_FTRACE=y .config
       grep -Fqx CONFIG_EVENT_TRACING=y .config
       grep -Fqx CONFIG_IPV6=y .config
+      grep -Fqx CONFIG_FUSE_FS=y .config
       grep -Fqx CONFIG_ZRAM=y .config
       grep -Fqx CONFIG_ZRAM_BACKEND_LZ4=y .config
       ! grep -Fqx CONFIG_ZRAM_WRITEBACK=y .config
@@ -85,13 +87,16 @@
         mt6351-fgadc-conversion-host gemini-battery-profile-host \
         mt6351-fgadc-model-host mt6351-fgadc-model-lifecycle-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-station-host wifi-radio-tx-host \
+        wifi-radio-worker-host wifi-radio-scan-cancel-host wifi-hif-recovery-host \
         regulator-exclusive-state media-clock-bounds drm-synchronous-bind cellular-integration \
         fusb301-role-host mt6797-tphy-power-host mtu3-fallback-host; do
         python3 "tools/gemini/test-$test.py"
       done
-      for test in acquire integration provider registration pm; do
+      for test in acquire integration provider registration pm dvfs; do
         python3 "drivers/pmdomain/mediatek/test-gpuldo-$test.py"
       done
+      python3 drivers/pmdomain/mediatek/test-gpuldo-dt.py \
+        arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb
       "$HOSTCC" -std=c11 -Wall -Wextra -Werror \
         drivers/pmdomain/mediatek/test-gpuldo-owner.c -o gpuldo-owner-test
       ./gpuldo-owner-test

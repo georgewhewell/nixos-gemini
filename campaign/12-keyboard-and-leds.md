@@ -1,5 +1,7 @@
 # Keyboard, notification LEDs and camera flash
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: keyboard is BOUND-UNVERIFIED; LEDs and camera flash are MISSING.
 
 The current full Stage2 runtime has keyboard-matrix input/event0 and dmesg

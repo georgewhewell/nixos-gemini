@@ -1,5 +1,7 @@
 # Gemini PDA mainline campaign: evidence first
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve earlier campaign baselines.
+
 Current status, 2026-10-08: use [the completion ledger](../research/HARDWARE_STATUS.md)
 and the dated results in each campaign chapter. The maintained kernel pin is
 `b62fc653f754fde3bf388c284a5098a53cd8f244`; M69 remains the installed recovery

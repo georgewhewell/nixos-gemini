@@ -1,5 +1,7 @@
 # Mali-T880 / Panfrost
 
+For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve the earlier bring-up baseline.
+
 Status: GENERIC UPSTREAM DRIVER EXISTS; MT6797 APPLICABILITY PROVEN; DT ENABLED
 **NO**; DEVICE-TESTED **UNKNOWN**.
 

@@ -1,8 +1,8 @@
 # NixOS on the Planet Computers Gemini PDA
 
 The installed system is Linux 7.2.9 with GNOME Wayland, 200% display scaling,
-a fixed bottom dock, NetworkManager, ModemManager, IPv6 and LZ4 zram.
-[Trial 85](research/networkmanager-image-20261010.json)
+a fixed bottom dock, NetworkManager, ModemManager, Bluetooth, IPv6 and LZ4 zram.
+[Trial 88](research/desktop-responsiveness-20261011.json)
 passed the supervised installation and independent terminal audit, and was
 kept as the [accepted baseline](research/accepted-baseline.json).
 Native RTC startup, UTC read/write, alarm delivery/cancellation/rearming,
@@ -11,7 +11,11 @@ The cross-built desktop and networking runtime check passes 1,224 ARM64 ELF
 files and 124 script checks, including service entrypoints, target Python and
 GI libraries. Both managers run, the onboard modem is detected and wired DHCP
 works. Saved Wi-Fi profiles are imported; Wi-Fi association and cellular data
-remain unqualified on this image.
+remain unqualified on this image. Bluetooth registers and powers on at boot;
+the GNOME document portal has built-in FUSE support. GPU DVFS now uses seven
+operating points from 238 to 900 MHz, with verified voltage/clock readbacks and
+pixel rendering in both directions. The [integration audit](research/integration-audit-20261011.json)
+records the retained device support and the gaps corrected in this image.
 
 Normal boot initializes devices and opens GNOME. GPU render tests, audio
 playback/capture tests, Wi-Fi scan loops and Weston qualification are explicit
@@ -105,7 +109,7 @@ python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s)
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The supervisor checks the candidate and restores the accepted image afterwards.
 Add `--keep` to leave a fully passing candidate installed; adopt its recorded
-`promoted-baseline.json` after the independent terminal audit. Trial 85 did this
+`promoted-baseline.json` after the independent terminal audit. Trial 88 did this
 for the current GNOME image. The unchanged accepted image needs no new baseline
 cycle. Test changed behavior and unmet acceptance checks using the
 [current testing criteria](research/HARDWARE_STATUS.md).

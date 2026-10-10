@@ -15,8 +15,11 @@ selection was inherited from the original board packaging, without a
 documented GCC 15 incompatibility. [Trial 87](default-toolchain-20261010.json)
 passed the full build, required kernel host checks, ARM64 desktop/manager runtime
 audit, supervised hardware acceptance and independent terminal audit. Its GCC
-15.3.0 / binutils 2.46 image is installed. The decoder module also builds with
-strict MODPOST and `W=1` against this exact kernel; its IRQ hardware test remains
+15.3.0 / binutils 2.46 image was retained. [Trial 88](desktop-responsiveness-20261011.json)
+installs the same toolchain with GPU DVFS, built-in FUSE and Wi-Fi cancellation
+fixes; Bluetooth now registers and powers on automatically. The experimental
+decoder module is rebuilt with strict MODPOST and `W=1` against this exact
+kernel/configuration/symbol table in the trial 88 record; its IRQ hardware test remains
 pending. [Trial 85](networkmanager-image-20261010.json) preserves the earlier
 GCC 12 image evidence.
 
@@ -34,14 +37,17 @@ their original version pins. Uncommitted allocator diagnostics in the original
 kernel checkout are preserved separately and are not part of this build.
 
 The earlier qualified port source was `5fb8876d52f20cf79d8618c675d478633b052fc5`.
-Current development pins `7eb0d527f1b549bb373908dfe644728e55d9a911` on
+Current development pins `a25cb83b405045f7a1d8b25aeba71036eb277206` on
 `gemini-7.2.9`. This single kernel includes the decoder's device-tree resources,
-its clock provider, built-in IPv6 and LZ4 zram, with zswap and zram writeback
-disabled. The temporary `gemini-video-7.2.9` branch was merged, then deleted
+its clock provider, built-in IPv6, FUSE and LZ4 zram, with zswap and zram writeback
+disabled. GPU voltage changes use native OPP ordering through the existing
+shared-rail owner; seven frequencies and clock/voltage readbacks pass rendering
+on the installed board. Wi-Fi scan cancellation drains the matching firmware
+completion rather than fencing the radio. The temporary `gemini-video-7.2.9` branch was merged, then deleted
 locally and remotely. Its earlier source snapshot remains detached for
 reproducing recorded build evidence; it is not a development branch.
 
-[Trial 87](default-toolchain-20261010.json) qualifies the current GCC 15-built
+[Trial 88](desktop-responsiveness-20261011.json) qualifies the current GCC 15-built
 GNOME/zram image and keeps it installed after a passing independent audit.
 [Trial 81](desktop-ui-20261010.json) retains the earlier UI evidence. Local Wayland, HiDPI and
 the dock pass; IPv6 ping passed on this configuration in trial 80.

@@ -1,0 +1,168 @@
+{
+  "result": "passed",
+  "scope": "NetworkManager-driven scan cancellation and WLAN registration survival",
+  "kernel_source_commit": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+  "fix_introduced_commit": "06e0b19e90f1e67a442f0144749e1ee1b8b5e8fe",
+  "fixture_followup_commit": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+  "regression": {
+    "previous_boot_id": "eff3eca4-bb13-41c6-b37f-46e1932b4e23",
+    "previous_faults": [
+      {
+        "uptime_seconds": 176.031405,
+        "errno": -125
+      },
+      {
+        "uptime_seconds": 267.085703,
+        "errno": -125
+      },
+      {
+        "uptime_seconds": 359.110857,
+        "errno": -125
+      },
+      {
+        "uptime_seconds": 451.169911,
+        "errno": -125
+      }
+    ],
+    "previous_outcome": "Fourth fault exhausted the three-restarts-per-600s budget; driver stayed bound but WLAN netdev was unregistered.",
+    "fault_origin": "mt6797_radio_scan_work"
+  },
+  "change": {
+    "description": "Distinguish administrative scan cancellation from transport abort; wait for matching SCAN_DONE within existing 30s timeout before reporting aborted.",
+    "retained_fences": [
+      "missing SCAN_DONE",
+      "malformed completion",
+      "transport failure"
+    ],
+    "driver": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/kernel-worktree/drivers/net/wireless/mediatek/mt6797/radio.c",
+      "sha256": "a9e3029b1aaab52db17b5f7f3ac34185817d8d327e654b33c4427a919a5a13a0"
+    }
+  },
+  "host_checks": {
+    "new_scan_worker_test": {
+      "file": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/kernel-worktree/tools/gemini/test-wifi-radio-scan-cancel-host.py",
+        "sha256": "2719177330dc7e4ed7253a16770c6f80d55fc48ff956303aca66557c7d0dcd6d"
+      },
+      "result": "passed",
+      "cases": 18,
+      "compiler": "native GCC 15.3.0"
+    },
+    "existing_connection_worker": "passed",
+    "existing_hif_recovery": "passed",
+    "tx_chain_including_stop_lifecycle_and_pthread_queue_race": "passed",
+    "full_kernel_build": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/kernel-build-exit.json",
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+    }
+  },
+  "supervised_trial": {
+    "name": "boot-test-88",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "boot_id": "d7373628-30ae-4161-826a-4dca951d2156",
+    "parent_exit": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-test-88-exit.json",
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+    },
+    "independent_audit_exit": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/audit-exit.json",
+      "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+    },
+    "independent_audit": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/independent-audit-88/result.json",
+      "sha256": "8616a86b4ee68108ad7a46ae2ca395b570fc481219cac8bb9d9999ce6c0c0381"
+    }
+  },
+  "hardware": {
+    "result": "passed",
+    "process_exit_code": 0,
+    "verifier": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/verify-scan-cancel.py",
+      "sha256": "cc0acbfbabddaf37f6318271afc3a368bed01ea6bac324294d421242ab9ba0ca"
+    },
+    "aggregate_result": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/run-20261010T224607Z/result.json",
+      "sha256": "f536220777ad477ec3e5c53a9f312bd1bc5bb44db453d5378958da47797931de"
+    },
+    "process_exit": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/run-20261010T224607Z/process-exit.json",
+      "sha256": "6e5b66546e1baeddaaaef45ec2d5a716a6d0c2fb4e84341b71054931fa7f81ca"
+    },
+    "command": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/run-20261010T224607Z/command.json",
+      "sha256": "8f37f3c9ff146a6d8771cf3251661a4e104b865a00ab28f9a743428c3481d4d9"
+    },
+    "duration_seconds": 282.702,
+    "controlled_scan_cancel": {
+      "status": "passed",
+      "request_scan_exit": 0,
+      "scanning_observed_before_abort": true,
+      "abort_scan_exit": 0,
+      "scanning_finished": true,
+      "trace_events": [
+        {
+          "time": 329.462375,
+          "event": "rdev_abort_scan"
+        },
+        {
+          "time": 332.122866,
+          "event": "cfg80211_scan_done",
+          "aborted": true
+        }
+      ],
+      "last_scan_changed": true,
+      "duration_seconds": 6.26
+    },
+    "abort_to_completion_seconds": 2.660491,
+    "trace_cleanup_passed": true,
+    "sample_count": 26,
+    "initially_connected": false,
+    "first_sample": {
+      "uptime": 320.59,
+      "netdev_count": 1,
+      "phy_count": 1,
+      "driver_bound": 1,
+      "nm_active": 1,
+      "wpa_active": 1,
+      "supplicant_count": 1,
+      "supplicant_unit_matches_exe": 1,
+      "fault_count": 0,
+      "restart_count": 0,
+      "down_count": 0,
+      "fenced_count": 0
+    },
+    "last_sample": {
+      "uptime": 601.7,
+      "netdev_count": 1,
+      "phy_count": 1,
+      "driver_bound": 1,
+      "nm_active": 1,
+      "wpa_active": 1,
+      "supplicant_count": 1,
+      "supplicant_unit_matches_exe": 1,
+      "fault_count": 0,
+      "restart_count": 0,
+      "down_count": 0,
+      "fenced_count": 0,
+      "nm_device_state": 50,
+      "active_connection_present": true,
+      "original_connection_preserved": true
+    },
+    "all_samples_zero_fault_restart_down_fence": true,
+    "all_samples_wlan_registered": true
+  },
+  "preservation": {
+    "radio_owner": "existing NetworkManager and its existing sole wpa_supplicant",
+    "profiles_changed": false,
+    "services_restarted": false,
+    "driver_reprobe": false,
+    "private_wifi_details_recorded": false
+  },
+  "limitations": [
+    "This qualifies cancellation and registration survival through 601.70s uptime, not long-term reliability.",
+    "No WLAN connection existed at the start; association/throughput/connected-scan continuity were not hardware-tested.",
+    "Final NetworkManager state 50 showed automatic association in progress; it does not establish association or data success.",
+    "Missing matching SCAN_DONE still triggers the existing bounded transport fence."
+  ]
+}
