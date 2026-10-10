@@ -55,7 +55,8 @@ I/P pictures, at most one short-term reference, with enabled or disabled deblock
 Main/CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
 `V4L2_PIX_FMT_MM21`. The current candidate admits coded widths 64..640 and heights 64..480 in steps
-of 16; hardware qualification currently extends only through 320x256.
+of 16; media fixture qualification extends through 640x480 in trial 38; its full
+system profile fails the separate RTC check described below.
 Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
 height, and cached references must match it. Trial 30 passes all 18 original
 request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
@@ -196,13 +197,21 @@ deliberately invalid CABAC alignment bit reports raw `0x100`, stops safely at
 the one-second deadline, and causes a GStreamer request timeout before capture
 error propagation can be checked. Its observer retains this negative-test
 failure. The next source stops promptly on this specific fatal error and tests
-it alongside 640x480/640x464/352x288 decoding. Larger geometry and early-error
-handling await hardware validation. `first_context_failure` also preserves each
+it alongside 640x480/640x464/352x288 decoding. Trial 38 validates both: all 58 positive
+pictures match, including deblocked Baseline/Main at 640x480 and 640x464 in
+480-row storage, plus 352x288. Invalid alignment stops in 53 ms with raw
+`0x100`, safe reset and intact guards. GStreamer returns an error and emits only
+the independently matching preceding I picture. All 57 compliance checks and
+normal decoder/probe unload pass. The separate final RTC alarm check misses
+its interrupt; the supervisor preserves that system-profile failure, restores
+the accepted system, and the strict recovery audit passes. The same module is
+being repeated with stream reconfiguration and standard-output tests; this
+media result does not qualify the entire experimental system. `first_context_failure` also preserves each
 context's first rejection, so pre-DMA failures cannot be hidden by later
 missing references. The fixture
 generator's `--deblocking` and `--entropy cabac` options generate separately
 verified x264 references; their use makes no hardware encoder claim.
 
-The encoder, interrupt completion, general codec features, larger pictures,
+The encoder, interrupt completion, general codec features beyond this scope,
 resolution changes and system suspend remain unqualified. These experimental
 packages and source files do not enable the decoder in the accepted system.
