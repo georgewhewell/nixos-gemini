@@ -12,7 +12,7 @@ Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
-Trials 52/53 qualify the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trials 52–54 qualify the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -168,6 +168,22 @@ all 57 media checks, normal unload, RTC/system checks, accepted recovery and
 the final audit. These original motion fixtures use CAVLC and integer sample
 displacements; broader long-term direct-motion throughput remains unqualified.
 
+Trial 54 also reuses that module and qualifies long-term index replacement
+and short-term frame-number wrap. Three original 25-picture streams promote
+the first I_PCM picture to index 1, then retain it, replace it using MMCO6,
+or explicitly release and replace it using MMCO2/6. The four-bit frame number
+wraps at picture 16. A final P mosaic selects both the latest short-term
+picture and the expected original or replacement long-term picture; every
+sample is independently calculated and checked against FFmpeg. Independent
+syntax replay verifies the exact retained picture and marking operations
+across the wrap. The hardware status confirms the expected private long-term
+slot, separate output slot and two complete reference pixel/motion snapshots.
+All 535 output pictures match over 536 hardware commands, including the
+timeout. All earlier regressions, all 57 media checks, normal unload,
+RTC/system checks, accepted recovery and the final audit pass. Wider POC
+ranges, multiple slices, interlace, IRQ completion, production integration,
+sustained thermal playback and hardware encoding remain unfinished.
+
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
 or DMA ownership transfer. It handles emulation-prevention bytes, signed and
@@ -225,7 +241,8 @@ checks, accepted recovery and the strict kernel-journal audit also pass.
 Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
 the High-profile streams in trial 47, weighted P streams in trial 49 and
 multiple-reference streams in trial 50, B streams in trial 51 and long-term
-reference mosaics in trial 52 and original motion streams in trial 53 above:
+reference mosaics in trial 52, original motion streams in trial 53 and
+replacement/wrap chains in trial 54 above:
 one slice, Baseline I/P or Main/High I/P/B
 pictures, up to 16 short-term references at SD, 16 short/long-term references
 in the original 64x64 mosaics and three short-term references in the listed HD fixtures, with

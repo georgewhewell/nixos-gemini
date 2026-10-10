@@ -59,6 +59,18 @@ earlier regressions, all 57 media checks, normal unload and full
 RTC/system/recovery/audit pass. The original motion cases use 64x64 CAVLC and
 integer displacements. Sustained long-term direct throughput is unqualified.
 
+Trial 54 qualifies three original 25-picture retention/replacement chains
+using the same module: 535 pictures match exactly over 536 hardware commands.
+`make-long-term-chain-fixture.py` promotes the first picture to long-term
+index 1, keeps or replaces it using MMCO6 or MMCO2/6, and crosses the four-bit
+frame-number wrap. The final P mosaic selects both the latest short-term
+picture and the independently known long-term source. Mathematical pixels,
+FFmpeg and independent marking replay agree. Hardware confirms the expected
+private long-term/output slots and complete retained pixel/motion snapshots.
+All earlier regressions, all 57 media checks, normal unload and full
+RTC/system/recovery/audit pass. Wider POC ranges and broader codec, production
+and encoding work remain unfinished.
+
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
 There is no proprietary codec firmware or `libvcodec` dependency in this work.
@@ -357,8 +369,8 @@ CRC entries are valid only because that configuration disables `MODVERSIONS`.
 The experimental driver now has hardware-qualified V4L2 request/queue handling,
 private DMA and reference storage, native MM21 capture, bounded recovery and
 exact software comparisons for the fixtures described above. Remaining work
-includes extended long-term chains, multiple slices,
-interlaced pictures, wider POC and HD-reference coverage, interrupt completion,
+includes wider POC and HD-reference coverage, multiple slices,
+interlaced pictures, interrupt completion,
 system suspend/resume, sustained playback/thermal checks and accepted-system
 integration. Encoding needs its own public frame-programming contract and
 implementation; the command-free resource probe does not encode pictures.
