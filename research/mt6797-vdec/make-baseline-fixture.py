@@ -28,22 +28,29 @@ def main():
                         help='Generate High profile with actual adaptive 8x8 transform use')
     parser.add_argument('--scaling', choices=('flat', 'jvt', 'custom'), default='flat',
                         help='High-profile quantization matrices for separate qualification')
+    parser.add_argument('--weighted-pred', action='store_true',
+                        help='Enable x264 weighted P prediction in Main/High profile')
+    parser.add_argument('--fade', action='store_true',
+                        help='Change brightness/chroma offsets to exercise nondefault weights')
     args = parser.parse_args()
     w, h, count = args.width, args.height, args.frames
     cabac = args.entropy == 'cabac'
     high = args.transform_8x8 or args.scaling != 'flat'
-    profile = 'high' if high else 'main' if cabac else 'baseline'
+    profile = 'high' if high else 'main' if cabac or args.weighted_pred else 'baseline'
     if not (64 <= w <= 1920 and 64 <= h <= 1088 and not w % 16 and not h % 2
             and 2 <= count <= 32):
         parser.error('Use width64..1920 in steps16, even height64..1088 and2..32frames')
     args.out.mkdir(parents=True, exist_ok=True)
     original = bytearray()
     for frame in range(count):
-        original.extend(16 + (x * 3 + row * 2 + frame * 7) % 220
+        original.extend((16 + (x * 3 + row * 2) % 128 + frame * 3) if args.fade else
+                        16 + (x * 3 + row * 2 + frame * 7) % 220
                         for row in range(h) for x in range(w))
-        original.extend(64 + (x + row + frame * 3) % 128
+        original.extend((64 + (x + row) % 96 + frame) if args.fade else
+                        64 + (x + row + frame * 3) % 128
                         for row in range(h // 2) for x in range(w // 2))
-        original.extend(128 + (x * 2 + row + frame * 2) % 112
+        original.extend((96 + (x * 2 + row) % 96 + frame * 2) if args.fade else
+                        128 + (x * 2 + row + frame * 2) % 112
                         for row in range(h // 2) for x in range(w // 2))
     source, stream, reference = [args.out / name for name in
                                  ('original.yuv', 'stream.h264', 'reference.yuv')]
@@ -66,9 +73,9 @@ def main():
                '-pix_fmt', 'yuv420p', '-s', f'{w}x{h}', '-r', '25', '-i', str(source),
                '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', profile,
                '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', '1',
-               '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high else '') +
+               '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high or args.weighted_pred else '') +
                f'no-deblock={0 if args.deblocking else 1}:'
-               f'8x8dct={int(args.transform_8x8)}:weightp=0:repeat-headers=1:'
+               f'8x8dct={int(args.transform_8x8)}:weightp={2 if args.weighted_pred else 0}:repeat-headers=1:'
                f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' + matrix_params,
                str(stream)]
     encode = subprocess.run(command, check=True, capture_output=True)
@@ -89,9 +96,9 @@ def main():
     trace = subprocess.run(trace_command, check=True, capture_output=True)
     (args.out / 'public-syntax-trace.txt').write_bytes(trace.stderr)
     syntax = trace.stderr.decode()
-    for field, expected in [('profile_idc', 100 if high else 77 if cabac else 66),
+    for field, expected in [('profile_idc', 100 if high else 77 if cabac or args.weighted_pred else 66),
                             ('entropy_coding_mode_flag', int(cabac)),
-                            ('weighted_pred_flag', 0), ('weighted_bipred_idc', 0),
+                            ('weighted_pred_flag', int(args.weighted_pred)), ('weighted_bipred_idc', 0),
                             ('num_ref_idx_l0_default_active_minus1', 0),
                             ('max_num_ref_frames', 1),
                             ('frame_mbs_only_flag', 1),
@@ -111,6 +118,9 @@ def main():
             raise RuntimeError(f'Unexpected scaling matrix syntax: {present}')
     transform_usage = re.findall(r'8x8 transform intra:([\d.]+)% inter:([\d.]+)%',
                                 encode.stderr.decode())
+    weight_flags = re.findall(r'\bluma_weight_l0_flag\[0\]\s+\S+\s+=\s+(\d+)', syntax)
+    if args.weighted_pred and args.fade and not any(int(v) for v in weight_flags):
+        raise RuntimeError('Fade fixture did not encode actual nondefault luma weights')
     if args.transform_8x8 and (not transform_usage or
                               not any(float(v) > 0 for pair in transform_usage for v in pair)):
         raise RuntimeError('Encoder did not report actual 8x8 transform use')
@@ -131,6 +141,8 @@ def main():
                     coded_height=(h+15)//16*16, storage_height=(h+31)//32*32,
                     deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
                     transform_8x8=args.transform_8x8, scaling=args.scaling,
+                    weighted_prediction=args.weighted_pred, fade=args.fade,
+                    encoded_luma_weight_flags=weight_flags,
                     encoder_transform_usage=transform_usage,
                     encode_command=command, decode_command=decode_command,
                     public_syntax_checked=True,

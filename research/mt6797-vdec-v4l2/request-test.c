@@ -179,7 +179,9 @@ static void decode(struct stream *stream, const char *out, const char *name,
 			!strcmp(name, "fault-pskip") || !strcmp(name, "fault-stale") ||
 			!strcmp(name, "fault-retained") ? "pcm64-p" :
 			!strcmp(name, "motion-reference") || !strcmp(name, "fault-pcm") ||
-			!strcmp(name, "fault-truncated") || !strcmp(name, "fault-scaling") ? "pcm64" : name;
+			!strcmp(name, "fault-truncated") || !strcmp(name, "fault-scaling") ||
+			!strcmp(name, "weight-reference") ? "pcm64" :
+			!strcmp(name, "fault-weight") ? "weighted64-p" : name;
 		char path[1024];
 		if (snprintf(path, sizeof(path), "%s/%s.nal", fixture_directory, fixture) >= (int)sizeof(path)) {
 			fprintf(stderr, "Fixture path too long\n"); exit(1);
@@ -240,7 +242,25 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		params.dpb[0].top_field_order_cnt = params.dpb[0].bottom_field_order_cnt = 2;
 	}
 	struct v4l2_ctrl_h264_scaling_matrix scaling;
+	struct v4l2_ctrl_h264_pred_weights weights = { 0 };
 	memset(&scaling, 16, sizeof(scaling));
+	if (!strcmp(name, "fault-weight")) {
+		sps.profile_idc = 77;
+		sps.constraint_set_flags = 0;
+		pps.flags |= V4L2_H264_PPS_FLAG_WEIGHTED_PRED;
+		slice.header_bit_size = 84;
+		params.pic_order_cnt_bit_size = 4;
+		params.dec_ref_pic_marking_bit_size = 1;
+		weights.luma_log2_weight_denom = 1;
+		weights.chroma_log2_weight_denom = 2;
+		weights.weight_factors[0].luma_weight[0] = 3;
+		/* In-band offset is -12: mismatch must fail before any DMA. */
+		weights.weight_factors[0].luma_offset[0] = -11;
+		weights.weight_factors[0].chroma_weight[0][0] = 3;
+		weights.weight_factors[0].chroma_weight[0][1] = -3;
+		weights.weight_factors[0].chroma_offset[0][0] = 17;
+		weights.weight_factors[0].chroma_offset[0][1] = 127;
+	}
 	if (!strcmp(name, "fault-scaling")) {
 		sps.profile_idc = 100;
 		sps.constraint_set_flags = 0;
@@ -253,6 +273,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		{ .id = V4L2_CID_STATELESS_H264_SCALING_MATRIX, .size = sizeof(scaling), .ptr = &scaling },
 		{ .id = V4L2_CID_STATELESS_H264_SLICE_PARAMS, .size = sizeof(slice), .ptr = &slice },
 		{ .id = V4L2_CID_STATELESS_H264_DECODE_PARAMS, .size = sizeof(params), .ptr = &params },
+		{ .id = V4L2_CID_STATELESS_H264_PRED_WEIGHTS, .size = sizeof(weights), .ptr = &weights },
 	};
 	int request;
 	checked_ioctl(stream->media, MEDIA_IOC_REQUEST_ALLOC, &request, "REQUEST_ALLOC");
@@ -274,11 +295,11 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
 	int bad = dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
-	if (!strcmp(name, "fault-scaling")) {
+	if (!strcmp(name, "fault-scaling") || !strcmp(name, "fault-weight")) {
 		for (unsigned int plane = 0; plane < 2; plane++)
 			for (size_t byte = 0; byte < stream->capture[plane].bytes; byte++)
 				if (((u8 *)stream->capture[plane].address)[byte] != 0x79) {
-					fprintf(stderr, "Rejected scaling request changed capture storage\n"); exit(1);
+					fprintf(stderr, "Rejected control request changed capture storage\n"); exit(1);
 				}
 	}
 
@@ -299,7 +320,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	}
 	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
 	close(request);
-	char status[512], status_output[1024];
+	char status[1024], status_output[1024];
 	FILE *status_file = fopen(status_path, "r");
 	if (!status_file || !fgets(status, sizeof(status), status_file)) fail("read cached job status");
 	fclose(status_file);
@@ -366,6 +387,12 @@ int main(int argc, char **argv)
 		decode(&stream, argv[3], "fault-retained", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 5, 4);
 		decode(&stream, argv[3], "fault-scaling", pcm64_nal, sizeof(pcm64_nal), 0, 0, 1, 6, 5);
 		close_stream(&stream);
+		if (width == 64 && height == 64) {
+			open_stream(&stream, argv[1], argv[2]);
+			decode(&stream, argv[3], "weight-reference", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
+			decode(&stream, argv[3], "fault-weight", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 2, 1);
+			close_stream(&stream);
+		}
 	}
 	puts("{\"public_api_test_passed\":true}");
 	return 0;

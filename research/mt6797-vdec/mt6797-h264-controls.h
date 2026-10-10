@@ -69,4 +69,22 @@ struct mt6797_h264_scaling_word {
 int mt6797_h264_scaling_words(const struct v4l2_ctrl_h264_scaling_matrix *matrix,
 			     struct mt6797_h264_scaling_word output[MT6797_H264_SCALING_WORDS]);
 
+struct mt6797_h264_weight_range {
+	__u32 start, end; /* RBSP bits from the beginning of the NAL header. */
+	__u32 start_word, start_mask, end_word, end_mask;
+};
+
+/* Locate a one-reference progressive P prediction table and verify its
+ * values and complete slice header against the public stateless controls.
+ * Emulation-prevention bytes do not count as RBSP bits. No MMIO or DMA.
+ * A rejected header leaves output unchanged.
+ */
+int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
+			    const struct v4l2_ctrl_h264_pps *pps,
+			    const struct v4l2_ctrl_h264_slice_params *slice,
+			    const struct v4l2_ctrl_h264_decode_params *decode,
+			    const struct v4l2_ctrl_h264_pred_weights *weights,
+			    const __u8 *nal, __u32 bytes,
+			    struct mt6797_h264_weight_range *output);
+
 #endif

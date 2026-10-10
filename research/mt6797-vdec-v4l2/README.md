@@ -44,6 +44,38 @@ decode command; capture storage remains untouched. Concurrent contexts, all
 accepted recovery/audit pass. The Main 32-picture 1080p clocked regression
 also passes. High-profile sustained or clocked throughput remains unqualified.
 
+Trial 48 tests weighted P prediction. An original CAVLC P-skip picture with
+signed luma/chroma weights matches every independently calculated sample.
+The x264 weighted clips stop before reconstruction because a six-bit cursor
+check expects bit 47 but observes 15. The input mode retains the public SUM6
+append setting; compatibility of the related helper's sixth counter bit is
+unqualified. The trial preserves 113 exact output comparisons, 123 input
+fetches and 116 picture commands, including the intentional timeout; two
+successful pictures are not exported by the failed pipelines. All stop/guard
+checks, normal unload, all 57 media checks, RTC/system checks and strict
+accepted recovery/audit pass. A separate candidate checks the low five cursor
+bits and actual next RBSP bits before and after the table. Trial 49 qualifies
+that correction with 164 exact output pictures across 165 picture commands,
+including the intentional timeout. The 58 weighted-stream pictures cover
+signed original luma/chroma factors, Main/High CABAC/CAVLC, custom scaling,
+Main 1080p and I420 conversion. Every weighted operation checks the input
+window; cached status retains the full observed counter, words and masks.
+High matrix transitions, concurrent streams, the Main clocked 32-picture
+1080p regression, all 57 media checks, normal unload, all RTC/system checks,
+strict accepted-system recovery and the final board audit pass. The accepted
+boot is healthy with taint zero and no temporary media modules. Weighted
+sustained or clocked throughput remains unqualified.
+
+The original bounded slice reader validates the prediction table and complete
+P header against Linux's stateless controls before any allocation, power vote
+or DMA ownership transfer. It handles emulation-prevention bytes, signed and
+inferred default weights, POC variants and bounded reference-list/marking
+syntax. Host ASan/UBSan checks cover 64 independently constructed headers;
+36 real P headers match independent FFmpeg syntax traces. A weighted request
+with a mismatched luma offset fails before fetch or reconstruction and leaves
+the whole capture allocation untouched. Table operations use bounded polling
+and the existing break/reset and DMA fencing path.
+
 The first module builds against the 7.1.3 candidate kernel with strict modpost
 and genuine exported-symbol metadata from that kernel and its media modules.
 The first registered frontend trial (`boot-test-video-frame-24`) panicked when
@@ -86,8 +118,8 @@ metadata shadowed module metadata; its report is reconstructed offline from
 the preserved results. The raw reporting failure is retained with the trial. Supervisor RTC/system
 checks, accepted recovery and the strict kernel-journal audit also pass.
 
-Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC
-and the High-profile streams qualified in trial 47 above, one slice,
+Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
+the High-profile streams in trial 47 and weighted P streams in trial 49 above, one slice,
 I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
 CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
@@ -145,7 +177,7 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 128 96 export
 
-# Optional timeout, stale reference, retained-reference recovery and invalid scaling:
+# Optional timeout, stale references, invalid scaling and mismatched weights:
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 64 64 export faults
@@ -160,6 +192,14 @@ It saves MM21 samples and
 cached hardware status for independent host comparison with
 `../mt6797-vdec/compare-frame.py`. This is an API and hardware qualification
 exerciser; successful compilation alone is not a decode qualification.
+
+`../mt6797-vdec/make-weighted-skip-fixture.py` constructs the signed weighted
+P-skip fixture from an original `make-pcm-fixture.py` output. It checks every
+luma/chroma sample with independent FFmpeg decoding. Copy its
+`weighted64-p.nal` into the 64x64 fixture directory for the optional fault
+test. `make-baseline-fixture.py --weighted-pred --fade` creates Main/High
+x264 clips with actual luma/chroma weighting; combine it with `--entropy`,
+`--transform-8x8` and `--scaling` for the separately qualified combinations.
 
 The cross-build recipe in `gstreamer-userspace.nix` accepts `buildPkgs` and
 `targetPkgs`, so it does not depend on this workspace path. With the repository's

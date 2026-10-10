@@ -19,6 +19,7 @@ struct mt6797_decode_job {
 	struct v4l2_ctrl_h264_sps sps;
 	struct v4l2_ctrl_h264_pps pps;
 	struct v4l2_ctrl_h264_scaling_matrix scaling;
+	struct v4l2_ctrl_h264_pred_weights weights;
 	struct v4l2_ctrl_h264_slice_params slice;
 	struct v4l2_ctrl_h264_decode_params decode;
 	const u8 *nal;
@@ -33,6 +34,8 @@ struct mt6797_decode_status {
 	u32 mbx, mby, stall, read_pointer, fetch_status, top_status;
 	u32 pred_config, pred_mode, nal_bytes, header_bits;
 	u32 tail_bit_offset, tail_word;
+	u32 weight_start, weight_end, weight_before, weight_after, weight_state;
+	u32 weight_before_word, weight_after_word, weight_start_mask, weight_end_mask;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;

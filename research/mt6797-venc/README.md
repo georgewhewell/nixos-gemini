@@ -47,3 +47,8 @@ the inspected sources; they do not establish that MT6797 requires firmware.
 The resource probe also passes in trials 36–41, with normal unload and released
 power votes. Trial 38 separately misses the supervisor's final RTC alarm; that
 failure remains recorded. No trial produces an encoded picture.
+
+Trials 47–49 also pass the command-free resource probe with normal unload and
+released power votes. Trial 49 qualifies weighted decoder pictures and passes
+the full RTC/system/recovery/audit checks. The encoder frame contract remains
+unfinished; these results produce no encoded picture.

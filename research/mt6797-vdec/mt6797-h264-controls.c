@@ -220,3 +220,260 @@ int mt6797_h264_scaling_words(const struct v4l2_ctrl_h264_scaling_matrix *matrix
 	}
 	return 0;
 }
+
+/* Original bounded reader for the public H.264 slice-header syntax. The
+ * hardware weighting operation consumes in-band syntax, so a control-only
+ * register translation cannot establish its start/end or validate its data.
+ */
+struct weight_reader {
+	const __u8 *nal;
+	__u32 bytes, source, position, limit;
+	__u8 current, remaining, zeros;
+	int error;
+};
+
+static __u32 weight_bits(struct weight_reader *reader, unsigned int count)
+{
+	__u32 value = 0;
+	unsigned int i;
+
+	if (count > 32) {
+		reader->error = -EINVAL;
+		return 0;
+	}
+	for (i = 0; i < count && !reader->error; i++) {
+		if (reader->position == reader->limit) {
+			reader->error = -EINVAL;
+			break;
+		}
+		if (!reader->remaining) {
+			__u8 byte;
+
+			if (reader->source == reader->bytes) {
+				reader->error = -EINVAL;
+				break;
+			}
+			byte = reader->nal[reader->source++];
+			if (reader->zeros == 2 && byte == 3) {
+				if (reader->source == reader->bytes || reader->nal[reader->source] > 3) {
+					reader->error = -EINVAL;
+					break;
+				}
+				byte = reader->nal[reader->source++];
+				reader->zeros = 0;
+			}
+			reader->zeros = byte == 0 ? (reader->zeros < 2 ? reader->zeros + 1 : 2) : 0;
+			reader->current = byte;
+			reader->remaining = 8;
+		}
+		reader->remaining--;
+		reader->position++;
+		value = (value << 1) | ((reader->current >> reader->remaining) & 1);
+	}
+	return value;
+}
+
+static __u32 weight_ue(struct weight_reader *reader)
+{
+	unsigned int zeros = 0;
+
+	while (!reader->error && !weight_bits(reader, 1)) {
+		if (++zeros == 32) {
+			reader->error = -ERANGE;
+			return 0;
+		}
+	}
+	return reader->error ? 0 : ((1U << zeros) - 1) + weight_bits(reader, zeros);
+}
+
+static __s32 weight_se(struct weight_reader *reader)
+{
+	__u32 code = weight_ue(reader);
+
+	if (code & 1)
+		return (__s32)(((__u64)code + 1) / 2);
+	return -(__s32)(code / 2);
+}
+
+static void weight_expect(struct weight_reader *reader, __s64 actual, __s64 expected)
+{
+	if (!reader->error && actual != expected)
+		reader->error = -EINVAL;
+}
+
+static __s32 weight_factor(struct weight_reader *reader, __s16 expected)
+{
+	__s32 value = weight_se(reader);
+
+	if (!reader->error && (value < -128 || value > 127))
+		reader->error = -ERANGE;
+	weight_expect(reader, value, expected);
+	return value;
+}
+
+/* A bounded, non-consuming RBSP lookahead verifies the hardware barrel
+ * contents independently of the cursor counter. Ignore bits beyond the NAL:
+ * the private hardware FIFO supplies padding and an end marker there.
+ */
+static int weight_window(struct weight_reader reader, __u32 *word, __u32 *mask)
+{
+	unsigned int count = 0;
+	__u32 value = 0;
+
+	reader.limit = reader.position + 32;
+	while (count < 32 && (reader.remaining || reader.source < reader.bytes)) {
+		value = (value << 1) | weight_bits(&reader, 1);
+		if (reader.error)
+			return reader.error;
+		count++;
+	}
+	if (!count)
+		return -EINVAL;
+	*word = count == 32 ? value : value << (32 - count);
+	*mask = count == 32 ? ~0U : ~0U << (32 - count);
+	return 0;
+}
+
+int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
+			    const struct v4l2_ctrl_h264_pps *pps,
+			    const struct v4l2_ctrl_h264_slice_params *slice,
+			    const struct v4l2_ctrl_h264_decode_params *decode,
+			    const struct v4l2_ctrl_h264_pred_weights *weights,
+			    const __u8 *nal, __u32 bytes,
+			    struct mt6797_h264_weight_range *output)
+{
+	struct mt6797_h264_slice_words ignored;
+	struct mt6797_h264_weight_range range;
+	struct weight_reader reader = { .nal = nal, .bytes = bytes };
+	const struct v4l2_h264_weight_factors *factors;
+	__u32 begin, value, iterations;
+	unsigned int component;
+	int ret;
+
+	if (!sps || !pps || !slice || !decode || !weights || !nal || !output || bytes < 4)
+		return -EINVAL;
+	ret = mt6797_h264_slice_words(sps, pps, slice, decode, bytes, &ignored);
+	if (ret)
+		return ret;
+	if (slice->slice_type != V4L2_H264_SLICE_TYPE_P ||
+	    !(pps->flags & V4L2_H264_PPS_FLAG_WEIGHTED_PRED) ||
+	    (decode->flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
+	    slice->num_ref_idx_l0_active_minus1 || pps->num_ref_idx_l0_default_active_minus1 ||
+	    sps->max_num_ref_frames > 1 || sps->profile_idc == 66 || pps->weighted_bipred_idc)
+		return -EOPNOTSUPP;
+	if (weights->luma_log2_weight_denom > 7 || weights->chroma_log2_weight_denom > 7)
+		return -ERANGE;
+	reader.limit = slice->header_bit_size;
+	factors = &weights->weight_factors[0];
+	/* The admitted one-slice progressive P boundary has no colour-plane,
+	 * field, IDR, redundant-picture, B-direct or slice-group syntax.
+	 */
+	weight_expect(&reader, weight_bits(&reader, 8), (decode->nal_ref_idc << 5) | 1);
+	weight_expect(&reader, weight_ue(&reader), slice->first_mb_in_slice);
+	value = weight_ue(&reader);
+	if (value != 0 && value != 5)
+		reader.error = -EINVAL;
+	weight_expect(&reader, weight_ue(&reader), pps->pic_parameter_set_id);
+	weight_expect(&reader, weight_bits(&reader, sps->log2_max_frame_num_minus4 + 4),
+		      decode->frame_num);
+	begin = reader.position;
+	if (sps->pic_order_cnt_type == 0) {
+		weight_expect(&reader, weight_bits(&reader, sps->log2_max_pic_order_cnt_lsb_minus4 + 4),
+			      decode->pic_order_cnt_lsb);
+		if (pps->flags & V4L2_H264_PPS_FLAG_BOTTOM_FIELD_PIC_ORDER_IN_FRAME_PRESENT)
+			weight_expect(&reader, weight_se(&reader), decode->delta_pic_order_cnt_bottom);
+	} else if (sps->pic_order_cnt_type == 1 &&
+		   !(sps->flags & V4L2_H264_SPS_FLAG_DELTA_PIC_ORDER_ALWAYS_ZERO)) {
+		weight_expect(&reader, weight_se(&reader), decode->delta_pic_order_cnt0);
+		if (pps->flags & V4L2_H264_PPS_FLAG_BOTTOM_FIELD_PIC_ORDER_IN_FRAME_PRESENT)
+			weight_expect(&reader, weight_se(&reader), decode->delta_pic_order_cnt1);
+	}
+	weight_expect(&reader, reader.position - begin, decode->pic_order_cnt_bit_size);
+	if (weight_bits(&reader, 1))
+		weight_expect(&reader, weight_ue(&reader), slice->num_ref_idx_l0_active_minus1);
+	/* Reference selection is supplied by the stateless ref_pic_list0 and
+	 * resolved separately to private storage. Parse list-modification syntax
+	 * only to locate the following table, with a finite operation bound.
+	 */
+	if (weight_bits(&reader, 1)) {
+		for (iterations = 0; iterations < 32 && !reader.error; iterations++) {
+			value = weight_ue(&reader);
+			if (value == 3)
+				break;
+			if (value > 3) {
+				reader.error = -EINVAL;
+				break;
+			}
+			weight_ue(&reader);
+		}
+		if (iterations == 32)
+			reader.error = -EOPNOTSUPP;
+	}
+	range.start = reader.position;
+	ret = weight_window(reader, &range.start_word, &range.start_mask);
+	if (ret)
+		return ret;
+	weight_expect(&reader, weight_ue(&reader), weights->luma_log2_weight_denom);
+	weight_expect(&reader, weight_ue(&reader), weights->chroma_log2_weight_denom);
+	if (weight_bits(&reader, 1)) {
+		weight_factor(&reader, factors->luma_weight[0]);
+		weight_factor(&reader, factors->luma_offset[0]);
+	} else {
+		weight_expect(&reader, factors->luma_weight[0], 1U << weights->luma_log2_weight_denom);
+		weight_expect(&reader, factors->luma_offset[0], 0);
+	}
+	if (weight_bits(&reader, 1)) {
+		for (component = 0; component < 2; component++) {
+			weight_factor(&reader, factors->chroma_weight[0][component]);
+			weight_factor(&reader, factors->chroma_offset[0][component]);
+		}
+	} else {
+		for (component = 0; component < 2; component++) {
+			weight_expect(&reader, factors->chroma_weight[0][component],
+				      1U << weights->chroma_log2_weight_denom);
+			weight_expect(&reader, factors->chroma_offset[0][component], 0);
+		}
+	}
+	range.end = reader.position;
+	ret = weight_window(reader, &range.end_word, &range.end_mask);
+	if (ret)
+		return ret;
+	begin = reader.position;
+	if (decode->nal_ref_idc && weight_bits(&reader, 1)) {
+		for (iterations = 0; iterations < 32 && !reader.error; iterations++) {
+			value = weight_ue(&reader);
+			if (!value)
+				break;
+			if (value > 6) {
+				reader.error = -EINVAL;
+				break;
+			}
+			if (value == 1 || value == 3)
+				weight_ue(&reader);
+			if (value == 2)
+				weight_ue(&reader);
+			if (value == 3 || value == 6)
+				weight_ue(&reader);
+			if (value == 4)
+				weight_ue(&reader);
+		}
+		if (iterations == 32)
+			reader.error = -EOPNOTSUPP;
+	}
+	weight_expect(&reader, reader.position - begin, decode->dec_ref_pic_marking_bit_size);
+	if (pps->flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)
+		weight_expect(&reader, weight_ue(&reader), slice->cabac_init_idc);
+	weight_expect(&reader, weight_se(&reader), slice->slice_qp_delta);
+	if (pps->flags & V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT) {
+		weight_expect(&reader, weight_ue(&reader), slice->disable_deblocking_filter_idc);
+		if (slice->disable_deblocking_filter_idc != 1) {
+			weight_expect(&reader, weight_se(&reader), slice->slice_alpha_c0_offset_div2);
+			weight_expect(&reader, weight_se(&reader), slice->slice_beta_offset_div2);
+		}
+	}
+	weight_expect(&reader, reader.position, slice->header_bit_size);
+	if (reader.error)
+		return reader.error;
+	*output = range;
+	return 0;
+}

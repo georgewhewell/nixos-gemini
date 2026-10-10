@@ -333,13 +333,13 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	if ((job->sps.profile_idc != 66 && job->sps.profile_idc != 77 &&
 	     job->sps.profile_idc != 100) ||
 	    (job->sps.profile_idc == 66 &&
-	     (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)) ||
+	     (job->pps.flags & (V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE |
+			       V4L2_H264_PPS_FLAG_WEIGHTED_PRED))) ||
 	    job->width < 64 || job->width > MT6797_MAX_WIDTH || job->width % 16 ||
 	    job->height < 64 || job->height > MT6797_MAX_HEIGHT || job->height % 32 ||
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
 	    ALIGN(header->height_mbs * 16, 32) != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
-	    job->pps.flags & V4L2_H264_PPS_FLAG_WEIGHTED_PRED ||
 	    (job->sps.profile_idc != 100 &&
 	     (job->pps.flags & (V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
 			       V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT))) ||
@@ -487,6 +487,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words slice;
 	struct mt6797_h264_p_reference_words ref_words;
+	struct mt6797_h264_weight_range weights = { 0 };
 	struct mt6797_h264_scaling_word scaling[MT6797_H264_SCALING_WORDS];
 	struct register_save saved = { 0 };
 	void __iomem *misc = engine->banks[MISC], *vld = engine->banks[VLD];
@@ -507,6 +508,17 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = validate_job(ctx, job, &header, &slice, &reference, &output);
 	if (ret)
 		return ret;
+	if (V4L2_H264_CTRL_PRED_WEIGHTS_REQUIRED(&job->pps, &job->slice)) {
+		ret = mt6797_h264_weight_range(&job->sps, &job->pps, &job->slice,
+					     &job->decode, &job->weights,
+					     job->nal, job->bytes, &weights);
+		if (ret)
+			return ret;
+		status->weight_start = weights.start;
+		status->weight_end = weights.end;
+		status->weight_start_mask = weights.start_mask;
+		status->weight_end_mask = weights.end_mask;
+	}
 	/* All consumed coefficients must be valid before allocating picture
 	 * storage, taking a power vote or transferring private DMA ownership.
 	 */
@@ -626,11 +638,57 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		ret = -EIO;
 		goto cleanup;
 	}
-	remaining = job->slice.header_bit_size;
+	if (weights.end) {
+		/* The public weight-table operation parses at the current barrel
+		 * position using the programmed PPS and active-reference count.
+		 * Keep the unweighted initialization sequence unchanged.
+		 */
+		SAVE(avc + 0x88, header.sps);
+		SAVE(avc + 0x90, header.pps);
+		SAVE(avc + 0x94, header.reference_counts);
+		SAVE(avc + 0x98, (readl(avc + 0x98) & 0x1fff) | slice.header1);
+	}
+	remaining = weights.end ? weights.start : job->slice.header_bit_size;
 	while (remaining) {
 		unsigned int advance = min(remaining, 32U);
 		readl(avc + advance * 4);
 		remaining -= advance;
+	}
+	if (weights.end) {
+		u32 original_weight_select = readl(misc + 0xf0);
+
+		/* The related helper reports six counter bits, but trial48 reports
+		 * 15 for a table ending at bit47 with this SUM6 input mode. Check
+		 * the low five counter bits and the actual following RBSP bits;
+		 * retain the full observed counter in cached diagnostic status.
+		 */
+		status->weight_before = (readl(avc + 0x84) >> 16) & 63;
+		status->weight_before_word = readl(avc);
+		if ((status->weight_before & 31) != (weights.start & 31) ||
+		    (status->weight_before_word & weights.start_mask) != weights.start_word) {
+			ret = -EIO;
+			goto cleanup;
+		}
+		SAVE(misc + 0xf0, original_weight_select | BIT(0));
+		write_word(1, avc + 0x230);
+		ret = readl_poll_timeout(avc + 0x230, state, state, 10, 100000);
+		status->weight_state = state;
+		write_word(original_weight_select, misc + 0xf0);
+		if (ret)
+			goto cleanup;
+		status->weight_after = (readl(avc + 0x84) >> 16) & 63;
+		status->weight_after_word = readl(avc);
+		if ((status->weight_after & 31) != (weights.end & 31) ||
+		    (status->weight_after_word & weights.end_mask) != weights.end_word) {
+			ret = -EIO;
+			goto cleanup;
+		}
+		remaining = job->slice.header_bit_size - weights.end;
+		while (remaining) {
+			unsigned int advance = min(remaining, 32U);
+			readl(avc + advance * 4);
+			remaining -= advance;
+		}
 	}
 	write_word(1, avc + 0x228);
 	ret = readl_poll_timeout(avc + 0x228, state, !(state & BIT(0)), 10, 100000);

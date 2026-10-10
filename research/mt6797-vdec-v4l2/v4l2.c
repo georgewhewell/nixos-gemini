@@ -42,7 +42,7 @@ struct decode_file {
 	struct v4l2_ctrl_handler controls;
 	struct mt6797_decode_context *context;
 	struct mt6797_decode_job job;
-	struct v4l2_ctrl *sps, *pps, *slice, *decode, *scaling;
+	struct v4l2_ctrl *sps, *pps, *slice, *decode, *scaling, *weights;
 	atomic_t abort;
 	bool failure_recorded;
 	u32 sequence;
@@ -324,6 +324,7 @@ static void decode_work(struct work_struct *work)
 		ctx->job.sps = *ctx->sps->p_cur.p_h264_sps;
 		ctx->job.pps = *ctx->pps->p_cur.p_h264_pps;
 		ctx->job.scaling = *ctx->scaling->p_cur.p_h264_scaling_matrix;
+		ctx->job.weights = *ctx->weights->p_cur.p_h264_pred_weights;
 		ctx->job.slice = *ctx->slice->p_cur.p_h264_slice_params;
 		ctx->job.decode = *ctx->decode->p_cur.p_h264_decode_params;
 		ctx->job.width = ctx->width;
@@ -431,11 +432,8 @@ static int open_decoder(struct file *file)
 	ctx->decode = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	config.id = V4L2_CID_STATELESS_H264_SCALING_MATRIX;
 	ctx->scaling = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
-	/* Slice-based clients also submit weights for unweighted pictures.
-	 * Admission in engine.c rejects weighted PPS flags before hardware DMA.
-	 */
 	config.id = V4L2_CID_STATELESS_H264_PRED_WEIGHTS;
-	v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
+	ctx->weights = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	v4l2_ctrl_new_std_menu(&ctx->controls, NULL, V4L2_CID_STATELESS_H264_DECODE_MODE,
 			       V4L2_STATELESS_H264_DECODE_MODE_SLICE_BASED, 0,
 			       V4L2_STATELESS_H264_DECODE_MODE_SLICE_BASED);
@@ -578,14 +576,17 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	}
 	failures = decoder->failures;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
 		status.nal_bytes, status.header_bits, status.mbx, status.mby, status.stall,
 		status.read_pointer, status.fetch_status, status.top_status, status.pred_config,
 		status.pred_mode, status.tail_bit_offset, status.tail_word,
-		status.cabac_tail_valid);
+		status.cabac_tail_valid, status.weight_start, status.weight_end,
+		status.weight_before, status.weight_after, status.weight_state,
+		status.weight_before_word, status.weight_after_word,
+		status.weight_start_mask, status.weight_end_mask);
 }
 static DEVICE_ATTR_RO(last_job);
 static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);
