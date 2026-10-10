@@ -80,5 +80,68 @@
       "independent_terminal_audit": "passed"
     }
   ],
-  "host_build_record": "irq-clock-trace-build-20261011.json"
+  "host_build_record": "irq-clock-trace-build-20261011.json",
+  "source_followup_after_trial90": {
+    "kernel_revision": "3164a039836c8bd1ae96a4bb31bc65db2e2dcaed",
+    "files_sha256": {
+      "drivers/clk/clk.c": "a26af5a1ea1626c8010898fb0c751664b60134a7f05231140fc4e2349042ec48",
+      "drivers/clk/mediatek/clk-mt6797-vdec.c": "2a7095d83448c6aa568703a336b3c8ce0212991f5bafbe4d512ff418041653d6",
+      "drivers/pmdomain/mediatek/mtk-scpsys.c": "74101296cf05735085942940e4f04eb6e2202c3c7640deae9de29631e3c7afa9",
+      "arch/arm64/boot/dts/mediatek/mt6797.dtsi": "caf562a190ff25463121c9841ed31230692d41f4337de70ebf950b6d9d786620",
+      "arch/arm64/configs/gemini_defconfig": "ed3b2c803f8ae6b923eb32621098c675ee076f26a3df3ea723499fbac4bf62b9"
+    },
+    "facts": [
+      "The MT6797 legacy scpsys VDEC domain enables only CLK_VDEC, mapped in the DTS to the topckgen VDEC mux. It does not vote the vdecsys ACTIVE or engine gates.",
+      "The board command line contains clk_ignore_unused. Linux clk_disable_unused returns before disabling any unused gate when this argument is set.",
+      "The inverted VDEC provider enables ACTIVE by setting bit4 and disables it by clearing bit4."
+    ],
+    "inference": "The unchanged first powered snapshot can be consistent with an inherited enabled gate retained by clk_ignore_unused. Source inspection rules out an explicit ACTIVE gate vote in this scpsys power path, but it does not establish the origin of 0x111.",
+    "next_evidence": "The idle framework has no child VDEC gate votes. Qualify explicit ownership initialization through the clock API, preserving the ACTIVE-clear IRQ guard, independent all-CPU IRQ counters, exact pixels, DMA quiescence and recovery. Do not remove global clk_ignore_unused or directly clear clock registers.",
+    "hardware_clock_ownership_snapshot_collected": true,
+    "hardware_irq_qualified": false,
+    "hardware_clock_ownership_snapshot": {
+      "boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
+      "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "accepted_baseline": "boot-test-88",
+      "experimental_module_present": false,
+      "reads": "Individual clk_prepare_count and clk_enable_count debugfs files only; no clk_summary, rate or gate-status reads and no MMIO access.",
+      "counts": {
+        "vdec_cken_eng": {
+          "prepare": 0,
+          "enable": 0
+        },
+        "vdec_active": {
+          "prepare": 0,
+          "enable": 0
+        },
+        "vdec_cken": {
+          "prepare": 0,
+          "enable": 0
+        },
+        "vdec_larb1_cken": {
+          "prepare": 0,
+          "enable": 0
+        }
+      },
+      "parent_counts": {
+        "vdecpll_ck": {
+          "prepare": 1,
+          "enable": 1
+        },
+        "vdec_sel": {
+          "prepare": 1,
+          "enable": 1
+        },
+        "venc_sel": {
+          "prepare": 1,
+          "enable": 1
+        },
+        "vdecpll": {
+          "prepare": 1,
+          "enable": 1
+        }
+      },
+      "scope": "These cached ownership counters were read after recovery, not concurrently with trial90 powered gate snapshots; they do not establish the hardware word on this boot."
+    }
+  }
 }
