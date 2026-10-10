@@ -12,8 +12,8 @@ let
     { name = "UL1_CH2 ADDA_UL_CH2"; value = 1; idle = 1; }
   ];
   # The fixed machine card exposes Playback_1 at 0 and Capture_1 at 3.
-  # UCM users open those hardware PCMs; plain ALSA applications use the
-  # default hooks below, which restore their route controls on close.
+  # UCM owns the route controls; plain ALSA applications use preserving
+  # control hooks. Both use the board's playback channel correction below.
   headphonePath = [
     { name = "DAC In Mux"; value = "Normal Path"; idle = "Normal Path"; }
   ] ++ playbackInterconnects ++ [
@@ -87,6 +87,33 @@ let
       }
     }
   '';
+  # Both onboard outputs share Playback_1 and the MT6351 HP buffers. On
+  # this board their physical stereo order is reversed. Correct samples
+  # once at the playback PCM, including UCM clients; capture is separate.
+  playbackPcm = name: slave: ''
+    pcm.${name} {
+      type route
+      slave {
+        pcm ${builtins.toJSON slave}
+        channels 2
+      }
+      ttable.0.1 1
+      ttable.1.0 1
+    }
+  '';
+  hookedPlaybackPcm = name: controls: ''
+    ${controlHooks name 0 controls}
+    ${playbackPcm "${name}_stereo" "${name}_routes"}
+    pcm.${name} {
+      type plug
+      slave {
+        pcm "${name}_stereo"
+        format S16_LE
+        rate 48000
+        channels 2
+      }
+    }
+  '';
   # Keep the qualified stereo hardware transport and select only its left
   # channel. The outer plug converts that mono stream for ordinary clients.
   # UCM owns its controls; the standalone PCM uses preserving control hooks.
@@ -117,6 +144,9 @@ let
         ${pkgs.gnugrep}/bin/grep -Fq ': values=on'
     '') (playbackInterconnects ++ captureInterconnects)}
   '';
+  playbackInspect = pkgs.writeShellScript "gemini-audio-playback-inspect" ''
+    exec ${pkgs.python3}/bin/python3 ${../tools/audio-playback-evidence.py} --inspect
+  '';
   ucm = pkgs.runCommand "gemini-alsa-ucm" {} ''
     mkdir -p "$out/share/alsa"
     cp -R --no-preserve=mode ${pkgs.alsa-ucm-conf}/share/alsa/ucm2 "$out/share/alsa/ucm2"
@@ -140,7 +170,7 @@ let
       ConflictingDevice [ "Headphones" ]
       Value {
         PlaybackPriority 200
-        PlaybackPCM "hw:''${CardId},0"
+        PlaybackPCM "gemini_playback_ucm"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"
         PlaybackVolume "name='Headphone Volume'"
@@ -159,7 +189,7 @@ let
         PlaybackPriority 300
         JackControl "Headphone Jack"
         JackHWMute "Speaker"
-        PlaybackPCM "hw:''${CardId},0"
+        PlaybackPCM "gemini_playback_ucm"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"
         PlaybackVolume "name='Headphone Volume'"
@@ -210,11 +240,17 @@ let
   '';
 in {
   system.build.geminiAudioDigitalRoutes = digitalRoutes;
+  system.build.geminiAudioUcm = ucm;
   environment.variables.ALSA_CONFIG_UCM2 = "${ucm}/share/alsa/ucm2";
+  # Expose the exact active board profile for read-only candidate validation.
+  environment.etc."gemini/audio-ucm-hifi.conf".source =
+    "${ucm}/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf";
+  environment.etc."gemini/audio-playback-inspect".source = playbackInspect;
   environment.etc."asound.conf".text = ''
     # ASoC power follows the selected stream. No GPIO is written by userspace.
-    ${hookedPcm "gemini_speakers" 0 speakers}
-    ${hookedPcm "gemini_headphones" 0 headphones}
+    ${hookedPlaybackPcm "gemini_speakers" speakers}
+    ${hookedPlaybackPcm "gemini_headphones" headphones}
+    ${playbackPcm "gemini_playback_ucm" "hw:CARD=mt6797mt6351,DEV=0"}
     ${hookedPcm "gemini_mic" 3 microphone}
     ${controlHooks "gemini_headset_mic" 3 headsetMicrophone}
     ${headsetMonoPcm "gemini_headset_mic" "gemini_headset_mic_routes"}

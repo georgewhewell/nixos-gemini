@@ -7,6 +7,7 @@ import io
 from pathlib import Path
 import tempfile
 import unittest
+import uuid
 
 spec = importlib.util.spec_from_file_location(
     'profiles', Path(__file__).with_name('networkmanager-import-wifi.py'))
@@ -77,6 +78,48 @@ class ImportTests(unittest.TestCase):
         self.run_import()
         output, = self.destination.glob('*.nmconnection')
         self.assertIn('psk=' + 'ab' * 32, output.read_text())
+
+    def test_display_name_is_the_ssid_with_keyfile_escaping(self):
+        name = ' Café\\network '
+        self.profile('named', ssid=name.encode().hex())
+        self.run_import()
+        output, = self.destination.glob('*.nmconnection')
+        parser = profiles.configparser.ConfigParser(interpolation=None)
+        parser.read_string(output.read_text())
+        self.assertEqual(profiles.keyfile_string(parser['connection']['id']), name)
+        self.assertNotIn('Gemian Wi-Fi', output.read_text())
+
+    def test_old_generated_label_migrates_without_rewriting_user_settings(self):
+        self.profile('valid')
+        self.run_import()
+        output, = self.destination.glob('*.nmconnection')
+        identity = str(uuid.uuid5(uuid.NAMESPACE_URL, 'gemini-wifi:546573742057694669'))
+        old_id = f'Gemian Wi-Fi {identity[:8]}'
+        text = output.read_text().replace('id=Test\\sWiFi', 'id=' + old_id)
+        text = text.replace('autoconnect=true', 'autoconnect=false')
+        text += '\n# desktop edit\n[proxy]\nmethod=none\n'
+        original = text.replace('\n', '\r\n').encode()
+        output.write_bytes(original)
+        self.profile('valid', secret='Replacement123')
+        self.run_import()
+        expected = original.replace(('id=' + old_id).encode(), b'id=Test\\sWiFi')
+        self.assertEqual(output.read_bytes(), expected)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    def test_user_label_and_changed_ssid_are_preserved(self):
+        self.profile('valid')
+        self.run_import()
+        output, = self.destination.glob('*.nmconnection')
+        identity = str(uuid.uuid5(uuid.NAMESPACE_URL, 'gemini-wifi:546573742057694669'))
+        for label, encoded in [('My connection', '84;101;115;116;32;87;105;70;105;'),
+                               (f'Gemian Wi-Fi {identity[:8]}', '79;116;104;101;114;')]:
+            text = output.read_text()
+            text = profiles.re.sub(r'(?m)^id=.*$', lambda _: 'id=' + label, text)
+            text = profiles.re.sub(r'(?m)^ssid=.*$', lambda _: 'ssid=' + encoded, text)
+            output.write_text(text)
+            original = output.read_bytes()
+            self.run_import()
+            self.assertEqual(output.read_bytes(), original)
 
 
 if __name__ == '__main__':

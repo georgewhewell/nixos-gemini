@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=a25cb83b405045f7a1d8b25aeba71036eb277206&shallow=1";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=3164a039836c8bd1ae96a4bb31bc65db2e2dcaed&shallow=1";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -128,6 +128,15 @@
         cp ${./nix/networkmanager-import-wifi.py} networkmanager-import-wifi.py
         cp ${./nix/test-networkmanager-import-wifi.py} test-networkmanager-import-wifi.py
         python3 test-networkmanager-import-wifi.py
+        touch "$out"
+      '';
+      audio-playback-routing = gemini.buildPkgs.runCommand "gemini-audio-playback-routing-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.alsa-utils];
+      } ''
+        python3 ${./nix/test-audio-playback-routing.py} \
+          ${gemini.buildPkgs.writeText "gemini-asound.conf" gemini.system.config.environment.etc."asound.conf".text} \
+          ${gemini.system.config.system.build.geminiAudioUcm}/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf \
+          ${gemini.buildPkgs.alsa-utils}/bin/aplay
         touch "$out"
       '';
       baseline-acceptance = gemini.buildPkgs.runCommand "gemini-baseline-acceptance-check" {

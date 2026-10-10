@@ -1,4 +1,4 @@
-{ lib, pkgs, ... }: {
+{ pkgs, ... }: {
   networking.networkmanager = {
     enable = true;
     dhcp = "internal";
@@ -52,15 +52,6 @@
   };
   # Opening the desktop does not depend on finding an access point or a SIM.
   systemd.services.NetworkManager-wait-online.enable = false;
-  # This kernel has no /dev/rfkill. Keep the supplicant's sandbox, with that
-  # device optional so the same unit also works when rfkill is available.
-  systemd.services.wpa_supplicant.serviceConfig.BindPaths = lib.mkForce [
-    "/etc/wpa_supplicant"
-    "/run/wpa_supplicant"
-    "/proc/sys/net"
-    "-/dev/rfkill"
-    "/run/dbus"
-  ];
   systemd.services.ModemManager = {
     wantedBy = ["multi-user.target"];
     after = ["gemini-cellular.service"];
