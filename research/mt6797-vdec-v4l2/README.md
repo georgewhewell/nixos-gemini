@@ -49,10 +49,13 @@ metadata shadowed module metadata; its report is reconstructed offline from
 the preserved results. The raw reporting failure is retained with the trial. Supervisor RTC/system
 checks, accepted recovery and the strict kernel-journal audit also pass.
 
-Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
-I/P pictures, at most one short-term reference and disabled deblocking. Input
+Hardware-tested scope is progressive 8-bit 4:2:0 Baseline and the Main/CABAC
+streams qualified in trial 37 below, one slice,
+I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
+Main/CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The driver admits coded widths 64..320 and heights 64..256 in steps of 16.
+`V4L2_PIX_FMT_MM21`. The current candidate admits coded widths 64..640 and heights 64..480 in steps
+of 16; hardware qualification currently extends only through 320x256.
 Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
 height, and cached references must match it. Trial 30 passes all 18 original
 request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
@@ -60,10 +63,12 @@ GStreamer pipelines. The 64x80 and 320x240 motion streams match their coded
 samples in padded storage. The eight-frame x264 320x240 stream times out on its
 first picture and produces no output: zero error/message words, state 1, safe
 break/reset, unchanged guards and normal unload. All 57 compliance checks and
-supervisor/recovery/journal checks pass. That compressed stream is unqualified.
-Its independent coherent allocations are 256 KiB each, with separate 128 KiB
-data and trailing guard regions. GStreamer's initial 320x240 probe can negotiate
-320x256. Real GStreamer decoding is qualified only for the listed trial-29 streams. Queues
+supervisor/recovery/journal checks pass. The later lookahead trial described below qualifies this same compressed stream.
+Qualified trials through 37 use 256 KiB coherent allocations with 128 KiB data
+and trailing guard regions. The next SD candidate expands picture allocations
+to 640 KiB, with 512 KiB capacity and a 128 KiB guard; it checks all bytes after
+the actual picture payload. Scratch allocations remain 256 KiB. GStreamer's initial 320x240 probe can negotiate
+320x256. Real GStreamer decoding is qualified for the explicitly listed archived streams. Queues
 use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
 buffer export is hardware tested at the seven listed dimensions. Completion
 uses a bounded workqueue poll because actual interrupt delivery is unqualified.
@@ -72,9 +77,10 @@ It does not implement an encoder.
 Userspace queue storage is allocated by videobuf2-vmalloc. Hardware reads and
 writes only independent coherent DMA allocations, with private input padding,
 working buffers, picture buffers and trailing guards. Before copying pixels
-into capture buffers, the worker requires picture completion, zero error and
-message words, break/reset acknowledgements and unchanged guards/reference
-storage. It resolves references by the input timestamp and checks picture
+into capture buffers, the worker requires picture completion, break/reset
+acknowledgements and unchanged guards/reference storage. Baseline requires zero
+error/message words. The experimental Main trailer classification below retains
+raw flags and admits only its specifically checked completion condition. It resolves references by the input timestamp and checks picture
 metadata against the per-file cache. Stream-off and close wait for the worker.
 An unproven hardware stop retains private DMA allocations, clocks, runtime
 power and a module reference until reboot; it still returns errored userspace
@@ -99,6 +105,11 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 128 96 export
+
+# Optional bounded timeout, stale timestamp and retained-reference recovery:
+request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
+  /sys/bus/platform/devices/16020000.video-codec/last_job \
+  FIXTURE_DIRECTORY 64 64 export faults
 ```
 
 It submits the independently verified original fixtures, checks request
@@ -113,8 +124,13 @@ exerciser; successful compilation alone is not a decode qualification.
 
 The cross-build recipe in `gstreamer-userspace.nix` accepts `buildPkgs` and
 `targetPkgs`, so it does not depend on this workspace path. With the repository's
-pinned nixpkgs and `pkgsCross.aarch64-multiplatform`, it produces the same
-userspace store path exercised in trial 29. The package contains the GStreamer
+pinned nixpkgs and `pkgsCross.aarch64-multiplatform`, the original recipe produced
+the userspace store path exercised in trials 29 through 34. The current recipe
+adds `gstreamer-v4l2-buffer-errors.patch`: unmodified GStreamer 1.28.6 ignores
+`V4L2_BUF_FLAG_ERROR` on successful capture DQBUF, allowing failed pictures
+to reach the sink. The patch propagates that flag through request failure;
+trial 36 verifies five actual driver errors produce nonzero pipeline status
+and no failed picture output. Eight subsequent Baseline pictures match exactly. The package contains the GStreamer
 CLI, scanner, and a `plugin-path` file naming the core/base/bad plugin directories.
 On a matching experimental candidate, use those files to run a pipeline:
 
@@ -128,14 +144,64 @@ export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
 
 `../mt6797-vdec/make-baseline-fixture.py` reproduces the changing-gradient x264
 fixtures and records their software-decoded references, commands, hashes and
-public header trace. It verifies Baseline CAVLC, one reference, unweighted
-prediction and disabled deblocking. It reproduces the original 128x96 stream
+public header trace. It verifies the selected Baseline CAVLC or Main CABAC profile, one reference,
+unweighted prediction, one slice per picture and the selected deblocking mode. It reproduces the original 128x96 stream
 and reference byte for byte with the pinned FFmpeg build.
 
-The next diagnostic build caches macroblock/pipeline progress, NAL/header size,
-elapsed time and the engine result before frontend cancellation. Reading
-`last_job` only accesses that snapshot. These fields have compiled but have not
-yet been hardware tested.
+Trial 31 adds cached macroblock/pipeline progress, elapsed time and the engine
+result before frontend cancellation. Reading `last_job` only accesses this
+snapshot. Three exact 320x256 pictures precede a fourth-picture timeout; the
+320x240 stream times out on its first picture. Both fail near the final
+macroblocks with exactly 17 readable zero bytes after the end marker. Trial 32
+reserves a further 128-byte readable zero block within private input storage,
+with a compile-time upper-bound check. All 84 pictures then match: 18 original
+ioctl pictures and 66 GStreamer pictures, including both formerly stalled
+streams and a 32-picture 320x240 chain crossing four-bit frame-number wrap.
+All 57 default compliance checks, normal unload, RTC/system/recovery and strict
+kernel-journal audit pass. NAL/header sizes are now assigned after engine status
+initialization and are validated in this trial. Maximum NAL size is 130816 bytes.
+
+Trial 33 tests enabled deblocking at 64x80, 128x96 and 320x240, plus the original
+long chain. Its 73 successful pictures match independent software references.
+An intentional truncated I_PCM picture reaches the one-second engine timeout,
+stops safely with intact guards, and returns errored buffers. Its overwritten
+slot's old timestamp is rejected before DMA; a P picture using the other
+retained reference still matches. All 57 default compliance checks and normal
+unload pass. Supervisor RTC/system/recovery checks and the strict kernel-journal audit also pass. The driver also requires
+final macroblock coordinates to match the coded picture and invalidates every
+cached reference if private guard/reference storage changes.
+
+The next build admits Main-profile CABAC I/P pictures within the existing
+geometry/reference limits. It initializes AVC context SRAM at offset `0x234`
+after programming PPS and slice/QP controls, using a fact from the pinned public
+GPL related-core interface. Trial 34 completes two independently matching 128x96 pictures, then fails the
+Main streams; the 64x80/320x240 first pictures also fail. Later missing-reference
+errors hide the original engine status. Baseline regression and all 57 default
+compliance checks pass. The next source preserves `last_engine_failure`, a
+read-only cached snapshot whose job number identifies the last error after
+hardware fetch; later admission failures do not replace it. Trial 35 verifies these cached snapshots and identifies only the CABAC
+zero-word trailer check (bit 14, raw error/message `0x4000`) after complete
+pictures with final macroblock coordinates and intact guards. Trial 36 appends one optional escaped CABAC zero word (`00 00 03`) before the
+private end marker. Software decoding verifies all 24 pictures remain unchanged,
+but the hardware still flags each CABAC I picture. This trailer is removed.
+The next source checks the documented sole-bit-14 completion condition: complete
+macroblock coordinates and a byte-aligned parser window at zero or a start code.
+It retains the raw error/message, bit cursor, tail word and classification in
+cached diagnostics. All other errors and failed stop/guard checks remain fatal.
+Trial 37 verifies all 56 Main pictures across 64x80, 128x96 and 320x240,
+including a 32-picture chain, against independent software references. Completed
+flagged pictures expose the parser start code and retain raw error/message
+`0x4000`. Nine native and eight Baseline regression pictures also match. A
+deliberately invalid CABAC alignment bit reports raw `0x100`, stops safely at
+the one-second deadline, and causes a GStreamer request timeout before capture
+error propagation can be checked. Its observer retains this negative-test
+failure. The next source stops promptly on this specific fatal error and tests
+it alongside 640x480/640x464/352x288 decoding. Larger geometry and early-error
+handling await hardware validation. `first_context_failure` also preserves each
+context's first rejection, so pre-DMA failures cannot be hidden by later
+missing references. The fixture
+generator's `--deblocking` and `--entropy cabac` options generate separately
+verified x264 references; their use makes no hardware encoder claim.
 
 The encoder, interrupt completion, general codec features, larger pictures,
 resolution changes and system suspend remain unqualified. These experimental

@@ -5,10 +5,13 @@
 #include <linux/platform_device.h>
 #include <linux/v4l2-controls.h>
 
+#define MT6797_MAX_WIDTH 640U
+#define MT6797_MAX_HEIGHT 480U
+
 struct mt6797_engine;
 struct mt6797_decode_context;
 
-/* Initial hardware boundary: progressive Baseline, one slice and one
+/* Initial hardware boundary: progressive Baseline/Main, one slice and one
  * short-term reference, bounded small pictures. This is original code, not firmware.
  */
 struct mt6797_decode_job {
@@ -27,10 +30,12 @@ struct mt6797_decode_status {
 	u32 state, error, message, irq;
 	u32 mbx, mby, stall, read_pointer, fetch_status, top_status;
 	u32 pred_config, pred_mode, nal_bytes, header_bits;
+	u32 tail_bit_offset, tail_word;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;
 	bool fetched, submitted, quiesced, guards_unchanged;
+	bool cabac_tail_valid;
 };
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev);

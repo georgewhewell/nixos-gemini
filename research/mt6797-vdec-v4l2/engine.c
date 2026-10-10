@@ -23,7 +23,11 @@
 
 #define DATA_SIZE SZ_128K
 #define ALLOC_SIZE (2 * DATA_SIZE)
-#define MAX_NAL (DATA_SIZE - 128)
+#define MAX_NAL (DATA_SIZE - 256)
+#define PICTURE_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT * 3 / 2, SZ_64K)
+#define PICTURE_ALLOC_SIZE (PICTURE_DATA_SIZE + DATA_SIZE)
+
+static_assert(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4 <= DATA_SIZE);
 
 enum bank { MISC, VLD, TOP, MC, AVC, MV, PP, BANK_COUNT };
 enum memory { INPUT, PREDICTION, MOTION, VLD_WRAP, PP_WRAP, MEMORY_COUNT };
@@ -31,6 +35,7 @@ enum memory { INPUT, PREDICTION, MOTION, VLD_WRAP, PP_WRAP, MEMORY_COUNT };
 struct private_buffer {
 	u8 *cpu;
 	dma_addr_t dma;
+	size_t bytes;
 };
 
 struct mt6797_engine {
@@ -90,24 +95,26 @@ static void restore_words(struct register_save *save)
 	}
 }
 
-static int allocate_buffer(struct mt6797_engine *engine, struct private_buffer *buf)
+static int allocate_buffer(struct mt6797_engine *engine, struct private_buffer *buf,
+			   size_t bytes)
 {
-	buf->cpu = dma_alloc_coherent(engine->dev, ALLOC_SIZE, &buf->dma, GFP_KERNEL);
+	buf->bytes = bytes;
+	buf->cpu = dma_alloc_coherent(engine->dev, buf->bytes, &buf->dma, GFP_KERNEL);
 	if (!buf->cpu)
 		return -ENOMEM;
-	if (!IS_ALIGNED(buf->dma, 2048) || buf->dma + ALLOC_SIZE - 1 > DMA_BIT_MASK(28)) {
-		dma_free_coherent(engine->dev, ALLOC_SIZE, buf->cpu, buf->dma);
+	if (!IS_ALIGNED(buf->dma, 2048) || buf->dma + buf->bytes - 1 > DMA_BIT_MASK(28)) {
+		dma_free_coherent(engine->dev, buf->bytes, buf->cpu, buf->dma);
 		buf->cpu = NULL;
 		return -ERANGE;
 	}
-	memset(buf->cpu, 0xd3, ALLOC_SIZE);
+	memset(buf->cpu, 0xd3, buf->bytes);
 	return 0;
 }
 
 static void release_buffer(struct mt6797_engine *engine, struct private_buffer *buf)
 {
 	if (buf->cpu)
-		dma_free_coherent(engine->dev, ALLOC_SIZE, buf->cpu, buf->dma);
+		dma_free_coherent(engine->dev, buf->bytes, buf->cpu, buf->dma);
 	buf->cpu = NULL;
 }
 
@@ -122,6 +129,11 @@ int mt6797_engine_suspend(struct mt6797_engine *engine)
 		return -EBUSY;
 	clk_bulk_disable_unprepare(ARRAY_SIZE(engine->clocks), engine->clocks);
 	return 0;
+}
+
+static void free_snapshot(void *snapshot)
+{
+	kvfree(snapshot);
 }
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
@@ -144,9 +156,12 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	if (!engine)
 		return ERR_PTR(-ENOMEM);
 	engine->dev = dev;
-	engine->reference_snapshot = devm_kmalloc(dev, ALLOC_SIZE, GFP_KERNEL);
+	engine->reference_snapshot = kvmalloc(PICTURE_ALLOC_SIZE, GFP_KERNEL);
 	if (!engine->reference_snapshot)
 		return ERR_PTR(-ENOMEM);
+	ret = devm_add_action_or_reset(dev, free_snapshot, engine->reference_snapshot);
+	if (ret)
+		return ERR_PTR(ret);
 	INIT_LIST_HEAD(&engine->contexts);
 	engine->gcon = syscon_regmap_lookup_by_compatible("mediatek,mt6797-vdecsys");
 	if (IS_ERR(engine->gcon))
@@ -187,7 +202,7 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	if (!engine->larb_mmu)
 		return ERR_PTR(-ENOMEM);
 	for (i = 0; i < MEMORY_COUNT; i++) {
-		ret = allocate_buffer(engine, &engine->memory[i]);
+		ret = allocate_buffer(engine, &engine->memory[i], ALLOC_SIZE);
 		if (ret)
 			goto fail;
 	}
@@ -212,7 +227,7 @@ struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine 
 		return ERR_PTR(-ENOMEM);
 	ctx->engine = engine;
 	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		ret = allocate_buffer(engine, &ctx->pictures[i]);
+		ret = allocate_buffer(engine, &ctx->pictures[i], PICTURE_ALLOC_SIZE);
 		if (ret)
 			goto fail;
 	}
@@ -319,20 +334,20 @@ static int validate_job(struct mt6797_decode_context *ctx,
 				    &job->decode, job->bytes, slice);
 	if (ret)
 		return ret;
-	if (job->sps.profile_idc != 66 ||
-	    job->width < 64 || job->width > 320 || job->width % 16 ||
-	    job->height < 64 || job->height > 256 || job->height % 32 ||
+	if ((job->sps.profile_idc != 66 && job->sps.profile_idc != 77) ||
+	    (job->sps.profile_idc == 66 &&
+	     (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)) ||
+	    job->width < 64 || job->width > MT6797_MAX_WIDTH || job->width % 16 ||
+	    job->height < 64 || job->height > MT6797_MAX_HEIGHT || job->height % 32 ||
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
 	    ALIGN(header->height_mbs * 16, 32) != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
-	    job->pps.flags & (V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE |
-		V4L2_H264_PPS_FLAG_WEIGHTED_PRED | V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
+	    job->pps.flags & (V4L2_H264_PPS_FLAG_WEIGHTED_PRED | V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
 		V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT) ||
 	    job->pps.weighted_bipred_idc || job->slice.slice_type == V4L2_H264_SLICE_TYPE_B ||
 	    (!!(job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_PFRAME) !=
 	     (job->slice.slice_type == V4L2_H264_SLICE_TYPE_P)) ||
 	    (job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_BFRAME) ||
-	    job->slice.disable_deblocking_filter_idc != 1 ||
 	    (job->nal[0] & 0x80) || ((job->nal[0] >> 5) & 3) != job->decode.nal_ref_idc ||
 	    ((job->nal[0] & 31) != ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ? 5 : 1)))
 		return -EOPNOTSUPP;
@@ -398,7 +413,10 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
 			 const u8 **pixels, struct mt6797_decode_status *status)
 {
-	static const u8 ending[] = { 0, 0, 0, 1, 0x0a };
+	static const u8 eos[] = { 0, 0, 0, 1, 0x0a };
+	bool cabac = job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE;
+	const u8 *ending = eos;
+	size_t ending_bytes = sizeof(eos);
 	struct mt6797_engine *engine = ctx->engine;
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words slice;
@@ -414,6 +432,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	int reference, ret, stop_ret;
 	bool dma_started = false;
 
+	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= DATA_SIZE);
 	memset(status, 0, sizeof(*status));
 	*pixels = NULL;
 	if (engine->fenced)
@@ -431,18 +450,23 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			return ret;
 	}
 	picture = &ctx->pictures[output];
+	/* Overwriting storage invalidates its previous timestamp even if this
+	 * attempt fails before a replacement picture can be retained.
+	 */
 	ctx->valid[output] = false;
 	memset(input->cpu, 0xa5, ALLOC_SIZE);
 	memcpy(input->cpu, job->nal, job->bytes);
 	memset(input->cpu + job->bytes, 0, DATA_SIZE - job->bytes);
-	memcpy(input->cpu + job->bytes, ending, sizeof(ending));
+	/* Private end marker and readable zero padding; userspace remains untouched. */
+	memcpy(input->cpu + job->bytes, ending, ending_bytes);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++) {
 		memset(engine->memory[i].cpu, 0, DATA_SIZE);
 		memset(engine->memory[i].cpu + DATA_SIZE, 0xd3, DATA_SIZE);
 	}
-	memset(picture->cpu, 0xd3, ALLOC_SIZE);
+	memset(picture->cpu, 0xd3, picture->bytes);
 	if (reference >= 0)
-		memcpy(engine->reference_snapshot, ctx->pictures[reference].cpu, ALLOC_SIZE);
+		memcpy(engine->reference_snapshot, ctx->pictures[reference].cpu,
+		       ctx->pictures[reference].bytes);
 	ret = pm_runtime_resume_and_get(engine->dev);
 	if (ret < 0)
 		return ret;
@@ -498,7 +522,14 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	write_word(readl(vld + 0x110) | BIT(0), vld + 0x110);
 	write_word(lower_32_bits(input->dma), vld + 0xb0);
 	write_word(lower_32_bits(input->dma), vld + 0xb0);
-	write_word(lower_32_bits(input->dma + ALIGN(job->bytes + sizeof(ending), 128)), vld + 0x110);
+	/* The barrel reader can require lookahead past the end marker. Keep a
+	 * further complete 128-byte zero block readable, inside private data.
+	 * MAX_NAL reserves that block and the alignment/end-marker overhead.
+	 * A 17-byte readable tail stalled two independently encoded pictures
+	 * near their final macroblocks despite otherwise intact DMA guards.
+	 */
+	write_word(lower_32_bits(input->dma + ALIGN(job->bytes + ending_bytes, 128) + 128),
+		   vld + 0x110);
 	write_word(1, avc + 0x28c);
 	write_word(BIT(8), vld + 0x108);
 	write_word(0, vld + 0x108);
@@ -533,6 +564,11 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(avc + 0x8c, (readl(avc + 0x8c) & ~0x1ffff) | slice.first_mb);
 	SAVE(avc + 0x98, (readl(avc + 0x98) & 0x1fff) | slice.header1);
 	SAVE(avc + 0x9c, slice.header2);
+	/* Public related-core interface: AVC + 0x234 initializes CABAC
+	 * context SRAM from the programmed PPS and slice/QP words.
+	 */
+	if (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)
+		write_word(1, avc + 0x234);
 	if (reference >= 0) {
 		SAVE(mc + 0x564, 0);
 		SAVE(mc + 0x3dc, lower_32_bits(ctx->pictures[reference].dma));
@@ -587,7 +623,13 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	dma_wmb();
 	status->submitted = true;
 	write_word(1, avc + 0x238);
-	ret = readl_poll_timeout(avc + 0x278, status->state, status->state & BIT(31), 100, 1000000);
+	/* CABAC alignment is an explicit fatal syntax error. It can stall before
+	 * picture completion; stop it promptly instead of racing userspace's
+	 * one-second request deadline. The trailer flag is classified below.
+	 */
+	ret = readl_poll_timeout(avc + 0x278, status->state,
+				 (status->state & BIT(31)) || (readl(avc + 0x284) & BIT(8)),
+				 100, 1000000);
 	status->irq = readl(misc + 0xa4);
 	status->error = readl(avc + 0x284);
 	status->message = readl(avc + 0x270);
@@ -602,7 +644,28 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->top_status = readl(top + 0x80);
 	status->pred_config = readl(top + 0x2c);
 	status->pred_mode = readl(top + 0x40);
-	if (!ret && (status->error || status->message))
+	/* The public related-core interface identifies bit 14 as a CABAC
+	 * trailer check. A completed picture may report this alone when the
+	 * byte-aligned parser window is already at a zero word/start code.
+	 * Verify that condition; retain both raw error words for diagnostics.
+	 * Other errors, incomplete pictures and failed DMA guards stay fatal.
+	 */
+	if (!ret && (status->state & BIT(31)) && cabac && status->error == BIT(14) &&
+	    status->message == BIT(14) &&
+	    status->mbx == header.width_mbs - 1 &&
+	    status->mby == header.height_mbs - 1) {
+		status->tail_bit_offset = (readl(avc + 0x84) >> 16) & 0x3f;
+		remaining = (-status->tail_bit_offset) & 7;
+		if (remaining)
+			readl(avc + remaining * 4);
+		status->tail_word = readl(avc);
+		status->cabac_tail_valid = !status->tail_word ||
+			status->tail_word == 1 || (status->tail_word >> 8) == 1;
+	}
+	if (!ret && (!(status->state & BIT(31)) ||
+		     ((status->error || status->message) && !status->cabac_tail_valid) ||
+		     status->mbx != header.width_mbs - 1 ||
+		     status->mby != header.height_mbs - 1))
 		ret = -EIO;
 cleanup:
 	if (dma_started) {
@@ -620,19 +683,22 @@ cleanup:
 	}
 	dma_rmb();
 	status->guards_unchanged = !memcmp(input->cpu, job->nal, job->bytes) &&
-		!memcmp(input->cpu + job->bytes, ending, sizeof(ending)) &&
-		!memchr_inv(input->cpu + job->bytes + sizeof(ending), 0,
-			    DATA_SIZE - job->bytes - sizeof(ending)) &&
+		!memcmp(input->cpu + job->bytes, ending, ending_bytes) &&
+		!memchr_inv(input->cpu + job->bytes + ending_bytes, 0,
+			    DATA_SIZE - job->bytes - ending_bytes) &&
 		!memchr_inv(input->cpu + DATA_SIZE, 0xa5, DATA_SIZE) &&
 		!memchr_inv(picture->cpu + luma_size * 3 / 2, 0xd3,
-			    ALLOC_SIZE - luma_size * 3 / 2);
+			    picture->bytes - luma_size * 3 / 2);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++)
 		if (memchr_inv(engine->memory[i].cpu + DATA_SIZE, 0xd3, DATA_SIZE))
 			status->guards_unchanged = false;
-	if (reference >= 0 && memcmp(ctx->pictures[reference].cpu, engine->reference_snapshot, ALLOC_SIZE))
+	if (reference >= 0 && memcmp(ctx->pictures[reference].cpu, engine->reference_snapshot,
+			      ctx->pictures[reference].bytes))
 		status->guards_unchanged = false;
-	if (!status->guards_unchanged)
+	if (!status->guards_unchanged) {
+		mt6797_decode_context_reset(ctx);
 		ret = -EIO;
+	}
 	if (status->submitted) {
 		state = readl(misc + 0xa4);
 		write_word(state | 0x11, misc + 0xa4);

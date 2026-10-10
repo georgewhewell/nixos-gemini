@@ -1,0 +1,24 @@
+From: Gemini media implementation
+SPDX-License-Identifier: LGPL-2.0-or-later
+Subject: [PATCH] v4l2codecs: propagate errored capture buffers to requests
+
+VIDIOC_DQBUF can succeed while V4L2_BUF_FLAG_ERROR reports a failed decode.
+Mark the request failed instead of handing that storage to the output path.
+Observed with an original stateless decoder returning a bounded hardware error.
+
+--- a/sys/v4l2codecs/gstv4l2decoder.c
++++ b/sys/v4l2codecs/gstv4l2decoder.c
+@@ -1028,6 +1028,13 @@ gst_v4l2_decoder_dequeue_src (GstV4l2Decoder * self, guint32 * out_frame_num)
+     return FALSE;
+   }
+ 
++  if (buf.flags & V4L2_BUF_FLAG_ERROR) {
++    GST_ERROR_OBJECT (self, "Driver reported an error for picture buffer %u",
++        buf.index);
++    errno = EIO;
++    return FALSE;
++  }
++
+   *out_frame_num = buf.timestamp.tv_usec + buf.timestamp.tv_sec * 1000000;
+ 
+   GST_TRACE_OBJECT (self, "Dequeued picture buffer %i", buf.index);

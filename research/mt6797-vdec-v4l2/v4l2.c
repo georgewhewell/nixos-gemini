@@ -18,7 +18,7 @@
 #include <media/videobuf2-vmalloc.h>
 #include "engine.h"
 
-#define INPUT_SIZE (SZ_128K - 128)
+#define INPUT_SIZE (SZ_128K - 256)
 
 struct decoder {
 	struct device *dev;
@@ -30,10 +30,10 @@ struct decoder {
 	struct mutex mutex;
 	struct workqueue_struct *queue;
 	struct work_struct work;
-	struct mt6797_decode_status last_status;
+	struct mt6797_decode_status last_status, failed_status, first_failed_status;
 	spinlock_t status_lock;
-	int last_result;
-	u64 jobs, failures;
+	int last_result, failed_result, first_failed_result;
+	u64 jobs, failures, failed_job, first_failed_job;
 };
 
 struct decode_file {
@@ -44,6 +44,7 @@ struct decode_file {
 	struct mt6797_decode_job job;
 	struct v4l2_ctrl *sps, *pps, *slice, *decode;
 	atomic_t abort;
+	bool failure_recorded;
 	u32 sequence;
 	u16 width, height;
 	u32 colorspace, xfer_func, ycbcr_enc, quantization;
@@ -82,12 +83,15 @@ static int enumerate_format(struct file *file, void *priv, struct v4l2_fmtdesc *
 
 static int enumerate_size(struct file *file, void *priv, struct v4l2_frmsizeenum *size)
 {
-	if (size->index >= 17 * 7 || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
+	const unsigned int widths = (MT6797_MAX_WIDTH - 64) / 16 + 1;
+	const unsigned int heights = (MT6797_MAX_HEIGHT - 64) / 32 + 1;
+
+	if (size->index >= widths * heights || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
 			    size->pixel_format != V4L2_PIX_FMT_MM21))
 		return -EINVAL;
 	size->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	size->discrete.width = 64 + 16 * (size->index / 7);
-	size->discrete.height = 64 + 32 * (size->index % 7);
+	size->discrete.width = 64 + 16 * (size->index / heights);
+	size->discrete.height = 64 + 32 * (size->index % heights);
 	return 0;
 }
 
@@ -130,8 +134,8 @@ static int try_format(struct file *file, void *priv, struct v4l2_format *format)
 	unsigned int width = ctx->width, height = ctx->height;
 	int ret;
 	if (output_queue(format->type)) {
-		width = ALIGN(clamp(format->fmt.pix_mp.width, 64U, 320U), 16U);
-		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, 256U), 32U);
+		width = ALIGN(clamp(format->fmt.pix_mp.width, 64U, MT6797_MAX_WIDTH), 16U);
+		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, MT6797_MAX_HEIGHT), 32U);
 	}
 	ret = fill_format(format, width, height, ctx);
 	if (!ret && output_queue(format->type)) {
@@ -331,10 +335,10 @@ static void decode_work(struct work_struct *work)
 			ctx->job.nal += source->vb2_buf.planes[0].data_offset;
 			ctx->job.bytes = vb2_get_plane_payload(&source->vb2_buf, 0) - source->vb2_buf.planes[0].data_offset;
 			ctx->job.timestamp = source->vb2_buf.timestamp;
-			status.nal_bytes = ctx->job.bytes;
-			status.header_bits = ctx->job.slice.header_bit_size;
 			ret = atomic_read(&ctx->abort) ? -ECANCELED :
 				mt6797_engine_decode(ctx->context, &ctx->job, &pixels, &status);
+			status.nal_bytes = ctx->job.bytes;
+			status.header_bits = ctx->job.slice.header_bit_size;
 		}
 	}
 	status.engine_result = ret;
@@ -354,6 +358,17 @@ static void decode_work(struct work_struct *work)
 	decoder->jobs++;
 	if (ret)
 		decoder->failures++;
+	if (ret && !ctx->failure_recorded) {
+		ctx->failure_recorded = true;
+		decoder->first_failed_status = status;
+		decoder->first_failed_result = ret;
+		decoder->first_failed_job = decoder->jobs;
+	}
+	if (status.fetched && status.engine_result < 0) {
+		decoder->failed_status = status;
+		decoder->failed_result = ret;
+		decoder->failed_job = decoder->jobs;
+	}
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
 	v4l2_m2m_buf_copy_metadata(source, capture);
 	capture->sequence = ctx->sequence++;
@@ -547,21 +562,37 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	u64 jobs, failures;
 	int result;
 	spin_lock_irqsave(&decoder->status_lock, flags);
-	status = decoder->last_status;
-	jobs = decoder->jobs;
+	if (!strcmp(attr->attr.name, "first_context_failure")) {
+		status = decoder->first_failed_status;
+		jobs = decoder->first_failed_job;
+		result = decoder->first_failed_result;
+	} else if (!strcmp(attr->attr.name, "last_engine_failure")) {
+		status = decoder->failed_status;
+		jobs = decoder->failed_job;
+		result = decoder->failed_result;
+	} else {
+		status = decoder->last_status;
+		jobs = decoder->jobs;
+		result = decoder->last_result;
+	}
 	failures = decoder->failures;
-	result = decoder->last_result;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
 		status.nal_bytes, status.header_bits, status.mbx, status.mby, status.stall,
 		status.read_pointer, status.fetch_status, status.top_status, status.pred_config,
-		status.pred_mode);
+		status.pred_mode, status.tail_bit_offset, status.tail_word,
+		status.cabac_tail_valid);
 }
 static DEVICE_ATTR_RO(last_job);
-static struct attribute *decoder_attrs[] = { &dev_attr_last_job.attr, NULL };
+static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);
+static DEVICE_ATTR(first_context_failure, 0444, last_job_show, NULL);
+static struct attribute *decoder_attrs[] = {
+	&dev_attr_last_job.attr, &dev_attr_last_engine_failure.attr,
+	&dev_attr_first_context_failure.attr, NULL
+};
 ATTRIBUTE_GROUPS(decoder);
 
 static int probe_decoder(struct platform_device *pdev)

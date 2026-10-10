@@ -20,11 +20,17 @@ def main():
     parser.add_argument('--width', type=int, default=128)
     parser.add_argument('--height', type=int, default=96)
     parser.add_argument('--frames', type=int, default=8)
+    parser.add_argument('--entropy', choices=('cavlc', 'cabac'), default='cavlc',
+                        help='CABAC generates Main profile for separate hardware qualification')
+    parser.add_argument('--deblocking', action='store_true',
+                        help='Generate a deblocked stream for separate hardware qualification')
     args = parser.parse_args()
     w, h, count = args.width, args.height, args.frames
-    if not (64 <= w <= 320 and 64 <= h <= 256 and not w % 16 and not h % 16
+    cabac = args.entropy == 'cabac'
+    profile = 'main' if cabac else 'baseline'
+    if not (64 <= w <= 640 and 64 <= h <= 480 and not w % 16 and not h % 16
             and 2 <= count <= 32):
-        parser.error('Use 64..320 by 64..256 in steps of 16 and 2..32 frames')
+        parser.error('Use 64..640 by 64..480 in steps of 16 and 2..32 frames')
     args.out.mkdir(parents=True, exist_ok=True)
     original = bytearray()
     for frame in range(count):
@@ -39,9 +45,11 @@ def main():
     source.write_bytes(original)
     command = [args.ffmpeg, '-v', 'info', '-nostdin', '-y', '-f', 'rawvideo',
                '-pix_fmt', 'yuv420p', '-s', f'{w}x{h}', '-r', '25', '-i', str(source),
-               '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', 'baseline',
+               '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', profile,
                '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', '1',
-               '-x264-params', 'no-deblock=1:8x8dct=0:weightp=0:repeat-headers=1:'
+               '-x264-params', ('cabac=1:' if cabac else '') +
+               f'no-deblock={0 if args.deblocking else 1}:'
+               '8x8dct=0:weightp=0:repeat-headers=1:'
                f'threads=1:scenecut=0:keyint={count}:min-keyint={count}', str(stream)]
     encode = subprocess.run(command, check=True, capture_output=True)
     (args.out / 'encode-stderr.txt').write_bytes(encode.stderr)
@@ -50,6 +58,8 @@ def main():
                       str(reference)]
     decode = subprocess.run(decode_command, check=True, capture_output=True)
     (args.out / 'decode-stderr.txt').write_bytes(decode.stderr)
+    if decode.stderr:
+        raise RuntimeError('Software reference decoder reported errors')
     if reference.stat().st_size != count * w * h * 3 // 2:
         raise RuntimeError('Software decode returned the wrong picture count/size')
     trace_command = [args.ffmpeg, '-nostdin', '-i', str(stream), '-c', 'copy',
@@ -57,13 +67,19 @@ def main():
     trace = subprocess.run(trace_command, check=True, capture_output=True)
     (args.out / 'public-syntax-trace.txt').write_bytes(trace.stderr)
     syntax = trace.stderr.decode()
-    for field, expected in [('profile_idc', 66), ('entropy_coding_mode_flag', 0),
-                            ('weighted_pred_flag', 0), ('max_num_ref_frames', 1),
+    for field, expected in [('profile_idc', 77 if cabac else 66),
+                            ('entropy_coding_mode_flag', int(cabac)),
+                            ('weighted_pred_flag', 0), ('weighted_bipred_idc', 0),
+                            ('num_ref_idx_l0_default_active_minus1', 0),
+                            ('max_num_ref_frames', 1),
                             ('frame_mbs_only_flag', 1),
-                            ('disable_deblocking_filter_idc', 1)]:
+                            ('disable_deblocking_filter_idc', 0 if args.deblocking else 1)]:
         values = re.findall(r'\b' + field + r'\s+\S+\s+=\s+(\d+)', syntax)
         if not values or any(int(v) != expected for v in values):
             raise RuntimeError(f'Unexpected public syntax {field}: {values}')
+    starts = re.findall(r'\bfirst_mb_in_slice\s+\S+\s+=\s+(\d+)', syntax)
+    if len(starts) != count or any(int(v) for v in starts):
+        raise RuntimeError('Expected exactly one complete slice per frame')
     names = ('original.yuv', 'stream.h264', 'reference.yuv', 'encode-stderr.txt',
              'decode-stderr.txt', 'public-syntax-trace.txt')
     metadata = dict(schema=1, width=w, height=h, frames=count,
@@ -71,12 +87,13 @@ def main():
                     fixture_encoder='Open-source FFmpeg libx264; no hardware encoder claim',
                     reference='Independent FFmpeg software decode of the lossy stream',
                     software_decode_verified=True, hardware_tested=False,
+                    deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
                     encode_command=command, decode_command=decode_command,
                     public_syntax_checked=True,
                     hashes={n: hashlib.sha256((args.out / n).read_bytes()).hexdigest()
                             for n in names})
     (args.out / 'fixture.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    print(f'Verified {count} Baseline frames, {w}x{h}: '
+    print(f'Verified {count} {profile} frames, {w}x{h}: '
           f'{stream.stat().st_size} input bytes, {reference.stat().st_size} reference bytes')
 
 

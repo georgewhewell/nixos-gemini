@@ -173,10 +173,13 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		   const u8 *nal, size_t bytes, int predicted, int patterned,
 		   int expect_error, unsigned int timestamp, unsigned int sequence)
 {
-	u8 input[130944];
+	u8 input[130816];
 	if (fixture_directory) {
-		const char *fixture = !strcmp(name, "missing-reference") ? "pcm64-p" :
-			!strcmp(name, "motion-reference") ? "pcm64" : name;
+		const char *fixture = !strcmp(name, "missing-reference") ||
+			!strcmp(name, "fault-pskip") || !strcmp(name, "fault-stale") ||
+			!strcmp(name, "fault-retained") ? "pcm64-p" :
+			!strcmp(name, "motion-reference") || !strcmp(name, "fault-pcm") ||
+			!strcmp(name, "fault-truncated") ? "pcm64" : name;
 		char path[1024];
 		if (snprintf(path, sizeof(path), "%s/%s.nal", fixture_directory, fixture) >= (int)sizeof(path)) {
 			fprintf(stderr, "Fixture path too long\n"); exit(1);
@@ -189,6 +192,19 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		}
 		fclose(file);
 		nal = input;
+	}
+	if (!strcmp(name, "fault-truncated"))
+		bytes = 32; /* Complete I_PCM header, insufficient first-MB PCM data. */
+	if (!strcmp(name, "fault-retained")) {
+		if (!fixture_directory) {
+			memcpy(input, nal, bytes);
+			nal = input;
+		}
+		/* Original P-skip syntax: three one-bit UE fields precede frame_num,
+		 * followed by four POC bits. Change frame_num1/POC2 to2/4.
+		 */
+		input[1] = (input[1] & ~0x1fU) | (2U << 1);
+		input[2] = (input[2] & ~0xe0U) | (4U << 5);
 	}
 	struct v4l2_ctrl_h264_sps sps = {
 		.profile_idc = 66, .level_idc = width * height / 256 <= 99 ? 10 : 11, .constraint_set_flags = 3,
@@ -214,6 +230,14 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		params.dpb[0].fields = V4L2_H264_FRAME_REF;
 		params.dpb[0].flags = V4L2_H264_DPB_ENTRY_FLAG_VALID | V4L2_H264_DPB_ENTRY_FLAG_ACTIVE;
 		slice.ref_pic_list0[0].fields = V4L2_H264_FRAME_REF;
+	}
+	if (!strcmp(name, "fault-retained")) {
+		params.frame_num = 2;
+		params.pic_order_cnt_lsb = 4;
+		params.top_field_order_cnt = params.bottom_field_order_cnt = 4;
+		params.dpb[0].reference_ts = 2000000000ULL;
+		params.dpb[0].frame_num = params.dpb[0].pic_num = 1;
+		params.dpb[0].top_field_order_cnt = params.dpb[0].bottom_field_order_cnt = 2;
 	}
 	struct v4l2_ext_control values[] = {
 		{ .id = V4L2_CID_STATELESS_H264_SPS, .size = sizeof(sps), .ptr = &sps },
@@ -279,16 +303,17 @@ static void decode(struct stream *stream, const char *out, const char *name,
 int main(int argc, char **argv)
 {
 	struct stream stream;
-	if (argc != 5 && argc != 9) {
-		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [FIXTURES WIDTH HEIGHT mmap|export]\n", argv[0]); return 2;
+	if (argc != 5 && argc != 9 && argc != 10) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
 	}
 	status_path = argv[4];
-	if (argc == 9) {
+	if (argc >= 9) {
 		fixture_directory = argv[5];
 		width = strtoul(argv[6], NULL, 10);
 		height = strtoul(argv[7], NULL, 10);
 		if (width < 64 || width > 320 || width % 16 || height < 64 || height > 256 || height % 16 ||
-		    (strcmp(argv[8], "mmap") && strcmp(argv[8], "export"))) {
+		    (strcmp(argv[8], "mmap") && strcmp(argv[8], "export")) ||
+		    (argc == 10 && strcmp(argv[9], "faults"))) {
 			fprintf(stderr, "Invalid test geometry or mapping mode\n"); return 2;
 		}
 		export_buffers = !strcmp(argv[8], "export");
@@ -314,6 +339,15 @@ int main(int argc, char **argv)
 			decode(&stream, argv[3], "pcm64-motion", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);
 			close_stream(&stream);
 		}
+	}
+	if (argc == 10) {
+		open_stream(&stream, argv[1], argv[2]);
+		decode(&stream, argv[3], "fault-pcm", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
+		decode(&stream, argv[3], "fault-pskip", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);
+		decode(&stream, argv[3], "fault-truncated", pcm64_nal, sizeof(pcm64_nal), 0, 0, 1, 3, 2);
+		decode(&stream, argv[3], "fault-stale", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 4, 3);
+		decode(&stream, argv[3], "fault-retained", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 5, 4);
+		close_stream(&stream);
 	}
 	puts("{\"public_api_test_passed\":true}");
 	return 0;

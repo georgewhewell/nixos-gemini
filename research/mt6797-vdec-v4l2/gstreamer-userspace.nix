@@ -33,6 +33,7 @@ let
     gst-plugins-base = base;
     enableDocumentation = false;
   }).overrideAttrs (old: {
+    patches = (old.patches or []) ++ [ ./gstreamer-v4l2-buffer-errors.patch ];
     nativeBuildInputs = [ pkgs.meson pkgs.ninja pkgs.pkg-config pkgs.python3 pkgs.gettext pkgs.orc pkgs.glib ];
     buildInputs = [ base arm.orc arm.libgudev arm.libdrm ];
     mesonFlags = [
