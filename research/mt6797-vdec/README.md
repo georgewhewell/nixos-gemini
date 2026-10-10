@@ -30,6 +30,21 @@ picture-order metadata. Both lists have independently verified planning;
 prediction mosaics; 18 software variants pass. Hardware encoding remains
 unfinished.
 
+Trial 52 qualifies long-term reference metadata with 424 exact decoded
+pictures over 425 hardware commands. Eight original sixteen-reference P/B
+mosaics exercise mixed/all long-term lists, marking and promotion, reordering,
+explicit signed weights and implicit equal-weight fallback. The generators'
+`--long-term all|mixed|promote` options preserve existing bytes when omitted.
+All 108 software variants match independently calculated pixels and FFmpeg;
+eight syntax traces replay MMCO2/3/4/6, and 110 weighted headers match their
+independent traces. Host sanitizer checks cover all reference counts, invalid
+indices through 65535, picture-number mismatches and duplicate indices.
+Three native invalid-metadata requests fail before DMA, leave capture memory
+untouched and preserve a usable reference. The earlier B/direct/pyramid/High,
+weighted, 1080p, clocked and concurrent regressions, all 57 media checks,
+normal unload and full RTC/system/recovery/audit pass. Long-term direct-motion
+and replacement/extended chains still need hardware qualification.
+
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
 There is no proprietary codec firmware or `libvcodec` dependency in this work.
@@ -325,12 +340,14 @@ CRC entries are valid only because that configuration disables `MODVERSIONS`.
 
 ## Remaining implementation
 
-The next requirements are hardware qualification of the candidate interface,
-decoded-buffer layout and alignment, reference/MV/scratch-buffer programming,
-IOMMU/DMA setup, bounded reset/completion recovery and actual frame submission.
-Then add V4L2 request/queue handling and compare output with software-decoded
-fixtures before exposing supported formats. Encode needs its own hardware
-contract and implementation. These are required work, not completed features.
+The experimental driver now has hardware-qualified V4L2 request/queue handling,
+private DMA and reference storage, native MM21 capture, bounded recovery and
+exact software comparisons for the fixtures described above. Remaining work
+includes long-term direct-motion and extended chains, multiple slices,
+interlaced pictures, wider POC and HD-reference coverage, interrupt completion,
+system suspend/resume, sustained playback/thermal checks and accepted-system
+integration. Encoding needs its own public frame-programming contract and
+implementation; the command-free resource probe does not encode pictures.
 
 Private frame trial `handoff/boot-test-video-frame-20` supplies TOP `0x70`
 pixel dimensions. Four frame commands complete with state `0x80000001` and

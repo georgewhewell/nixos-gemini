@@ -11,6 +11,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+from h264_reference_marking import MODES, long_term_indices, write_reference_marking
 
 spec = importlib.util.spec_from_file_location('original_pcm', Path(__file__).with_name('make-pcm-fixture.py'))
 pcm = importlib.util.module_from_spec(spec)
@@ -25,6 +26,7 @@ def main():
     parser.add_argument('--refs', type=int, default=16, choices=range(2, 17))
     parser.add_argument('--prediction', choices=('l0', 'l1', 'bi'), default='bi')
     parser.add_argument('--weighting', choices=('none', 'explicit', 'implicit'), default='none')
+    parser.add_argument('--long-term', choices=MODES, default='none')
     a = parser.parse_args()
     refs, width, height = a.refs, 64, 64
     ysize, csize = width * height, width * height // 4
@@ -51,8 +53,7 @@ def main():
         b.put(frame, 6)
         if not frame: b.ue(0)
         b.put(frame * 4, 6)
-        b.put(0)
-        if not frame: b.put(0)
+        write_reference_marking(b, frame, refs, a.long_term)
         b.se(0); b.ue(1)
         headers.append(8 + len(b.bits))
         for _ in range(16):
@@ -62,9 +63,13 @@ def main():
         b.trailing()
         encoded.append(nal(0x65 if not frame else 0x41, b.bytes()))
     current_poc = 4 * (refs - 1) - 3
-    past = [frame for frame in range(refs) if frame * 4 < current_poc]
-    future = [frame for frame in range(refs) if frame * 4 > current_poc]
-    orders = [list(reversed(past)) + future, future + list(reversed(past))]
+    long_term = long_term_indices(refs, a.long_term)
+    past = [frame for frame in range(refs) if frame not in long_term and frame * 4 < current_poc]
+    future = [frame for frame in range(refs) if frame not in long_term and frame * 4 > current_poc]
+    long_order = sorted(long_term, key=long_term.get)
+    orders = [list(reversed(past)) + future + long_order, future + list(reversed(past)) + long_order]
+    if orders[0] == orders[1] and refs > 1:
+        orders[1][0], orders[1][1] = orders[1][1], orders[1][0]
     assert all(sorted(order) == list(range(refs)) for order in orders)
     b = Bits()
     for value in (0, 1, 0): b.ue(value)
@@ -120,7 +125,7 @@ def main():
                         poc0,poc1=[orders[which][indices[which]]*4 for which in range(2)]
                         td=clip(poc1-poc0,-128,127);tb=clip(current_poc-poc0,-128,127)
                         w1=32
-                        if td:
+                        if td and not any(orders[which][indices[which]] in long_term for which in range(2)):
                             # H264 integer division truncates toward zero.
                             tx=int((16384+abs(int(td/2)))/td)
                             scale=clip((tb*tx+32)>>6,-1024,1023)
@@ -146,7 +151,8 @@ def main():
     for name, data in artifacts.items(): (a.out / name).write_bytes(data)
     info = dict(schema=1, width=width, height=height, frames=refs + 1, references=refs,
                 profile='main', entropy_coding='cavlc', weighted_prediction=a.weighting, prediction=a.prediction,
-                reference_orders=orders, current_poc=current_poc, display_pocs=sorted(poc for poc,_ in ordered), original_input='Original distinct I_PCM pictures and a B16x16 mosaic with independent list0/list1 selections',
+                reference_orders=orders, current_poc=current_poc, long_term=a.long_term,
+                long_term_indices=long_term, display_pocs=sorted(poc for poc,_ in ordered), original_input='Original distinct I_PCM pictures and a B16x16 mosaic with independent list0/list1 selections',
                 software_decode_verified=True, hardware_tested=False, header_bit_size=final_header,
                 intra_header_bits=headers, weight_start=start if a.weighting == "explicit" else 0,
                 weight_end=end if a.weighting == "explicit" else 0, weights=weights, decode_command=command,

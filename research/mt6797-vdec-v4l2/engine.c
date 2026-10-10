@@ -544,6 +544,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->reference_count1 = plan.count1;
 	status->motion_bytes = motion_bytes;
 	status->reference_mask = plan.protected_mask;
+	status->long_term_mask = plan.long_term_mask;
 	status->snapshot_mask = plan.snapshot_mask;
 	status->picture_slot = plan.output;
 	/* An attempted overwrite invalidates the old timestamp even on failure. */

@@ -42,8 +42,7 @@ static void test_count(unsigned int count)
 	REJECT(cache[0].width=80, cache[0].width=64, -EINVAL);
 	REJECT(cache[0].top_poc++, cache[0].top_poc--, -EINVAL);
 	REJECT(cache[0].frame_number++, cache[0].frame_number--, -EINVAL);
-	REJECT(decode.dpb[0].flags|=V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM,
-	       decode.dpb[0].flags&=~V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM, -EOPNOTSUPP);
+
 	REJECT(decode.dpb[0].reserved[0]=1, decode.dpb[0].reserved[0]=0, -EINVAL);
 	REJECT(slice.ref_pic_list0[0].index=16, slice.ref_pic_list0[0].index=count-1, -EINVAL);
 	REJECT(slice.ref_pic_list0[0].fields=V4L2_H264_TOP_FIELD_REF,
@@ -72,6 +71,66 @@ static void test_count(unsigned int count)
 	slice.num_ref_idx_l1_active_minus1 = 0;
 	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
 	saved = plan;
+	/* Long-term frame_num is an index, which may differ from the cached
+	 * NAL frame number. Timestamp, POC and geometry remain authoritative.
+	 */
+	for (unsigned int i = 0; i < count; i++) {
+		decode.dpb[i].flags |= V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+		decode.dpb[i].frame_num = decode.dpb[i].pic_num = count - 1 - i;
+	}
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	assert(plan.long_term_mask == saved.protected_mask);
+	saved = plan;
+	decode.dpb[0].pic_num++;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	decode.dpb[0].pic_num--;
+	decode.dpb[0].frame_num = decode.dpb[0].pic_num = count;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	decode.dpb[0].frame_num = decode.dpb[0].pic_num = 65535;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	decode.dpb[0].frame_num = decode.dpb[0].pic_num = count - 1;
+	/* Invalid POC still fails for a long-term entry. */
+	cache[count - 1].bottom_poc++;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	cache[count - 1].bottom_poc--;
+	slice.slice_type = V4L2_H264_SLICE_TYPE_B;
+	slice.num_ref_idx_l1_active_minus1 = count - 1;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	assert(plan.count1 == count && plan.long_term_mask == plan.protected_mask);
+	for (unsigned int i = 0; i < count; i++)
+		assert(plan.list1[i] == count - 1 - i && plan.list0[i] == i);
+	slice.slice_type = V4L2_H264_SLICE_TYPE_P;
+	slice.num_ref_idx_l1_active_minus1 = 0;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	saved = plan;
+	if (count > 1) {
+		decode.dpb[1].frame_num = decode.dpb[1].pic_num = count - 1;
+		assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+		assert(!memcmp(&plan,&saved,sizeof(plan)));
+	}
+	for (unsigned int i = 0; i < count; i++) {
+		decode.dpb[i].flags &= ~V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+		decode.dpb[i].frame_num = decode.dpb[i].pic_num = i;
+	}
+	/* Same frame_num is legal across short-term and long-term namespaces. */
+	decode.dpb[0].flags |= V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+	decode.dpb[0].frame_num = decode.dpb[0].pic_num = count - 1;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	assert(plan.long_term_mask == (1U << (count - 1)));
+	slice.slice_type = V4L2_H264_SLICE_TYPE_B;
+	slice.num_ref_idx_l1_active_minus1 = count - 1;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	assert(plan.count1 == count && plan.long_term_mask == (1U << (count - 1)));
+	slice.slice_type = V4L2_H264_SLICE_TYPE_P;
+	slice.num_ref_idx_l1_active_minus1 = 0;
+	decode.dpb[0].flags &= ~V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+	decode.dpb[0].frame_num = decode.dpb[0].pic_num = 0;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	saved = plan;
 	/* Duplicate list entries are valid; duplicate active DPB entries are not. */
 	if (count > 1) {
 		slice.ref_pic_list0[1] = slice.ref_pic_list0[0];
@@ -93,6 +152,6 @@ static void test_count(unsigned int count)
 int main(void)
 {
 	for (unsigned int count=1; count<=V4L2_H264_NUM_DPB_ENTRIES; count++) test_count(count);
-	puts("PASS:1..16 P/B reference plans with independent lists, reordered/duplicate lists, protected output, retained snapshots and atomic invalid metadata rejection");
+	puts("PASS:1..16 short/long-term P/B reference plans with independent lists, reordered/duplicate lists, protected output, retained snapshots and atomic invalid metadata rejection");
 	return 0;
 }

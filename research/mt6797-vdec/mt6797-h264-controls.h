@@ -51,7 +51,7 @@ struct mt6797_h264_cached_picture {
 };
 
 struct mt6797_h264_reference_plan {
-	__u32 protected_mask, snapshot_mask;
+	__u32 protected_mask, snapshot_mask, long_term_mask;
 	__u8 output, count, count1, list0[V4L2_H264_NUM_DPB_ENTRIES];
 	__u8 list1[V4L2_H264_NUM_DPB_ENTRIES];
 };

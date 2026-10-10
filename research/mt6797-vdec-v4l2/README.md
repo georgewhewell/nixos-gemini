@@ -10,8 +10,9 @@ This development has not used a formally separated clean-room team.
 The current module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
-short-term references in SD fixtures, or three in the listed HD fixtures.
-Trial 51 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
+references in SD fixtures, including long-term references in original 64x64
+fixtures, or three short-term references in the listed HD fixtures.
+Trial 52 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -86,11 +87,11 @@ the final board audit pass. Sixteen-reference HD throughput remains unqualified.
 
 The private cache has 17 possible picture slots, allocated only when a real
 request needs another output. Planning validates all active DPB timestamps,
-geometry, frame numbers and picture-order counts before allocating or powering
+geometry, short-term frame numbers and picture-order counts before allocating or powering
 the hardware. Output never overlaps an active reference. Repeated logical list
 entries may share a private picture. Every retained cached picture, including
 its guard, is copied before DMA and compared after a proven stop. The ordered
-worker owns the shared bounded snapshot and 128-entry register save area;
+worker owns the shared bounded snapshot and 256-entry register save area;
 the latter avoids enlarging the kernel stack as reference tables grow. The
 qualified sixteen-entry weighted sequence saves and restores 122 registers.
 Single-reference streams retain the two-picture allocation path.
@@ -127,6 +128,28 @@ mathematically calculated software sample. Independent syntax traces confirm
 53 B pictures in the hardware run, including five reference B pictures.
 Encoder statistics report actual direct-prediction and skip macroblock use. B-picture sustained or clocked
 throughput remains unqualified.
+
+Trial 52 adds long-term references with 424 exact output pictures over 425
+hardware commands, including the intentional timeout. Eight original 64x64
+streams exercise sixteen-reference P and B lists: all-long-term and mixed
+references, marking the current picture long-term, promoting previous
+short-term pictures, P-list reordering, identical B-list swapping, signed
+explicit weights and implicit equal-weight fallback. All 108 original
+software variants match mathematically calculated pixels and FFmpeg. Eight
+independent syntax traces replay MMCO2/3/4/6; 110 weighted P/B headers match
+independent traces. Linux carries the long-term index in DPB `frame_num`,
+rather than the cached picture's original NAL frame number. The driver checks
+its range, progressive picture-number equality and uniqueness, while retaining
+timestamp, geometry and POC checks. Three invalid long-term metadata requests
+fail before DMA, leave capture storage untouched and preserve the next valid
+reference. The trial retains all B16, direct-prediction, pyramid, High-matrix,
+weighted, 1080p, clocked and concurrent-context regressions from trial 51.
+Every retained pixel, motion and guard byte matches after a proven stop.
+All 57 media checks, normal unload, RTC/system checks, accepted recovery and
+the final board audit pass. The accepted system is healthy with taint zero,
+no temporary media modules and no failed services. Long-term temporal-direct
+motion, replacement/extended chains and broader codec features remain
+unqualified.
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
@@ -184,8 +207,10 @@ checks, accepted recovery and the strict kernel-journal audit also pass.
 
 Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
 the High-profile streams in trial 47, weighted P streams in trial 49 and
-multiple-reference streams in trial 50 and B streams in trial 51 above:
-one slice, Baseline I/P or Main/High I/P/B pictures, up to 16 short-term references at SD and three in the listed HD fixtures, with
+multiple-reference streams in trial 50, B streams in trial 51 and long-term
+reference mosaics in trial 52 above: one slice, Baseline I/P or Main/High I/P/B
+pictures, up to 16 short-term references at SD, 16 short/long-term references
+in the original 64x64 mosaics and three short-term references in the listed HD fixtures, with
 enabled or disabled deblocking.
 CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native

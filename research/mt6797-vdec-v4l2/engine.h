@@ -38,7 +38,7 @@ struct mt6797_decode_status {
 	u32 weight_before_word, weight_after_word, weight_start_mask, weight_end_mask;
 	u32 reference_count, reference_mask, snapshot_mask, picture_slot;
 	u32 reference_guard_count, registers_saved;
-	u32 reference_count1, motion_bytes, motion_guard_count;
+	u32 reference_count1, motion_bytes, motion_guard_count, long_term_mask;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;

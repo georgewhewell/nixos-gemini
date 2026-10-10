@@ -524,6 +524,7 @@ int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
 	struct mt6797_h264_reference_plan plan = { 0 };
 	__u8 mapping[V4L2_H264_NUM_DPB_ENTRIES];
 	unsigned int dpb, slot, active = 0, pass;
+	__u32 long_term_indices = 0;
 	int found = -1;
 
 	if (!sps || !slice || !decode || !cache || !output ||
@@ -550,8 +551,16 @@ int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
 		if ((decode->flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
 		    !(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_ACTIVE))
 			continue;
-		if (entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM)
-			return -EOPNOTSUPP;
+		if (entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM) {
+			/* Progressive LongTermPicNum equals LongTermFrameIdx. Linux
+			 * carries that index in frame_num, rather than the NAL frame_num.
+			 */
+			if (entry->frame_num >= sps->max_num_ref_frames ||
+			    entry->pic_num != entry->frame_num ||
+			    (long_term_indices & (1U << entry->frame_num)))
+				return -EINVAL;
+			long_term_indices |= 1U << entry->frame_num;
+		}
 		ret = mt6797_h264_p_reference_words(entry, 0, &ignored);
 		if (ret)
 			return ret;
@@ -564,7 +573,8 @@ int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
 		if (slot == MT6797_H264_PICTURE_SLOTS)
 			return -ENOENT;
 		if ((plan.protected_mask & (1U << slot)) ||
-		    cache[slot].frame_number != entry->frame_num ||
+		    (!(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM) &&
+		     cache[slot].frame_number != entry->frame_num) ||
 		    cache[slot].width != ((__u32)sps->pic_width_in_mbs_minus1 + 1) * 16 ||
 		    cache[slot].height != ((__u32)sps->pic_height_in_map_units_minus1 + 1) * 16 ||
 		    cache[slot].top_poc != entry->top_field_order_cnt ||
@@ -573,6 +583,8 @@ int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
 			return -EINVAL;
 		mapping[dpb] = slot;
 		plan.protected_mask |= 1U << slot;
+		if (entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM)
+			plan.long_term_mask |= 1U << slot;
 	}
 	if (slice->slice_type != V4L2_H264_SLICE_TYPE_I) {
 		plan.count = slice->num_ref_idx_l0_active_minus1 + 1;

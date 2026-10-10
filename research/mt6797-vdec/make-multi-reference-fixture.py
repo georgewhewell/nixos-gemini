@@ -11,6 +11,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+from h264_reference_marking import MODES, long_term_indices, write_reference_marking
 
 spec = importlib.util.spec_from_file_location('original_pcm', Path(__file__).with_name('make-pcm-fixture.py'))
 pcm = importlib.util.module_from_spec(spec)
@@ -25,6 +26,7 @@ def main():
     parser.add_argument('--refs', type=int, default=16, choices=range(2, 17))
     parser.add_argument('--reorder', action='store_true')
     parser.add_argument('--weighted', action='store_true')
+    parser.add_argument('--long-term', choices=MODES, default='none')
     a = parser.parse_args()
     refs, width, height = a.refs, 64, 64
     ysize, csize = width * height, width * height // 4
@@ -51,8 +53,7 @@ def main():
         b.put(frame, 6)
         if not frame: b.ue(0)
         b.put(frame * 2, 6)
-        b.put(0)
-        if not frame: b.put(0)
+        write_reference_marking(b, frame, refs, a.long_term)
         b.se(0); b.ue(1)
         headers.append(8 + len(b.bits))
         for _ in range(16):
@@ -61,7 +62,9 @@ def main():
                 for _ in range(count): b.put(color, 8)
         b.trailing()
         encoded.append(nal(0x65 if not frame else 0x41, b.bytes()))
-    default = list(reversed(range(refs)))
+    long_term = long_term_indices(refs, a.long_term)
+    default = [frame for frame in reversed(range(refs)) if frame not in long_term]
+    default += sorted(long_term, key=long_term.get)
     selected = [refs // 3, 2 * refs // 3, refs - 1, 0] if a.reorder else []
     selected = list(dict.fromkeys(selected))
     order = selected + [frame for frame in default if frame not in selected]
@@ -74,6 +77,9 @@ def main():
     if a.reorder:
         predicted = refs
         for frame in selected:
+            if frame in long_term:
+                b.ue(2); b.ue(long_term[frame])
+                continue
             difference = frame - predicted
             assert difference
             b.ue(1 if difference > 0 else 0); b.ue(abs(difference) - 1)
@@ -92,7 +98,13 @@ def main():
             b.put(1)
             for weight, offset, denom in factors[1:]: b.se(weight); b.se(offset)
     end = 8 + len(b.bits)
-    b.put(0); b.se(0); b.ue(1)
+    if a.long_term == 'all':
+        # The DPB is full of long-term pictures: explicitly release index0
+        # after this prediction, rather than relying on short-term sliding.
+        b.put(1); b.ue(2); b.ue(0); b.ue(0)
+    else:
+        b.put(0)
+    b.se(0); b.ue(1)
     final_header = 8 + len(b.bits)
     final = bytearray(ysize + 2 * csize)
     for mb in range(16):
@@ -128,7 +140,9 @@ def main():
     for name, data in artifacts.items(): (a.out / name).write_bytes(data)
     info = dict(schema=1, width=width, height=height, frames=refs + 1, references=refs,
                 profile='main', entropy_coding='cavlc', weighted_prediction=a.weighted,
-                reordered=a.reorder, reference_order=order, original_input='Original distinct I_PCM pictures and a P_L0_16x16 mosaic using every reference',
+                reordered=a.reorder, reference_order=order, long_term=a.long_term,
+                long_term_indices=long_term,
+                original_input='Original distinct I_PCM pictures and a P_L0_16x16 mosaic using every reference',
                 software_decode_verified=True, hardware_tested=False, header_bit_size=final_header,
                 intra_header_bits=headers, weight_start=start if a.weighted else 0,
                 weight_end=end if a.weighted else 0, weights=weights, decode_command=command,

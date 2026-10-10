@@ -576,7 +576,7 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	}
 	failures = decoder->failures;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
@@ -589,7 +589,7 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 		status.weight_start_mask, status.weight_end_mask, status.reference_count,
 		status.reference_mask, status.snapshot_mask, status.picture_slot,
 		status.reference_guard_count, status.registers_saved, status.reference_count1,
-		status.motion_bytes, status.motion_guard_count);
+		status.motion_bytes, status.motion_guard_count, status.long_term_mask);
 }
 static DEVICE_ATTR_RO(last_job);
 static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);
