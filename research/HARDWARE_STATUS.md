@@ -71,8 +71,13 @@ leaves working memory zero without the frame command, but produces 28 MV flags
 after submission. DMA30/DMA28 working snapshots are identical, while every
 output byte remains unchanged. Counter/record data is consistent with seven
 parsed macroblocks and downstream backpressure; no completed frame is inferred.
-Fifteen frame commands have zero successful pixel comparisons. System/RTC/
-recovery and the final accepted-board audit pass. A
+Trial 18 also stalls on five commands after explicitly selecting H.264 PP,
+using direct MC output, or resetting the whole decoder before DMA. All output
+remains unchanged. Twenty frame commands have zero successful pixel comparisons.
+System/RTC/recovery and the final accepted-board audit pass. The newer pinned
+GPL MT6795 reference adds a third local power-down mask at MISC `0x178` and
+two MC memory/output mode bits; bounded save/restore diagnostics are prepared
+but not yet tested. A
 27-byte patterned compressed intra reference passes all 6,144 samples against
 FFmpeg; it has not run on hardware. Hardware video decoding and encoding remain
 unqualified. The target is

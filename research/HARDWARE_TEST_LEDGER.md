@@ -1490,3 +1490,25 @@ whole-VDEC reset uses published GCON `0x10` bit 0 before all DMA, rejects a rese
 already held, releases it even on assertion/read failure, and requires unchanged
 clock/SMI/reset readback. It neither writes framework clocks nor the supplier MMU
 mask. These variants are compiled but have not yet run on hardware.
+
+Private frame trial `handoff/boot-test-video-frame-18` runs one command-free
+control and five frame commands. H.264 PP mode reads back as `1`; normal PP and
+direct MC output both stall, including after documented whole-VDEC reset.
+The reset returns successfully with clock, SMI and reset words unchanged.
+Output stays entirely `0xd3`; prediction/MV writes persist, while both wrapper
+regions remain zero. Input, guards, both stop acknowledgements, idle reset and
+normal unload pass. Twenty actual frame commands have no pixel comparison.
+Full boot/paging/Nix/all RTC/recovery and final source/no-writer checks pass.
+The accepted board is healthy and untainted at boot
+`73ae1f79-428e-433d-8335-f08c7e6bed8c`.
+
+Pinned GPL MT6795 kernel `3c1166fd1c809473bde680bf1f7ebdd07f395104`
+provides another public H.264 initialization reference. Its `REALCHIP_DVT`
+reset path writes MISC `0x178`, a third local power-down mask absent from the
+older reference. Candidate diagnostics separately test its `0x1f` reference
+value and zero, then MC `0x5e4[17]` (`MC_QIU_BANK8`) and the non-field-compact
+output bit at MC `0x920[24]`. All registers are saved; clock restoration is
+read back after proven idle. No additional MMIO bank, arbitrary buffer address,
+reference picture or firmware is used. The external module builds with strict
+modpost against the exact candidate kernel. These new variants are not yet
+hardware qualified.

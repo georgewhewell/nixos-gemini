@@ -222,7 +222,19 @@ bit counter are consistent with seven parsed macroblocks; this is an inference.
 branch; every current fixture has deblocking disabled. `subsystem_reset=1`
 pulses the documented whole-decoder active-low reset before any DMA command.
 It requires unchanged clock/SMI/reset readback and does not write clock gates
-or the supplier's MMU mask. These three variants are not hardware qualified.
+or the supplier's MMU mask. Trial 18 tests these variants: five commands still
+stall with unchanged output, and guards/idle/unload/system recovery pass.
+Twenty frame commands have no successful pixel comparison.
+The pinned public GPL MT6795 kernel at
+`3c1166fd1c809473bde680bf1f7ebdd07f395104` adds further candidate initialization
+facts. `extended_clocks` tests MISC `0x178`: zero leaves it unchanged, one
+writes the reference `0x1f` mask, and two clears it. This frame-only diagnostic
+saves the original word and verifies restoration after proven idle.
+`frame_bank8=1` sets the public MC queue bank bit at `0x5e4[17]` while preserving
+other bits; `frame_format=1` sets its non-field-compact output bit at `0x920[24]`.
+Both MC words are restored after idle. The newer reference has different core
+routing on some configurations; none of its extra MMIO banks is mapped here.
+These additional facts are candidates, not proven MT6797 compatibility.
 These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM

@@ -26,6 +26,7 @@
 #define REG_SELECT 0x84
 #define PDN_SPEC 0xc8
 #define PDN_MODULE 0xcc
+#define PDN_MODULE2 0x178
 #define AUTO_PDN_CONTROL 0xec
 #define GLOBAL_DCM_CONTROL 0x18
 #define GLOBAL_RESET_CONTROL 0x10
@@ -84,6 +85,15 @@ MODULE_PARM_DESC(frame_h264_pp, "Explicitly select the public H.264 post-process
 static bool frame_mc_output;
 module_param(frame_mc_output, bool, 0444);
 MODULE_PARM_DESC(frame_mc_output, "Diagnose direct MC output using the public disabled-deblocking branch; only the deblocking-disabled fixture is admitted");
+static unsigned int extended_clocks;
+module_param(extended_clocks, uint, 0444);
+MODULE_PARM_DESC(extended_clocks, "Private frame diagnostic for the newer public MISC 0x178 mask: 0 unchanged, 1 reference 0x1f, 2 all local clocks");
+static bool frame_bank8;
+module_param(frame_bank8, bool, 0444);
+MODULE_PARM_DESC(frame_bank8, "Test public MC_QIU_BANK8 at MC 0x5e4 bit17, preserving other mode bits");
+static bool frame_format;
+module_param(frame_format, bool, 0444);
+MODULE_PARM_DESC(frame_format, "Test the newer public non-field-compact setting at MC 0x920 bit24");
 static unsigned int dma_bits = TEST_DMA_BITS;
 module_param(dma_bits, uint, 0444);
 MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
@@ -141,6 +151,7 @@ struct fifo_probe {
 	u32 fifo_start_readback, fifo_end_readback, read_ptr_readback;
 	u32 clock_select_original, clock_select, power_down, power_down_programmed;
 	u32 pdn_spec_original, pdn_module_original, auto_pdn_original;
+	u32 pdn_module2_original, pdn_module2_after, pdn_module2_restored;
 	u32 pdn_spec, pdn_module;
 	u32 larb_mmu, fifo_start_before_reset, read_ptr_before_reset;
 	u32 after_fetch[8];
@@ -163,7 +174,7 @@ struct fifo_probe {
 	unsigned int frame_saved_count;
 	u32 frame_state, frame_irq, frame_error, frame_message, frame_mbx, frame_mby;
 	u32 frame_input_first, frame_input_data;
-	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[17];
+	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[19];
 	bool frame_work_changed[4]; /* prediction, MV, VLD wrapper, PP wrapper */
 	bool frame_work_before[4];
 	int frame_result;
@@ -290,6 +301,13 @@ static int test_input(struct fifo_probe *p, bool slice)
 	 */
 	write_reg(all_clocks ? 0 : 0xf7, p->misc + PDN_SPEC);
 	write_reg(all_clocks ? 0 : 0x13a20100, p->misc + PDN_MODULE);
+	/* The pinned MT6795 GPL H.264 reset interface adds a third local
+	 * power-down word, MISC(94). Test its reference mask separately from
+	 * clearing it. Neither option submits DMA, and cleanup restores it
+	 * only after the existing break acknowledgements and idle reset.
+	 */
+	if (extended_clocks)
+		write_reg(extended_clocks == 1 ? 0x1f : 0, p->misc + PDN_MODULE2);
 	/* The newer-core public reset routine also programs the legacy control,
 	 * retaining its upper control bits. Omitting it is not an equivalent
 	 * initialization even with both newer power-down masks cleared.
@@ -531,7 +549,10 @@ static int test_frame(struct fifo_probe *p)
 	frame_reg(p, p->mc + 0x980, 4);
 	frame_reg(p, p->mc + 0xa20, lower_32_bits(p->frame_dma[2]));
 	frame_reg(p, p->mc + 0xa24, lower_32_bits(p->frame_dma[3]));
-	frame_reg(p, p->mc + 0x5e4, readl(p->mc + 0x5e4) | BIT(12));
+	frame_reg(p, p->mc + 0x5e4, readl(p->mc + 0x5e4) | BIT(12) |
+		  (frame_bank8 ? BIT(17) : 0));
+	if (frame_format)
+		frame_reg(p, p->mc + 0x920, readl(p->mc + 0x920) | BIT(24));
 	frame_reg(p, p->mv + 0x200, 0);
 	frame_reg(p, p->mv + 0x204, 0);
 	frame_reg(p, p->mv + 0x208, 0);
@@ -610,6 +631,8 @@ static int test_frame(struct fifo_probe *p)
 	p->frame_pipeline[14] = readl(p->vld + 0xfc);
 	p->frame_pipeline[15] = readl(p->vld + 0xec);
 	p->frame_pipeline[16] = readl(p->mc + 0x268);
+	p->frame_pipeline[17] = readl(p->misc + PDN_MODULE2);
+	p->frame_pipeline[18] = readl(p->mc + 0x920);
 	return ret;
 }
 
@@ -628,7 +651,8 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		"\"pipeline\":{\"mc_status\":%u,\"mb_intra\":%u,\"cbp\":%u,\"frame_dct\":%u,"
 		"\"mv_valid\":%u,\"pp_enable\":%u,\"post_writeback\":%u,\"opbuf\":%u,"
 		"\"ddr0\":%u,\"ddr1\":%u,\"ddr3\":%u,\"mc_mode\":%u,\"pp_wrapper_control\":%u,"
-		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u,\"pp_mode\":%u}}\n",
+		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u,\"pp_mode\":%u,"
+		"\"pdn_module2\":%u,\"frame_format\":%u}}\n",
 		p->frame_setup[0], p->frame_setup[1], p->frame_setup[2], p->frame_setup[3],
 		p->frame_setup[4], p->frame_setup[5], p->frame_setup[6], p->frame_setup[7],
 		p->frame_setup[8], p->frame_setup[9], p->frame_setup[10], p->frame_setup[11],
@@ -641,7 +665,7 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		p->frame_pipeline[4], p->frame_pipeline[5], p->frame_pipeline[6], p->frame_pipeline[7],
 		p->frame_pipeline[8], p->frame_pipeline[9], p->frame_pipeline[10], p->frame_pipeline[11],
 		p->frame_pipeline[12], p->frame_pipeline[13], p->frame_pipeline[14], p->frame_pipeline[15],
-		p->frame_pipeline[16]);
+		p->frame_pipeline[16], p->frame_pipeline[17], p->frame_pipeline[18]);
 }
 static DEVICE_ATTR_RO(frame_registers);
 
@@ -650,7 +674,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 	struct fifo_probe *p = dev_get_drvdata(dev);
 	return sysfs_emit(buf,
 		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,\"config_only\":%s,"
-		"\"h264_pp\":%s,\"mc_output\":%s,"
+		"\"h264_pp\":%s,\"mc_output\":%s,\"extended_clocks\":%u,\"bank8\":%s,\"frame_format\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
@@ -665,6 +689,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		frame_config_only ? "true" : "false",
 		frame_h264_pp ? "true" : "false",
 		frame_mc_output ? "true" : "false",
+		extended_clocks, frame_bank8 ? "true" : "false", frame_format ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -727,6 +752,7 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		"\"clock_select_original\":%u,\"clock_select\":%u,"
 		"\"power_down\":%u,\"power_down_programmed\":%u,\"clock_rate\":%lu,"
 		"\"pdn_spec_original\":%u,\"pdn_module_original\":%u,"
+		"\"pdn_module2_original\":%u,\"pdn_module2_after\":%u,\"pdn_module2_restored\":%u,"
 		"\"pdn_spec\":%u,\"pdn_module\":%u,\"larb_mmu\":%u,"
 		"\"fifo_start_before_reset\":%u,\"read_ptr_before_reset\":%u,"
 		"\"dcm_original\":%u,\"dcm_programmed\":%u,"
@@ -757,7 +783,9 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		p->fifo_end_readback, p->read_ptr_readback, p->clock_select_original,
 		p->clock_select, p->power_down, p->power_down_programmed, p->clock_rate,
 		p->pdn_spec_original,
-		p->pdn_module_original, p->pdn_spec, p->pdn_module, p->larb_mmu,
+		p->pdn_module_original, p->pdn_module2_original, p->pdn_module2_after,
+		p->pdn_module2_restored,
+		p->pdn_spec, p->pdn_module, p->larb_mmu,
 		p->fifo_start_before_reset, p->read_ptr_before_reset,
 		p->dcm_original, p->dcm_programmed, p->global_after_fetch[0],
 		p->global_after_fetch[1], p->global_after_fetch[2],
@@ -828,8 +856,10 @@ static int fifo_probe(struct platform_device *pdev)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format)) ||
 	    (frame_flat && frame_pattern))
+		return -EINVAL;
+	if (extended_clocks > 2)
 		return -EINVAL;
 	if (dma_bits < 28 || dma_bits > TEST_DMA_BITS)
 		return -EINVAL;
@@ -905,6 +935,7 @@ static int fifo_probe(struct platform_device *pdev)
 	p->power_down = readl(p->misc);
 	p->pdn_spec_original = readl(p->misc + PDN_SPEC);
 	p->pdn_module_original = readl(p->misc + PDN_MODULE);
+	p->pdn_module2_original = readl(p->misc + PDN_MODULE2);
 	p->auto_pdn_original = readl(p->misc + AUTO_PDN_CONTROL);
 	p->break_original = readl(p->misc + BREAK_CONTROL);
 	p->irq_original = readl(p->misc + IRQ_CONTROL);
@@ -993,6 +1024,7 @@ static int fifo_probe(struct platform_device *pdev)
 	p->after_fetch[0] = readl(p->misc + REG_SELECT);
 	p->after_fetch[1] = readl(p->misc + PDN_SPEC);
 	p->after_fetch[2] = readl(p->misc + PDN_MODULE);
+	p->pdn_module2_after = readl(p->misc + PDN_MODULE2);
 	p->after_fetch[3] = readl(p->misc + AUTO_PDN_CONTROL);
 	p->after_fetch[4] = readl(p->vld + VLD_WRITE_PTR);
 	p->after_fetch[5] = readl(p->avc + AVC_CONTROL);
@@ -1067,6 +1099,11 @@ static int fifo_probe(struct platform_device *pdev)
 	write_reg(p->power_down, p->misc);
 	write_reg(p->pdn_spec_original, p->misc + PDN_SPEC);
 	write_reg(p->pdn_module_original, p->misc + PDN_MODULE);
+	if (extended_clocks)
+		write_reg(p->pdn_module2_original, p->misc + PDN_MODULE2);
+	p->pdn_module2_restored = readl(p->misc + PDN_MODULE2);
+	if (extended_clocks && p->pdn_module2_restored != p->pdn_module2_original)
+		p->result = -EIO;
 	write_reg(p->auto_pdn_original, p->misc + AUTO_PDN_CONTROL);
 	write_reg(p->break_original, p->misc + BREAK_CONTROL);
 	write_reg(p->irq_original & ~BIT(4), p->misc + IRQ_CONTROL);
