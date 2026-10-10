@@ -36,15 +36,27 @@ discovers the decoder but its slice-mode weight control was absent; compliance
 also found missing media bus information/events and discarded colorimetry.
 The next build supplies that control for unweighted pictures, event callbacks,
 matching media bus information and retained output/capture colorimetry.
+Trial 29 validates those corrections: six original ioctl-test pictures and
+fourteen GStreamer pictures match their independent software references. The
+GStreamer tests cover P-skip, explicit motion, patterned intra at 128x96 and
+320x256, and an eight-frame x264 Baseline sequence at 128x96 with changing
+luma/chroma, residual coefficients and chained P pictures. All 57 default
+v4l2-compliance 1.32.0 media/video checks pass without warnings. GStreamer
+1.28.6 discovers the real device and decodes through its unchanged
+`v4l2slh264dec` element. The observer completed capture, status collection and
+normal unload, then failed while composing its final JSON because fixture
+metadata shadowed module metadata; its report is reconstructed offline from
+the preserved results. The raw reporting failure is retained with the trial. Supervisor RTC/system
+checks, accepted recovery and the strict kernel-journal audit also pass.
 
 Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
 I/P pictures, at most one short-term reference and disabled deblocking. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The next build admits widths 64..320 in steps of 16 and
+`V4L2_PIX_FMT_MM21`. The driver admits widths 64..320 in steps of 16 and
 heights 64..256 in steps of 32. Only the seven dimensions above have been tested.
 Its independent coherent allocations are 256 KiB each, with separate 128 KiB
 data and trailing guard regions. GStreamer's initial 320x240 probe can negotiate
-320x256. Real GStreamer decoding is still pending. Queues
+320x256. Real GStreamer decoding is qualified only for the listed trial-29 streams. Queues
 use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
 buffer export is hardware tested at the seven listed dimensions. Completion
 uses a bounded workqueue poll because actual interrupt delivery is unqualified.
@@ -91,3 +103,22 @@ It saves MM21 samples and
 cached hardware status for independent host comparison with
 `../mt6797-vdec/compare-frame.py`. This is an API and hardware qualification
 exerciser; successful compilation alone is not a decode qualification.
+
+The cross-build recipe in `gstreamer-userspace.nix` accepts `buildPkgs` and
+`targetPkgs`, so it does not depend on this workspace path. With the repository's
+pinned nixpkgs and `pkgsCross.aarch64-multiplatform`, it produces the same
+userspace store path exercised in trial 29. The package contains the GStreamer
+CLI, scanner, and a `plugin-path` file naming the core/base/bad plugin directories.
+On a matching experimental candidate, use those files to run a pipeline:
+
+```sh
+export GST_PLUGIN_SYSTEM_PATH_1_0="$(cat "$GST_PACKAGE/plugin-path")"
+export GST_PLUGIN_PATH_1_0=
+export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
+"$GST_PACKAGE/bin/gst-launch-1.0" filesrc location=baseline.h264 \
+  ! h264parse ! v4l2slh264dec ! filesink location=native-mm21.bin
+```
+
+The encoder, interrupt completion, general codec features, larger pictures,
+resolution changes and system suspend remain unqualified. These experimental
+packages and source files do not enable the decoder in the accepted system.

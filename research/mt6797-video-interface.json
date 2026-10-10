@@ -257,7 +257,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "7aa81567-4ea2-4caf-bd78-363fb75d6885",
+      "boot_id": "526c5b25-1fa4-42a3-9b23-c88baa3a18a7",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -15999,9 +15999,522 @@
           "gstreamer_decode_qualified": false,
           "compliance_qualified": false,
           "note": "All 48 original I/P/motion pictures and expected missing-reference rejections pass. GStreamer discovers the registered decoder but S_EXT_CTRLS rejects its always-submitted PRED_WEIGHTS control; zero additional jobs/commands. Compliance has media bus_info, control event and colorimetry failures and is terminated by the 15s test limit during its deliberate 4s-per-queue blocking waits. Driver unload and system/RTC/recovery/strict audit pass."
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-29",
+          "diagnostic": {
+            "passed": true,
+            "geometry_passed": true,
+            "integration_passed": true,
+            "boot_id": "b54f0d26-ed7a-4c0e-9b15-32f7900ab43f",
+            "module_sha256": "93648a8f79c36a2ebf2f5bb9f9c427bc24ae4f8b231ae7a072f48d864ee436d1",
+            "source_sha256": {
+              "v4l2.c": "95a46c21dde169f57e879938944ff7bf588db84db99cd9b6cd1fe66c80fe8a0f",
+              "engine.c": "245400a009cf25488f1c06adae42a1328b35236953d301260147ad859d2d3eba",
+              "engine.h": "290da25621f66e9122b02a438f46375bc8674a470ea5f5c45472ffef7555877c",
+              "controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+              "Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+              "mt6797-h264-controls.c": "702f41b123bba9917a7232f465c8577f982a5879b74340316a5c791756ff5046",
+              "mt6797-h264-controls.h": "27ce05580d562de23f8bdbd1f286ce879fe79a8cfe7c205d67adf997ac4bf9d4",
+              "request-test.c": "e2b768d0a7f68a116fd4a3e41bb9317b301bd45d7b759623a5e8222ba314f454",
+              "pcm64-fixture.h": "a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "index": 0,
+                "width": 64,
+                "height": 64,
+                "mapping": "export",
+                "passed": true,
+                "returncode": 0,
+                "cached": {
+                  "jobs": 7,
+                  "failures": 1,
+                  "result": 0,
+                  "fetched": 1,
+                  "submitted": 1,
+                  "state": 2147483649,
+                  "error": 0,
+                  "message": 0,
+                  "irq": 12289,
+                  "break": 0,
+                  "reset": 0,
+                  "quiesced": 1,
+                  "guards": 1
+                },
+                "statuses": {
+                  "pcm64": {
+                    "jobs": 1,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "pcm64-p": {
+                    "jobs": 2,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "grey64": {
+                    "jobs": 3,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "pattern64": {
+                    "jobs": 4,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "motion-reference": {
+                    "jobs": 6,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "pcm64-motion": {
+                    "jobs": 7,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "missing-reference": {
+                    "jobs": 5,
+                    "failures": 1,
+                    "result": -2,
+                    "fetched": 0,
+                    "submitted": 0,
+                    "state": 0,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 0,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 0,
+                    "guards": 0
+                  }
+                },
+                "comparisons": {
+                  "pcm64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pcm64-p": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "grey64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pattern64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "motion-reference": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pcm64-motion": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                }
+              }
+            ],
+            "integration": {
+              "discovery": {
+                "passed": true,
+                "returncode": 0
+              },
+              "pipelines": [
+                {
+                  "passed": true,
+                  "width": 64,
+                  "height": 64,
+                  "prefix": "pcm64-p",
+                  "returncode": 0,
+                  "output_bytes": 12288,
+                  "before": {
+                    "jobs": 7,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "after": {
+                    "jobs": 9,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                      "stderr": ""
+                    },
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                      "stderr": ""
+                    }
+                  ]
+                },
+                {
+                  "passed": true,
+                  "width": 64,
+                  "height": 64,
+                  "prefix": "pcm64-motion",
+                  "returncode": 0,
+                  "output_bytes": 12288,
+                  "before": {
+                    "jobs": 9,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "after": {
+                    "jobs": 11,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                      "stderr": ""
+                    },
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                      "stderr": ""
+                    }
+                  ]
+                },
+                {
+                  "passed": true,
+                  "width": 128,
+                  "height": 96,
+                  "prefix": "pattern64",
+                  "returncode": 0,
+                  "output_bytes": 18432,
+                  "before": {
+                    "jobs": 11,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "after": {
+                    "jobs": 12,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 18432 decoded sample bytes match; layout=mm21, stride=128, chroma_offset=12288\n",
+                      "stderr": ""
+                    }
+                  ]
+                },
+                {
+                  "passed": true,
+                  "width": 320,
+                  "height": 256,
+                  "prefix": "pattern64",
+                  "returncode": 0,
+                  "output_bytes": 122880,
+                  "before": {
+                    "jobs": 12,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "after": {
+                    "jobs": 13,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "stdout": "PASS: all 122880 decoded sample bytes match; layout=mm21, stride=320, chroma_offset=81920\n",
+                      "stderr": ""
+                    }
+                  ]
+                },
+                {
+                  "passed": true,
+                  "width": 128,
+                  "height": 96,
+                  "prefix": "general-baseline",
+                  "returncode": 0,
+                  "output_bytes": 147456,
+                  "before": {
+                    "jobs": 13,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "after": {
+                    "jobs": 21,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "frame": 0,
+                      "different_samples": 0,
+                      "expected_sha256": "8b7c5003fd5afea8155aec1c1ee5a0d9e765949accc53624abbcd174d7958188",
+                      "actual_sha256": "8b7c5003fd5afea8155aec1c1ee5a0d9e765949accc53624abbcd174d7958188"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 1,
+                      "different_samples": 0,
+                      "expected_sha256": "68486afead747dad05fcfe1772b1006f9176f83a64298063010f67b32095e303",
+                      "actual_sha256": "68486afead747dad05fcfe1772b1006f9176f83a64298063010f67b32095e303"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 2,
+                      "different_samples": 0,
+                      "expected_sha256": "2697a48802dc2729a302cee8b28dbe6746b4cc1f39f8696257ceb2ddfbc9447e",
+                      "actual_sha256": "2697a48802dc2729a302cee8b28dbe6746b4cc1f39f8696257ceb2ddfbc9447e"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 3,
+                      "different_samples": 0,
+                      "expected_sha256": "6793553e69b6faca73dd3381e2f4aee68179248437d7104378ce9284c45ac1d5",
+                      "actual_sha256": "6793553e69b6faca73dd3381e2f4aee68179248437d7104378ce9284c45ac1d5"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 4,
+                      "different_samples": 0,
+                      "expected_sha256": "67961bf9cd2f3637c6f065299e8b3b5505e42c0375e8ef3ce78f2710c5d5b44c",
+                      "actual_sha256": "67961bf9cd2f3637c6f065299e8b3b5505e42c0375e8ef3ce78f2710c5d5b44c"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 5,
+                      "different_samples": 0,
+                      "expected_sha256": "03ac3a53d49d8d5f6a175d00efbe41d50f81c7c5035284994a2b128ae2fee1c3",
+                      "actual_sha256": "03ac3a53d49d8d5f6a175d00efbe41d50f81c7c5035284994a2b128ae2fee1c3"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 6,
+                      "different_samples": 0,
+                      "expected_sha256": "3f7a0b679e432c03336ffb7e2257071780a25b96429b909d97c40307bb14f99c",
+                      "actual_sha256": "3f7a0b679e432c03336ffb7e2257071780a25b96429b909d97c40307bb14f99c"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 7,
+                      "different_samples": 0,
+                      "expected_sha256": "672c6ce6c002dcde52e5ec79ffea7d0c1d92d1e9fa094d689120e0b64420fc33",
+                      "actual_sha256": "672c6ce6c002dcde52e5ec79ffea7d0c1d92d1e9fa094d689120e0b64420fc33"
+                    }
+                  ]
+                }
+              ],
+              "compliance": {
+                "passed": true,
+                "returncode": 0
+              }
+            },
+            "unloaded": true,
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true,
+            "report_reconstructed_from_archived_evidence": true,
+            "observer_reporting_error": "observer-reporting-error.json"
+          },
+          "boot_trial_passed": true,
+          "recovered_boot_id": "526c5b25-1fa4-42a3-9b23-c88baa3a18a7",
+          "final_no_writer": true,
+          "post_recovery_audit": {
+            "result": "passed",
+            "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+            "boot_id": "526c5b25-1fa4-42a3-9b23-c88baa3a18a7",
+            "tainted": 0,
+            "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+            "failed_units": [],
+            "temporary_modules_loaded": false,
+            "temporary_probe_device_present": false,
+            "kernel_fault_patterns_found": [],
+            "evidence": "handoff/video-resource-20261009/final-board-audit.json"
+          },
+          "owned_input_fetch_commands": 20,
+          "owned_frame_commands": 20,
+          "exact_complete_frame_comparisons": 20,
+          "geometry_qualified": true,
+          "gstreamer_decode_qualified": true,
+          "compliance_qualified": true,
+          "note": "Six original ioctl-test pictures and fourteen GStreamer pictures pass all sample comparisons, hardware errors/messages, quiescence and private guards. Real GStreamer discovery plus five pipelines and all 57 default compliance checks pass without warnings. One missing reference is rejected before DMA. Normal unload, RTC/system/recovery and strict journal audit pass. Observer raises a metadata-shadowing KeyError only during final report composition after saved evidence and unload; raw error retained and final summary reconstructed offline without rerunning board commands. This qualifies the tested Baseline subset, not general decoding or encoding."
         }
       ],
-      "note": "Trial28 hardware-qualifies all 48 original I/P skip and explicit motion frames through the Request API across seven tested dimensions including 320x256, with zero errors, complete payload-boundary guards and export/close lifetime. GStreamer discovery passes but frame controls reject missing PRED_WEIGHTS; compliance finds bus-info, control-event and colorimetry issues. Next source adds those API corrections; no weighted pictures are admitted. General/production decoding, IRQ and encoder remain unfinished.",
+      "note": "Trial29 passes real GStreamer decoding for all five tested streams including eight chained Baseline x264 I/P frames; all 57 default media/video compliance checks pass without warnings. Trial28 additionally proves 48 original pictures at seven geometries. Accepted recovery and strict audit pass. Padded coded heights, larger pictures, general codec features, IRQ completion and encoder remain unfinished.",
       "qualified_scope": {
         "public_request_api": true,
         "width": 64,
@@ -16077,15 +16590,63 @@
           "exported_storage_survives_close": true,
           "normal_unload": true,
           "completion": "bounded polling"
+        },
+        "trial29": {
+          "module_sha256": "93648a8f79c36a2ebf2f5bb9f9c427bc24ae4f8b231ae7a072f48d864ee436d1",
+          "native_ioctl_frames": 6,
+          "gstreamer_frames": 14,
+          "all_pixels_exact": true,
+          "zero_decoder_errors": true,
+          "guard_unchanged": true,
+          "normal_unload": true,
+          "completion": "bounded polling",
+          "gstreamer_version": "1.28.6",
+          "v4l2_compliance_version": "1.32.0",
+          "default_compliance_checks": 57,
+          "default_compliance_failures": 0,
+          "default_compliance_warnings": 0,
+          "gstreamer_streams": [
+            {
+              "width": 64,
+              "height": 64,
+              "fixture": "pcm64-p",
+              "frames": 2
+            },
+            {
+              "width": 64,
+              "height": 64,
+              "fixture": "pcm64-motion",
+              "frames": 2
+            },
+            {
+              "width": 128,
+              "height": 96,
+              "fixture": "pattern64",
+              "frames": 1
+            },
+            {
+              "width": 320,
+              "height": 256,
+              "fixture": "pattern64",
+              "frames": 1
+            },
+            {
+              "width": 128,
+              "height": 96,
+              "fixture": "general-baseline",
+              "frames": 8
+            }
+          ],
+          "scope": "Pinned trial29 module; one-slice progressive Baseline CAVLC, no weighting, one short-term reference and disabled deblocking. Original fixtures and eight-frame general x264 sequence only. No encoder or production qualification."
         }
       },
       "last_hardware_build": {
         "build_passed": true,
         "strict_modpost": true,
-        "module_sha256": "ef6140806ebcbc62929d3cfa33d962c584bcce04b1bed0b5ec838fefdd63b0a4",
+        "module_sha256": "93648a8f79c36a2ebf2f5bb9f9c427bc24ae4f8b231ae7a072f48d864ee436d1",
         "vermagic": "7.1.3-gemini-da921x-lkro SMP preempt mod_unload aarch64",
         "source_sha256": {
-          "v4l2.c": "af17971b5b41b1462bab601ce7fb6a4ed09a3c528d0c6ab882b914b1cb82c2e6",
+          "v4l2.c": "95a46c21dde169f57e879938944ff7bf588db84db99cd9b6cd1fe66c80fe8a0f",
           "engine.c": "245400a009cf25488f1c06adae42a1328b35236953d301260147ad859d2d3eba",
           "engine.h": "290da25621f66e9122b02a438f46375bc8674a470ea5f5c45472ffef7555877c",
           "controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
@@ -16217,6 +16778,87 @@
         "compliance": {
           "passed": false,
           "returncode": 143
+        }
+      },
+      "last_hardware_trial": "handoff/boot-test-video-frame-29",
+      "discovery_qualified": true,
+      "decoding_qualified_scope": {
+        "module_sha256": "93648a8f79c36a2ebf2f5bb9f9c427bc24ae4f8b231ae7a072f48d864ee436d1",
+        "native_ioctl_frames": 6,
+        "gstreamer_frames": 14,
+        "all_pixels_exact": true,
+        "zero_decoder_errors": true,
+        "guard_unchanged": true,
+        "normal_unload": true,
+        "completion": "bounded polling",
+        "gstreamer_version": "1.28.6",
+        "v4l2_compliance_version": "1.32.0",
+        "default_compliance_checks": 57,
+        "default_compliance_failures": 0,
+        "default_compliance_warnings": 0,
+        "gstreamer_streams": [
+          {
+            "width": 64,
+            "height": 64,
+            "fixture": "pcm64-p",
+            "frames": 2
+          },
+          {
+            "width": 64,
+            "height": 64,
+            "fixture": "pcm64-motion",
+            "frames": 2
+          },
+          {
+            "width": 128,
+            "height": 96,
+            "fixture": "pattern64",
+            "frames": 1
+          },
+          {
+            "width": 320,
+            "height": 256,
+            "fixture": "pattern64",
+            "frames": 1
+          },
+          {
+            "width": 128,
+            "height": 96,
+            "fixture": "general-baseline",
+            "frames": 8
+          }
+        ],
+        "scope": "Pinned trial29 module; one-slice progressive Baseline CAVLC, no weighting, one short-term reference and disabled deblocking. Original fixtures and eight-frame general x264 sequence only. No encoder or production qualification."
+      },
+      "portable_expression": "research/mt6797-vdec-v4l2/gstreamer-userspace.nix",
+      "portable_expression_sha256": "064e12b2a88221748833b5d1b3ead307bd38ddbadfbc589e87d8a303c0f814c4",
+      "portable_expression_reproduces_qualified_store_path": true,
+      "build": {
+        "packages": [
+          "/nix/store/n39wrva3ryzpkyzkfxwbhhhj0mb3z7ng-gemini-video-gstreamer-userspace",
+          "/nix/store/1xs251z3ylnvk1qzzhxrxs662g9w0qz3-v4l-utils-aarch64-unknown-linux-gnu-1.32.0"
+        ],
+        "gstreamer_version": "1.28.6",
+        "v4l_utils_version": "1.32.0",
+        "gstreamer_expression_sha256": "1ab48c7e8cb2395656ff635590688f47d6103c64e5960dfa433116965a2b7552",
+        "hardware_tested": false,
+        "source_archives": {
+          "gstreamer-1.28.6": {
+            "path": "/nix/store/p90qp6vslbvsmqzhapwndn6il77myq8f-gstreamer-1.28.6.tar.xz",
+            "sha256": "62b6b9f0ad3147a6dd6420ac64a91180b14e990695bddd353b96041611d052ca"
+          },
+          "gst-plugins-base-1.28.6": {
+            "path": "/nix/store/2j40048xrwyqqahxk0633dfqpr42jdvy-gst-plugins-base-1.28.6.tar.xz",
+            "sha256": "0ba699c7c6c66f4ba640be78cb38a24715add9683f3e3a199f5369dc5a4f04ac"
+          },
+          "gst-plugins-bad-1.28.6": {
+            "path": "/nix/store/3wy905a3s15scd9lbpz81593k7z9phlr-gst-plugins-bad-1.28.6.tar.xz",
+            "sha256": "6636f2c2289ceda52c4aba971338c81e2b5780d3381bd3673c1c116ec87587c3"
+          },
+          "v4l-utils-1.32.0": {
+            "path": "/nix/store/0qara7fcjh83pdmj3bjbf0q29d32fm8p-v4l-utils-1.32.0.tar.xz",
+            "sha256": "6828828a17775526eb93fb258a9294d1d1073d633c344dd71ecd4e7a1ffb7dfc"
+          }
         }
       }
     }
