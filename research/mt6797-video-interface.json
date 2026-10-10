@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original GPL firmware-free V4L2 stateless Baseline/Main decoder qualifies listed SD/HD I/P streams through1920x1088 coded/1080visible. Cached private DMA has explicit ownership/lazy geometry allocation. Trial44 passes97exact pictures including two32-picture1080p25fps native/four-thread queuedI420 samples with validtimestamps/clockwaits/zero drops, concurrent16/all57media;RTCdelivery-before duplicateIRQcount2fails fullprofile;acceptedrecovery/audit pass. Historical42/43conversiondrops retained. Encoder frame contract, broadcodec/IRQ/production/sustainedthermalplayback remain unfinished.",
+  "implementation_status": "Original GPL firmware-free V4L2 stateless Baseline/Main decoder qualifies listed SD/HD I/P streams through1920x1088 coded/1080visible. Cached DMA has explicit ownership/lazy geometry allocation. Trial45 repeats97exact pictures including two32-picture1080p25fps native/four-thread I420 samples with validtimestamps/clockwaits/zero drops, concurrent16/all57media/fullRTC/system/recovery/auditPASS. Prior44RTCIRQdelta2 and38miss/40openallocation/42-43conversiondrops retained. Encoder frame contract, broadcodec/IRQ/production/sustainedthermalplayback unfinished.",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -315,7 +315,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "3613b34b-a0db-4007-a2d8-ee33360e53ba",
+      "boot_id": "6b19e02e-8a27-4cd0-862a-b59ac391dc1a",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -41205,9 +41205,2493 @@
           "default_compliance_checks": 57,
           "default_compliance_failures": 0,
           "note": "Native MM21 and four-thread queuedI420 each qualify32-picture1080p25fps short samples: everytimestamp/sample exact, realclock waits,32rendered/0dropped. Nativefault/recovery/Baseline/concurrent16/all57media/normalunload pass. SeparateRTCdelivery-before count2fails exactonecheck;acceptedrecovery/strictaudit pass;cause notestablished. Prior42/43one-thread conversion failures retained; no sustainedthermal/generalcodec/IRQ/encoder/production qualification."
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-45",
+          "diagnostic": {
+            "passed": true,
+            "encoder_resource_probe": {
+              "passed": true,
+              "attempted": true,
+              "module_sha256": "92a6b28093589f5d5c8c7b12a78b13ac9dfa41ee7894bfedf507cc294d6bd296",
+              "insmod_returncode": 0,
+              "snapshot": {
+                "schema": 1,
+                "dma_started": false,
+                "encode_started": false,
+                "encoder_registers_written": false,
+                "power_vote_released": true,
+                "engine_hz": 325000000,
+                "bus_hz": 325000000,
+                "clock_status": 17,
+                "chip_enable": 0,
+                "dcm_control": 1,
+                "clock_control": 4294967295,
+                "result": 0
+              },
+              "normal_unload": true,
+              "encode_qualified": false
+            },
+            "geometry_passed": true,
+            "integration_passed": true,
+            "boot_id": "b85123f7-a45c-42e4-8a76-473f2d74418b",
+            "module_sha256": "97ae6106396dc3bda9816a94a25746ab19005d3ff9ddc2f27c96be8c870cd824",
+            "source_sha256": {
+              "v4l2.c": "63da116d74d31b78a30b58590450db0b32458262fefc805924f13b0fe72198cc",
+              "engine.c": "65b5e03992676d357966d20987a1faed57cc55be5d1bf0192bb870dfb260fa04",
+              "engine.h": "aec5f881a21ef20306545e8e634b3dda6a5df053e85024cc8e6428895ef52185",
+              "controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+              "Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+              "mt6797-h264-controls.c": "702f41b123bba9917a7232f465c8577f982a5879b74340316a5c791756ff5046",
+              "mt6797-h264-controls.h": "27ce05580d562de23f8bdbd1f286ce879fe79a8cfe7c205d67adf997ac4bf9d4",
+              "request-test.c": "b974abd8d5271f2202b482732c51b41da739b132e44668cfb15460e478e5beb3",
+              "pcm64-fixture.h": "a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "index": 0,
+                "width": 64,
+                "height": 64,
+                "mapping": "export",
+                "passed": true,
+                "returncode": 0,
+                "cached": {
+                  "jobs": 12,
+                  "failures": 3,
+                  "result": 0,
+                  "fetched": 1,
+                  "submitted": 1,
+                  "state": 2147483649,
+                  "error": 0,
+                  "message": 0,
+                  "irq": 12289,
+                  "break": 0,
+                  "reset": 0,
+                  "quiesced": 1,
+                  "guards": 1,
+                  "engine_result": 0,
+                  "elapsed_us": 6572,
+                  "nal_bytes": 5,
+                  "header_bits": 26,
+                  "mbx": 3,
+                  "mby": 3,
+                  "stall": 513,
+                  "read_pointer": 266338304,
+                  "fetch_status": 2065,
+                  "top_status": 0,
+                  "pred_config": 2147483648,
+                  "pred_mode": 3,
+                  "tail_bit_offset": 0,
+                  "tail_word": 0,
+                  "cabac_tail_valid": 0
+                },
+                "statuses": {
+                  "pcm64": {
+                    "jobs": 1,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3758,
+                    "nal_bytes": 6180,
+                    "header_bits": 28,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "pcm64-p": {
+                    "jobs": 2,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3047,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "grey64": {
+                    "jobs": 3,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3410,
+                    "nal_bytes": 20,
+                    "header_bits": 28,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "pattern64": {
+                    "jobs": 4,
+                    "failures": 0,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 2763,
+                    "nal_bytes": 27,
+                    "header_bits": 38,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "motion-reference": {
+                    "jobs": 6,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3370,
+                    "nal_bytes": 6180,
+                    "header_bits": 28,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "pcm64-motion": {
+                    "jobs": 7,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 2997,
+                    "nal_bytes": 15,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "missing-reference": {
+                    "jobs": 5,
+                    "failures": 1,
+                    "result": -2,
+                    "fetched": 0,
+                    "submitted": 0,
+                    "state": 0,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 0,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 0,
+                    "guards": 0,
+                    "engine_result": -2,
+                    "elapsed_us": 17,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 0,
+                    "mby": 0,
+                    "stall": 0,
+                    "read_pointer": 0,
+                    "fetch_status": 0,
+                    "top_status": 0,
+                    "pred_config": 0,
+                    "pred_mode": 0,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "fault-pcm": {
+                    "jobs": 8,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3543,
+                    "nal_bytes": 6180,
+                    "header_bits": 28,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "fault-pskip": {
+                    "jobs": 9,
+                    "failures": 1,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3025,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "fault-truncated": {
+                    "jobs": 10,
+                    "failures": 2,
+                    "result": -110,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 1,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 4097,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": -110,
+                    "elapsed_us": 1005058,
+                    "nal_bytes": 32,
+                    "header_bits": 28,
+                    "mbx": 0,
+                    "mby": 0,
+                    "stall": 234881537,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "fault-stale": {
+                    "jobs": 11,
+                    "failures": 3,
+                    "result": -2,
+                    "fetched": 0,
+                    "submitted": 0,
+                    "state": 0,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 0,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 0,
+                    "guards": 0,
+                    "engine_result": -2,
+                    "elapsed_us": 34,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 0,
+                    "mby": 0,
+                    "stall": 0,
+                    "read_pointer": 0,
+                    "fetch_status": 0,
+                    "top_status": 0,
+                    "pred_config": 0,
+                    "pred_mode": 0,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "fault-retained": {
+                    "jobs": 12,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 6572,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  }
+                },
+                "comparisons": {
+                  "pcm64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pcm64-p": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "grey64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pattern64": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "motion-reference": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "pcm64-motion": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "fault-pcm": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "fault-pskip": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "fault-retained": {
+                    "passed": true,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                }
+              }
+            ],
+            "integration": {
+              "discovery": {
+                "passed": true,
+                "returncode": 0
+              },
+              "pipelines": [
+                {
+                  "passed": true,
+                  "width": 64,
+                  "height": 80,
+                  "storage_height": 96,
+                  "prefix": "general-baseline-deblocked",
+                  "returncode": 0,
+                  "output_bytes": 73728,
+                  "before": {
+                    "jobs": 12,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 6572,
+                    "nal_bytes": 5,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 3,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "after": {
+                    "jobs": 20,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3259,
+                    "nal_bytes": 67,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 4,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "frame": 0,
+                      "different_samples": 0,
+                      "expected_sha256": "91c14dfc0b37ef10271749b4de85772a87d6a6ef316ab482aa491cf88dd1a3e7",
+                      "actual_sha256": "91c14dfc0b37ef10271749b4de85772a87d6a6ef316ab482aa491cf88dd1a3e7"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 1,
+                      "different_samples": 0,
+                      "expected_sha256": "dc281b9fa24ef4f02570e98246e1bd8a46291b3bc995147493eb3a55e5c7ec17",
+                      "actual_sha256": "dc281b9fa24ef4f02570e98246e1bd8a46291b3bc995147493eb3a55e5c7ec17"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 2,
+                      "different_samples": 0,
+                      "expected_sha256": "07370b8e4513a88c1566dcff3660aab8cf312fbb548ba98b746f85daf913da54",
+                      "actual_sha256": "07370b8e4513a88c1566dcff3660aab8cf312fbb548ba98b746f85daf913da54"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 3,
+                      "different_samples": 0,
+                      "expected_sha256": "d9d33ecaec2aa80a47357d88438cceb2f62f4fa120fd0a33316230cd6dd417d3",
+                      "actual_sha256": "d9d33ecaec2aa80a47357d88438cceb2f62f4fa120fd0a33316230cd6dd417d3"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 4,
+                      "different_samples": 0,
+                      "expected_sha256": "8d36c7a24ae39f2eb9c21354e62823fdf777b89eef8158a762451e10e7ece9ae",
+                      "actual_sha256": "8d36c7a24ae39f2eb9c21354e62823fdf777b89eef8158a762451e10e7ece9ae"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 5,
+                      "different_samples": 0,
+                      "expected_sha256": "1c26d283ea01ab8fe90640e67a0e6b4bc800bda5d12ba47f85c6adf5e0b8380b",
+                      "actual_sha256": "1c26d283ea01ab8fe90640e67a0e6b4bc800bda5d12ba47f85c6adf5e0b8380b"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 6,
+                      "different_samples": 0,
+                      "expected_sha256": "17dfa943cb14c732eb53d2d7a772a5e0643fd974331286c2674f23d50ecd7ab0",
+                      "actual_sha256": "17dfa943cb14c732eb53d2d7a772a5e0643fd974331286c2674f23d50ecd7ab0"
+                    },
+                    {
+                      "passed": true,
+                      "frame": 7,
+                      "different_samples": 0,
+                      "expected_sha256": "64e7c92d5ecb15f88ab38b4a36f7f596aaaf86ce0f286e37fd53cbf3b625e7bb",
+                      "actual_sha256": "64e7c92d5ecb15f88ab38b4a36f7f596aaaf86ce0f286e37fd53cbf3b625e7bb"
+                    }
+                  ],
+                  "intentional_malformed": false
+                }
+              ],
+              "dynamic_pipelines": [
+                {
+                  "passed": true,
+                  "label": "clocked-native-mm21-1080-long",
+                  "returncode": 0,
+                  "output_bytes": 100270080,
+                  "expected_bytes": 100270080,
+                  "frames": 32,
+                  "before": {
+                    "jobs": 20,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 3259,
+                    "nal_bytes": 67,
+                    "header_bits": 26,
+                    "mbx": 3,
+                    "mby": 4,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "after": {
+                    "jobs": 52,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 18181,
+                    "nal_bytes": 50306,
+                    "header_bits": 27,
+                    "mbx": 119,
+                    "mby": 67,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "segments": [
+                    {
+                      "width": 1920,
+                      "height": 1080,
+                      "frames": 32
+                    }
+                  ],
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 0,
+                      "different_samples": 0,
+                      "expected_sha256": "9db7a2b09d484fece50bc328f1ad7b9fdb785a64495c06d501eaa5e7f394b499",
+                      "actual_sha256": "9db7a2b09d484fece50bc328f1ad7b9fdb785a64495c06d501eaa5e7f394b499"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 1,
+                      "different_samples": 0,
+                      "expected_sha256": "218f33864d3c6081394d8ea0a353fb6fc58a37b5b330f447ce7f987ea38616e6",
+                      "actual_sha256": "218f33864d3c6081394d8ea0a353fb6fc58a37b5b330f447ce7f987ea38616e6"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 2,
+                      "different_samples": 0,
+                      "expected_sha256": "3fff778c16cc59cdef1c6903a6cf90a1bf2aa5234fee1a525474b07f6315db94",
+                      "actual_sha256": "3fff778c16cc59cdef1c6903a6cf90a1bf2aa5234fee1a525474b07f6315db94"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 3,
+                      "different_samples": 0,
+                      "expected_sha256": "814a2f0bda09d7b6bf03044d2e0893287025f86e02b92351d6870a73863808aa",
+                      "actual_sha256": "814a2f0bda09d7b6bf03044d2e0893287025f86e02b92351d6870a73863808aa"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 4,
+                      "different_samples": 0,
+                      "expected_sha256": "13afe685883f26049abeaa0736e49bd70cdbbd7676c7b490f1cd43021cf079a3",
+                      "actual_sha256": "13afe685883f26049abeaa0736e49bd70cdbbd7676c7b490f1cd43021cf079a3"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 5,
+                      "different_samples": 0,
+                      "expected_sha256": "28dc2bc12a9d186226aac85629df5557e4e556687e3daeff3b0eb4a9d7bbe633",
+                      "actual_sha256": "28dc2bc12a9d186226aac85629df5557e4e556687e3daeff3b0eb4a9d7bbe633"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 6,
+                      "different_samples": 0,
+                      "expected_sha256": "a687d853cba07d3a6c6c327ad92c1e1608237cf4796923c9028b36a75507e4ab",
+                      "actual_sha256": "a687d853cba07d3a6c6c327ad92c1e1608237cf4796923c9028b36a75507e4ab"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 7,
+                      "different_samples": 0,
+                      "expected_sha256": "e5a4e05a5738424cd9e611b49420da6f5eefe998b35da2aa1d2e1bc72a4c2129",
+                      "actual_sha256": "e5a4e05a5738424cd9e611b49420da6f5eefe998b35da2aa1d2e1bc72a4c2129"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 8,
+                      "different_samples": 0,
+                      "expected_sha256": "06c3321acb5280ea626abe0c2e49efcd35dc9f5f8ca25c19ba686f22464dbe32",
+                      "actual_sha256": "06c3321acb5280ea626abe0c2e49efcd35dc9f5f8ca25c19ba686f22464dbe32"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 9,
+                      "different_samples": 0,
+                      "expected_sha256": "0dcbe86d64f3b76a4596200379eab17a9c84cdb52454cbf989fb29ffbf548e96",
+                      "actual_sha256": "0dcbe86d64f3b76a4596200379eab17a9c84cdb52454cbf989fb29ffbf548e96"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 10,
+                      "different_samples": 0,
+                      "expected_sha256": "1065f81a9d9b502121dcd7f9daeafd0eac36f2e6b471b91a53040af351a788e5",
+                      "actual_sha256": "1065f81a9d9b502121dcd7f9daeafd0eac36f2e6b471b91a53040af351a788e5"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 11,
+                      "different_samples": 0,
+                      "expected_sha256": "24497489be7a96637aba5258ec3d0c84ff968c9c251dc11eb53ba314955beeb2",
+                      "actual_sha256": "24497489be7a96637aba5258ec3d0c84ff968c9c251dc11eb53ba314955beeb2"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 12,
+                      "different_samples": 0,
+                      "expected_sha256": "4833faca24fcdc494db47d4c204aadd44f5e78149dcf559245aee37b6724a510",
+                      "actual_sha256": "4833faca24fcdc494db47d4c204aadd44f5e78149dcf559245aee37b6724a510"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 13,
+                      "different_samples": 0,
+                      "expected_sha256": "cf335cbc75016be259343375c4afe8fecebb71a3435965b6a0c0a46162863101",
+                      "actual_sha256": "cf335cbc75016be259343375c4afe8fecebb71a3435965b6a0c0a46162863101"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 14,
+                      "different_samples": 0,
+                      "expected_sha256": "1f73170ed3b81d85b39637f81c69775d0632c349a05ad5598c71e508e5b445ac",
+                      "actual_sha256": "1f73170ed3b81d85b39637f81c69775d0632c349a05ad5598c71e508e5b445ac"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 15,
+                      "different_samples": 0,
+                      "expected_sha256": "0d7b35a3b640b1792dd529e2eadc95279af3621234b453274a725cfcd11c2392",
+                      "actual_sha256": "0d7b35a3b640b1792dd529e2eadc95279af3621234b453274a725cfcd11c2392"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 16,
+                      "different_samples": 0,
+                      "expected_sha256": "5c64faaa824bb8bc30314bd75fee6c330f03957055eb8ab0a9f16651e812e213",
+                      "actual_sha256": "5c64faaa824bb8bc30314bd75fee6c330f03957055eb8ab0a9f16651e812e213"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 17,
+                      "different_samples": 0,
+                      "expected_sha256": "94cf8159ec555357a3bde97cf00aae91e1635e83aa0b3b388885dc7136a99a48",
+                      "actual_sha256": "94cf8159ec555357a3bde97cf00aae91e1635e83aa0b3b388885dc7136a99a48"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 18,
+                      "different_samples": 0,
+                      "expected_sha256": "2c409d6ca760a12fc3ba077c235356b613dfaae33466c5a66c6b6861b3d7c8fb",
+                      "actual_sha256": "2c409d6ca760a12fc3ba077c235356b613dfaae33466c5a66c6b6861b3d7c8fb"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 19,
+                      "different_samples": 0,
+                      "expected_sha256": "83837cd0fd59862350c553db6f5376f64bb0af4f5477a9d811170cf446974459",
+                      "actual_sha256": "83837cd0fd59862350c553db6f5376f64bb0af4f5477a9d811170cf446974459"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 20,
+                      "different_samples": 0,
+                      "expected_sha256": "287ccf5d8b9aeae54761232ead44c27d8cb88f2b0a43ced68059f940cf6d9a31",
+                      "actual_sha256": "287ccf5d8b9aeae54761232ead44c27d8cb88f2b0a43ced68059f940cf6d9a31"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 21,
+                      "different_samples": 0,
+                      "expected_sha256": "3455ac574399bae689303f7a56dbc4f705a0d736bef36ef8209f39d47ac06d0a",
+                      "actual_sha256": "3455ac574399bae689303f7a56dbc4f705a0d736bef36ef8209f39d47ac06d0a"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 22,
+                      "different_samples": 0,
+                      "expected_sha256": "d3df07aab5e8397fd296c6887fa6f0fae250bfa4dab8af79af7d24c97b3c7446",
+                      "actual_sha256": "d3df07aab5e8397fd296c6887fa6f0fae250bfa4dab8af79af7d24c97b3c7446"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 23,
+                      "different_samples": 0,
+                      "expected_sha256": "47d83dfea1c358f0b2c5d7ac59fb0467ddb250483d01074234e68b9a6f002cd3",
+                      "actual_sha256": "47d83dfea1c358f0b2c5d7ac59fb0467ddb250483d01074234e68b9a6f002cd3"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 24,
+                      "different_samples": 0,
+                      "expected_sha256": "9d845545f21e21cec73acf2f48047eea1a268ddccf6237827cbd1e759b2bbbae",
+                      "actual_sha256": "9d845545f21e21cec73acf2f48047eea1a268ddccf6237827cbd1e759b2bbbae"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 25,
+                      "different_samples": 0,
+                      "expected_sha256": "d80b5f468d6cfd7eed0007a50685df00ea30d28b54bcfd7ce06accf406a39e02",
+                      "actual_sha256": "d80b5f468d6cfd7eed0007a50685df00ea30d28b54bcfd7ce06accf406a39e02"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 26,
+                      "different_samples": 0,
+                      "expected_sha256": "ea3273a099b34b20fe38411353c60ea24302bc634a9181720857aa1c935d6a57",
+                      "actual_sha256": "ea3273a099b34b20fe38411353c60ea24302bc634a9181720857aa1c935d6a57"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 27,
+                      "different_samples": 0,
+                      "expected_sha256": "aa347defd6075dc325057cfc339de048fe2316fc50f1c8c558082bdedb997c0d",
+                      "actual_sha256": "aa347defd6075dc325057cfc339de048fe2316fc50f1c8c558082bdedb997c0d"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 28,
+                      "different_samples": 0,
+                      "expected_sha256": "5d1219ced6c88804dfb16315d4089ebb2bd83ba54fcca0bfa64bb3223edad0c4",
+                      "actual_sha256": "5d1219ced6c88804dfb16315d4089ebb2bd83ba54fcca0bfa64bb3223edad0c4"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 29,
+                      "different_samples": 0,
+                      "expected_sha256": "834efec4b645baaf73b5819276bb90ce4e4dc705ce37653b3332f96608733773",
+                      "actual_sha256": "834efec4b645baaf73b5819276bb90ce4e4dc705ce37653b3332f96608733773"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 30,
+                      "different_samples": 0,
+                      "expected_sha256": "ff71a0070aa0ed3e7135e42fb7fe6c67c98cd100d24317c78d0972a9923a1713",
+                      "actual_sha256": "ff71a0070aa0ed3e7135e42fb7fe6c67c98cd100d24317c78d0972a9923a1713"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 31,
+                      "different_samples": 0,
+                      "expected_sha256": "a2690049a86aa01e43786e8772ada5bd6d45251daba0f86662eaf8d9c03e1a63",
+                      "actual_sha256": "a2690049a86aa01e43786e8772ada5bd6d45251daba0f86662eaf8d9c03e1a63"
+                    }
+                  ],
+                  "output_format": "MM21",
+                  "clocked_output": {
+                    "passed": true,
+                    "framerate": [
+                      25,
+                      1
+                    ],
+                    "sync": true,
+                    "qos": true,
+                    "max_lateness_ns": 20000000,
+                    "required_buffer_timestamps_ns": [
+                      0,
+                      40000000,
+                      80000000,
+                      120000000,
+                      160000000,
+                      200000000,
+                      240000000,
+                      280000000,
+                      320000000,
+                      360000000,
+                      400000000,
+                      440000000,
+                      480000000,
+                      520000000,
+                      560000000,
+                      600000000,
+                      640000000,
+                      680000000,
+                      720000000,
+                      760000000,
+                      800000000,
+                      840000000,
+                      880000000,
+                      920000000,
+                      960000000,
+                      1000000000,
+                      1040000000,
+                      1080000000,
+                      1120000000,
+                      1160000000,
+                      1200000000,
+                      1240000000
+                    ],
+                    "observed_times": [
+                      [
+                        0,
+                        1
+                      ],
+                      [
+                        40000000,
+                        1
+                      ],
+                      [
+                        80000000,
+                        1
+                      ],
+                      [
+                        120000000,
+                        1
+                      ],
+                      [
+                        160000000,
+                        1
+                      ],
+                      [
+                        200000000,
+                        1
+                      ],
+                      [
+                        240000000,
+                        1
+                      ],
+                      [
+                        280000000,
+                        1
+                      ],
+                      [
+                        320000000,
+                        1
+                      ],
+                      [
+                        360000000,
+                        1
+                      ],
+                      [
+                        400000000,
+                        1
+                      ],
+                      [
+                        440000000,
+                        1
+                      ],
+                      [
+                        480000000,
+                        1
+                      ],
+                      [
+                        520000000,
+                        1
+                      ],
+                      [
+                        560000000,
+                        1
+                      ],
+                      [
+                        600000000,
+                        1
+                      ],
+                      [
+                        640000000,
+                        1
+                      ],
+                      [
+                        680000000,
+                        1
+                      ],
+                      [
+                        720000000,
+                        1
+                      ],
+                      [
+                        760000000,
+                        1
+                      ],
+                      [
+                        800000000,
+                        1
+                      ],
+                      [
+                        840000000,
+                        1
+                      ],
+                      [
+                        880000000,
+                        1
+                      ],
+                      [
+                        920000000,
+                        1
+                      ],
+                      [
+                        960000000,
+                        1
+                      ],
+                      [
+                        1000000000,
+                        1
+                      ],
+                      [
+                        1040000000,
+                        1
+                      ],
+                      [
+                        1080000000,
+                        1
+                      ],
+                      [
+                        1120000000,
+                        1
+                      ],
+                      [
+                        1160000000,
+                        1
+                      ],
+                      [
+                        1200000000,
+                        1
+                      ],
+                      [
+                        1240000000,
+                        1
+                      ]
+                    ],
+                    "rendered_dropped": [
+                      [
+                        "32",
+                        "0"
+                      ]
+                    ],
+                    "clock_returns": [
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                    "conversion_thread_queue_buffers": 0,
+                    "converter_threads": 0
+                  }
+                },
+                {
+                  "passed": true,
+                  "label": "clocked-queued-i420-1080-long",
+                  "returncode": 0,
+                  "output_bytes": 99532800,
+                  "expected_bytes": 99532800,
+                  "frames": 32,
+                  "before": {
+                    "jobs": 52,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 18181,
+                    "nal_bytes": 50306,
+                    "header_bits": 27,
+                    "mbx": 119,
+                    "mby": 67,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "after": {
+                    "jobs": 84,
+                    "failures": 3,
+                    "result": 0,
+                    "fetched": 1,
+                    "submitted": 1,
+                    "state": 2147483649,
+                    "error": 0,
+                    "message": 0,
+                    "irq": 12289,
+                    "break": 0,
+                    "reset": 0,
+                    "quiesced": 1,
+                    "guards": 1,
+                    "engine_result": 0,
+                    "elapsed_us": 16428,
+                    "nal_bytes": 50306,
+                    "header_bits": 27,
+                    "mbx": 119,
+                    "mby": 67,
+                    "stall": 513,
+                    "read_pointer": 266338304,
+                    "fetch_status": 2065,
+                    "top_status": 0,
+                    "pred_config": 2147483648,
+                    "pred_mode": 3,
+                    "tail_bit_offset": 0,
+                    "tail_word": 0,
+                    "cabac_tail_valid": 0
+                  },
+                  "segments": [
+                    {
+                      "width": 1920,
+                      "height": 1080,
+                      "frames": 32
+                    }
+                  ],
+                  "comparisons": [
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 0,
+                      "different_samples": 0,
+                      "expected_sha256": "9db7a2b09d484fece50bc328f1ad7b9fdb785a64495c06d501eaa5e7f394b499",
+                      "actual_sha256": "9db7a2b09d484fece50bc328f1ad7b9fdb785a64495c06d501eaa5e7f394b499"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 1,
+                      "different_samples": 0,
+                      "expected_sha256": "218f33864d3c6081394d8ea0a353fb6fc58a37b5b330f447ce7f987ea38616e6",
+                      "actual_sha256": "218f33864d3c6081394d8ea0a353fb6fc58a37b5b330f447ce7f987ea38616e6"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 2,
+                      "different_samples": 0,
+                      "expected_sha256": "3fff778c16cc59cdef1c6903a6cf90a1bf2aa5234fee1a525474b07f6315db94",
+                      "actual_sha256": "3fff778c16cc59cdef1c6903a6cf90a1bf2aa5234fee1a525474b07f6315db94"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 3,
+                      "different_samples": 0,
+                      "expected_sha256": "814a2f0bda09d7b6bf03044d2e0893287025f86e02b92351d6870a73863808aa",
+                      "actual_sha256": "814a2f0bda09d7b6bf03044d2e0893287025f86e02b92351d6870a73863808aa"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 4,
+                      "different_samples": 0,
+                      "expected_sha256": "13afe685883f26049abeaa0736e49bd70cdbbd7676c7b490f1cd43021cf079a3",
+                      "actual_sha256": "13afe685883f26049abeaa0736e49bd70cdbbd7676c7b490f1cd43021cf079a3"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 5,
+                      "different_samples": 0,
+                      "expected_sha256": "28dc2bc12a9d186226aac85629df5557e4e556687e3daeff3b0eb4a9d7bbe633",
+                      "actual_sha256": "28dc2bc12a9d186226aac85629df5557e4e556687e3daeff3b0eb4a9d7bbe633"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 6,
+                      "different_samples": 0,
+                      "expected_sha256": "a687d853cba07d3a6c6c327ad92c1e1608237cf4796923c9028b36a75507e4ab",
+                      "actual_sha256": "a687d853cba07d3a6c6c327ad92c1e1608237cf4796923c9028b36a75507e4ab"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 7,
+                      "different_samples": 0,
+                      "expected_sha256": "e5a4e05a5738424cd9e611b49420da6f5eefe998b35da2aa1d2e1bc72a4c2129",
+                      "actual_sha256": "e5a4e05a5738424cd9e611b49420da6f5eefe998b35da2aa1d2e1bc72a4c2129"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 8,
+                      "different_samples": 0,
+                      "expected_sha256": "06c3321acb5280ea626abe0c2e49efcd35dc9f5f8ca25c19ba686f22464dbe32",
+                      "actual_sha256": "06c3321acb5280ea626abe0c2e49efcd35dc9f5f8ca25c19ba686f22464dbe32"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 9,
+                      "different_samples": 0,
+                      "expected_sha256": "0dcbe86d64f3b76a4596200379eab17a9c84cdb52454cbf989fb29ffbf548e96",
+                      "actual_sha256": "0dcbe86d64f3b76a4596200379eab17a9c84cdb52454cbf989fb29ffbf548e96"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 10,
+                      "different_samples": 0,
+                      "expected_sha256": "1065f81a9d9b502121dcd7f9daeafd0eac36f2e6b471b91a53040af351a788e5",
+                      "actual_sha256": "1065f81a9d9b502121dcd7f9daeafd0eac36f2e6b471b91a53040af351a788e5"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 11,
+                      "different_samples": 0,
+                      "expected_sha256": "24497489be7a96637aba5258ec3d0c84ff968c9c251dc11eb53ba314955beeb2",
+                      "actual_sha256": "24497489be7a96637aba5258ec3d0c84ff968c9c251dc11eb53ba314955beeb2"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 12,
+                      "different_samples": 0,
+                      "expected_sha256": "4833faca24fcdc494db47d4c204aadd44f5e78149dcf559245aee37b6724a510",
+                      "actual_sha256": "4833faca24fcdc494db47d4c204aadd44f5e78149dcf559245aee37b6724a510"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 13,
+                      "different_samples": 0,
+                      "expected_sha256": "cf335cbc75016be259343375c4afe8fecebb71a3435965b6a0c0a46162863101",
+                      "actual_sha256": "cf335cbc75016be259343375c4afe8fecebb71a3435965b6a0c0a46162863101"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 14,
+                      "different_samples": 0,
+                      "expected_sha256": "1f73170ed3b81d85b39637f81c69775d0632c349a05ad5598c71e508e5b445ac",
+                      "actual_sha256": "1f73170ed3b81d85b39637f81c69775d0632c349a05ad5598c71e508e5b445ac"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 15,
+                      "different_samples": 0,
+                      "expected_sha256": "0d7b35a3b640b1792dd529e2eadc95279af3621234b453274a725cfcd11c2392",
+                      "actual_sha256": "0d7b35a3b640b1792dd529e2eadc95279af3621234b453274a725cfcd11c2392"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 16,
+                      "different_samples": 0,
+                      "expected_sha256": "5c64faaa824bb8bc30314bd75fee6c330f03957055eb8ab0a9f16651e812e213",
+                      "actual_sha256": "5c64faaa824bb8bc30314bd75fee6c330f03957055eb8ab0a9f16651e812e213"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 17,
+                      "different_samples": 0,
+                      "expected_sha256": "94cf8159ec555357a3bde97cf00aae91e1635e83aa0b3b388885dc7136a99a48",
+                      "actual_sha256": "94cf8159ec555357a3bde97cf00aae91e1635e83aa0b3b388885dc7136a99a48"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 18,
+                      "different_samples": 0,
+                      "expected_sha256": "2c409d6ca760a12fc3ba077c235356b613dfaae33466c5a66c6b6861b3d7c8fb",
+                      "actual_sha256": "2c409d6ca760a12fc3ba077c235356b613dfaae33466c5a66c6b6861b3d7c8fb"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 19,
+                      "different_samples": 0,
+                      "expected_sha256": "83837cd0fd59862350c553db6f5376f64bb0af4f5477a9d811170cf446974459",
+                      "actual_sha256": "83837cd0fd59862350c553db6f5376f64bb0af4f5477a9d811170cf446974459"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 20,
+                      "different_samples": 0,
+                      "expected_sha256": "287ccf5d8b9aeae54761232ead44c27d8cb88f2b0a43ced68059f940cf6d9a31",
+                      "actual_sha256": "287ccf5d8b9aeae54761232ead44c27d8cb88f2b0a43ced68059f940cf6d9a31"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 21,
+                      "different_samples": 0,
+                      "expected_sha256": "3455ac574399bae689303f7a56dbc4f705a0d736bef36ef8209f39d47ac06d0a",
+                      "actual_sha256": "3455ac574399bae689303f7a56dbc4f705a0d736bef36ef8209f39d47ac06d0a"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 22,
+                      "different_samples": 0,
+                      "expected_sha256": "d3df07aab5e8397fd296c6887fa6f0fae250bfa4dab8af79af7d24c97b3c7446",
+                      "actual_sha256": "d3df07aab5e8397fd296c6887fa6f0fae250bfa4dab8af79af7d24c97b3c7446"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 23,
+                      "different_samples": 0,
+                      "expected_sha256": "47d83dfea1c358f0b2c5d7ac59fb0467ddb250483d01074234e68b9a6f002cd3",
+                      "actual_sha256": "47d83dfea1c358f0b2c5d7ac59fb0467ddb250483d01074234e68b9a6f002cd3"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 24,
+                      "different_samples": 0,
+                      "expected_sha256": "9d845545f21e21cec73acf2f48047eea1a268ddccf6237827cbd1e759b2bbbae",
+                      "actual_sha256": "9d845545f21e21cec73acf2f48047eea1a268ddccf6237827cbd1e759b2bbbae"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 25,
+                      "different_samples": 0,
+                      "expected_sha256": "d80b5f468d6cfd7eed0007a50685df00ea30d28b54bcfd7ce06accf406a39e02",
+                      "actual_sha256": "d80b5f468d6cfd7eed0007a50685df00ea30d28b54bcfd7ce06accf406a39e02"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 26,
+                      "different_samples": 0,
+                      "expected_sha256": "ea3273a099b34b20fe38411353c60ea24302bc634a9181720857aa1c935d6a57",
+                      "actual_sha256": "ea3273a099b34b20fe38411353c60ea24302bc634a9181720857aa1c935d6a57"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 27,
+                      "different_samples": 0,
+                      "expected_sha256": "aa347defd6075dc325057cfc339de048fe2316fc50f1c8c558082bdedb997c0d",
+                      "actual_sha256": "aa347defd6075dc325057cfc339de048fe2316fc50f1c8c558082bdedb997c0d"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 28,
+                      "different_samples": 0,
+                      "expected_sha256": "5d1219ced6c88804dfb16315d4089ebb2bd83ba54fcca0bfa64bb3223edad0c4",
+                      "actual_sha256": "5d1219ced6c88804dfb16315d4089ebb2bd83ba54fcca0bfa64bb3223edad0c4"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 29,
+                      "different_samples": 0,
+                      "expected_sha256": "834efec4b645baaf73b5819276bb90ce4e4dc705ce37653b3332f96608733773",
+                      "actual_sha256": "834efec4b645baaf73b5819276bb90ce4e4dc705ce37653b3332f96608733773"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 30,
+                      "different_samples": 0,
+                      "expected_sha256": "ff71a0070aa0ed3e7135e42fb7fe6c67c98cd100d24317c78d0972a9923a1713",
+                      "actual_sha256": "ff71a0070aa0ed3e7135e42fb7fe6c67c98cd100d24317c78d0972a9923a1713"
+                    },
+                    {
+                      "passed": true,
+                      "width": 1920,
+                      "height": 1080,
+                      "frame": 31,
+                      "different_samples": 0,
+                      "expected_sha256": "a2690049a86aa01e43786e8772ada5bd6d45251daba0f86662eaf8d9c03e1a63",
+                      "actual_sha256": "a2690049a86aa01e43786e8772ada5bd6d45251daba0f86662eaf8d9c03e1a63"
+                    }
+                  ],
+                  "output_format": "I420",
+                  "clocked_output": {
+                    "passed": true,
+                    "framerate": [
+                      25,
+                      1
+                    ],
+                    "sync": true,
+                    "qos": true,
+                    "max_lateness_ns": 20000000,
+                    "required_buffer_timestamps_ns": [
+                      0,
+                      40000000,
+                      80000000,
+                      120000000,
+                      160000000,
+                      200000000,
+                      240000000,
+                      280000000,
+                      320000000,
+                      360000000,
+                      400000000,
+                      440000000,
+                      480000000,
+                      520000000,
+                      560000000,
+                      600000000,
+                      640000000,
+                      680000000,
+                      720000000,
+                      760000000,
+                      800000000,
+                      840000000,
+                      880000000,
+                      920000000,
+                      960000000,
+                      1000000000,
+                      1040000000,
+                      1080000000,
+                      1120000000,
+                      1160000000,
+                      1200000000,
+                      1240000000
+                    ],
+                    "observed_times": [
+                      [
+                        0,
+                        1
+                      ],
+                      [
+                        40000000,
+                        1
+                      ],
+                      [
+                        80000000,
+                        1
+                      ],
+                      [
+                        120000000,
+                        1
+                      ],
+                      [
+                        160000000,
+                        1
+                      ],
+                      [
+                        200000000,
+                        1
+                      ],
+                      [
+                        240000000,
+                        1
+                      ],
+                      [
+                        280000000,
+                        1
+                      ],
+                      [
+                        320000000,
+                        1
+                      ],
+                      [
+                        360000000,
+                        1
+                      ],
+                      [
+                        400000000,
+                        1
+                      ],
+                      [
+                        440000000,
+                        1
+                      ],
+                      [
+                        480000000,
+                        1
+                      ],
+                      [
+                        520000000,
+                        1
+                      ],
+                      [
+                        560000000,
+                        1
+                      ],
+                      [
+                        600000000,
+                        1
+                      ],
+                      [
+                        640000000,
+                        1
+                      ],
+                      [
+                        680000000,
+                        1
+                      ],
+                      [
+                        720000000,
+                        1
+                      ],
+                      [
+                        760000000,
+                        1
+                      ],
+                      [
+                        800000000,
+                        1
+                      ],
+                      [
+                        840000000,
+                        1
+                      ],
+                      [
+                        880000000,
+                        1
+                      ],
+                      [
+                        920000000,
+                        1
+                      ],
+                      [
+                        960000000,
+                        1
+                      ],
+                      [
+                        1000000000,
+                        1
+                      ],
+                      [
+                        1040000000,
+                        1
+                      ],
+                      [
+                        1080000000,
+                        1
+                      ],
+                      [
+                        1120000000,
+                        1
+                      ],
+                      [
+                        1160000000,
+                        1
+                      ],
+                      [
+                        1200000000,
+                        1
+                      ],
+                      [
+                        1240000000,
+                        1
+                      ]
+                    ],
+                    "rendered_dropped": [
+                      [
+                        "32",
+                        "0"
+                      ]
+                    ],
+                    "clock_returns": [
+                      1,
+                      1,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ],
+                    "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                    "conversion_thread_queue_buffers": 2,
+                    "converter_threads": 4
+                  }
+                }
+              ],
+              "concurrent_contexts": {
+                "passed": true,
+                "before": {
+                  "jobs": 84,
+                  "failures": 3,
+                  "result": 0,
+                  "fetched": 1,
+                  "submitted": 1,
+                  "state": 2147483649,
+                  "error": 0,
+                  "message": 0,
+                  "irq": 12289,
+                  "break": 0,
+                  "reset": 0,
+                  "quiesced": 1,
+                  "guards": 1,
+                  "engine_result": 0,
+                  "elapsed_us": 16428,
+                  "nal_bytes": 50306,
+                  "header_bits": 27,
+                  "mbx": 119,
+                  "mby": 67,
+                  "stall": 513,
+                  "read_pointer": 266338304,
+                  "fetch_status": 2065,
+                  "top_status": 0,
+                  "pred_config": 2147483648,
+                  "pred_mode": 3,
+                  "tail_bit_offset": 0,
+                  "tail_word": 0,
+                  "cabac_tail_valid": 0
+                },
+                "after": {
+                  "jobs": 100,
+                  "failures": 3,
+                  "result": 0,
+                  "fetched": 1,
+                  "submitted": 1,
+                  "state": 2147483649,
+                  "error": 0,
+                  "message": 0,
+                  "irq": 12289,
+                  "break": 0,
+                  "reset": 0,
+                  "quiesced": 1,
+                  "guards": 1,
+                  "engine_result": 0,
+                  "elapsed_us": 10177,
+                  "nal_bytes": 22032,
+                  "header_bits": 27,
+                  "mbx": 79,
+                  "mby": 44,
+                  "stall": 513,
+                  "read_pointer": 266338304,
+                  "fetch_status": 2065,
+                  "top_status": 0,
+                  "pred_config": 2147483648,
+                  "pred_mode": 3,
+                  "tail_bit_offset": 0,
+                  "tail_word": 0,
+                  "cabac_tail_valid": 0
+                },
+                "pipelines": [
+                  {
+                    "passed": true,
+                    "width": 1280,
+                    "height": 720,
+                    "fixture": "general-main-deblocked",
+                    "returncode": 0,
+                    "output_bytes": 11304960,
+                    "comparisons": [
+                      {
+                        "passed": true,
+                        "frame": 0,
+                        "different_samples": 0,
+                        "actual_sha256": "53a2fa07d98032ad05ad208596bde5115992007525b01f072c3bac97f6f0987e",
+                        "expected_sha256": "53a2fa07d98032ad05ad208596bde5115992007525b01f072c3bac97f6f0987e"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 1,
+                        "different_samples": 0,
+                        "actual_sha256": "f949dea528733117bac0ee0d337863a8f5c30f566d6bc672a14e2982b5d1808f",
+                        "expected_sha256": "f949dea528733117bac0ee0d337863a8f5c30f566d6bc672a14e2982b5d1808f"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 2,
+                        "different_samples": 0,
+                        "actual_sha256": "bfaff29a4308c0e821fc42272941b781dd573eaa2fa0cf4cf4d0177306676d08",
+                        "expected_sha256": "bfaff29a4308c0e821fc42272941b781dd573eaa2fa0cf4cf4d0177306676d08"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 3,
+                        "different_samples": 0,
+                        "actual_sha256": "bd7eef7309337e08a278db4d65ca86b4e32a37b57fad3a8e5b61af00134f8eb3",
+                        "expected_sha256": "bd7eef7309337e08a278db4d65ca86b4e32a37b57fad3a8e5b61af00134f8eb3"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 4,
+                        "different_samples": 0,
+                        "actual_sha256": "043c5aa1663d940e15a4c618584db8a21cc4da8ccfca30646339a6296f2d329a",
+                        "expected_sha256": "043c5aa1663d940e15a4c618584db8a21cc4da8ccfca30646339a6296f2d329a"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 5,
+                        "different_samples": 0,
+                        "actual_sha256": "eb0b04b478608e82ff37df553a15caaef978d84302b0b28c4678c23a6c70f7f9",
+                        "expected_sha256": "eb0b04b478608e82ff37df553a15caaef978d84302b0b28c4678c23a6c70f7f9"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 6,
+                        "different_samples": 0,
+                        "actual_sha256": "3334dfbaaf77f18c9863484835a38b2efbe2eaba110ab0f1804430272b62a7bb",
+                        "expected_sha256": "3334dfbaaf77f18c9863484835a38b2efbe2eaba110ab0f1804430272b62a7bb"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 7,
+                        "different_samples": 0,
+                        "actual_sha256": "b883da111eb0186983fa2c855a1800376827c0ba8b37b29a8a5fb3066e5e7494",
+                        "expected_sha256": "b883da111eb0186983fa2c855a1800376827c0ba8b37b29a8a5fb3066e5e7494"
+                      }
+                    ]
+                  },
+                  {
+                    "passed": true,
+                    "width": 640,
+                    "height": 480,
+                    "fixture": "general-baseline-deblocked",
+                    "returncode": 0,
+                    "output_bytes": 3686400,
+                    "comparisons": [
+                      {
+                        "passed": true,
+                        "frame": 0,
+                        "different_samples": 0,
+                        "actual_sha256": "9b56d6758ec78a2dafdf630ce7d0cfa5bf6201c30bca3aeaa6af10d7ca36ffed",
+                        "expected_sha256": "9b56d6758ec78a2dafdf630ce7d0cfa5bf6201c30bca3aeaa6af10d7ca36ffed"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 1,
+                        "different_samples": 0,
+                        "actual_sha256": "14fa28b4be20b0ec1228d0b8bfb99ac9cfd5d6bc5c3c280913b692082f169222",
+                        "expected_sha256": "14fa28b4be20b0ec1228d0b8bfb99ac9cfd5d6bc5c3c280913b692082f169222"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 2,
+                        "different_samples": 0,
+                        "actual_sha256": "fa6394b036c95973ad6d0dc53d5243afcb0652200e9656fd2ce940e72b40415a",
+                        "expected_sha256": "fa6394b036c95973ad6d0dc53d5243afcb0652200e9656fd2ce940e72b40415a"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 3,
+                        "different_samples": 0,
+                        "actual_sha256": "92006015f9502341b3d0c4706fdaa99033399f7182fea6890f81b8c114c53484",
+                        "expected_sha256": "92006015f9502341b3d0c4706fdaa99033399f7182fea6890f81b8c114c53484"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 4,
+                        "different_samples": 0,
+                        "actual_sha256": "51aa20f5bc09cb362f20c10e44863338cee844954a15e385a2fd2d51c44846b9",
+                        "expected_sha256": "51aa20f5bc09cb362f20c10e44863338cee844954a15e385a2fd2d51c44846b9"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 5,
+                        "different_samples": 0,
+                        "actual_sha256": "f57e579a84a298e1536f7976bef9557af309d17cde4afc9e9804673ad1ff68d7",
+                        "expected_sha256": "f57e579a84a298e1536f7976bef9557af309d17cde4afc9e9804673ad1ff68d7"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 6,
+                        "different_samples": 0,
+                        "actual_sha256": "5593a068254a47ae480a97a1b79d2cd8b0665057abd7f929b121ce76f887eef6",
+                        "expected_sha256": "5593a068254a47ae480a97a1b79d2cd8b0665057abd7f929b121ce76f887eef6"
+                      },
+                      {
+                        "passed": true,
+                        "frame": 7,
+                        "different_samples": 0,
+                        "actual_sha256": "bbcb496edc6d8774056ed77e0acc60fdfb36d23def9c7ce250a160d0bb1f454e",
+                        "expected_sha256": "bbcb496edc6d8774056ed77e0acc60fdfb36d23def9c7ce250a160d0bb1f454e"
+                      }
+                    ]
+                  }
+                ],
+                "scope": "Two independently opened concurrent GStreamer streams with distinct Main/Baseline geometries and reference chains; every output sample checked."
+              },
+              "compliance": {
+                "passed": true,
+                "returncode": 0
+              }
+            },
+            "unloaded": true,
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "strict_clock_checks": [
+            {
+              "label": "clocked-native-mm21-1080-long",
+              "output_format": "MM21",
+              "frames": 32,
+              "output_bytes": 100270080,
+              "clocked_output": {
+                "passed": true,
+                "framerate": [
+                  25,
+                  1
+                ],
+                "sync": true,
+                "qos": true,
+                "max_lateness_ns": 20000000,
+                "required_buffer_timestamps_ns": [
+                  0,
+                  40000000,
+                  80000000,
+                  120000000,
+                  160000000,
+                  200000000,
+                  240000000,
+                  280000000,
+                  320000000,
+                  360000000,
+                  400000000,
+                  440000000,
+                  480000000,
+                  520000000,
+                  560000000,
+                  600000000,
+                  640000000,
+                  680000000,
+                  720000000,
+                  760000000,
+                  800000000,
+                  840000000,
+                  880000000,
+                  920000000,
+                  960000000,
+                  1000000000,
+                  1040000000,
+                  1080000000,
+                  1120000000,
+                  1160000000,
+                  1200000000,
+                  1240000000
+                ],
+                "observed_times": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    40000000,
+                    1
+                  ],
+                  [
+                    80000000,
+                    1
+                  ],
+                  [
+                    120000000,
+                    1
+                  ],
+                  [
+                    160000000,
+                    1
+                  ],
+                  [
+                    200000000,
+                    1
+                  ],
+                  [
+                    240000000,
+                    1
+                  ],
+                  [
+                    280000000,
+                    1
+                  ],
+                  [
+                    320000000,
+                    1
+                  ],
+                  [
+                    360000000,
+                    1
+                  ],
+                  [
+                    400000000,
+                    1
+                  ],
+                  [
+                    440000000,
+                    1
+                  ],
+                  [
+                    480000000,
+                    1
+                  ],
+                  [
+                    520000000,
+                    1
+                  ],
+                  [
+                    560000000,
+                    1
+                  ],
+                  [
+                    600000000,
+                    1
+                  ],
+                  [
+                    640000000,
+                    1
+                  ],
+                  [
+                    680000000,
+                    1
+                  ],
+                  [
+                    720000000,
+                    1
+                  ],
+                  [
+                    760000000,
+                    1
+                  ],
+                  [
+                    800000000,
+                    1
+                  ],
+                  [
+                    840000000,
+                    1
+                  ],
+                  [
+                    880000000,
+                    1
+                  ],
+                  [
+                    920000000,
+                    1
+                  ],
+                  [
+                    960000000,
+                    1
+                  ],
+                  [
+                    1000000000,
+                    1
+                  ],
+                  [
+                    1040000000,
+                    1
+                  ],
+                  [
+                    1080000000,
+                    1
+                  ],
+                  [
+                    1120000000,
+                    1
+                  ],
+                  [
+                    1160000000,
+                    1
+                  ],
+                  [
+                    1200000000,
+                    1
+                  ],
+                  [
+                    1240000000,
+                    1
+                  ]
+                ],
+                "rendered_dropped": [
+                  [
+                    "32",
+                    "0"
+                  ]
+                ],
+                "clock_returns": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                "conversion_thread_queue_buffers": 0,
+                "converter_threads": 0
+              },
+              "all_samples_exact": true,
+              "all_clock_results_ok_or_early": true
+            },
+            {
+              "label": "clocked-queued-i420-1080-long",
+              "output_format": "I420",
+              "frames": 32,
+              "output_bytes": 99532800,
+              "clocked_output": {
+                "passed": true,
+                "framerate": [
+                  25,
+                  1
+                ],
+                "sync": true,
+                "qos": true,
+                "max_lateness_ns": 20000000,
+                "required_buffer_timestamps_ns": [
+                  0,
+                  40000000,
+                  80000000,
+                  120000000,
+                  160000000,
+                  200000000,
+                  240000000,
+                  280000000,
+                  320000000,
+                  360000000,
+                  400000000,
+                  440000000,
+                  480000000,
+                  520000000,
+                  560000000,
+                  600000000,
+                  640000000,
+                  680000000,
+                  720000000,
+                  760000000,
+                  800000000,
+                  840000000,
+                  880000000,
+                  920000000,
+                  960000000,
+                  1000000000,
+                  1040000000,
+                  1080000000,
+                  1120000000,
+                  1160000000,
+                  1200000000,
+                  1240000000
+                ],
+                "observed_times": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    40000000,
+                    1
+                  ],
+                  [
+                    80000000,
+                    1
+                  ],
+                  [
+                    120000000,
+                    1
+                  ],
+                  [
+                    160000000,
+                    1
+                  ],
+                  [
+                    200000000,
+                    1
+                  ],
+                  [
+                    240000000,
+                    1
+                  ],
+                  [
+                    280000000,
+                    1
+                  ],
+                  [
+                    320000000,
+                    1
+                  ],
+                  [
+                    360000000,
+                    1
+                  ],
+                  [
+                    400000000,
+                    1
+                  ],
+                  [
+                    440000000,
+                    1
+                  ],
+                  [
+                    480000000,
+                    1
+                  ],
+                  [
+                    520000000,
+                    1
+                  ],
+                  [
+                    560000000,
+                    1
+                  ],
+                  [
+                    600000000,
+                    1
+                  ],
+                  [
+                    640000000,
+                    1
+                  ],
+                  [
+                    680000000,
+                    1
+                  ],
+                  [
+                    720000000,
+                    1
+                  ],
+                  [
+                    760000000,
+                    1
+                  ],
+                  [
+                    800000000,
+                    1
+                  ],
+                  [
+                    840000000,
+                    1
+                  ],
+                  [
+                    880000000,
+                    1
+                  ],
+                  [
+                    920000000,
+                    1
+                  ],
+                  [
+                    960000000,
+                    1
+                  ],
+                  [
+                    1000000000,
+                    1
+                  ],
+                  [
+                    1040000000,
+                    1
+                  ],
+                  [
+                    1080000000,
+                    1
+                  ],
+                  [
+                    1120000000,
+                    1
+                  ],
+                  [
+                    1160000000,
+                    1
+                  ],
+                  [
+                    1200000000,
+                    1
+                  ],
+                  [
+                    1240000000,
+                    1
+                  ]
+                ],
+                "rendered_dropped": [
+                  [
+                    "32",
+                    "0"
+                  ]
+                ],
+                "clock_returns": [
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                "conversion_thread_queue_buffers": 2,
+                "converter_threads": 4
+              },
+              "all_samples_exact": true,
+              "all_clock_results_ok_or_early": true
+            }
+          ],
+          "boot_trial_passed": true,
+          "candidate_profile_qualified": true,
+          "recovery_passed": true,
+          "recovered_boot_id": "6b19e02e-8a27-4cd0-862a-b59ac391dc1a",
+          "final_no_writer": true,
+          "post_recovery_audit": {
+            "result": "passed",
+            "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+            "boot_id": "6b19e02e-8a27-4cd0-862a-b59ac391dc1a",
+            "tainted": 0,
+            "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+            "failed_units": [],
+            "temporary_modules_loaded": false,
+            "temporary_probe_device_present": false,
+            "kernel_fault_patterns_found": [],
+            "evidence": "handoff/video-resource-20261009/final-board-audit.json"
+          },
+          "owned_input_fetch_commands": 98,
+          "owned_frame_commands": 98,
+          "exact_positive_picture_comparisons": 97,
+          "default_compliance_qualified": true,
+          "default_compliance_checks": 57,
+          "default_compliance_failures": 0,
+          "note": "Identical97ae module/fixtures/four-thread queuedI420/native clock settings repeated after44RTCfailure. Both32-picture1080p25fps streams pass everypixel/timestamp/clock/drop check; nativefaults/Baseline/concurrent16/all57media/unload pass. All strictRTC/system/recovery/audit checks pass this repeat. Original44IRQdelta2 and38miss retained withoutestablishedcause. No sustainedthermal/broadcodec/IRQ/encoder/production qualification."
         }
       ],
-      "note": "Native MM21 and four-thread queuedI420 each qualify32-picture1080p25fps short samples: everytimestamp/sample exact, realclock waits,32rendered/0dropped. Nativefault/recovery/Baseline/concurrent16/all57media/normalunload pass. SeparateRTCdelivery-before count2fails exactonecheck;acceptedrecovery/strictaudit pass;cause notestablished. Prior42/43one-thread conversion failures retained; no sustainedthermal/generalcodec/IRQ/encoder/production qualification.",
+      "note": "Identical97ae module/fixtures/four-thread queuedI420/native clock settings repeated after44RTCfailure. Both32-picture1080p25fps streams pass everypixel/timestamp/clock/drop check; nativefaults/Baseline/concurrent16/all57media/unload pass. All strictRTC/system/recovery/audit checks pass this repeat. Original44IRQdelta2 and38miss retained withoutestablishedcause. No sustainedthermal/broadcodec/IRQ/encoder/production qualification.",
       "qualified_scope": {
         "public_request_api": true,
         "width": 64,
@@ -42835,6 +45319,478 @@
           "default_compliance_failures": 0,
           "sustained_playback_thermal_qualified": false,
           "scope": "Pinned97ae module; listed one-slice progressive8bit420 Baseline/Main I/P, one shortterm reference.32pictures/1.28seconds per clocked Mainstream; no broadcodec, sustainedthermal, IRQ, encoder or accepted-default qualification."
+        },
+        "trial45": {
+          "module_sha256": "97ae6106396dc3bda9816a94a25746ab19005d3ff9ddc2f27c96be8c870cd824",
+          "owned_frame_commands": 98,
+          "exact_positive_picture_comparisons": 97,
+          "clocked_samples": [
+            {
+              "label": "clocked-native-mm21-1080-long",
+              "output_format": "MM21",
+              "frames": 32,
+              "output_bytes": 100270080,
+              "clocked_output": {
+                "passed": true,
+                "framerate": [
+                  25,
+                  1
+                ],
+                "sync": true,
+                "qos": true,
+                "max_lateness_ns": 20000000,
+                "required_buffer_timestamps_ns": [
+                  0,
+                  40000000,
+                  80000000,
+                  120000000,
+                  160000000,
+                  200000000,
+                  240000000,
+                  280000000,
+                  320000000,
+                  360000000,
+                  400000000,
+                  440000000,
+                  480000000,
+                  520000000,
+                  560000000,
+                  600000000,
+                  640000000,
+                  680000000,
+                  720000000,
+                  760000000,
+                  800000000,
+                  840000000,
+                  880000000,
+                  920000000,
+                  960000000,
+                  1000000000,
+                  1040000000,
+                  1080000000,
+                  1120000000,
+                  1160000000,
+                  1200000000,
+                  1240000000
+                ],
+                "observed_times": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    40000000,
+                    1
+                  ],
+                  [
+                    80000000,
+                    1
+                  ],
+                  [
+                    120000000,
+                    1
+                  ],
+                  [
+                    160000000,
+                    1
+                  ],
+                  [
+                    200000000,
+                    1
+                  ],
+                  [
+                    240000000,
+                    1
+                  ],
+                  [
+                    280000000,
+                    1
+                  ],
+                  [
+                    320000000,
+                    1
+                  ],
+                  [
+                    360000000,
+                    1
+                  ],
+                  [
+                    400000000,
+                    1
+                  ],
+                  [
+                    440000000,
+                    1
+                  ],
+                  [
+                    480000000,
+                    1
+                  ],
+                  [
+                    520000000,
+                    1
+                  ],
+                  [
+                    560000000,
+                    1
+                  ],
+                  [
+                    600000000,
+                    1
+                  ],
+                  [
+                    640000000,
+                    1
+                  ],
+                  [
+                    680000000,
+                    1
+                  ],
+                  [
+                    720000000,
+                    1
+                  ],
+                  [
+                    760000000,
+                    1
+                  ],
+                  [
+                    800000000,
+                    1
+                  ],
+                  [
+                    840000000,
+                    1
+                  ],
+                  [
+                    880000000,
+                    1
+                  ],
+                  [
+                    920000000,
+                    1
+                  ],
+                  [
+                    960000000,
+                    1
+                  ],
+                  [
+                    1000000000,
+                    1
+                  ],
+                  [
+                    1040000000,
+                    1
+                  ],
+                  [
+                    1080000000,
+                    1
+                  ],
+                  [
+                    1120000000,
+                    1
+                  ],
+                  [
+                    1160000000,
+                    1
+                  ],
+                  [
+                    1200000000,
+                    1
+                  ],
+                  [
+                    1240000000,
+                    1
+                  ]
+                ],
+                "rendered_dropped": [
+                  [
+                    "32",
+                    "0"
+                  ]
+                ],
+                "clock_returns": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                "conversion_thread_queue_buffers": 0,
+                "converter_threads": 0
+              },
+              "all_samples_exact": true,
+              "all_clock_results_ok_or_early": true
+            },
+            {
+              "label": "clocked-queued-i420-1080-long",
+              "output_format": "I420",
+              "frames": 32,
+              "output_bytes": 99532800,
+              "clocked_output": {
+                "passed": true,
+                "framerate": [
+                  25,
+                  1
+                ],
+                "sync": true,
+                "qos": true,
+                "max_lateness_ns": 20000000,
+                "required_buffer_timestamps_ns": [
+                  0,
+                  40000000,
+                  80000000,
+                  120000000,
+                  160000000,
+                  200000000,
+                  240000000,
+                  280000000,
+                  320000000,
+                  360000000,
+                  400000000,
+                  440000000,
+                  480000000,
+                  520000000,
+                  560000000,
+                  600000000,
+                  640000000,
+                  680000000,
+                  720000000,
+                  760000000,
+                  800000000,
+                  840000000,
+                  880000000,
+                  920000000,
+                  960000000,
+                  1000000000,
+                  1040000000,
+                  1080000000,
+                  1120000000,
+                  1160000000,
+                  1200000000,
+                  1240000000
+                ],
+                "observed_times": [
+                  [
+                    0,
+                    1
+                  ],
+                  [
+                    40000000,
+                    1
+                  ],
+                  [
+                    80000000,
+                    1
+                  ],
+                  [
+                    120000000,
+                    1
+                  ],
+                  [
+                    160000000,
+                    1
+                  ],
+                  [
+                    200000000,
+                    1
+                  ],
+                  [
+                    240000000,
+                    1
+                  ],
+                  [
+                    280000000,
+                    1
+                  ],
+                  [
+                    320000000,
+                    1
+                  ],
+                  [
+                    360000000,
+                    1
+                  ],
+                  [
+                    400000000,
+                    1
+                  ],
+                  [
+                    440000000,
+                    1
+                  ],
+                  [
+                    480000000,
+                    1
+                  ],
+                  [
+                    520000000,
+                    1
+                  ],
+                  [
+                    560000000,
+                    1
+                  ],
+                  [
+                    600000000,
+                    1
+                  ],
+                  [
+                    640000000,
+                    1
+                  ],
+                  [
+                    680000000,
+                    1
+                  ],
+                  [
+                    720000000,
+                    1
+                  ],
+                  [
+                    760000000,
+                    1
+                  ],
+                  [
+                    800000000,
+                    1
+                  ],
+                  [
+                    840000000,
+                    1
+                  ],
+                  [
+                    880000000,
+                    1
+                  ],
+                  [
+                    920000000,
+                    1
+                  ],
+                  [
+                    960000000,
+                    1
+                  ],
+                  [
+                    1000000000,
+                    1
+                  ],
+                  [
+                    1040000000,
+                    1
+                  ],
+                  [
+                    1080000000,
+                    1
+                  ],
+                  [
+                    1120000000,
+                    1
+                  ],
+                  [
+                    1160000000,
+                    1
+                  ],
+                  [
+                    1200000000,
+                    1
+                  ],
+                  [
+                    1240000000,
+                    1
+                  ]
+                ],
+                "rendered_dropped": [
+                  [
+                    "32",
+                    "0"
+                  ]
+                ],
+                "clock_returns": [
+                  1,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+                "conversion_thread_queue_buffers": 2,
+                "converter_threads": 4
+              },
+              "all_samples_exact": true,
+              "all_clock_results_ok_or_early": true
+            }
+          ],
+          "clocked_native_1080p_25fps_short_sample_qualified": true,
+          "clocked_i420_1080p_25fps_short_sample_qualified": true,
+          "conversion_threads": 4,
+          "conversion_queue_buffers": 2,
+          "cached_concurrent_contexts_frames": 16,
+          "guard_stop_reference_checks": true,
+          "normal_unload": true,
+          "full_system_profile_passed": true,
+          "default_compliance_checks": 57,
+          "default_compliance_failures": 0,
+          "sustained_playback_thermal_qualified": false,
+          "scope": "Pinned97ae module; listed one-slice progressive8bit420 Baseline/Main I/P, one shortterm reference.32pictures/1.28seconds per clocked Mainstream; no broadcodec, sustainedthermal, IRQ, encoder or accepted-default qualification.",
+          "repeats_trial44_module_and_pipeline": true
         }
       },
       "last_hardware_build": {
@@ -43545,6 +46501,46 @@
             "kernel_fault_patterns_found": [],
             "evidence": "handoff/video-resource-20261009/final-board-audit.json"
           }
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-45",
+          "diagnostic": {
+            "passed": true,
+            "attempted": true,
+            "module_sha256": "92a6b28093589f5d5c8c7b12a78b13ac9dfa41ee7894bfedf507cc294d6bd296",
+            "insmod_returncode": 0,
+            "snapshot": {
+              "schema": 1,
+              "dma_started": false,
+              "encode_started": false,
+              "encoder_registers_written": false,
+              "power_vote_released": true,
+              "engine_hz": 325000000,
+              "bus_hz": 325000000,
+              "clock_status": 17,
+              "chip_enable": 0,
+              "dcm_control": 1,
+              "clock_control": 4294967295,
+              "result": 0
+            },
+            "normal_unload": true,
+            "encode_qualified": false
+          },
+          "boot_trial_passed": true,
+          "candidate_profile_qualified": true,
+          "recovered_boot_id": "6b19e02e-8a27-4cd0-862a-b59ac391dc1a",
+          "post_recovery_audit": {
+            "result": "passed",
+            "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+            "boot_id": "6b19e02e-8a27-4cd0-862a-b59ac391dc1a",
+            "tainted": 0,
+            "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+            "failed_units": [],
+            "temporary_modules_loaded": false,
+            "temporary_probe_device_present": false,
+            "kernel_fault_patterns_found": [],
+            "evidence": "handoff/video-resource-20261009/final-board-audit.json"
+          }
         }
       ],
       "note": "Pinned command-free probe passes encoder VENC-domain/explicit clock-provider ownership,325MHz reported engine/bus rates,documented register snapshots,balanced power vote and normal unload. Larb3/JPEG stays supplier-owned. No encoder register writes, DMA or frame commands; video encoding remains unfinished.",
@@ -43692,7 +46688,9 @@
       "hardware_qualified_i420_trial43": false,
       "note": "Original open-source software fixture; hardwareencoder remains unqualified.",
       "hardware_qualified_native_trial44": true,
-      "hardware_qualified_i420_trial44": true
+      "hardware_qualified_i420_trial44": true,
+      "hardware_qualified_native_trial45": true,
+      "hardware_qualified_i420_trial45": true
     }
   },
   "related_silicon_reference": {
@@ -45459,6 +48457,478 @@
       "default_compliance_failures": 0,
       "sustained_playback_thermal_qualified": false,
       "scope": "Pinned97ae module; listed one-slice progressive8bit420 Baseline/Main I/P, one shortterm reference.32pictures/1.28seconds per clocked Mainstream; no broadcodec, sustainedthermal, IRQ, encoder or accepted-default qualification."
+    },
+    "clocked_sample_trial45": {
+      "module_sha256": "97ae6106396dc3bda9816a94a25746ab19005d3ff9ddc2f27c96be8c870cd824",
+      "owned_frame_commands": 98,
+      "exact_positive_picture_comparisons": 97,
+      "clocked_samples": [
+        {
+          "label": "clocked-native-mm21-1080-long",
+          "output_format": "MM21",
+          "frames": 32,
+          "output_bytes": 100270080,
+          "clocked_output": {
+            "passed": true,
+            "framerate": [
+              25,
+              1
+            ],
+            "sync": true,
+            "qos": true,
+            "max_lateness_ns": 20000000,
+            "required_buffer_timestamps_ns": [
+              0,
+              40000000,
+              80000000,
+              120000000,
+              160000000,
+              200000000,
+              240000000,
+              280000000,
+              320000000,
+              360000000,
+              400000000,
+              440000000,
+              480000000,
+              520000000,
+              560000000,
+              600000000,
+              640000000,
+              680000000,
+              720000000,
+              760000000,
+              800000000,
+              840000000,
+              880000000,
+              920000000,
+              960000000,
+              1000000000,
+              1040000000,
+              1080000000,
+              1120000000,
+              1160000000,
+              1200000000,
+              1240000000
+            ],
+            "observed_times": [
+              [
+                0,
+                1
+              ],
+              [
+                40000000,
+                1
+              ],
+              [
+                80000000,
+                1
+              ],
+              [
+                120000000,
+                1
+              ],
+              [
+                160000000,
+                1
+              ],
+              [
+                200000000,
+                1
+              ],
+              [
+                240000000,
+                1
+              ],
+              [
+                280000000,
+                1
+              ],
+              [
+                320000000,
+                1
+              ],
+              [
+                360000000,
+                1
+              ],
+              [
+                400000000,
+                1
+              ],
+              [
+                440000000,
+                1
+              ],
+              [
+                480000000,
+                1
+              ],
+              [
+                520000000,
+                1
+              ],
+              [
+                560000000,
+                1
+              ],
+              [
+                600000000,
+                1
+              ],
+              [
+                640000000,
+                1
+              ],
+              [
+                680000000,
+                1
+              ],
+              [
+                720000000,
+                1
+              ],
+              [
+                760000000,
+                1
+              ],
+              [
+                800000000,
+                1
+              ],
+              [
+                840000000,
+                1
+              ],
+              [
+                880000000,
+                1
+              ],
+              [
+                920000000,
+                1
+              ],
+              [
+                960000000,
+                1
+              ],
+              [
+                1000000000,
+                1
+              ],
+              [
+                1040000000,
+                1
+              ],
+              [
+                1080000000,
+                1
+              ],
+              [
+                1120000000,
+                1
+              ],
+              [
+                1160000000,
+                1
+              ],
+              [
+                1200000000,
+                1
+              ],
+              [
+                1240000000,
+                1
+              ]
+            ],
+            "rendered_dropped": [
+              [
+                "32",
+                "0"
+              ]
+            ],
+            "clock_returns": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+            "conversion_thread_queue_buffers": 0,
+            "converter_threads": 0
+          },
+          "all_samples_exact": true,
+          "all_clock_results_ok_or_early": true
+        },
+        {
+          "label": "clocked-queued-i420-1080-long",
+          "output_format": "I420",
+          "frames": 32,
+          "output_bytes": 99532800,
+          "clocked_output": {
+            "passed": true,
+            "framerate": [
+              25,
+              1
+            ],
+            "sync": true,
+            "qos": true,
+            "max_lateness_ns": 20000000,
+            "required_buffer_timestamps_ns": [
+              0,
+              40000000,
+              80000000,
+              120000000,
+              160000000,
+              200000000,
+              240000000,
+              280000000,
+              320000000,
+              360000000,
+              400000000,
+              440000000,
+              480000000,
+              520000000,
+              560000000,
+              600000000,
+              640000000,
+              680000000,
+              720000000,
+              760000000,
+              800000000,
+              840000000,
+              880000000,
+              920000000,
+              960000000,
+              1000000000,
+              1040000000,
+              1080000000,
+              1120000000,
+              1160000000,
+              1200000000,
+              1240000000
+            ],
+            "observed_times": [
+              [
+                0,
+                1
+              ],
+              [
+                40000000,
+                1
+              ],
+              [
+                80000000,
+                1
+              ],
+              [
+                120000000,
+                1
+              ],
+              [
+                160000000,
+                1
+              ],
+              [
+                200000000,
+                1
+              ],
+              [
+                240000000,
+                1
+              ],
+              [
+                280000000,
+                1
+              ],
+              [
+                320000000,
+                1
+              ],
+              [
+                360000000,
+                1
+              ],
+              [
+                400000000,
+                1
+              ],
+              [
+                440000000,
+                1
+              ],
+              [
+                480000000,
+                1
+              ],
+              [
+                520000000,
+                1
+              ],
+              [
+                560000000,
+                1
+              ],
+              [
+                600000000,
+                1
+              ],
+              [
+                640000000,
+                1
+              ],
+              [
+                680000000,
+                1
+              ],
+              [
+                720000000,
+                1
+              ],
+              [
+                760000000,
+                1
+              ],
+              [
+                800000000,
+                1
+              ],
+              [
+                840000000,
+                1
+              ],
+              [
+                880000000,
+                1
+              ],
+              [
+                920000000,
+                1
+              ],
+              [
+                960000000,
+                1
+              ],
+              [
+                1000000000,
+                1
+              ],
+              [
+                1040000000,
+                1
+              ],
+              [
+                1080000000,
+                1
+              ],
+              [
+                1120000000,
+                1
+              ],
+              [
+                1160000000,
+                1
+              ],
+              [
+                1200000000,
+                1
+              ],
+              [
+                1240000000,
+                1
+              ]
+            ],
+            "rendered_dropped": [
+              [
+                "32",
+                "0"
+              ]
+            ],
+            "clock_returns": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "scope": "32-picture 1080p sample at25fps with valid timestamps and actualclock waits; no broad sustained/thermal playback claim.",
+            "conversion_thread_queue_buffers": 2,
+            "converter_threads": 4
+          },
+          "all_samples_exact": true,
+          "all_clock_results_ok_or_early": true
+        }
+      ],
+      "clocked_native_1080p_25fps_short_sample_qualified": true,
+      "clocked_i420_1080p_25fps_short_sample_qualified": true,
+      "conversion_threads": 4,
+      "conversion_queue_buffers": 2,
+      "cached_concurrent_contexts_frames": 16,
+      "guard_stop_reference_checks": true,
+      "normal_unload": true,
+      "full_system_profile_passed": true,
+      "default_compliance_checks": 57,
+      "default_compliance_failures": 0,
+      "sustained_playback_thermal_qualified": false,
+      "scope": "Pinned97ae module; listed one-slice progressive8bit420 Baseline/Main I/P, one shortterm reference.32pictures/1.28seconds per clocked Mainstream; no broadcodec, sustainedthermal, IRQ, encoder or accepted-default qualification.",
+      "repeats_trial44_module_and_pipeline": true
     }
   },
   "initial_missing_contracts": [

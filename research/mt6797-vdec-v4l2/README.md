@@ -10,12 +10,13 @@ This development has not used a formally separated clean-room team.
 The current module decodes the listed progressive Baseline/Main I/P fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and one short-term
 reference. Trial 41 checks 106 exact pictures including HD, resolution changes
-and visible-height I420 output; all 57 default media checks pass. Trial 44
-checks 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
+and visible-height I420 output; all 57 default media checks pass. Trials 44/45
+check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
 timestamps, real clock waits and zero drops. Concurrent contexts, fault/recovery,
-normal unload and strict accepted-system recovery pass. Trial 44's separate
-RTC alarm count is two instead of one, so its system profile does not qualify.
+normal unload and strict accepted-system recovery pass. Trial 45 also passes
+all RTC/system checks. Trial 44's separate alarm count of two instead of one
+fails its system profile and remains recorded without an established cause.
 The source uses cached private DMA with explicit ownership and lazy geometry
 allocation. Prior RTC/open-allocation/conversion failures remain recorded.
 Hardware encoding, broader codec features, interrupt completion, sustained
@@ -305,6 +306,17 @@ two interrupts instead of one; the full system profile fails and remains
 archived without an established cause. The prior serial
 and queued one-thread conversion failures remain archived. These short
 1.28-second samples do not qualify sustained playback or thermal behavior.
+
+Trial 45 repeats the same module, fixtures and four-thread pipeline settings.
+Both 32-picture 1080p samples again match every sample and timestamp, with 32
+rendered and zero dropped per sink. The native faults, Baseline regression,
+concurrent contexts and all 57 default media checks pass; all 97 compared
+pictures are exact. This repeat also passes every strict RTC/system check,
+normal unload, accepted recovery and kernel-journal audit. Trial 44's duplicate
+alarm count and trial 38's earlier missed alarm remain recorded without an
+established cause. Accepted kernel/configuration pins and bootloader are
+unchanged. The source and pipelines remain experimental with the stated
+one-slice I/P/reference and short-playback limits.
 
 The encoder, interrupt completion, general codec features beyond this scope,
 system suspend and untested stream configurations remain unqualified. These experimental
