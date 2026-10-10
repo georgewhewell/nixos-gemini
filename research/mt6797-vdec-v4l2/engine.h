@@ -9,7 +9,7 @@ struct mt6797_engine;
 struct mt6797_decode_context;
 
 /* Initial hardware boundary: progressive Baseline, one slice and one
- * short-term reference, fixed 64x64. This is original code, not firmware.
+ * short-term reference, bounded small pictures. This is original code, not firmware.
  */
 struct mt6797_decode_job {
 	struct v4l2_ctrl_h264_sps sps;
@@ -19,6 +19,7 @@ struct mt6797_decode_job {
 	const u8 *nal;
 	size_t bytes;
 	u64 timestamp;
+	u16 width, height;
 };
 
 struct mt6797_decode_status {

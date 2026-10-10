@@ -15,16 +15,22 @@ The corrected capability query uses no per-file context; set-format obtains
 the file handle from `file_to_v4l2_fh(file)`. That correction's next hardware
 trial survived udev and G/TRY/S_FMT in `boot-test-video-frame-25`; request QBUF
 then exposed the required `buf_out_validate` hook. That callback is now
-implemented and builds. No owned decoder command ran during trials 24/25;
-public request decoding is still pending. The existing private diagnostic
-has proved exact 64x64 PCM, compressed grey, patterned intra and I-to-P-skip
-pixels with zero decoder error/message words. Those results do not establish
-that this frontend works, or that arbitrary H.264 streams work.
+implemented. No owned decoder command ran during trials 24/25. Trial 26 then
+passed eight public-request hardware frames: every 64x64 MM21 sample matches
+the independently decoded original PCM, grey, patterned intra and P-skip
+fixtures, with zero decoder error/message words. Request completion and reuse,
+capture metadata, six open/stream/close contexts, missing-reference rejection
+before DMA and normal module unload passed. The supervisor's RTC/system checks,
+accepted recovery and strict kernel-journal audit also passed. These results
+apply to the archived trial-26 module, not arbitrary H.264 streams.
 
-Current admission is progressive 8-bit 4:2:0 Baseline, fixed 64x64, one slice,
+Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
 I/P pictures, at most one short-term reference and disabled deblocking. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. This initial implementation supports MMAP queues. Completion
+`V4L2_PIX_FMT_MM21`. The next build admits widths 64/128 and heights 64/96/128;
+only the previous fixed-64x64 build has hardware qualification so far. Queues
+use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
+buffer export is not yet hardware tested. Completion
 uses a bounded workqueue poll because actual interrupt delivery is unqualified.
 It does not implement an encoder.
 
@@ -53,11 +59,19 @@ boot:
 ```text
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job
+
+# Original external fixtures, with explicit motion and exported-buffer mappings:
+request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
+  /sys/bus/platform/devices/16020000.video-codec/last_job \
+  FIXTURE_DIRECTORY 128 96 export
 ```
 
 It submits the independently verified original fixtures, checks request
 completion/reinitialization, capture sizes/timestamps/sequences, repeated
-open/stream/close and a missing reference rejection. It saves MM21 samples and
+open/stream/close and a missing reference rejection. Optional external fixtures
+exercise other admitted dimensions and an explicit four-pixel P-picture motion;
+export mode checks that completed capture storage survives video-file close.
+It saves MM21 samples and
 cached hardware status for independent host comparison with
 `../mt6797-vdec/compare-frame.py`. This is an API and hardware qualification
 exerciser; successful compilation alone is not a decode qualification.

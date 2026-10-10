@@ -42,6 +42,7 @@ struct decode_file {
 	struct v4l2_ctrl *sps, *pps, *slice, *decode;
 	atomic_t abort;
 	u32 sequence;
+	u16 width, height;
 };
 
 static struct decode_file *file_context(void *priv)
@@ -77,32 +78,51 @@ static int enumerate_format(struct file *file, void *priv, struct v4l2_fmtdesc *
 
 static int enumerate_size(struct file *file, void *priv, struct v4l2_frmsizeenum *size)
 {
-	if (size->index || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
+	if (size->index >= 6 || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
 			    size->pixel_format != V4L2_PIX_FMT_MM21))
 		return -EINVAL;
 	size->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	size->discrete.width = size->discrete.height = 64;
+	size->discrete.width = size->index < 3 ? 64 : 128;
+	size->discrete.height = 64 + 32 * (size->index % 3);
 	return 0;
 }
 
-static int get_format(struct file *file, void *priv, struct v4l2_format *format)
+static int fill_format(struct v4l2_format *format, unsigned int width, unsigned int height)
 {
 	struct v4l2_pix_format_mplane *pix = &format->fmt.pix_mp;
 	bool output = output_queue(format->type);
 	if (!output && format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
 		return -EINVAL;
 	memset(pix, 0, sizeof(*pix));
-	pix->width = pix->height = 64;
+	pix->width = width;
+	pix->height = height;
 	pix->field = V4L2_FIELD_NONE;
 	pix->pixelformat = output ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21;
 	pix->num_planes = output ? 1 : 2;
-	pix->plane_fmt[0].sizeimage = output ? INPUT_SIZE : 4096;
+	pix->plane_fmt[0].sizeimage = output ? INPUT_SIZE : width * height;
 	if (!output) {
-		pix->plane_fmt[0].bytesperline = 64;
-		pix->plane_fmt[1].bytesperline = 64;
-		pix->plane_fmt[1].sizeimage = 2048;
+		pix->plane_fmt[0].bytesperline = width;
+		pix->plane_fmt[1].bytesperline = width;
+		pix->plane_fmt[1].sizeimage = width * height / 2;
 	}
 	return 0;
+}
+
+static int get_format(struct file *file, void *priv, struct v4l2_format *format)
+{
+	struct decode_file *ctx = file_context(file_to_v4l2_fh(file));
+	return fill_format(format, ctx->width, ctx->height);
+}
+
+static int try_format(struct file *file, void *priv, struct v4l2_format *format)
+{
+	struct decode_file *ctx = file_context(file_to_v4l2_fh(file));
+	unsigned int width = ctx->width, height = ctx->height;
+	if (output_queue(format->type)) {
+		width = format->fmt.pix_mp.width <= 64 ? 64 : 128;
+		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, 128U), 32U);
+	}
+	return fill_format(format, width, height);
 }
 
 static int set_format(struct file *file, void *priv, struct v4l2_format *format)
@@ -111,38 +131,50 @@ static int set_format(struct file *file, void *priv, struct v4l2_format *format)
 	struct vb2_queue *queue = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, format->type);
 	if (!queue)
 		return -EINVAL;
-	if (vb2_is_busy(queue))
+	if (vb2_is_busy(queue) ||
+	    (output_queue(format->type) && vb2_is_busy(v4l2_m2m_get_dst_vq(ctx->fh.m2m_ctx))))
 		return -EBUSY;
-	return get_format(file, priv, format);
+	if (try_format(file, priv, format))
+		return -EINVAL;
+	if (output_queue(format->type)) {
+		ctx->width = format->fmt.pix_mp.width;
+		ctx->height = format->fmt.pix_mp.height;
+		mt6797_decode_context_reset(ctx->context);
+	}
+	return 0;
 }
 
 static int queue_setup(struct vb2_queue *queue, unsigned int *buffers,
 		       unsigned int *planes, unsigned int sizes[], struct device *devices[])
 {
 	bool output = output_queue(queue->type);
+	struct decode_file *ctx = vb2_get_drv_priv(queue);
+	unsigned int luma_size = ctx->width * ctx->height;
 	unsigned int count = output ? 1 : 2;
-	unsigned int first = output ? INPUT_SIZE : 4096;
+	unsigned int first = output ? INPUT_SIZE : luma_size;
 	if (*planes) {
-		if (*planes != count || sizes[0] < first || (!output && sizes[1] < 2048))
+		if (*planes != count || sizes[0] < first || (!output && sizes[1] < luma_size / 2))
 			return -EINVAL;
 		return 0;
 	}
 	*planes = count;
 	sizes[0] = first;
 	if (!output)
-		sizes[1] = 2048;
+		sizes[1] = luma_size / 2;
 	return 0;
 }
 
 static int prepare_buffer(struct vb2_buffer *buffer)
 {
 	bool output = output_queue(buffer->vb2_queue->type);
+	struct decode_file *ctx = vb2_get_drv_priv(buffer->vb2_queue);
+	unsigned int luma_size = ctx->width * ctx->height;
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(buffer);
-	unsigned int first = output ? INPUT_SIZE : 4096;
+	unsigned int first = output ? INPUT_SIZE : luma_size;
 	unsigned int bytes = vb2_get_plane_payload(buffer, 0);
 	unsigned int offset = buffer->planes[0].data_offset;
 	if (vb2_plane_size(buffer, 0) < first ||
-	    (!output && vb2_plane_size(buffer, 1) < 2048))
+	    (!output && vb2_plane_size(buffer, 1) < luma_size / 2))
 		return -EINVAL;
 	if (output && (bytes <= offset || bytes - offset > INPUT_SIZE))
 		return -EINVAL;
@@ -262,6 +294,8 @@ static void decode_work(struct work_struct *work)
 		ctx->job.pps = *ctx->pps->p_cur.p_h264_pps;
 		ctx->job.slice = *ctx->slice->p_cur.p_h264_slice_params;
 		ctx->job.decode = *ctx->decode->p_cur.p_h264_decode_params;
+		ctx->job.width = ctx->width;
+		ctx->job.height = ctx->height;
 		mutex_unlock(ctx->controls.lock);
 		ctx->job.nal = vb2_plane_vaddr(&source->vb2_buf, 0);
 		if (!ctx->job.nal)
@@ -277,10 +311,11 @@ static void decode_work(struct work_struct *work)
 	if (atomic_read(&ctx->abort))
 		ret = -ECANCELED;
 	if (!ret) {
-		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 0), pixels, 4096);
-		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 1), pixels + 4096, 2048);
-		vb2_set_plane_payload(&capture->vb2_buf, 0, 4096);
-		vb2_set_plane_payload(&capture->vb2_buf, 1, 2048);
+		unsigned int luma_size = ctx->width * ctx->height;
+		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 0), pixels, luma_size);
+		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 1), pixels + luma_size, luma_size / 2);
+		vb2_set_plane_payload(&capture->vb2_buf, 0, luma_size);
+		vb2_set_plane_payload(&capture->vb2_buf, 1, luma_size / 2);
 	}
 	spin_lock_irqsave(&decoder->status_lock, flags);
 	decoder->last_status = status;
@@ -326,6 +361,7 @@ static int open_decoder(struct file *file)
 	if (!ctx)
 		return -ENOMEM;
 	ctx->decoder = decoder;
+	ctx->width = ctx->height = 64;
 	mutex_lock(&decoder->mutex);
 	ctx->context = mt6797_decode_context_create(decoder->engine);
 	if (IS_ERR(ctx->context)) {
@@ -404,13 +440,14 @@ static const struct v4l2_ioctl_ops ioctls = {
 	.vidioc_enum_framesizes = enumerate_size,
 	.vidioc_g_fmt_vid_out_mplane = get_format,
 	.vidioc_g_fmt_vid_cap_mplane = get_format,
-	.vidioc_try_fmt_vid_out_mplane = get_format,
-	.vidioc_try_fmt_vid_cap_mplane = get_format,
+	.vidioc_try_fmt_vid_out_mplane = try_format,
+	.vidioc_try_fmt_vid_cap_mplane = try_format,
 	.vidioc_s_fmt_vid_out_mplane = set_format,
 	.vidioc_s_fmt_vid_cap_mplane = set_format,
 	.vidioc_reqbufs = v4l2_m2m_ioctl_reqbufs,
 	.vidioc_create_bufs = v4l2_m2m_ioctl_create_bufs,
 	.vidioc_querybuf = v4l2_m2m_ioctl_querybuf,
+	.vidioc_expbuf = v4l2_m2m_ioctl_expbuf,
 	.vidioc_qbuf = v4l2_m2m_ioctl_qbuf,
 	.vidioc_dqbuf = v4l2_m2m_ioctl_dqbuf,
 	.vidioc_prepare_buf = v4l2_m2m_ioctl_prepare_buf,

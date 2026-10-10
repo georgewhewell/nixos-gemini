@@ -50,6 +50,7 @@ struct mt6797_decode_context {
 	struct private_buffer pictures[2];
 	u64 timestamps[2];
 	u16 frame_numbers[2];
+	u16 widths[2], heights[2];
 	s32 top_poc[2], bottom_poc[2];
 	bool valid[2];
 };
@@ -318,7 +319,10 @@ static int validate_job(struct mt6797_decode_context *ctx,
 				    &job->decode, job->bytes, slice);
 	if (ret)
 		return ret;
-	if (job->sps.profile_idc != 66 || header->width_mbs != 4 || header->height_mbs != 4 ||
+	if (job->sps.profile_idc != 66 ||
+	    (job->width != 64 && job->width != 128) ||
+	    job->height < 64 || job->height > 128 || job->height % 32 ||
+	    header->width_mbs * 16 != job->width || header->height_mbs * 16 != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
 	    job->pps.flags & (V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE |
 		V4L2_H264_PPS_FLAG_WEIGHTED_PRED | V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
@@ -351,6 +355,7 @@ static int validate_job(struct mt6797_decode_context *ctx,
 			if (retained < 0)
 				return -ENOENT;
 			if (ctx->frame_numbers[retained] != entry->frame_num ||
+			    ctx->widths[retained] != job->width || ctx->heights[retained] != job->height ||
 			    ctx->top_poc[retained] != entry->top_field_order_cnt ||
 			    ctx->bottom_poc[retained] != entry->bottom_field_order_cnt)
 				return -EINVAL;
@@ -403,7 +408,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct private_buffer *input = &engine->memory[INPUT], *prediction = &engine->memory[PREDICTION];
 	struct private_buffer *picture;
 	u32 state, original_dcm, original_irq, original_break, original_gate;
-	unsigned int output, remaining, i;
+	unsigned int output, remaining, i, luma_size = job->width * job->height;
 	int reference, ret, stop_ret;
 	bool dma_started = false;
 
@@ -535,29 +540,29 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	}
 	SAVE(avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
 	SAVE(avc + 0x2c8, readl(avc + 0x2c8) & ~BIT(5));
-	SAVE(top + 0x68, 3 | (3U << 16));
-	SAVE(top + 0x70, 64 | (64U << 16));
+	SAVE(top + 0x68, (header.width_mbs - 1) | ((header.height_mbs - 1) << 16));
+	SAVE(top + 0x70, job->width | ((u32)job->height << 16));
 	SAVE(top + 0x58, 0xffffffff);
-	SAVE(top + 0x6c, 16);
+	SAVE(top + 0x6c, header.width_mbs * header.height_mbs);
 	SAVE(top + 0x50, 0xffffffff);
 	SAVE(top + 0x54, readl(top + 0x54) | BIT(0));
 	SAVE(misc + 0xf0, readl(misc + 0xf0) | BIT(0));
 	SAVE(mc + 0x90, 4);
 	SAVE(mc + 0x768, (readl(mc + 0x768) & ~GENMASK(2, 0)) | 4);
-	SAVE(mc + 0x208, 64);
-	SAVE(mc + 0x20c, 64);
+	SAVE(mc + 0x208, job->width);
+	SAVE(mc + 0x20c, job->width);
 	SAVE(mc + 0x220, 1);
 	SAVE(mc + 0x224, lower_32_bits(picture->dma) >> 9);
-	SAVE(mc + 0x228, lower_32_bits(picture->dma + 4096) >> 8);
-	SAVE(mc + 0x22c, 4);
+	SAVE(mc + 0x228, lower_32_bits(picture->dma + luma_size) >> 8);
+	SAVE(mc + 0x22c, header.width_mbs);
 	SAVE(mc + 0x238, 3);
 	SAVE(mc + 0x250, 1);
-	SAVE(mc + 0x260, 3);
-	SAVE(mc + 0x264, 3);
+	SAVE(mc + 0x260, header.width_mbs - 1);
+	SAVE(mc + 0x264, header.height_mbs - 1);
 	SAVE(mc + 0x268, 1);
 	SAVE(mc + 0x560, lower_32_bits(picture->dma));
-	SAVE(mc + 0x55c, 4096);
-	SAVE(mc + 0x980, 4);
+	SAVE(mc + 0x55c, luma_size);
+	SAVE(mc + 0x980, header.width_mbs);
 	SAVE(mc + 0xa20, lower_32_bits(engine->memory[VLD_WRAP].dma));
 	SAVE(mc + 0xa24, lower_32_bits(engine->memory[PP_WRAP].dma));
 	SAVE(mc + 0x5e4, readl(mc + 0x5e4) | BIT(12));
@@ -630,6 +635,8 @@ power:
 			mt6797_decode_context_reset(ctx);
 		ctx->timestamps[output] = job->timestamp;
 		ctx->frame_numbers[output] = job->decode.frame_num;
+		ctx->widths[output] = job->width;
+		ctx->heights[output] = job->height;
 		ctx->top_poc[output] = job->decode.top_field_order_cnt;
 		ctx->bottom_poc[output] = job->decode.bottom_field_order_cnt;
 		ctx->valid[output] = job->decode.nal_ref_idc != 0;

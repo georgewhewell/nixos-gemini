@@ -19,12 +19,15 @@
 typedef uint8_t u8;
 #include "../mt6797-vdec/pcm64-fixture.h"
 
-struct mapping { void *address; size_t bytes; };
+struct mapping { void *address; size_t bytes; int fd; };
 struct stream {
 	int video, media;
 	struct mapping source, capture[2];
 };
 static const char *status_path;
+static const char *fixture_directory;
+static unsigned int width = 64, height = 64;
+static int export_buffers;
 
 static void fail(const char *operation)
 {
@@ -48,12 +51,14 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 	struct v4l2_buffer buffer = { .type = type, .memory = V4L2_MEMORY_MMAP,
 		.length = type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ? 1 : 2, .m.planes = planes };
 	checked_ioctl(stream->video, VIDIOC_G_FMT, &format, "G_FMT");
-	if (format.fmt.pix_mp.width != 64 || format.fmt.pix_mp.height != 64 ||
-	    format.fmt.pix_mp.pixelformat != (buffer.length == 1 ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21)) {
-		fprintf(stderr, "Unexpected advertised format\n"); exit(1);
-	}
+	format.fmt.pix_mp.width = width;
+	format.fmt.pix_mp.height = height;
 	checked_ioctl(stream->video, VIDIOC_TRY_FMT, &format, "TRY_FMT");
 	checked_ioctl(stream->video, VIDIOC_S_FMT, &format, "S_FMT");
+	if (format.fmt.pix_mp.width != width || format.fmt.pix_mp.height != height ||
+	    format.fmt.pix_mp.pixelformat != (buffer.length == 1 ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21)) {
+		fprintf(stderr, "Unexpected negotiated format\n"); exit(1);
+	}
 	checked_ioctl(stream->video, VIDIOC_REQBUFS, &request, "REQBUFS");
 	if (!request.count || (buffer.length == 1 && !(request.capabilities & V4L2_BUF_CAP_SUPPORTS_REQUESTS))) {
 		fprintf(stderr, "Queue does not support the required allocation/request API\n"); exit(1);
@@ -62,8 +67,17 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 	for (unsigned int i = 0; i < buffer.length; i++) {
 		struct mapping *mapping = buffer.length == 1 ? &stream->source : &stream->capture[i];
 		mapping->bytes = planes[i].length;
+		mapping->fd = -1;
+		int fd = stream->video;
+		off_t offset = planes[i].m.mem_offset;
+		if (export_buffers) {
+			struct v4l2_exportbuffer exported = { .type = type, .plane = i, .flags = O_RDWR | O_CLOEXEC };
+			checked_ioctl(stream->video, VIDIOC_EXPBUF, &exported, "EXPBUF");
+			mapping->fd = fd = exported.fd;
+			offset = 0;
+		}
 		mapping->address = mmap(NULL, mapping->bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
-					stream->video, planes[i].m.mem_offset);
+					fd, offset);
 		if (mapping->address == MAP_FAILED)
 			fail("mmap");
 	}
@@ -91,14 +105,31 @@ static void open_stream(struct stream *stream, const char *video, const char *me
 
 static void close_stream(struct stream *stream)
 {
+	size_t luma_size = width * height;
+	u8 *snapshot = malloc(luma_size * 3 / 2);
+	if (!snapshot) fail("snapshot allocation");
+	memcpy(snapshot, stream->capture[0].address, luma_size);
+	memcpy(snapshot + luma_size, stream->capture[1].address, luma_size / 2);
 	for (unsigned int i = 0; i < 2; i++) {
 		enum v4l2_buf_type type = i ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 		checked_ioctl(stream->video, VIDIOC_STREAMOFF, &type, "STREAMOFF");
 	}
-	munmap(stream->source.address, stream->source.bytes);
-	for (unsigned int i = 0; i < 2; i++) munmap(stream->capture[i].address, stream->capture[i].bytes);
 	close(stream->media);
 	close(stream->video);
+	/* With exported mappings, the video file can close while these independent
+	 * DMA-buffer references keep the completed CPU queue storage alive.
+	 */
+	if (memcmp(snapshot, stream->capture[0].address, luma_size) ||
+	    memcmp(snapshot + luma_size, stream->capture[1].address, luma_size / 2)) {
+		fprintf(stderr, "Capture storage changed across video close\n"); exit(1);
+	}
+	free(snapshot);
+	munmap(stream->source.address, stream->source.bytes);
+	if (stream->source.fd >= 0) close(stream->source.fd);
+	for (unsigned int i = 0; i < 2; i++) {
+		munmap(stream->capture[i].address, stream->capture[i].bytes);
+		if (stream->capture[i].fd >= 0) close(stream->capture[i].fd);
+	}
 }
 
 static int64_t milliseconds(void)
@@ -131,8 +162,8 @@ static int dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_er
 	}
 	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
 	    (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec ||
-	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : 4096U) ||
-	     planes[1].bytesused != (expect_error ? 0U : 2048U))) {
+	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : width * height) ||
+	     planes[1].bytesused != (expect_error ? 0U : width * height / 2))) {
 		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); bad = 1;
 	}
 	return bad;
@@ -142,10 +173,27 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		   const u8 *nal, size_t bytes, int predicted, int patterned,
 		   int expect_error, unsigned int timestamp, unsigned int sequence)
 {
+	u8 input[65408];
+	if (fixture_directory) {
+		const char *fixture = !strcmp(name, "missing-reference") ? "pcm64-p" :
+			!strcmp(name, "motion-reference") ? "pcm64" : name;
+		char path[1024];
+		if (snprintf(path, sizeof(path), "%s/%s.nal", fixture_directory, fixture) >= (int)sizeof(path)) {
+			fprintf(stderr, "Fixture path too long\n"); exit(1);
+		}
+		FILE *file = fopen(path, "rb");
+		if (!file) fail("open fixture");
+		bytes = fread(input, 1, sizeof(input), file);
+		if (ferror(file) || !bytes || fgetc(file) != EOF) {
+			fprintf(stderr, "Invalid or oversized fixture\n"); exit(1);
+		}
+		fclose(file);
+		nal = input;
+	}
 	struct v4l2_ctrl_h264_sps sps = {
 		.profile_idc = 66, .level_idc = 10, .constraint_set_flags = 3,
 		.chroma_format_idc = 1, .max_num_ref_frames = 1,
-		.pic_width_in_mbs_minus1 = 3, .pic_height_in_map_units_minus1 = 3,
+		.pic_width_in_mbs_minus1 = width / 16 - 1, .pic_height_in_map_units_minus1 = height / 16 - 1,
 		.flags = V4L2_H264_SPS_FLAG_FRAME_MBS_ONLY | V4L2_H264_SPS_FLAG_DIRECT_8X8_INFERENCE,
 	};
 	struct v4l2_ctrl_h264_pps pps = { .flags = V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT };
@@ -205,8 +253,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		}
 		FILE *file = fopen(path, "wb");
 		if (!file) fail("output file");
-		if (fwrite(stream->capture[0].address, 1, 4096, file) != 4096 ||
-		    fwrite(stream->capture[1].address, 1, 2048, file) != 2048 || fclose(file)) fail("write output");
+		if (fwrite(stream->capture[0].address, 1, width * height, file) != width * height ||
+		    fwrite(stream->capture[1].address, 1, width * height / 2, file) != width * height / 2 || fclose(file)) fail("write output");
 	}
 	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
 	close(request);
@@ -231,10 +279,20 @@ static void decode(struct stream *stream, const char *out, const char *name,
 int main(int argc, char **argv)
 {
 	struct stream stream;
-	if (argc != 5) {
-		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH\n", argv[0]); return 2;
+	if (argc != 5 && argc != 9) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [FIXTURES WIDTH HEIGHT mmap|export]\n", argv[0]); return 2;
 	}
 	status_path = argv[4];
+	if (argc == 9) {
+		fixture_directory = argv[5];
+		width = strtoul(argv[6], NULL, 10);
+		height = strtoul(argv[7], NULL, 10);
+		if ((width != 64 && width != 128) || height < 64 || height > 128 || height % 32 ||
+		    (strcmp(argv[8], "mmap") && strcmp(argv[8], "export"))) {
+			fprintf(stderr, "Invalid test geometry or mapping mode\n"); return 2;
+		}
+		export_buffers = !strcmp(argv[8], "export");
+	}
 	open_stream(&stream, argv[1], argv[2]);
 	decode(&stream, argv[3], "pcm64", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
 	decode(&stream, argv[3], "pcm64-p", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);
@@ -246,6 +304,16 @@ int main(int argc, char **argv)
 	open_stream(&stream, argv[1], argv[2]);
 	decode(&stream, argv[3], "missing-reference", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 2, 0);
 	close_stream(&stream);
+	if (fixture_directory) {
+		char path[1024];
+		if (snprintf(path, sizeof(path), "%s/pcm64-motion.nal", fixture_directory) >= (int)sizeof(path)) return 2;
+		if (!access(path, R_OK)) {
+			open_stream(&stream, argv[1], argv[2]);
+			decode(&stream, argv[3], "motion-reference", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
+			decode(&stream, argv[3], "pcm64-motion", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);
+			close_stream(&stream);
+		}
+	}
 	puts("{\"public_api_test_passed\":true}");
 	return 0;
 }
