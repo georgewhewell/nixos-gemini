@@ -1595,3 +1595,33 @@ No mapping is released on unproven stop. This reference test has not yet run.
 The P fixture metadata now uses public V4L2 PFRAME flag `8`; NAL/sample bytes
 are unchanged. Production IRQ handling, V4L2 lifecycle, varied geometry and
 encoding remain unqualified.
+
+Private frame trial `handoff/boot-test-video-frame-22` passes the command-free
+control and PCM baseline. The guarded reference job completes its first PCM
+picture with zero errors and both stop acknowledgements. Its next step wrongly
+requests another break while VLD reset is held; acknowledgement times out
+before loading or commanding the P NAL. Reference registers are not programmed.
+The old cache retains the first-picture state; input mismatch reflects restored
+known-word producer bytes while stale bookkeeping expects a P slice. This
+does not isolate a hardware overwrite. The matrix stops with mappings and
+clocks fenced until supervised reboot, and no reference pixel snapshot is
+exported. Only two actual frame commands and six input fetches occur. P is
+not counted as a frame command or comparison. Aggregate: 39 commands, 12
+complete exact comparisons, 6 strictly error-free comparisons, 6 controls.
+
+The final RTC delivery check records interrupt delta zero over 13.22 seconds;
+the candidate run fails and is not qualified for installation. Accepted recovery
+and final no-writer/source checks pass. The independent audit finds the normal
+system healthy, untainted and clear of temporary probes at `00dd456a-14ad-40d6-ab82-62c8134e554c`.
+
+The compiled restart fix retains the successful first stop/reset proof, skips
+the duplicate break, and clears stale producer/submission caches before P.
+`frame_interrupt=1` separately requests the real DT interrupt while powered,
+requires delivered IRQ plus picture-complete status, and acknowledges the
+published RISC clear sequence. Four unclassified interrupts disable the line
+and fail the job. Callback synchronization and IRQ release precede power-off;
+failed DMA stop retains resources until reboot. Input endings must be valid.
+The next matrix tests corrected restart, active wrapper path and real IRQs.
+These additions build with strict modpost against the exact kernel, but P
+decoding and interrupt-driven jobs remain unqualified. V4L2 and encoding
+are not implemented.

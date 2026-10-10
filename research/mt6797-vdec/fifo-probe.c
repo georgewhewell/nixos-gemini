@@ -3,9 +3,12 @@
  * Private known-input and original H.264 intra-frame diagnostics; no V4L2 device.
  */
 #include <linux/clk.h>
+#include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
+#include <linux/interrupt.h>
+#include <linux/jiffies.h>
 #include <linux/iommu.h>
 #include <linux/iopoll.h>
 #include <linux/mfd/syscon.h>
@@ -109,6 +112,9 @@ MODULE_PARM_DESC(frame_ref_first, "Reset picture-number SRAM before SPS/PPS, mat
 static bool frame_p_skip;
 module_param(frame_p_skip, bool, 0444);
 MODULE_PARM_DESC(frame_p_skip, "Decode original PCM then an original P-skip picture using a guarded copy of the hardware-produced reference");
+static bool frame_interrupt;
+module_param(frame_interrupt, bool, 0444);
+MODULE_PARM_DESC(frame_interrupt, "Require a real decoder IRQ for frame completion; valid Annex B producer ending is required");
 static unsigned int dma_bits = TEST_DMA_BITS;
 module_param(dma_bits, uint, 0444);
 MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
@@ -210,6 +216,10 @@ struct fifo_probe {
 	u32 first_frame_state, first_frame_error, first_frame_message, first_frame_irq;
 	u32 reference_registers[5];
 	int first_frame_result, first_break_result, first_reset_result;
+	struct completion frame_completion;
+	int irq;
+	bool irq_requested, irq_armed, frame_irq_seen, first_irq_seen, irq_storm;
+	u32 irq_count, irq_completed, irq_unexpected, irq_last_status, irq_last_state;
 };
 
 static bool frame_input_unchanged(struct fifo_probe *p)
@@ -252,6 +262,42 @@ static void write_reg(u32 value, void __iomem *address)
 {
 	writel(value, address);
 	mb();
+}
+
+static irqreturn_t frame_interrupt_handler(int irq, void *data)
+{
+	struct fifo_probe *p = data;
+	u32 status = readl(p->misc + IRQ_CONTROL);
+	u32 state = readl(p->avc + 0x278);
+	u32 finish = readl(p->avc + 0x274);
+	bool completed = READ_ONCE(p->irq_armed) && (state & BIT(31)) &&
+		((status & BIT(16)) || (finish & BIT(0)));
+
+	p->irq_count++;
+	/* Public MT6797 RISC clear sequence. A delivered dedicated IRQ is
+	 * acknowledged even if it cannot be classified as frame completion.
+	 * Never wake the waiter merely because the interrupt line fired.
+	 */
+	write_reg(status | BIT(0) | BIT(4), p->misc + IRQ_CONTROL);
+	write_reg((status | BIT(0)) & ~BIT(4), p->misc + IRQ_CONTROL);
+	if (completed) {
+		p->irq_last_status = status;
+		p->irq_last_state = state;
+		p->irq_completed++;
+		WRITE_ONCE(p->frame_irq_seen, true);
+		complete(&p->frame_completion);
+	} else {
+		p->irq_unexpected++;
+		/* Bound an unclassified level-triggered source. The process records
+		 * failure and still proves DMA idle before releasing any mapping.
+		 */
+		if (p->irq_unexpected >= 4 && !p->irq_storm) {
+			p->irq_storm = true;
+			disable_irq_nosync(irq);
+			complete(&p->frame_completion);
+		}
+	}
+	return IRQ_HANDLED;
 }
 
 static int reset_subsystem(struct fifo_probe *p)
@@ -517,13 +563,20 @@ static int test_frame(struct fifo_probe *p)
 				    frame_nal_size(p->predicted_picture), &words);
 	if (ret)
 		return ret;
-	/* Stop the known-word fetch before replacing producer bytes. */
-	ret = break_input(p);
-	if (ret)
-		return ret;
-	ret = reset_input(p);
-	if (ret)
-		return ret;
+	/* The initial picture must stop its known-word fetch. A chained P
+	 * picture already has both stop acknowledgements and an asserted idle
+	 * reset; asking that reset-held engine for a second break would stall.
+	 */
+	if (!p->predicted_picture) {
+		ret = break_input(p);
+		if (ret)
+			return ret;
+		ret = reset_input(p);
+		if (ret)
+			return ret;
+	} else if (!p->reference_ready || p->first_break_result || p->first_reset_result) {
+		return -EINVAL;
+	}
 	dma_rmb();
 	if (memcmp(p->input, test_bytes, sizeof(test_bytes)) ||
 	    memchr_inv(p->input + sizeof(test_bytes), 0xa5,
@@ -680,16 +733,42 @@ static int test_frame(struct fifo_probe *p)
 		p->frame_work_before[i] = !!memchr_inv(p->frame_buffers[i], 0, FIFO_SIZE);
 	ret = 0;
 	if (!frame_config_only) {
+		if (frame_interrupt) {
+			if (!p->irq_requested) {
+				ret = request_irq(p->irq, frame_interrupt_handler, 0,
+						  dev_name(p->dev), p);
+				if (ret)
+					return ret;
+				p->irq_requested = true;
+			}
+			synchronize_irq(p->irq);
+			if (p->irq_storm)
+				return -EIO;
+			reinit_completion(&p->frame_completion);
+			WRITE_ONCE(p->frame_irq_seen, false);
+			WRITE_ONCE(p->irq_armed, true);
+		}
 		dma_wmb();
 		p->decode_started = true; /* Software submission, not decoded-frame proof. */
 		write_reg(1, p->avc + 0x238);
-		ret = readl_poll_timeout(p->avc + 0x278, p->frame_state,
-					p->frame_state & BIT(31), 100, 1000000);
+		if (frame_interrupt) {
+			ret = wait_for_completion_timeout(&p->frame_completion,
+							 msecs_to_jiffies(1000)) ? 0 : -ETIMEDOUT;
+			WRITE_ONCE(p->irq_armed, false);
+			synchronize_irq(p->irq);
+			p->frame_state = readl(p->avc + 0x278);
+			if (!ret && (!(p->frame_state & BIT(31)) ||
+				     !p->frame_irq_seen || p->irq_storm))
+				ret = -EIO;
+		} else {
+			ret = readl_poll_timeout(p->avc + 0x278, p->frame_state,
+						p->frame_state & BIT(31), 100, 1000000);
+		}
 		p->frame_done = !ret;
 	} else {
 		p->frame_state = readl(p->avc + 0x278);
 	}
-	p->frame_irq = readl(p->misc + IRQ_CONTROL);
+	p->frame_irq = frame_interrupt && p->frame_irq_seen ? p->irq_last_status : readl(p->misc + IRQ_CONTROL);
 	p->frame_error = readl(p->avc + 0x284);
 	p->frame_message = readl(p->avc + 0x270);
 	p->frame_mbx = readl(p->mc + 0x28);
@@ -753,6 +832,7 @@ static int test_reference(struct fifo_probe *p)
 	p->first_frame_error = p->frame_error;
 	p->first_frame_message = p->frame_message;
 	p->first_frame_irq = p->frame_irq;
+	p->first_irq_seen = p->frame_irq_seen;
 	/* A failed first picture cannot become a reference. Zero-error completion
 	 * is required here; userspace independently compares both CPU snapshots.
 	 */
@@ -762,6 +842,7 @@ static int test_reference(struct fifo_probe *p)
 	p->first_reset_result = reset_input(p);
 	if (p->first_break_result || p->first_reset_result)
 		return -EBUSY;
+	p->dma_started = false; /* Both acknowledgements prove prior DMA idle. */
 	dma_rmb();
 	if (!frame_input_unchanged(p) ||
 	    memchr_inv(p->scratch + FIFO_SIZE, 0xd3, FIFO_SIZE))
@@ -786,8 +867,15 @@ static int test_reference(struct fifo_probe *p)
 	for (i = 0; i < ARRAY_SIZE(p->frame_buffers); i++)
 		memset(p->frame_buffers[i], 0xd3, INPUT_ALLOC_SIZE);
 	p->predicted_picture = true;
+	p->slice_loaded = false;
 	p->frame_done = false;
 	p->decode_started = false;
+	p->frame_state = p->frame_irq = p->frame_error = p->frame_message = 0;
+	p->frame_mbx = p->frame_mby = p->frame_input_first = p->frame_input_data = 0;
+	memset(p->frame_setup, 0, sizeof(p->frame_setup));
+	memset(p->frame_status, 0, sizeof(p->frame_status));
+	memset(p->frame_clock_status, 0, sizeof(p->frame_clock_status));
+	memset(p->frame_pipeline, 0, sizeof(p->frame_pipeline));
 	return test_frame(p);
 }
 
@@ -833,6 +921,9 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		"\"h264_pp\":%s,\"mc_output\":%s,\"extended_clocks\":%u,\"bank8\":%s,\"frame_format\":%s,"
 		"\"pixel_size_programmed\":%s,\"crc_programmed\":%s,"
 		"\"input_padding\":%u,\"reference_reset_first\":%s,"
+		"\"interrupt_mode\":%s,\"interrupt_seen\":%s,\"interrupt_count\":%u,"
+		"\"interrupt_completed\":%u,\"interrupt_unexpected\":%u,\"interrupt_last_state\":%u,"
+		"\"interrupt_storm\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
@@ -850,6 +941,9 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		extended_clocks, frame_bank8 ? "true" : "false", frame_format ? "true" : "false",
 		frame_pixels ? "true" : "false", frame_crc ? "true" : "false",
 		frame_padding, frame_ref_first ? "true" : "false",
+		frame_interrupt ? "true" : "false", p->frame_irq_seen ? "true" : "false",
+		p->irq_count, p->irq_completed, p->irq_unexpected, p->irq_last_state,
+		p->irq_storm ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -871,12 +965,14 @@ static ssize_t reference_result_show(struct device *dev, struct device_attribute
 		"{\"requested\":%s,\"predicted_picture\":%s,\"ready\":%s,\"unchanged\":%s,"
 		"\"first_result\":%d,\"first_state\":%u,\"first_error\":%u,\"first_message\":%u,"
 		"\"first_irq\":%u,\"first_break_result\":%d,\"first_reset_result\":%d,"
+		"\"first_interrupt_seen\":%s,"
 		"\"reference_iova\":%llu,\"field_mask\":%u,\"reference_address\":%u,"
 		"\"picture_number\":%u,\"mv_top\":%u,\"mv_bottom\":%u}\n",
 		frame_p_skip ? "true" : "false", p->predicted_picture ? "true" : "false",
 		p->reference_ready ? "true" : "false", p->reference_unchanged ? "true" : "false",
 		p->first_frame_result, p->first_frame_state, p->first_frame_error, p->first_frame_message,
 		p->first_frame_irq, p->first_break_result, p->first_reset_result,
+		p->first_irq_seen ? "true" : "false",
 		(unsigned long long)p->reference_dma, p->reference_registers[0], p->reference_registers[1],
 		p->reference_registers[2], p->reference_registers[3], p->reference_registers[4]);
 }
@@ -1049,12 +1145,14 @@ static int fifo_probe(struct platform_device *pdev)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc || frame_padding || frame_ref_first || frame_p_skip)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc || frame_padding || frame_ref_first || frame_p_skip || frame_interrupt)) ||
 	    (frame_flat && frame_pattern))
 		return -EINVAL;
 	if (extended_clocks > 2 || frame_padding > 2)
 		return -EINVAL;
 	if (frame_p_skip && (frame_flat || frame_pattern || frame_config_only || !frame_padding))
+		return -EINVAL;
+	if (frame_interrupt && frame_padding != 2)
 		return -EINVAL;
 	if (dma_bits < 28 || dma_bits > TEST_DMA_BITS)
 		return -EINVAL;
@@ -1062,6 +1160,12 @@ static int fifo_probe(struct platform_device *pdev)
 	if (!p)
 		return -ENOMEM;
 	p->dev = dev;
+	init_completion(&p->frame_completion);
+	if (frame_interrupt) {
+		p->irq = platform_get_irq(pdev, 0);
+		if (p->irq < 0)
+			return p->irq;
+	}
 	p->frame_result = -ENODATA;
 	p->gcon = syscon_regmap_lookup_by_compatible("mediatek,mt6797-vdecsys");
 	if (IS_ERR(p->gcon))
@@ -1279,10 +1383,16 @@ static int fifo_probe(struct platform_device *pdev)
 	p->quiesced = !p->reset_result &&
 		(!p->dma_started || !p->break_result);
 	if (!p->quiesced) {
+		if (p->irq_requested)
+			disable_irq(p->irq);
 		p->fenced = true;
 		__module_get(THIS_MODULE);
 		dev_err(dev, "input DMA not proven idle; retaining buffers until reboot\n");
 		return 0;
+	}
+	if (p->irq_requested) {
+		free_irq(p->irq, p);
+		p->irq_requested = false;
 	}
 	if (frame) {
 		/* Copy only after both stop acknowledgements and the idle reset.
@@ -1329,6 +1439,10 @@ static int fifo_probe(struct platform_device *pdev)
 free:
 	free_buffers(p);
 put_pm:
+	if (p->irq_requested) {
+		free_irq(p->irq, p);
+		p->irq_requested = false;
+	}
 	pm_ret = pm_runtime_put_sync_suspend(dev);
 	if (ret >= 0 && pm_ret < 0)
 		ret = pm_ret;
