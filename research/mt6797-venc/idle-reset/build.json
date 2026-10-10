@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "module": "mt6797_venc_idle_reset_probe",
+  "source_sha256": {
+    "probe.c": "936c52ae62b57b65d2d8eda8f2cfb8984380c724eeb4a394390c5096821bdd8a",
+    "Kbuild": "5963aa861c642b9e8d14a32f596088672106feaf419fc43b8d084b9b2a135a1c"
+  },
+  "build_passed": true,
+  "strict_modpost": true,
+  "kernel_revision": "5fb8876d52f20cf79d8618c675d478633b052fc5",
+  "kernel_config_sha256": "bf3f9283fa6e4b1c033f5747b374ef1766d34dfb4c2264e8d48f625c2f3b5270",
+  "module_symvers_sha256": "8bde2f76e34482704011cc94fee3861c2cd27f4726697971547ef24a7dd9a019",
+  "module_sha256": "2c40de2a87e4b200bcea883629b1b11b57d248fe36d2dd99cce7f3e80b3a5da4",
+  "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+  "hardware_loaded": false,
+  "idle_reset_qualified": false,
+  "active_dma_stop_qualified": false,
+  "encoding_qualified": false,
+  "build_evidence": "handoff/kernel-7.2.9-20261010/idle-reset-build.log",
+  "public_reset_glue_url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/videocodec/mt6797/videocodec_kernel_driver.c",
+  "public_reset_glue_sha256": "43b368561f152d56afd648fa681d106d77001a6de00ce725c9384173db6662cd"
+}

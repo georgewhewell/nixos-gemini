@@ -1,0 +1,2 @@
+obj-m += mt6797_venc_idle_reset_probe.o
+mt6797_venc_idle_reset_probe-y := probe.o
