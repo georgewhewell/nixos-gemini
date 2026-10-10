@@ -226,7 +226,16 @@ if ! "$busybox" grep -Eq '^/dev/loop[0-9]+ /nix/store squashfs ro,' "$mounts_fil
 fi
 fi
 has_address '10.15.19.82/24' || fail gadget-address-missing
-has_address '192.168.23.70/' || fail right-nic-address-missing
+case "${GEMINI_BASELINE_ACCEPT_NETWORK:-legacy}" in
+  networkmanager)
+    # The handheld must boot without a wired link, Wi-Fi AP or SIM. The
+    # USB rescue address remains required; the managers own other links.
+    unit_active NetworkManager.service || fail networkmanager-inactive
+    unit_active ModemManager.service || fail modemmanager-inactive
+    ;;
+  legacy) has_address '192.168.23.70/' || fail right-nic-address-missing ;;
+  *) fail invalid-network-stack ;;
+esac
 [ -r "$display_activation_file" ] || fail display-activation-missing
 "$busybox" grep -Fqx \
   'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \

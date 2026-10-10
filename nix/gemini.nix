@@ -40,7 +40,7 @@
       ../nixos/gpu.nix
       ../nixos/connectivity.nix
       ../nixos/bluetooth.nix
-      ../nixos/wifi-autoconnect.nix
+      ../nixos/networking.nix
       ../nixos/audio.nix
       ../nixos/power-policy.nix
       ../nixos/storage.nix

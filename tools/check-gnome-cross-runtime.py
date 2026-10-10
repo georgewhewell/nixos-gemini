@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check installed desktop executables and Orca's actual runtime library paths."""
+"""Check desktop and networking executables and their runtime libraries."""
 import argparse
 import json
 import os
@@ -98,9 +98,11 @@ def main():
     parser.add_argument('--system', type=Path, required=True)
     parser.add_argument('--shell', type=Path, required=True)
     parser.add_argument('--orca', type=Path, required=True)
+    parser.add_argument('--networkmanager', type=Path, required=True)
+    parser.add_argument('--modemmanager', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
-    for package in (args.system, args.shell, args.orca):
+    for package in (args.system, args.shell, args.orca, args.networkmanager, args.modemmanager):
         if not package.is_dir():
             raise ValueError('Runtime package is missing: '+str(package))
     check = Check()
@@ -119,6 +121,10 @@ def main():
         for sub in ('bin', 'libexec', 'share/gnome-shell'):
             check.tree(package/sub, executables=True)
         check.tree(package/'lib')
+    for package in (args.networkmanager, args.modemmanager):
+        for sub in ('bin', 'sbin', 'libexec'):
+            check.tree(package/sub, executables=True)
+        check.tree(package/'lib')
     environment = wrapper_environment(args.orca/'bin/orca')
     check.typelibs(environment['GI_TYPELIB_PATH'])
     cache = Path(environment['GDK_PIXBUF_MODULE_FILE'])
@@ -129,6 +135,7 @@ def main():
         check.file(loader)
     result = dict(passed=not check.errors, elf_files=check.elf, script_files=check.scripts,
                   system=str(args.system), shell=str(args.shell), orca=str(args.orca),
+                  networkmanager=str(args.networkmanager), modemmanager=str(args.modemmanager),
                   orca_environment=environment, pixbuf_loaders=loaders, errors=check.errors,
                   hardware_tested=False)
     args.out.write_text(json.dumps(result, indent=2)+'\n')

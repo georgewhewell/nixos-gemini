@@ -1,13 +1,17 @@
 # NixOS on the Planet Computers Gemini PDA
 
 The installed system is Linux 7.2.9 with GNOME Wayland, 200% display scaling,
-a fixed bottom dock, IPv6 and LZ4 zram. [Trial 81](research/desktop-ui-20261010.json)
+a fixed bottom dock, NetworkManager, ModemManager, IPv6 and LZ4 zram.
+[Trial 85](research/networkmanager-image-20261010.json)
 passed the supervised installation and independent terminal audit, and was
 kept as the [accepted baseline](research/accepted-baseline.json).
 Native RTC startup, UTC read/write, alarm delivery/cancellation/rearming,
 128 MiB of actual zram paging, an ordinary Nix build and retained storage pass.
-The cross-built desktop runtime check passes 1,211 ARM64 ELF files and 122
-script checks, including service entrypoints, target Python and GI libraries.
+The cross-built desktop and networking runtime check passes 1,224 ARM64 ELF
+files and 124 script checks, including service entrypoints, target Python and
+GI libraries. Both managers run, the onboard modem is detected and wired DHCP
+works. Saved Wi-Fi profiles are imported; Wi-Fi association and cellular data
+remain unqualified on this image.
 
 Normal boot initializes devices and opens GNOME. GPU render tests, audio
 playback/capture tests, Wi-Fi scan loops and Weston qualification are explicit
@@ -42,6 +46,16 @@ cat result/MANIFEST
 `nixosConfigurations.gemini` is the same mainline system. The bundle contains
 the padded p22 boot image, kernel, DTB, generic initramfs and system closure.
 Building does not install or flash it.
+
+NetworkManager manages Wi-Fi and Ethernet DHCP in the default GNOME image;
+ModemManager manages modem discovery. `nmcli`, `nmtui` and `mmcli` are installed,
+and the `gemini` user can change connections from GNOME Settings. Saved profiles
+live in `/persist/NetworkManager/system-connections` with root-only permissions.
+The first boot imports automatic Wi-Fi profiles from the read-only Gemian
+filesystem without overwriting profiles subsequently edited in GNOME. The
+static USB rescue interface stays unmanaged, and startup does not wait for an
+access point or a SIM. The old Wi-Fi worker and standalone DHCP service are
+absent from the default image.
 
 ```sh
 nix build .#kernel         # Linux, with fixes committed in its source tree
@@ -91,7 +105,7 @@ python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s)
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The supervisor checks the candidate and restores the accepted image afterwards.
 Add `--keep` to leave a fully passing candidate installed; adopt its recorded
-`promoted-baseline.json` after the independent terminal audit. Trial 81 did this
+`promoted-baseline.json` after the independent terminal audit. Trial 85 did this
 for the current GNOME image. The unchanged accepted image needs no new baseline
 cycle. Test changed behavior and unmet acceptance checks using the
 [current testing criteria](research/HARDWARE_STATUS.md).

@@ -118,7 +118,26 @@
         python3 ${./tools/check-gnome-cross-runtime.py} \
           --system ${gemini.system.config.system.build.toplevel} \
           --shell ${gemini.system.pkgs.gnome-shell} \
-          --orca ${gemini.system.pkgs.orca} --out "$out"
+          --orca ${gemini.system.pkgs.orca} \
+          --networkmanager ${gemini.system.config.networking.networkmanager.package} \
+          --modemmanager ${gemini.system.config.networking.modemmanager.package} --out "$out"
+      '';
+      network-profiles = gemini.buildPkgs.runCommand "gemini-network-profiles-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3];
+      } ''
+        cp ${./nix/networkmanager-import-wifi.py} networkmanager-import-wifi.py
+        cp ${./nix/test-networkmanager-import-wifi.py} test-networkmanager-import-wifi.py
+        python3 test-networkmanager-import-wifi.py
+        touch "$out"
+      '';
+      baseline-acceptance = gemini.buildPkgs.runCommand "gemini-baseline-acceptance-check" {
+        nativeBuildInputs = with gemini.buildPkgs; [bash coreutils gnugrep gawk];
+      } ''
+        mkdir nix
+        cp ${./nix/unattended-recovery-baseline-self-accept.sh} nix/unattended-recovery-baseline-self-accept.sh
+        cp ${./nix/test-unattended-recovery-baseline-self-accept.sh} nix/test-unattended-recovery-baseline-self-accept.sh
+        bash nix/test-unattended-recovery-baseline-self-accept.sh
+        touch "$out"
       '';
       ssh = gemini.buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
         pam=${gemini.buildPkgs.writeText "gemini-sshd-pam" gemini.system.config.security.pam.services.sshd.text}

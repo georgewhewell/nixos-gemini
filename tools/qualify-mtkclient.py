@@ -61,11 +61,25 @@ def desktop_snapshot(script, desktop=None):
     if (desktop or BASELINE.get('desktop')) == 'gnome':
         old = 'systemctl is-active gemini-desktop gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
         new = 'systemctl is-active display-manager gemini-gnome-qualify gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
-        if script.count(new) == 1 and old not in script:
-            return script
-        if script.count(old) != 1:
+        managed = new.replace('gemini-wifi', '"$network_service"')
+        old_managed = old.replace('gemini-wifi', '"$network_service"')
+        if (script.count(new) == 1 or script.count(managed) == 1) and old not in script and old_managed not in script:
+            pass
+        elif script.count(old_managed) == 1:
+            script = script.replace(old_managed, managed)
+        elif script.count(old) != 1:
             raise RuntimeError('Desktop health guard changed; review the GNOME adapter')
-        script = script.replace(old, new)
+        else:
+            script = script.replace(old, new)
+    if 'gemini-wifi' in script and 'network_service=gemini-wifi\n' not in script:
+        script = script.replace('gemini-wifi', '"$network_service"')
+        script = script.replace('set -eu\n', '''set -eu
+network_service=gemini-wifi
+if test -e /etc/systemd/system/NetworkManager.service; then
+  network_service=NetworkManager
+  systemctl is-active --quiet ModemManager.service
+fi
+''', 1)
     return script
 
 

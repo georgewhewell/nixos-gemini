@@ -5,7 +5,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-WORK=$(mktemp -d /mnt/Home/src/nixos-gemini-baseline-accept-test.XXXXXX)
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/gemini-baseline-accept-test.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT HUP INT TERM
 TOKEN=gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052
 SYSTEM_HASH=42h659ml5kvdmvwcp64i3dypmgwbg4wz
@@ -54,7 +54,7 @@ BUSYBOX
 #!/bin/sh
 case "$1${2:-}" in
   is-system-running) echo running ;;
-  is-active--quiet) exit 0 ;;
+  is-active--quiet) test "${3:-}" != "${GEMINI_BASELINE_TEST_INACTIVE_UNIT:-}" ;;
   --failed--no-legend) exit 0 ;;
   *) exit 2 ;;
 esac
@@ -82,6 +82,30 @@ grep -Fqx unattended_recovery=healthy "$ok/run/unattended-recovery.accepted"
 test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
 grep -Fqx 'result=accepted' "$ok/run/gemini-baseline-self-accept.status"
+
+network=$WORK/networkmanager
+make_fixture "$network"
+printf '%s\n' 'usb0 10.15.19.82/24' > "$network/ip"
+GEMINI_BASELINE_ACCEPT_NETWORK=networkmanager run_fixture "$network"
+grep -Fqx unattended_recovery=healthy "$network/run/unattended-recovery.accepted"
+
+for inactive in NetworkManager.service ModemManager.service; do
+  network=$WORK/inactive-$inactive
+  make_fixture "$network"
+  if GEMINI_BASELINE_ACCEPT_NETWORK=networkmanager \
+     GEMINI_BASELINE_TEST_INACTIVE_UNIT="$inactive" run_fixture "$network"; then
+    fail "accepted inactive $inactive"
+  fi
+  test ! -e "$network/run/unattended-recovery.accepted"
+done
+
+network=$WORK/networkmanager-no-rescue
+make_fixture "$network"
+: > "$network/ip"
+if GEMINI_BASELINE_ACCEPT_NETWORK=networkmanager run_fixture "$network"; then
+  fail 'accepted NetworkManager without the USB rescue address'
+fi
+test ! -e "$network/run/unattended-recovery.accepted"
 
 overlay_store=$WORK/overlay-store
 make_fixture "$overlay_store"

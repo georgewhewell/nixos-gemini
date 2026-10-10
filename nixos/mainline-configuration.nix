@@ -43,11 +43,8 @@
   swapDevices = [];
   networking.hostName = "gemini-mainline-nixos";
   networking.enableIPv6 = true;
-  networking.useDHCP = true;
   networking.interfaces.usb0.useDHCP = false;
-  networking.dhcpcd.extraConfig = "denyinterfaces usb0";
   networking.firewall.enable = false;
-  networking.networkmanager.enable = false;
 
   # The kernel's built-in g_ether driver and stage 1 create usb0.  Reassert
   # its static address after systemd/udev settle; the operation is idempotent.
@@ -305,6 +302,7 @@
       export GEMINI_BASELINE_ACCEPT_BUSYBOX=${pkgs.busybox}/bin/busybox
       export GEMINI_BASELINE_ACCEPT_TOKEN=${lib.escapeShellArg geminiLeaseSelfAcceptToken}
       export GEMINI_BASELINE_ACCEPT_STORE=persistent
+      export GEMINI_BASELINE_ACCEPT_NETWORK=${if config.networking.networkmanager.enable then "networkmanager" else "legacy"}
       exec ${pkgs.busybox}/bin/busybox sh ${../nix/unattended-recovery-baseline-self-accept.sh}
     '';
   };

@@ -1,21 +1,23 @@
 # Current Gemini hardware status
 
 The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
-bottom dock, IPv6 and RAM-only zram in [accepted-baseline.json](accepted-baseline.json).
-[Trial 81](desktop-ui-20261010.json) passed and was kept on the device; the
+bottom dock, NetworkManager, ModemManager, IPv6 and RAM-only zram in
+[accepted-baseline.json](accepted-baseline.json).
+[Trial 85](networkmanager-image-20261010.json) passed and was kept on the device; the
 independent terminal audit passed. Its healthy boot is
-`fe38f475-ef36-4a5f-b89f-b6aaeedebe5b`. The no-swap 7.1.3 fallback is preserved
+`dc8a2bd9-ce1b-4d8c-8b13-2abcde73b6a8`. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 
 | Area | Current conclusion | Evidence and remaining work |
 | --- | --- | --- |
-| Protected storage, watchdog and native RTC | Working on the installed system | [Trial 81 and independent audit](desktop-ui-20261010.json). Exact image/readback identity, native RTC startup/UTC/awake alarms, ordinary Nix build, retained data and terminal audit pass. The kept image was not rebooted after its explicit clock write. |
-| Flash-safe paging | Working: RAM-only zram | Trial 81 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
+| Protected storage, watchdog and native RTC | Working on the installed system | [Trial 85 and independent audit](networkmanager-image-20261010.json). Exact image/readback identity, native RTC startup/UTC/awake alarms, ordinary Nix build, retained data and terminal audit pass. The kept image was not rebooted after its explicit clock write. |
+| Flash-safe paging | Working: RAM-only zram | Trial 85 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
 | Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Source `7eb0d52` includes decoder resources, built-in IPv6 and zram. Earlier feature results remain scoped to their recorded inputs. |
 | GNOME/GDM, HiDPI, dock and IPv6 | Working for the recorded checks | [Desktop proof](desktop-ui-20261010.json) confirms local Wayland, active 200% scaling and an enabled fixed bottom dock with no extension errors. IPv6 ping and SSH over USB passed on the same kernel/configuration; external IPv6 routing is untested. |
-| Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units remained unstarted. The kept image reaches graphical startup in 95.061 seconds, including 50.736 seconds in kernel/initramfs. |
+| NetworkManager and ModemManager | Running; wired DHCP and modem discovery verified | [Manager proof](networkmanager-image-20261010.json). Both cross-built daemons and the shared supplicant run, with one imported Wi-Fi profile. USB recovery stays unmanaged; boot no longer requires the wired lab IP. Wi-Fi association and cellular data remain unqualified. |
+| Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units are explicit diagnostics. Trial 85 reaches graphical startup in 95.983 seconds, including 50.932 seconds in kernel/initramfs. The old Wi-Fi worker and dhcpcd are retired from the default image. |
 | Experimental H.264 decoder | Recorded polling implementation works for tested cases | [Decoder evidence](mt6797-vdec-v4l2/README.md), particularly trials 66–67. Progressive 8-bit I/P/B, Baseline/Main/High and tested multi-slice cases have exact pixel comparisons on their recorded 7.1.3 build. Production IRQ completion, shared hardware surfaces and the rebased module remain open. |
-| Decoder IRQ completion | Host candidate built | [IRQ build](mt6797-vdec-v4l2/irq-build-20261010.json). Strict ARM64 MODPOST and `W=1` pass. Actual delivered done IRQs are unqualified. |
+| Decoder IRQ completion | Tested; no interrupt delivered | [Trial 82](mt6797-vdec-v4l2/irq-trial-82.json) times out on its first command with no frame exported. DMA stop, unload and supervised recovery pass. The [next diagnostic build](mt6797-vdec-v4l2/irq-controller-build-20261010.json) passes strict ARM64 MODPOST and `W=1`, and has not been loaded. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
 | Suspend/hibernation | Unqualified; hibernation disabled | Earlier post-hibernation GPU/Wi-Fi faults prevent qualification for normal use. Camera and vibrator are outside the requested scope. |
 

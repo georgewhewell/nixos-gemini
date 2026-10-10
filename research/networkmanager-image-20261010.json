@@ -1,0 +1,117 @@
+{
+  "result": "passed",
+  "trial": "boot-test-85",
+  "accepted_baseline": {
+    "name": "boot-test-85",
+    "image": "/nix/store/lnc3nn4jv0cvfyj1y5gcw23nspj0p2d5-gemini-mainline-nixos-padded.img",
+    "boot_sha256": "b3b465dc5e80802de00bb7994d1b7aab58348ecdc1e5f6f45010af1ca9865214",
+    "system": "/nix/store/bhw792fwjphy6xpyp9hss4xpjdajcpx2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "store": "normal",
+    "zswap_shrinker": "absent",
+    "boot": "direct",
+    "rtc_epoch": "native",
+    "previous": "boot-test-81",
+    "paging_policy": "zram",
+    "desktop": "gnome"
+  },
+  "bundle": "/nix/store/r3f47rkfd5455l1b6pwkgx16n64jzkkh-gemini-mainline-nixos-bundle",
+  "kernel_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+  "kernel_package": "/nix/store/ssljlfky7jbc365brxikv6vnw1ppywnq-linux-gemini-7.2.9",
+  "networking": {
+    "passed": true,
+    "boot_id": "dc8a2bd9-ce1b-4d8c-8b13-2abcde73b6a8",
+    "system": "/nix/store/bhw792fwjphy6xpyp9hss4xpjdajcpx2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "networkmanager": "1.58.0",
+    "modemmanager": "1.24.2",
+    "supplicant_active": true,
+    "gnome_wayland_active": true,
+    "usb_unmanaged": true,
+    "usb_ipv4": "10.15.19.82/24",
+    "wired_dhcp_ipv4": "192.168.23.70/24",
+    "ipv6_enabled": true,
+    "modem_paths": [
+      "/org/freedesktop/ModemManager1/Modem/0"
+    ],
+    "profile_directory_mode": "0700",
+    "profile_file_mode": "0600",
+    "imported_wifi_profile_loaded": true,
+    "wired_profile_loaded": true,
+    "wifi_state_at_observation": "connecting (configuring)",
+    "wifi_connection_qualified": false,
+    "cellular_data_qualified": false,
+    "legacy_workers_inactive": true,
+    "taint": 0,
+    "graphical_startup_seconds": 95.983,
+    "kernel_startup_seconds": 50.932,
+    "script_sha256": "1778274afc4d1a19200da7ccbc89d885e892866567c06266e039d0896759da55",
+    "stdout_sha256": "a4835d183e3c920ec6a91fbc916c08f040bb9dd19f9bf50753df72b4c29d2a0b",
+    "final_wifi_state": "disconnected; automatic connection retries observed"
+  },
+  "runtime_check": {
+    "passed": true,
+    "system": "/nix/store/bhw792fwjphy6xpyp9hss4xpjdajcpx2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "networkmanager": "/nix/store/ljlxyki5sygzkl65wy4amhqimvvkqbfw-networkmanager-aarch64-unknown-linux-gnu-1.58.0",
+    "modemmanager": "/nix/store/dgz2j5zg2r06kw03439njc9sln01asxa-modemmanager-aarch64-unknown-linux-gnu-1.24.2",
+    "elf_files": 1224,
+    "script_files": 124,
+    "errors": []
+  },
+  "host_checks": {
+    "network_profiles": "passed: four privacy, byte-SSID, raw-PSK and user-edit checks",
+    "baseline_acceptance": "passed: no wired IP needed; both managers and USB rescue required; legacy gates preserved"
+  },
+  "installation": {
+    "exit_code": 0,
+    "profile_qualified": true,
+    "promoted": true,
+    "terminal": true,
+    "supervisor_state": "supervisor_candidate_self_accepted 2026-10-10T23:27:39+02:00",
+    "boot_id": "dc8a2bd9-ce1b-4d8c-8b13-2abcde73b6a8",
+    "paging_flash_written_sectors": 0
+  },
+  "independent_audit": {
+    "result": "passed",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 42,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "previous_trials": [
+    {
+      "trial": "boot-test-83",
+      "qualified": false,
+      "cause": "Mandatory /dev/rfkill sandbox binding with CONFIG_RFKILL disabled",
+      "recovery_audit": "passed"
+    },
+    {
+      "trial": "boot-test-84",
+      "qualified": false,
+      "cause": "Legacy self-accept gate required the wired lab IP; NM assumed external link-local configuration instead of running DHCP",
+      "recovery_audit": "passed"
+    }
+  ],
+  "source_sha256": {
+    "nixos/networking.nix": "89533111f62fad35a7aaa3043867d255f3bb3ee6f223f14ef05ad0a064046b25",
+    "nixos/mainline-configuration.nix": "8869fa6547cc7197bbe6d9cb67abac297ba3f9faf095ed368529129cedf098e1",
+    "nix/gemini.nix": "1258a052facdd7c8eb305302a6100d21329ca6bbee92819dc55ae83a66cd808b",
+    "nix/networkmanager-import-wifi.py": "7e83cb4fa3b0df0a26fa222d5a8722569fb6407a8ddf95050a839c23723bacbd",
+    "nix/unattended-recovery-baseline-self-accept.sh": "d2d16e460bf22a6a2f20a5cc800caebc4133ea254a256d8a620a8ac804cedf52",
+    "tools/qualify-mtkclient.py": "d6079c2e2ccae3446107248dda328ec1322d5a5fc9e69831629fb22981d68fda",
+    "tools/check-gnome-cross-runtime.py": "1d2961ae3d80ba5d02b99db169b80de17360ea8eacbc928cebc54d014440249a"
+  },
+  "raw_evidence": {
+    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-85",
+    "manager_api": "/mnt/Home/src/nixos-gemini/handoff/networkmanager-device-85",
+    "terminal_audit": "/mnt/Home/src/nixos-gemini/handoff/networkmanager-independent-audit-85"
+  },
+  "raw_sha256": {
+    "plan.json": "a057c9c18b6b97e772e92d7a629c13f0d8988c05fbf195c076dc09ffdbc84ae5",
+    "backend.json": "18d5115fa6e08dc5afb83a6b57945d5e7f4a6f43682ec30e201f2909b64c3e1a",
+    "result.json": "a51ee18a20666fe1f6d440a072626a4ed9438100a59c01ccd872e98300dc02f7",
+    "promoted-baseline.json": "d2c39fc1d357c63b3661171b3512acf12703c68b03e9a00cdef4d7b00f2d4664",
+    "supervisor.state": "baced2b7ffc2d9d3022bd28a9f3819afe202179f46c429e495974d2139b3403d"
+  }
+}
