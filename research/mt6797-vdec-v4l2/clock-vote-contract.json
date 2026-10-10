@@ -1,0 +1,51 @@
+{
+  "scope": "Original driver clock-vote experiment from public GPL sources and supervised trial 86; no proprietary codec firmware/library inspection.",
+  "sources": {
+    "public_mt6797_codec_driver": {
+      "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/videocodec/mt6797/videocodec_kernel_driver.c",
+      "sha256": "43b368561f152d56afd648fa681d106d77001a6de00ce725c9384173db6662cd",
+      "license": "GPL-2.0",
+      "facts": [
+        "vdec_power_on enables VDEC0_VDEC and VDEC1_LARB; it does not separately vote VDEC_ACTIVE.",
+        "dec_isr reads VDEC_GCON + 0 and rejects bit 4 set, then requires MISC + 0xa4 bit 16."
+      ]
+    },
+    "public_mt6797_clock_manager": {
+      "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/base/power/mt6797/mt_clkmgr_legacy.c",
+      "sha256": "ed279ad4e800d07d443013c2cc6b0e54ced21e77d38d0b10f65851ff75975916",
+      "license": "GPL-2.0",
+      "facts": [
+        "CG_VDEC0 mask and VDEC_CG are bit 0 only; enable writes that mask through VDEC_CKEN_SET."
+      ]
+    },
+    "maintained_clock_provider": {
+      "kernel_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+      "path": "drivers/clk/mediatek/clk-mt6797-vdec.c",
+      "sha256": "2a7095d83448c6aa568703a336b3c8ce0212991f5bafbe4d512ff418041653d6",
+      "license": "GPL-2.0-only",
+      "facts": [
+        "CLK_VDEC_ACTIVE uses the inverted set/clear gate operation at bit 4; prepare/enable therefore sets bit 4.",
+        "CLK_VDEC_CKEN is bit 0 and CLK_VDEC_CKEN_ENG is bit 8."
+      ]
+    }
+  },
+  "hardware_observation": {
+    "record": "irq-trial-86.json",
+    "global_clock_word": "0x111",
+    "active_bit_set": true,
+    "irq_events": 0,
+    "irq_delta": 0
+  },
+  "inference": "The driver itself votes a bit the public ISR forbids. Removing that vote resolves the software conflict but is not proof of correct IRQ routing or completion.",
+  "candidate_change": "Request only the bus and engine clocks with the Linux bulk clock API; no direct global clock writes, no relaxed IRQ guard, no polling-success fallback, no change to DMA ownership or stop/fencing rules.",
+  "hardware_qualified": false,
+  "required_checks": [
+    "Clock word and IRQ-controller snapshots",
+    "Independent all-CPU IRQ counter increments",
+    "One attributed done event per command and no unexpected events",
+    "Exact I/P pixel comparisons",
+    "Safe DMA quiescence, guards and normal unload",
+    "Supervised recovery and independent terminal audit"
+  ],
+  "normal_image_contains_experimental_module": false
+}

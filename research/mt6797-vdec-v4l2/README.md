@@ -22,15 +22,30 @@ the picture-complete bit set without the IRQ done bit; it does not establish
 interrupt delivery. [Trial 82](irq-trial-82.json) loaded the IRQ candidate on
 the maintained kernel. Its first 64x64 I_PCM command reached picture-complete
 state but timed out without an interrupt: all ten possible CPU counters stayed
-zero, and no frame was exported or compared. DMA stop, guards and normal unload
+zero, and no successful frame was exported. The diagnostic's raw error buffer
+was dumped and failed its pixel comparison. DMA stop, guards and normal unload
 passed; supervised recovery and the independent terminal audit returned a
 healthy GNOME system. IRQ completion remains unqualified.
 
-The [next diagnostic build](irq-controller-build-20261010.json) passes strict
+The [controller diagnostic build](irq-controller-build-20261010.json) passes strict
 ARM64 MODPOST and `W=1` without warnings. It caches masked, pending and active
 controller state through Linux's `irq_get_irqchip_state`, together with the
 read-only AVC completion and clock status. It does not change the completion
-criteria or hardware programming and has not been loaded on the board.
+criteria or hardware programming. [Trial 86](irq-trial-86.json) loaded it on the
+maintained kernel: masked, pending and active controller snapshots were zero
+before and after the wait, with zero delivered interrupts. AVC completion was
+one; the global clock word was `0x111`. Stop, guards, normal unload, recovery and
+the independent terminal audit passed. These snapshots do not exclude a
+transient signal between samples.
+
+The [clock-vote contract](clock-vote-contract.json) identifies a conflict:
+the driver voted `VDEC_ACTIVE` (bit 4), which the public MT6797 ISR requires
+clear. The current candidate requests only the bus and engine clocks. It
+retains that ISR guard and all completion/stop criteria. This experiment is
+unqualified until independent delivery and pixel checks pass.
+Its [GCC 12 host build](irq-clock-build-20261010.json) matches the previously
+accepted kernel and has not been loaded. The next hardware trial follows the
+requested switch of the kernel and module to the default compiler.
 
 The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
 submitted command can accept a done event; a stale done bit or an event before

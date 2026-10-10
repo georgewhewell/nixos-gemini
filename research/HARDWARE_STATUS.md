@@ -4,8 +4,9 @@ The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
 bottom dock, NetworkManager, ModemManager, IPv6 and RAM-only zram in
 [accepted-baseline.json](accepted-baseline.json).
 [Trial 85](networkmanager-image-20261010.json) passed and was kept on the device; the
-independent terminal audit passed. Its healthy boot is
-`dc8a2bd9-ce1b-4d8c-8b13-2abcde73b6a8`. The no-swap 7.1.3 fallback is preserved
+independent terminal audit passed. [Decoder trial 86](mt6797-vdec-v4l2/irq-trial-86.json)
+subsequently restored the same accepted image; its independently audited healthy boot is
+`918f2954-92dd-44b4-8ee6-504bea182e59`. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 
 | Area | Current conclusion | Evidence and remaining work |
@@ -17,7 +18,7 @@ in [baselines](baselines/boot-test-76.json).
 | NetworkManager and ModemManager | Running; wired DHCP and modem discovery verified | [Manager proof](networkmanager-image-20261010.json). Both cross-built daemons and the shared supplicant run, with one imported Wi-Fi profile. USB recovery stays unmanaged; boot no longer requires the wired lab IP. Wi-Fi association and cellular data remain unqualified. |
 | Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units are explicit diagnostics. Trial 85 reaches graphical startup in 95.983 seconds, including 50.932 seconds in kernel/initramfs. The old Wi-Fi worker and dhcpcd are retired from the default image. |
 | Experimental H.264 decoder | Recorded polling implementation works for tested cases | [Decoder evidence](mt6797-vdec-v4l2/README.md), particularly trials 66–67. Progressive 8-bit I/P/B, Baseline/Main/High and tested multi-slice cases have exact pixel comparisons on their recorded 7.1.3 build. Production IRQ completion, shared hardware surfaces and the rebased module remain open. |
-| Decoder IRQ completion | Tested; no interrupt delivered | [Trial 82](mt6797-vdec-v4l2/irq-trial-82.json) times out on its first command with no frame exported. DMA stop, unload and supervised recovery pass. The [next diagnostic build](mt6797-vdec-v4l2/irq-controller-build-20261010.json) passes strict ARM64 MODPOST and `W=1`, and has not been loaded. |
+| Decoder IRQ completion | Tested; no interrupt delivered | [Trial 86](mt6797-vdec-v4l2/irq-trial-86.json) times out with zero delivered interrupts; masked/pending/active snapshots are zero. No successful frame was exported; the raw error-buffer comparison failed. Stop, guards, unload, supervised recovery and independent audit pass. The [clock-vote experiment](mt6797-vdec-v4l2/clock-vote-contract.json) addresses a conflict with the public ISR guard and remains unqualified. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
 | Suspend/hibernation | Unqualified; hibernation disabled | Earlier post-hibernation GPU/Wi-Fi faults prevent qualification for normal use. Camera and vibrator are outside the requested scope. |
 

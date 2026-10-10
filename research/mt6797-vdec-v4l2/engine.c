@@ -60,7 +60,7 @@ struct mt6797_engine {
 	struct device *dev;
 	struct regmap *gcon;
 	void __iomem *banks[BANK_COUNT], *larb_mmu;
-	struct clk_bulk_data clocks[3];
+	struct clk_bulk_data clocks[2];
 	struct private_buffer memory[MEMORY_COUNT];
 	u8 *reference_snapshot;
 	size_t snapshot_bytes;
@@ -364,8 +364,13 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 			return ERR_CAST(engine->banks[i]);
 	}
 	engine->clocks[0].id = "bus";
-	engine->clocks[1].id = "active";
-	engine->clocks[2].id = "engine";
+	/* VDEC_ACTIVE is not a clock vote needed by decoding. The public MT6797
+	 * clock manager enables bit 0, and its ISR requires bit 4 to be clear.
+	 * Voting the upstream "active" gate holds that bit set (trial 86).
+	 * Keep the real bus/engine votes and the IRQ clock guard; see
+	 * clock-vote-contract.json for the evidence and experiment scope.
+	 */
+	engine->clocks[1].id = "engine";
 	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(engine->clocks), engine->clocks);
 	if (ret)
 		return ERR_PTR(ret);
