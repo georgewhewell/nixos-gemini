@@ -1,0 +1,25 @@
+{
+  "result": "passed",
+  "hardware_retest_required": false,
+  "historical_nix_trial_count": 17,
+  "active_accepted_nix_trial_count": 1,
+  "active_accepted_nix_trials": [
+    "boot-test-76"
+  ],
+  "original_protected_data_and_build_fixtures_unchanged": true,
+  "current_candidate_output_checked_separately": true,
+  "historical_trial_files_deleted": false,
+  "host_tests": {
+    "tools/test-power-swap.py": 13
+  },
+  "status_history": {
+    "path": "research/history/HARDWARE_STATUS-20261010-before-consolidation.md",
+    "lines": 966,
+    "sha256": "da7e1bd7ad83fa36836ca401f716cea0b11d33ee6e06c612ab8c1951116b0e4b"
+  },
+  "status_current": {
+    "path": "research/HARDWARE_STATUS.md",
+    "lines": 46
+  },
+  "scope": "Consolidation of current status and bounded retention admission; no new hardware experiment."
+}

@@ -6,17 +6,19 @@ Current development adds GNOME and RAM-only paging; those changes are not yet
 qualified on the device. The complete GNOME system, initramfs, boot bundle and
 EFI files have cross-built for ARM64; see the
 [build record](research/desktop-consolidation-20261010.json).
-The installed baseline remains 7.1.3. See the
+The accepted recovery remains 7.1.3 and now disables swap and disk resume from
+boot. Its [device qualification](research/ram-only-recovery-hardware-20261010.json)
+and independent audit pass. See the
 [kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
 The default build includes EFI boot support, a persistent Nix daemon,
 GNOME Wayland desktop, Gemini keyboard layout, RAM-only zram swap, watchdog
 and MT6351 RTC fixes.
 The normal configuration enables no eMMC or SD swap and no zram writeback
 device. Earlier qualified images used zswap backed by the eMMC p34 partition;
-that historical policy is being replaced, and its old paging results do not
-qualify the new RAM-only policy. The running board currently has physical swap
-disabled and its swap unit masked in RAM. This mitigation lasts until reboot;
-the installed old image has not been replaced.
+those old paging results do not qualify the new zram policy. The installed
+recovery uses no swap, boot-generated masks and no disk resume. Two supervised
+boots and the final audit confirm zero writes to p34. GNOME and zram remain
+built artifacts awaiting their first device qualification.
 Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
 Camera and vibrator are outside the owner's completion scope.
 
@@ -39,7 +41,6 @@ nix build .#efiBootFiles   # Versioned systemd-boot entry, kernel, DTB and initr
 nix build .#uboot          # U-Boot with display, keyboard and EFI storage support
 nix build .#bootloader     # Flashable U-Boot image with the normal Linux fallback
 nix build .#mtkclient      # Open-source flashing tool, including RTC preservation
-nix build .#recovery       # Frozen M69 bundle (historical eMMC swap policy)
 ```
 
 The maintained Linux source is branch `gemini-7.2.9`, pinned by `flake.lock`.
@@ -74,14 +75,14 @@ reproducing an old trial; new features belong in the default system.
 Normal boot trials use the durable supervisor and an accepted recovery image:
 
 ```sh
-python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s) --execute
+python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s) --observe-seconds 90 --execute
 ```
 
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The command checks RTC startup/alarms, RAM-only zram paging, an ordinary Nix
 build and retained data before returning to recovery. It refuses recovery
-baselines that enable physical swap. The currently installed 7.1.3 recovery
-image must be migrated before these trials can resume. It records negotiated USB link speed at both
+baselines that enable physical swap. The accepted no-swap 7.1.3 recovery satisfies
+this gate. It records negotiated USB link speed at both
 the gadget and its host interface in `usb-link.json`. The existing p34 partition
 is preserved but remains unused; tests reject eMMC or SD swap. Trials retain
 the existing host USB/SSH setup. Copy the system closure into the installed Nix
@@ -91,24 +92,19 @@ overlay. Historical image trials still accept `--reclaim-cache`.
 The generation updater also requires an accepted RAM-only recovery baseline
 and a qualified zram trial; old successful disk-backed paging trials cannot
 promote a generation.
-The [temporary rescue build](research/ram-only-recovery-20261010.json) reuses the
-working 7.1.3 kernel and userspace with swap disabled from boot and early disk
-resume removed. Its host checks and migration preflight pass; it has not been
-booted or accepted. The durable runner supports an explicit migration:
+The [recovery build record](research/ram-only-recovery-20261010.json) preserves
+the working kernel, DTB and userspace. Its exact hash is bound into the accepted
+recovery evidence, so that host record remains unchanged. The later
+[hardware record](research/ram-only-recovery-hardware-20261010.json) records the
+successful migration through `--migrate-ram-only`, using the new image in both
+writer roles. Normal candidates still require zram; the updater retains its
+zram qualification requirement.
 
-```sh
-python3 tools/test-boot.py --migrate-ram-only \
-  --bundle /nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery \
-  --out ../handoff/boot-test-NEW --observe-seconds 90 --execute
-```
-
-Both writer roles use this no-swap image. Admission still checks the actual
-installed baseline; acceptance requires distinct candidate and rescue boots,
-boot-generated masks, no disk resume, zero p34 writes, RTC checks and the final
-storage/source audit. A successful run writes `qualified-ram-only-baseline.json`
-in its trial directory for review. It does not change the repository's accepted
-baseline. Normal candidates still require zram; the updater retains its zram
-qualification requirement. The current normal-trial gate remains in force.
+The accepted result is the stopping point for this recovery image. Test changed
+behavior and unmet acceptance checks; use the
+[current status and testing criteria](research/HARDWARE_STATUS.md) when deciding
+which integration checks a change requires. Routine data retention checks keep
+the protected fixtures and the accepted Nix build, rather than every old trial.
 
 For measurements that need services started after boot acceptance, add
 `--observe-seconds 90` (0–90 seconds, default 0). The runner records
@@ -166,8 +162,11 @@ The final audit retained home, previous EFI entries and all 26 ordinary Nix
 outputs. These are historical installation results. The accepted installed
 baseline is now the persistent-store 7.1.3 generation recorded in
 [accepted-baseline.json](research/accepted-baseline.json). Its old physical
-swap policy is disabled only for the current boot; GNOME and zram have not
-been installed or qualified on the device.
+swap policy has been removed from the accepted recovery's boot path; swap masks
+and disabled disk resume persist across boots. GNOME and zram have not been
+installed or qualified on the device. Current conclusions and the criteria for
+further tests are in [hardware status](research/HARDWARE_STATUS.md); older trials
+remain historical evidence.
 mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 

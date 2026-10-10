@@ -134,8 +134,9 @@ class Cleanup(unittest.TestCase):
 
 
 class Retention(unittest.TestCase):
-    def test_prior_builds_survive_later_trials_and_invalid_shell_paths_fail(self):
-        with tempfile.TemporaryDirectory() as tmp:
+    def test_only_accepted_build_is_a_live_witness_and_unsafe_paths_fail(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(p.f.q.r.qualify, 'BASELINE', {'name':'power-swap-01'}) as baseline:
             root = Path(tmp); old = root/'power-swap-01'; old.mkdir()
             token = 'a'*32
             proof = dict(ordinary_daemon_build_qualified=True, token=token,
@@ -145,15 +146,39 @@ class Retention(unittest.TestCase):
             self.assertEqual(p.prior_outputs(root), {'power-swap-01':proof})
             self.assertEqual(p.prior_outputs(root, old), {})
             rtc=root/'power-rtc-01';rtc.mkdir();(rtc/'nix-candidate.json').write_text(json.dumps(proof))
-            self.assertEqual(p.prior_outputs(root), {'power-rtc-01':proof,'power-swap-01':proof})
+            self.assertEqual(p.prior_outputs(root), {'power-swap-01':proof})
             self.assertEqual(p.prior_outputs(root, rtc), {'power-swap-01':proof})
-            calendar=root/'power-rtc-calendar-01';calendar.mkdir();(calendar/'nix-candidate.json').write_text(json.dumps(proof))
-            self.assertEqual(p.prior_outputs(root), {'power-rtc-01':proof,'power-swap-01':proof,'power-rtc-calendar-01':proof})
-            self.assertEqual(p.prior_outputs(root, calendar), {'power-rtc-01':proof,'power-swap-01':proof})
-            startup=root/'power-rtc-startup-01';startup.mkdir();(startup/'nix-candidate.json').write_text(json.dumps(proof))
-            self.assertEqual(p.prior_outputs(root)['power-rtc-startup-01'], proof)
+            # Old malformed trials remain history and cannot expand admission.
+            (rtc/'nix-candidate.json').write_text('invalid archived proof')
+            self.assertEqual(p.prior_outputs(root), {'power-swap-01':proof})
             path.write_text(json.dumps(dict(proof, output=proof['output']+'; unreviewed-command')))
             with self.assertRaises(RuntimeError): p.prior_outputs(root)
+            path.write_text(json.dumps(proof))
+            baseline['name']='power-rtc-01'
+            with self.assertRaises(ValueError): p.prior_outputs(root)
+
+    def test_missing_or_indirect_accepted_witness_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(p.f.q.r.qualify, 'BASELINE', {'name':'boot-test-76'}):
+            root=Path(tmp)
+            with self.assertRaises(RuntimeError): p.prior_outputs(root)
+            trial=root/'boot-test-76';trial.mkdir()
+            other=root/'other';other.write_text('{}')
+            (trial/'nix-candidate.json').symlink_to(other)
+            with self.assertRaises(RuntimeError): p.prior_outputs(root)
+            (trial/'nix-candidate.json').unlink();trial.rmdir();trial.symlink_to(root)
+            with self.assertRaises(RuntimeError): p.prior_outputs(root)
+
+    def test_original_data_fixtures_and_current_candidate_stay_independent(self):
+        state={'boot_id':'current'}
+        with mock.patch.object(p.f,'retained',return_value={'fixed':'anchor'}) as fixed, \
+                mock.patch.object(p,'prior_outputs',return_value={'accepted':{'output':'witness'}}) as selected, \
+                mock.patch.object(p.f.q.r.persistent_nix,'verify_retained') as verify:
+            result=p.retained_all(Path('/audit'),state,Path('/candidate'))
+            self.assertEqual(result,{'fixed':'anchor','accepted':'witness'})
+            fixed.assert_called_once_with(Path('/audit'),state)
+            selected.assert_called_once_with(exclude=Path('/candidate'))
+            verify.assert_called_once()
 
 
 if __name__ == '__main__': unittest.main()

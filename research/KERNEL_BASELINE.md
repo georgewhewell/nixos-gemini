@@ -42,9 +42,13 @@ synchronizes the handler before reset or power release. This candidate has
 not been loaded; previous polling results do not qualify IRQ delivery.
 For recovery migration only, a [temporary no-swap rescue derivative](ram-only-recovery-20261010.json)
 preserves the recorded working 7.1.3 kernel, DTB and userspace. It removes early
-disk resume, disables zswap and masks swap at every boot. This host-built image
-is not accepted or hardware-qualified; the normal development base remains
-the current 7.2.9 zram system.
+disk resume, disables zswap and masks swap at every boot. This image is now
+the [accepted recovery](ram-only-recovery-hardware-20261010.json): two distinct
+supervised boots, byte-exact writes/readbacks, boot masks, zero p34 writes,
+RTC/Nix/storage checks and an independent terminal audit pass. Its paging
+policy is accurately recorded as `none`. The normal development base remains
+the current 7.2.9 zram system; its changed paging policy needs its first device
+qualification. The accepted recovery does not need another baseline trial.
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the

@@ -65,18 +65,28 @@ def store_profile(provisioner):
 
 
 def prior_outputs(root=ROOT.parent/'handoff', exclude=None):
+    """Retain the accepted build witness without replaying every old trial.
+
+    Fixed protected-data/build fixtures are checked separately by f.retained.
+    Superseded trials remain evidence, but do not grow the live admission set.
+    """
     retained = {}
-    for path in sorted(root.glob('*/nix-candidate.json')):
-        if path.parent == exclude or not re.fullmatch(r'(power-(swap|rtc|rtc-calendar|rtc-startup)|boot-test)-[0-9]+', path.parent.name): continue
-        proof = json.loads(path.read_text()); token = proof.get('token', '')
-        if (proof.get('ordinary_daemon_build_qualified') is not True or
-                not re.fullmatch('[0-9a-f]{32}', token) or
-                not re.fullmatch('/nix/store/[0-9a-z]{32}-gemini-daemon-'+token, proof.get('output', '')) or
-                proof.get('output_link') != '/home/gemini/.gemini-daemon-build-'+token+'/result' or
-                not re.fullmatch('[0-9a-f]{64}', proof.get('proof_sha256', ''))):
-            raise RuntimeError('Invalid earlier power/swap build proof: '+str(path))
-        retained[path.parent.name] = proof
-    return retained
+    name = f.q.r.qualify.BASELINE['name']
+    if not re.fullmatch(r'(power-(swap|rtc|rtc-calendar|rtc-startup)|boot-test)-[0-9]+', name):
+        return retained
+    path = root/name/'nix-candidate.json'
+    if path.parent == exclude:
+        return retained
+    if path.is_symlink() or path.parent.is_symlink() or not path.is_file():
+        raise RuntimeError('Accepted build witness is missing or indirect: '+str(path))
+    proof = json.loads(path.read_text()); token = proof.get('token', '')
+    if (proof.get('ordinary_daemon_build_qualified') is not True or
+            not re.fullmatch('[0-9a-f]{32}', token) or
+            not re.fullmatch('/nix/store/[0-9a-z]{32}-gemini-daemon-'+token, proof.get('output', '')) or
+            proof.get('output_link') != '/home/gemini/.gemini-daemon-build-'+token+'/result' or
+            not re.fullmatch('[0-9a-f]{64}', proof.get('proof_sha256', ''))):
+        raise RuntimeError('Invalid accepted build proof: '+str(path))
+    return {name: proof}
 
 
 def retained_all(directory, state, exclude):
