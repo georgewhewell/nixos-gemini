@@ -1,8 +1,8 @@
 # NixOS on the Planet Computers Gemini PDA
 
 This branch packages Linux 7.2.9 and NixOS for the MT6797X Gemini.
-The 7.2.9 port passes the kernel build and host checks; device qualification
-is pending. The accepted installed baseline remains 7.1.3. See the
+The 7.2.9 port passes the kernel build, host checks and supervised device
+boot/RTC/paging/Nix checks. The accepted installed baseline remains 7.1.3. See the
 [kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
 The default build includes EFI boot support, a persistent Nix daemon,
 desktop keyboard layout, zswap writeback, watchdog and MT6351 RTC fixes.

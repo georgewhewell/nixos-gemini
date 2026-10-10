@@ -12,8 +12,13 @@ The 7.2.9 port is in branch `gemini-7.2.9`, with the full upstream ancestry,
 854 replayed board commits and the original 11 merges. The normal kernel,
 DTB and modules build successfully, and every required kernel host check passes.
 The native media modules also build with strict MODPOST against the generated
-7.2.9 `Module.symvers` and matching kernel configuration. Hardware qualification
-of this port is pending; the installed recovery baseline remains 7.1.3.
+7.2.9 `Module.symvers` and matching kernel configuration. The supervised normal-operation
+profile passes on the device: boot identity, native RTC startup, UTC and awake
+alarms, actual swap I/O and an ordinary unprivileged Nix build. The supervisor
+restores the accepted 7.1.3 system, with all stored outputs retained, matching
+executed sources, no remaining writer and a clean board audit. The installed
+baseline remains 7.1.3. Media, suspend and hibernation proofs have not been rerun
+on 7.2.9.
 Previous hardware results describe their exact source, configuration and kernel;
 they do not qualify a rebased kernel. Historical reproduction packages retain
 their original version pins. Uncommitted allocator diagnostics in the original
@@ -92,3 +97,10 @@ is a useful public lead for Mali-T880 geometry corruption: it maps the tiler
 polygon list for CPU access and clears the entire list before reuse. Our current
 Mesa package does not carry that patch. This observation has not been reproduced
 or qualified on our board, and no code has been imported from that project.
+
+The completed platform trial and strict recovery audit are recorded in
+[`kernel-7.2.9.json`](kernel-7.2.9.json), including exact source, configuration,
+image, module and candidate-system identities. The supervisor and subsequent
+board audit both exited successfully before this result was recorded. This
+trial uses the direct Linux boot path; it does not requalify the U-Boot/EFI menu
+path or the media modules.
