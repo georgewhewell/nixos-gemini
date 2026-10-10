@@ -13,7 +13,10 @@ The first registered frontend trial (`boot-test-video-frame-24`) panicked when
 udev queried its capabilities: this kernel passes a null ioctl `priv` argument.
 The corrected capability query uses no per-file context; set-format obtains
 the file handle from `file_to_v4l2_fh(file)`. That correction's next hardware
-trial is pending. No owned decoder command ran during trial 24. The existing private diagnostic
+trial survived udev and G/TRY/S_FMT in `boot-test-video-frame-25`; request QBUF
+then exposed the required `buf_out_validate` hook. That callback is now
+implemented and builds. No owned decoder command ran during trials 24/25;
+public request decoding is still pending. The existing private diagnostic
 has proved exact 64x64 PCM, compressed grey, patterned intra and I-to-P-skip
 pixels with zero decoder error/message words. Those results do not establish
 that this frontend works, or that arbitrary H.264 streams work.

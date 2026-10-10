@@ -447,3 +447,27 @@ The original fixture generator now admits 64/128 pixel widths and 64/96/128
 pixel heights. Independent FFmpeg checks prove all samples in new 128x96 PCM,
 grey, patterned intra and I-to-P streams. Default 64x64 NALs, streams, sample
 bytes and C arrays remain byte-identical. Wider hardware decoding is untested.
+
+
+### 2026-10-10: V4L2 request binding trial 25
+
+`handoff/boot-test-video-frame-25` proves the corrected frontend survives udev
+capability queries and userspace G/TRY/S_FMT. The media-node lookup was corrected
+for this kernel's platform media nodes. The first request source QBUF then
+warned and returned EINVAL: Linux requires the `buf_out_validate` callback.
+Cached jobs, input fetches and frame submissions remain zero; no public-API
+pixel comparison is available. The frontend unloaded normally. The missing
+callback is now implemented, validates progressive field metadata, and builds
+with strict modpost. Cached status distinguishes input-fetch attempts from
+frame commands so an input-stage stop failure cannot be mistaken for no DMA.
+
+The supervisor separately rejected RTC delivery-after's interrupt-count check.
+Accepted recovery boot `0cb93554-b871-4f9f-8566-e49824470e1e`, protected hashes,
+all frozen source hashes and no writer are verified. Its strict journal audit
+passes with taint zero, no temporary codec device/module and no fault patterns.
+The failed candidate and successful recovery are recorded separately.
+
+An original explicit-motion P_16x16 fixture now independently decodes to the
+derived four-pixel horizontal luma shift (two chroma pixels), including right
+edge replication. Both full 64x64 pictures match all 12,288 reference samples
+in FFmpeg. This fixture has not been submitted to hardware.

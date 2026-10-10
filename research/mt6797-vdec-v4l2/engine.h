@@ -24,7 +24,7 @@ struct mt6797_decode_job {
 struct mt6797_decode_status {
 	u32 state, error, message, irq;
 	int break_result, reset_result;
-	bool submitted, quiesced, guards_unchanged;
+	bool fetched, submitted, quiesced, guards_unchanged;
 };
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev);

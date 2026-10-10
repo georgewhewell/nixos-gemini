@@ -497,6 +497,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	write_word(0, vld + 0x108);
 	dma_wmb();
 	dma_started = true;
+	status->fetched = true;
 	write_word(BIT(20), vld + 0x8c);
 	ret = readl_poll_timeout(vld + 0xe8, state, state & BIT(0), 10, 100000);
 	if (ret)

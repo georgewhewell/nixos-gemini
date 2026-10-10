@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original GPL control translation and fixed 64x64 private intra/I-to-P polling are proven with complete exact zero-error pixels. A separate V4L2 Request frontend builds; its first registration trial panicked in QUERYCAP before any owned frame submission. NULL ioctl priv handling is corrected and builds, but the public API remains unqualified. Real IRQ delivery, varied geometry, production lifecycle and encoding remain unfinished.",
+  "implementation_status": "Original fixed 64x64 private H.264 intra and I-to-P polling remains proven with exact zero-error pixels. V4L2 frontend builds, survives capability and format ioctls, and reports cached status. Required request output-buffer validation is now implemented after trial25 rejected QBUF before any worker/DMA command. Public request decoding, real IRQ delivery, wider geometry, production lifecycle and encoding remain unfinished.",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -248,20 +248,16 @@
       "clock_rate_source": "clk_get_rate; configured rate, not an independently measured frequency"
     },
     "final_board_audit": {
-      "result": "failed",
+      "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "d59d8301-c9a0-470e-8ec1-c476743d9a3d",
+      "boot_id": "0cb93554-b871-4f9f-8566-e49824470e1e",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
       "temporary_modules_loaded": false,
       "temporary_probe_device_present": false,
-      "kernel_fault_patterns_found": [
-        "Oct 10 01:47:56 gemini-mainline-nixos kernel: mt6797-wifi 180f0000.wifi: runtime HIF fault -75 from mt6797_wifi_ais_hif_real_terminal+0x1c/0x28 [mt6797_wifi]; WLAN firmware powered off and stopped",
-        "Oct 10 01:47:56 gemini-mainline-nixos kernel: mt6797-wifi 180f0000.wifi: WLAN restarted after HIF fault (restart 1)"
-      ],
-      "evidence": "handoff/boot-test-video-frame-24/recovered-board-audit.json",
-      "note": "Supervisor verified accepted recovery, source hashes and no writer. Strict post-recovery audit rejected two accepted-kernel WiFi HIF fault/restart records; it is not a fault-free audit. These are separate from the candidate frontend panic."
+      "kernel_fault_patterns_found": [],
+      "evidence": "handoff/video-resource-20261009/final-board-audit.json"
     },
     "resource_candidate": {
       "kernel_revision": "e87e655499203294c6a8855830d521f73be241b8",
@@ -13661,23 +13657,22 @@
       "build": {
         "build_passed": true,
         "strict_modpost": true,
-        "module_sha256": "d4fc45367dec3b953b0a56ba8d2a3a06d1c393d3c94e38f29a8017bd7d8134f5",
+        "module_sha256": "cf2e1b5e7816d404bf07a9b3002b99e0a9ec791093537512adbe58c424ac37eb",
         "vermagic": "7.1.3-gemini-da921x-lkro SMP preempt mod_unload aarch64",
         "source_sha256": {
-          "v4l2.c": "2d2923bf88cbffe4a5003e3d8ef2424806c06e7cd7a5c43a58d8b1f24aba5e56",
-          "engine.c": "197af3e83634a6ffe927e7e5a75a936042d83a936cacb964ab871ce01574abcd",
-          "engine.h": "4b7e7bbd94ad6e3c14d6c2f7195e77aa8f1b10d38614b9f6752babb90d36be84",
+          "v4l2.c": "47273fd81a96d61ffb003ef34ef182e2bc8453854e84728b2848e7d1342b1922",
+          "engine.c": "b4a16b40f3be1f4f0aee99deb7dc54ba7efedb146806d5b10177f595e0c6a19e",
+          "engine.h": "3448ed9789f25dc07779fbe732e9ac4760573da1d12cff566c3d09210184c4a6",
           "controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
           "Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
           "mt6797-h264-controls.c": "702f41b123bba9917a7232f465c8577f982a5879b74340316a5c791756ff5046",
           "mt6797-h264-controls.h": "27ce05580d562de23f8bdbd1f286ce879fe79a8cfe7c205d67adf997ac4bf9d4",
-          "request-test.c": "30343d4a528ec0a94fcd985c7a8578d3219c5dd51248a6bc9915d888a122698d",
+          "request-test.c": "602ded03c84bdb23bda519ad2e488b77a4cf50ff61f15652ef0d7ed925001268",
           "pcm64-fixture.h": "a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758"
         },
-        "request_test_sha256": "359a4e5f5025bc05c34e36ce2c149b176d1f7dee883e7fc4c557b6072c814ac5",
+        "request_test_sha256": "5a400c4b5f46d36bf25f65337d91acf145254bb209d2f6e538ae85f1077611ea",
         "hardware_tested": false,
-        "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
-        "change": "Linux 7.1 NULL ioctl priv fix; userspace exercises G/TRY/S_FMT"
+        "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3"
       },
       "hardware_qualified": false,
       "attempts": [
@@ -13721,9 +13716,123 @@
             "evidence": "handoff/boot-test-video-frame-24/recovered-board-audit.json",
             "note": "Supervisor verified accepted recovery, source hashes and no writer. Strict post-recovery audit rejected two accepted-kernel WiFi HIF fault/restart records; it is not a fault-free audit. These are separate from the candidate frontend panic."
           }
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-25",
+          "diagnostic": {
+            "passed": false,
+            "boot_id": "b44c06fc-426a-492a-91f4-0618819dd4be",
+            "module_sha256": "d4fc45367dec3b953b0a56ba8d2a3a06d1c393d3c94e38f29a8017bd7d8134f5",
+            "source_sha256": {
+              "v4l2.c": "2d2923bf88cbffe4a5003e3d8ef2424806c06e7cd7a5c43a58d8b1f24aba5e56",
+              "engine.c": "197af3e83634a6ffe927e7e5a75a936042d83a936cacb964ab871ce01574abcd",
+              "engine.h": "4b7e7bbd94ad6e3c14d6c2f7195e77aa8f1b10d38614b9f6752babb90d36be84",
+              "controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+              "Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+              "mt6797-h264-controls.c": "702f41b123bba9917a7232f465c8577f982a5879b74340316a5c791756ff5046",
+              "mt6797-h264-controls.h": "27ce05580d562de23f8bdbd1f286ce879fe79a8cfe7c205d67adf997ac4bf9d4",
+              "request-test.c": "30343d4a528ec0a94fcd985c7a8578d3219c5dd51248a6bc9915d888a122698d",
+              "pcm64-fixture.h": "a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "index": 0,
+                "passed": false,
+                "returncode": 1,
+                "cached": {
+                  "jobs": 0,
+                  "failures": 0,
+                  "result": 0,
+                  "submitted": 0,
+                  "state": 0,
+                  "error": 0,
+                  "message": 0,
+                  "irq": 0,
+                  "break": 0,
+                  "reset": 0,
+                  "quiesced": 0,
+                  "guards": 0
+                },
+                "statuses": {},
+                "comparisons": {}
+              }
+            ],
+            "unloaded": true,
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "boot_trial_passed": false,
+          "recovered_boot_id": "0cb93554-b871-4f9f-8566-e49824470e1e",
+          "final_no_writer": true,
+          "post_recovery_audit": {
+            "result": "passed",
+            "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+            "boot_id": "0cb93554-b871-4f9f-8566-e49824470e1e",
+            "tainted": 0,
+            "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
+            "failed_units": [],
+            "temporary_modules_loaded": false,
+            "temporary_probe_device_present": false,
+            "kernel_fault_patterns_found": [],
+            "evidence": "handoff/video-resource-20261009/final-board-audit.json"
+          },
+          "owned_input_fetch_commands": 0,
+          "owned_frame_commands": 0,
+          "failure": "Capabilities and G/TRY/S_FMT pass; request QBUF warns and rejects because buf_out_validate is required. No worker job, fetch or frame command ran. Media node discovery corrected for Linux 7.1 platform media nodes. Supervisor separately rejects RTC delivery-after irq count. Normal driver unload and accepted audit pass."
         }
       ],
-      "note": "First public frontend registered but failed QUERYCAP from udev v4l_id: Linux 7.1 passes priv=NULL. No owned frame command ran. Callback fix compiles with strict modpost; its public request trial is pending. Private decoder polling remains separately qualified at fixed 64x64."
+      "note": "Linux 7.1 NULL ioctl priv correction survives udev capability queries and userspace G/TRY/S_FMT. The second frontend trial exposes the required vb2 buf_out_validate hook, which is now implemented and builds. No public-API frame was submitted yet. Next trial is pending; private 64x64 decode remains separately proven."
+    },
+    "p_motion_fixture": {
+      "metadata": {
+        "schema": 1,
+        "width": 64,
+        "height": 64,
+        "header_bit_size": 26,
+        "profile_idc": 66,
+        "level_idc": 10,
+        "constraint_set_flags": 3,
+        "max_num_ref_frames": 1,
+        "log2_max_frame_num_minus4": 0,
+        "pic_order_cnt_type": 0,
+        "log2_max_pic_order_cnt_lsb_minus4": 0,
+        "pic_width_in_mbs_minus1": 3,
+        "pic_height_in_map_units_minus1": 3,
+        "sps_flags": 80,
+        "pps_flags": 8,
+        "first_mb_in_slice": 0,
+        "slice_type": 0,
+        "slice_qp_delta": 0,
+        "disable_deblocking_filter_idc": 1,
+        "nal_ref_idc": 2,
+        "decode_flags": 8,
+        "software_decode_verified": true,
+        "hashes": {
+          "pcm64-motion.h264": "a7c30182a4b01adbc6c28d1a4260e5b435b74a513fd861210afa03c6286e1cf5",
+          "pcm64-motion.nal": "087f08f31b262002d48c08cde29dd17caacafed76d17a5bd09ca06c7a5c53488",
+          "pcm64-motion.yuv": "2226f37ef7b8c7a64f14ae7e34c2321aa1f8008b319d5fbf053ed9f4a0b0d9e9"
+        },
+        "frame_num": 1,
+        "pic_order_cnt_lsb": 2,
+        "top_field_order_cnt": 2,
+        "bottom_field_order_cnt": 2,
+        "reference_frame_num": 0,
+        "frames_verified": 2,
+        "sample_bytes_verified": 12288,
+        "macroblock_type": "P_L0_16x16",
+        "motion_vector_quarter_luma": [
+          16,
+          0
+        ],
+        "edge_extension": "Right edge replicated by the H.264 sample prediction rules"
+      },
+      "generator": "research/mt6797-vdec/make-pcm-fixture.py --p-skip --p-motion",
+      "software_decoder": "Independent FFmpeg 8.1.2 compares both complete pictures byte-for-byte",
+      "hardware_tested": false,
+      "note": "Original CAVLC P_L0_16x16 with uniform quarter-luma MV (16,0), no residual and H.264 right-edge replication. Does not use a codec encoder library or vendor source."
     }
   },
   "related_silicon_reference": {

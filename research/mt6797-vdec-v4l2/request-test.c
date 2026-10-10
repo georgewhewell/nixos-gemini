@@ -108,7 +108,7 @@ static int64_t milliseconds(void)
 	return now.tv_sec * 1000LL + now.tv_nsec / 1000000;
 }
 
-static void dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_error,
+static int dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_error,
 		    unsigned int timestamp, unsigned int sequence)
 {
 	struct v4l2_plane planes[2] = { 0 };
@@ -125,15 +125,17 @@ static void dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_e
 		struct pollfd pollfd = { .fd = stream->video, .events = POLLIN | POLLOUT };
 		if (poll(&pollfd, 1, 50) < 0 && errno != EINTR) fail("poll video");
 	}
+	int bad = 0;
 	if (!!(buffer.flags & V4L2_BUF_FLAG_ERROR) != expect_error || buffer.index) {
-		fprintf(stderr, "Unexpected completed buffer flags %#x\n", buffer.flags); exit(1);
+		fprintf(stderr, "Unexpected completed buffer flags %#x\n", buffer.flags); bad = 1;
 	}
 	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
 	    (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec ||
 	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : 4096U) ||
 	     planes[1].bytesused != (expect_error ? 0U : 2048U))) {
-		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); exit(1);
+		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); bad = 1;
 	}
+	return bad;
 }
 
 static void decode(struct stream *stream, const char *out, const char *name,
@@ -190,8 +192,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	checked_ioctl(stream->video, VIDIOC_QBUF, &capture, "QBUF capture");
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
-	dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
-	dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
+	int bad = dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
+	bad |= dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
 	struct pollfd pollfd = { .fd = request, .events = POLLPRI };
 	if (poll(&pollfd, 1, 1000) != 1 || !(pollfd.revents & POLLPRI)) {
 		fprintf(stderr, "Request did not complete\n"); exit(1);
@@ -220,6 +222,10 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	printf("{\"fixture\":\"%s\",\"expected_error\":%d,\"timestamp\":%u,\"sequence\":%u,\"request_completed\":true}\n",
 		name, expect_error, timestamp, sequence);
 	fflush(stdout);
+	/* Preserve completed capture bytes and cached status even on a failed
+	 * metadata check; the host still independently decides qualification.
+	 */
+	if (bad) exit(1);
 }
 
 int main(int argc, char **argv)

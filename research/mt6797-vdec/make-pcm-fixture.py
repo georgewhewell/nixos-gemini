@@ -66,6 +66,8 @@ def main():
                         help='Independent software decoder used to check every pixel')
     parser.add_argument('--p-skip', action='store_true',
                         help='Also verify an original P picture referencing the I_PCM frame')
+    parser.add_argument('--p-motion', action='store_true',
+                        help='With --p-skip, also verify explicit P_16x16 motion by four luma pixels')
     parser.add_argument('--width', type=int, default=64)
     parser.add_argument('--height', type=int, default=64)
     args = parser.parse_args()
@@ -73,6 +75,8 @@ def main():
     if width not in (64, 128) or height not in (64, 96, 128):
         parser.error('Fixture geometry must be width 64/128 and height 64/96/128')
     mb_width, mb_height = width // 16, height // 16
+    if args.p_motion and not args.p_skip:
+        parser.error('--p-motion requires --p-skip')
     sps = Bits()
     sps.put(66, 8)  # Baseline
     sps.put(0xc0, 8)  # Constraint sets 0 and 1
@@ -284,6 +288,48 @@ def main():
         print('Verified original P-skip reference:', len(predicted_nal), 'NAL bytes,',
               predicted_header_bits, 'header bits,', len(expected) * 2,
               'matching decoded bytes across two frames')
+        if args.p_motion:
+            motion = Bits()
+            motion.bits = predicted.bits[:predicted_header_bits - 8].copy()
+            for index in range(mb_width * mb_height):
+                motion.ue(0)  # No skipped macroblocks before this coded one
+                motion.ue(0)  # P_L0_16x16; one reference implies ref_idx_l0=0
+                # All macroblocks use MV=(16,0) in quarter-luma units. The
+                # first predictor is zero; the remaining median predictors
+                # are that same vector, including the unavailable-top rule.
+                motion.se(16 if index == 0 else 0)
+                motion.se(0)
+                motion.ue(0)  # Inter coded_block_pattern=0: no residual
+            motion.trailing()
+            motion_nal = nal(0x41, motion.bytes())
+            motion_stream = stream + b'\0\0\0\1' + motion_nal
+            shifted = bytearray()
+            for plane, stride, rows, displacement in (
+                    (y, width, height, 4), (u, width // 2, height // 2, 2),
+                    (v, width // 2, height // 2, 2)):
+                for row in range(rows):
+                    for x in range(stride):
+                        shifted.append(plane[row * stride + min(x + displacement, stride - 1)])
+            shifted = bytes(shifted)
+            decoded = subprocess.run(
+                [args.ffmpeg, '-v', 'error', '-nostdin', '-f', 'h264', '-i', 'pipe:0',
+                 '-frames:v', '2', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', 'pipe:1'],
+                input=motion_stream, capture_output=True, check=True, timeout=30)
+            if decoded.stdout != expected + shifted or decoded.stderr:
+                raise RuntimeError('Explicit motion disagrees with shifted reference samples: ' +
+                                   decoded.stderr.decode(errors='replace'))
+            motion_artifacts = {'pcm64-motion.h264': motion_stream,
+                                'pcm64-motion.nal': motion_nal, 'pcm64-motion.yuv': shifted}
+            for name, data in motion_artifacts.items():
+                (args.out / name).write_bytes(data)
+            motion_info = dict(predicted_info, macroblock_type='P_L0_16x16',
+                               motion_vector_quarter_luma=[16, 0],
+                               edge_extension='Right edge replicated by the H.264 sample prediction rules',
+                               hashes={name: hashlib.sha256(data).hexdigest()
+                                       for name, data in motion_artifacts.items()})
+            (args.out / 'pcm64-motion.json').write_text(json.dumps(motion_info, indent=2) + '\n')
+            print('Verified original explicit P_16x16 motion:', len(motion_nal),
+                  'NAL bytes,', len(expected) + len(shifted), 'matching samples across two frames')
 
 
 if __name__ == '__main__':

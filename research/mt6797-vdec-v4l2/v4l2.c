@@ -160,6 +160,16 @@ static void queue_buffer(struct vb2_buffer *buffer)
 	v4l2_m2m_buf_queue(ctx->fh.m2m_ctx, to_vb2_v4l2_buffer(buffer));
 }
 
+static int validate_output_buffer(struct vb2_buffer *buffer)
+{
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(buffer);
+	/* Request binding needs this hook before the later buf_prepare call. */
+	if (vbuf->field != V4L2_FIELD_ANY && vbuf->field != V4L2_FIELD_NONE)
+		return -EOPNOTSUPP;
+	vbuf->field = V4L2_FIELD_NONE;
+	return 0;
+}
+
 static void complete_buffer_request(struct vb2_buffer *buffer)
 {
 	struct decode_file *ctx = vb2_get_drv_priv(buffer->vb2_queue);
@@ -196,6 +206,7 @@ static void stop_stream(struct vb2_queue *queue)
 static const struct vb2_ops buffer_ops = {
 	.queue_setup = queue_setup,
 	.buf_prepare = prepare_buffer,
+	.buf_out_validate = validate_output_buffer,
 	.buf_queue = queue_buffer,
 	.buf_request_complete = complete_buffer_request,
 	.start_streaming = start_stream,
@@ -462,8 +473,8 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	failures = decoder->failures;
 	result = decoder->last_result;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u\n",
-		jobs, failures, result, status.submitted, status.state, status.error,
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u\n",
+		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged);
 }
