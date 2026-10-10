@@ -346,6 +346,9 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    (job->nal[0] & 0x80) || ((job->nal[0] >> 5) & 3) != job->decode.nal_ref_idc ||
 	    ((job->nal[0] & 31) != ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ? 5 : 1)))
 		return -EOPNOTSUPP;
+	ret = mt6797_h264_picture_poc(&job->sps, &job->pps, &job->decode);
+	if (ret)
+		return ret;
 	return mt6797_h264_reference_plan(&job->sps, &job->slice, &job->decode,
 					 ctx->cache, job->timestamp, plan);
 }
@@ -488,10 +491,11 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	bool b_picture = job->slice.slice_type == V4L2_H264_SLICE_TYPE_B;
 	int ret, stop_ret;
 	size_t snapshot_offset;
-	bool dma_started = false;
+	bool dma_started = false, reference_poc_seen = false;
 
 	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= INPUT_DATA_SIZE);
 	memset(status, 0, sizeof(*status));
+	status->current_poc = job->decode.top_field_order_cnt;
 	*pixels = NULL;
 	if (engine->fenced)
 		return -EIO;
@@ -518,10 +522,6 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		if (ret)
 			return ret;
 	}
-	if (b_picture && (job->decode.top_field_order_cnt < -131072 ||
-	    job->decode.top_field_order_cnt > 131071 || job->decode.bottom_field_order_cnt < -131072 ||
-	    job->decode.bottom_field_order_cnt > 131071))
-		return -ERANGE;
 	for (list = 0; list < (b_picture ? 2 : 1); list++)
 		for (i = 0; i < (list ? plan.count1 : plan.count); i++) {
 			const struct v4l2_h264_reference *ref = list ?
@@ -547,6 +547,20 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->long_term_mask = plan.long_term_mask;
 	status->snapshot_mask = plan.snapshot_mask;
 	status->picture_slot = plan.output;
+	for (i = 0; i < V4L2_H264_NUM_DPB_ENTRIES; i++) {
+		const struct v4l2_h264_dpb_entry *entry = &job->decode.dpb[i];
+		if ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
+		    !(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_ACTIVE))
+			continue;
+		if (!reference_poc_seen) {
+			status->reference_min_poc = status->reference_max_poc = entry->top_field_order_cnt;
+			reference_poc_seen = true;
+		}
+		status->reference_min_poc = min(status->reference_min_poc,
+			min(entry->top_field_order_cnt, entry->bottom_field_order_cnt));
+		status->reference_max_poc = max(status->reference_max_poc,
+			max(entry->top_field_order_cnt, entry->bottom_field_order_cnt));
+	}
 	/* An attempted overwrite invalidates the old timestamp even on failure. */
 	ctx->cache[plan.output].valid = false;
 	memset(input->cpu, 0xa5, input->bytes);
@@ -796,6 +810,12 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(mv + 0x200, min(job->decode.top_field_order_cnt, job->decode.bottom_field_order_cnt) & 0x3ffff);
 	SAVE(mv + 0x204, job->decode.top_field_order_cnt & 0x3ffff);
 	SAVE(mv + 0x208, job->decode.bottom_field_order_cnt & 0x3ffff);
+	status->current_poc_word = readl(mv + 0x200);
+	if (status->current_poc_word !=
+	    ((u32)min(job->decode.top_field_order_cnt, job->decode.bottom_field_order_cnt) & 0x3ffff)) {
+		ret = -EIO;
+		goto cleanup;
+	}
 	SAVE(mv + 0x220, readl(mv + 0x220) & ~BIT(5));
 	SAVE(mv + 0x20c, lower_32_bits(picture->dma + pixel_bytes) >> 4);
 	SAVE(pp + 0x804, readl(pp + 0x804) & ~BIT(4));

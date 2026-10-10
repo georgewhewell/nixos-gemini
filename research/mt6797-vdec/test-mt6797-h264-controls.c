@@ -119,14 +119,66 @@ static void test_b_references(void)
 	assert(words.picture_number == 0x7fffe && words.top == 0x8220000 && words.bottom == 0x861ffff);
 	saved = words;
 	entry.top_field_order_cnt--;
-	assert(mt6797_h264_b_reference_words(&entry, 16, &words) == -ERANGE);
-	assert(!memcmp(&words, &saved, sizeof(words)));
+	assert(!mt6797_h264_b_reference_words(&entry, 16, &words));
+	assert(words.top == 0x821ffff && words.bottom == saved.bottom);
 	entry.top_field_order_cnt++;
 	entry.bottom_field_order_cnt++;
-	assert(mt6797_h264_b_reference_words(&entry, 16, &words) == -ERANGE);
+	assert(!mt6797_h264_b_reference_words(&entry, 16, &words));
+	assert(words.top == 0x8220000 && words.bottom == 0x8620000);
+	static const struct { __s32 poc; __u32 low_bits; } cases[] = {
+		{ -262145, 0x3ffff }, { -262144, 0 }, { 262144, 0 },
+		{ (-2147483647 - 1), 0 }, { 2147483646, 0x3fffe },
+	};
+	for (unsigned int i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		entry.top_field_order_cnt = entry.bottom_field_order_cnt = cases[i].poc;
+		assert(!mt6797_h264_b_reference_words(&entry, 16, &words));
+		assert(words.top == (0x8200000 | cases[i].low_bits));
+		assert(words.bottom == (0x8600000 | cases[i].low_bits));
+	}
+	saved = words;
+	entry.top_field_order_cnt = 2147483647;
+	assert(mt6797_h264_b_reference_words(&entry, 16, &words) == -EINVAL);
 	assert(!memcmp(&words, &saved, sizeof(words)));
 	assert(mt6797_h264_b_reference_words(NULL, 0, &words) == -EINVAL);
 	assert(mt6797_h264_b_reference_words(&entry, 0, NULL) == -EINVAL);
+}
+
+static void test_picture_poc(void)
+{
+	struct v4l2_ctrl_h264_sps sps = { .log2_max_pic_order_cnt_lsb_minus4 = 12 };
+	struct v4l2_ctrl_h264_pps pps = { 0 };
+	struct v4l2_ctrl_h264_decode_params decode = { .pic_order_cnt_lsb = 65532,
+		.top_field_order_cnt = -131076, .bottom_field_order_cnt = -131076 };
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	decode.top_field_order_cnt = decode.bottom_field_order_cnt = 131068;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	decode.top_field_order_cnt = decode.bottom_field_order_cnt = 262140;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	decode.pic_order_cnt_lsb = 65533;
+	assert(mt6797_h264_picture_poc(&sps,&pps,&decode)==-EINVAL);
+	decode.pic_order_cnt_lsb = 65532;
+	decode.bottom_field_order_cnt++;
+	assert(mt6797_h264_picture_poc(&sps,&pps,&decode)==-EINVAL);
+	pps.flags = V4L2_H264_PPS_FLAG_BOTTOM_FIELD_PIC_ORDER_IN_FRAME_PRESENT;
+	decode.delta_pic_order_cnt_bottom = 1;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	decode.top_field_order_cnt = -2147483647 - 1;
+	decode.bottom_field_order_cnt = 2147483646;
+	decode.pic_order_cnt_lsb = 0;
+	decode.delta_pic_order_cnt_bottom = -2;
+	/* A64bit subtraction must reject overflow masquerading as delta -2. */
+	assert(mt6797_h264_picture_poc(&sps,&pps,&decode)==-EINVAL);
+	decode.top_field_order_cnt = decode.bottom_field_order_cnt = -2147483647 - 1;
+	decode.delta_pic_order_cnt_bottom = 0;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	sps.pic_order_cnt_type = 1;
+	decode.top_field_order_cnt = decode.bottom_field_order_cnt = 131073;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	sps.pic_order_cnt_type = 2;
+	assert(!mt6797_h264_picture_poc(&sps,&pps,&decode));
+	decode.bottom_field_order_cnt = 2147483647;
+	assert(mt6797_h264_picture_poc(&sps,&pps,&decode)==-EINVAL);
+	assert(mt6797_h264_picture_poc(NULL,&pps,&decode)==-EINVAL);
 }
 
 static void test_slices(void)
@@ -317,6 +369,7 @@ int main(void)
 	test_slices();
 	test_p_references();
 	test_b_references();
+	test_picture_poc();
 	test_scaling();
 	puts("PASS: H.264 SPS/PPS, slice fields, P-reference metadata, scaling SRAM words and atomic rejection");
 	return 0;

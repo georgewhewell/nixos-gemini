@@ -56,3 +56,9 @@ unfinished; these results produce no encoded picture.
 Trial 51 also qualifies listed B decoder pictures and passes full system
 recovery and audit. Its encoder probe still performs no encoder register
 writes, DMA fetches or frame commands; hardware encoding remains unfinished.
+
+Trial 56 completes the command-free resource probe with released votes and
+normal unload. Its decoder media suite passes; the separate system profile
+fails the final RTC alarm, and the recovered boot's strict audit finds a Wi-Fi
+HIF fault. The accepted boot image and codec cleanup are verified. No encoder
+frame command, DMA or encoded output is qualified by this result.

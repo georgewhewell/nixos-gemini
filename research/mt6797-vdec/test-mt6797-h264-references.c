@@ -62,6 +62,27 @@ static void test_count(unsigned int count)
 	assert(plan.count1 == count);
 	for (unsigned int i = 0; i < count; i++)
 		assert(plan.list1[i] == count - 1 - i && plan.list0[i] == i);
+	/* Full metadata must remain authoritative even when low hardware bits
+	 * coincide. This checks both DPB POCs, rather than a narrowed cache.
+	 */
+	for (unsigned int i = 0; i < count; i++) {
+		decode.dpb[i].top_field_order_cnt += 262144;
+		decode.dpb[i].bottom_field_order_cnt += 262144;
+		cache[count - 1 - i].top_poc += 262144;
+		cache[count - 1 - i].bottom_poc += 262144;
+	}
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	saved = plan;
+	decode.dpb[0].top_field_order_cnt += 262144;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	decode.dpb[0].top_field_order_cnt -= 262144;
+	for (unsigned int i = 0; i < count; i++) {
+		decode.dpb[i].top_field_order_cnt -= 262144;
+		decode.dpb[i].bottom_field_order_cnt -= 262144;
+		cache[count - 1 - i].top_poc -= 262144;
+		cache[count - 1 - i].bottom_poc -= 262144;
+	}
 	saved = plan;
 	slice.ref_pic_list1[count - 1].index = 16;
 	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);

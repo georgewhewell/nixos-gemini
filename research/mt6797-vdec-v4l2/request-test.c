@@ -295,7 +295,10 @@ static void decode(struct stream *stream, const char *out, const char *name,
 			slice.ref_pic_list1[i].index = 1 - i;
 		}
 		if (!strcmp(name, "fault-b-list1")) slice.ref_pic_list1[1].index = 2;
-		else params.top_field_order_cnt = params.bottom_field_order_cnt = 131072;
+		else {
+			/* Type0 full POC has low6 bits0, but the NAL/control LSB is1. */
+			params.top_field_order_cnt = params.bottom_field_order_cnt = 131072;
+		}
 	}
 	if (!strncmp(name, "fault-longterm-", 15)) {
 		sps.profile_idc = 77;

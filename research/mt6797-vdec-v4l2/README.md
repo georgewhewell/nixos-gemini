@@ -12,7 +12,8 @@ Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
-Trials 52–54 qualify the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trials 52–54 qualify the earlier module; trial 56 below checks the current
+module with full-width cached POCs. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -183,6 +184,30 @@ timeout. All earlier regressions, all 57 media checks, normal unload,
 RTC/system checks, accepted recovery and the final audit pass. Wider POC
 ranges, multiple slices, interlace, IRQ completion, production integration,
 sustained thermal playback and hardware encoding remain unfinished.
+
+Trial 55 retains 647 exact picture comparisons and all 57 media checks,
+including twelve original POC-boundary streams, but its observer misses the
+cleanup phase at the end of the live window; unload is unconfirmed. Its
+separate first RTC alarm reports zero interrupts. Recovery and the strict
+accepted-board audit pass. This incomplete trial does not qualify new scope.
+
+Trial 56 completes the same media suite with less observer overhead: 647
+pictures match over 648 frame commands, including the intentional timeout.
+`make-wide-poc-motion-fixture.py` builds 48 mathematical/FFmpeg-verified
+64x64 CAVLC streams. Twelve hardware streams cross -131072, +131072 and
++262144 with nearby references, spatial/temporal B skip/direct motion and
+unequal implicit weights. Full cached counts remain authoritative; only the
+hardware fields are masked to 18 bits, as in the pinned public related-core
+helper. The current hardware word is read back before reconstruction.
+Type-0 full-count/LSB and bottom-delta contradictions fail before DMA; host
+sanitizers cover full-width arithmetic and same-low-bit cache mismatches.
+All previous reference, weighted, HD, clocked and concurrency regressions,
+57 media checks, normal unload and the command-free encoder resource probe
+pass. The separate final RTC alarm observes zero interrupts and fails the
+system profile. Automatic recovery restores the accepted image, with taint
+zero and no temporary codec modules, but the strict board audit finds a
+recovered-boot Wi-Fi HIF fault. Both failures remain recorded; this is a media
+pass, with full system and production qualification incomplete.
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote

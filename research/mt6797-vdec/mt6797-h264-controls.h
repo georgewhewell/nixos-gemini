@@ -72,6 +72,13 @@ struct mt6797_h264_p_reference_words {
 	__u32 bottom;         /* AVC_MV + slot * 8 + 4 */
 };
 
+/* Validate full progressive POC metadata without narrowing it to the
+ * hardware field. Type0 also checks the signaled LSB and bottom-field delta.
+ */
+int mt6797_h264_picture_poc(const struct v4l2_ctrl_h264_sps *sps,
+			   const struct v4l2_ctrl_h264_pps *pps,
+			   const struct v4l2_ctrl_h264_decode_params *decode);
+
 /* Progressive frame reference metadata from the public related-core map.
  * The caller separately resolves reference_ts to a live capture buffer and
  * writes its full DMA address to MC + 0x3dc + slot * 4. No address, lifetime,
@@ -81,7 +88,8 @@ int mt6797_h264_p_reference_words(const struct v4l2_h264_dpb_entry *entry,
 				unsigned int frame_buffer_index,
 				struct mt6797_h264_p_reference_words *output);
 
-/* Progressive B metadata adds signed18bit POC to the P identity words.
+/* Progressive B metadata adds the low18 POC bits to the P identity words,
+ * following the public related-core helper; full POCs remain in the cache.
  * B1 separately binds each reference's retained motion address (16byte units).
  */
 int mt6797_h264_b_reference_words(const struct v4l2_h264_dpb_entry *entry,

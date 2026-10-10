@@ -187,6 +187,29 @@ int mt6797_h264_p_reference_words(const struct v4l2_h264_dpb_entry *entry,
 	return 0;
 }
 
+int mt6797_h264_picture_poc(const struct v4l2_ctrl_h264_sps *sps,
+			   const struct v4l2_ctrl_h264_pps *pps,
+			   const struct v4l2_ctrl_h264_decode_params *decode)
+{
+	__u32 mask;
+	__s64 bottom_delta;
+
+	if (!sps || !pps || !decode || sps->pic_order_cnt_type > 2 ||
+	    sps->log2_max_pic_order_cnt_lsb_minus4 > 12 ||
+	    decode->top_field_order_cnt == 0x7fffffff ||
+	    decode->bottom_field_order_cnt == 0x7fffffff)
+		return -EINVAL;
+	if (sps->pic_order_cnt_type != 0)
+		return 0;
+	mask = (1U << (sps->log2_max_pic_order_cnt_lsb_minus4 + 4)) - 1;
+	bottom_delta = (pps->flags & V4L2_H264_PPS_FLAG_BOTTOM_FIELD_PIC_ORDER_IN_FRAME_PRESENT) ?
+		decode->delta_pic_order_cnt_bottom : 0;
+	if (((__u32)decode->top_field_order_cnt & mask) != decode->pic_order_cnt_lsb ||
+	    (__s64)decode->bottom_field_order_cnt - decode->top_field_order_cnt != bottom_delta)
+		return -EINVAL;
+	return 0;
+}
+
 int mt6797_h264_b_reference_words(const struct v4l2_h264_dpb_entry *entry,
                                 unsigned int frame_buffer_index,
                                 struct mt6797_h264_p_reference_words *output)
@@ -199,9 +222,9 @@ int mt6797_h264_b_reference_words(const struct v4l2_h264_dpb_entry *entry,
         ret = mt6797_h264_p_reference_words(entry, frame_buffer_index, &words);
         if (ret)
                 return ret;
-        if (entry->top_field_order_cnt < -131072 || entry->top_field_order_cnt > 131071 ||
-            entry->bottom_field_order_cnt < -131072 || entry->bottom_field_order_cnt > 131071)
-                return -ERANGE;
+        /* Public SetBRefPicListReg masks full counts into the18bit field.
+         * Timestamp/geometry/full-POC checks happen before this translation.
+         */
         words.top |= (__u32)entry->top_field_order_cnt & 0x3ffff;
         words.bottom |= (__u32)entry->bottom_field_order_cnt & 0x3ffff;
         *output = words;

@@ -23,8 +23,8 @@ are hardware-qualified in trial 50. Trial 51's media run adds B pictures: 288 ex
 spatial/temporal direct, reference B pictures, explicit/implicit weighting,
 custom High matrices and Main 1080p. All 57 media checks, normal unload, full RTC/system checks and strict
 accepted-system recovery/audit pass.
-The B translator uses stable private reference identities and signed 18-bit
-picture-order metadata. Both lists have independently verified planning;
+The B translator uses stable private reference identities and full-width cached picture-order counts and masked 18-bit
+hardware metadata. Both lists have independently verified planning;
 512 weighted P/B headers and 74 FFmpeg traces check the bounded reader.
 `make-b-reference-fixture.py` supplies mathematical forward/backward/bi
 prediction mosaics; 18 software variants pass. Hardware encoding remains
@@ -70,6 +70,30 @@ private long-term/output slots and complete retained pixel/motion snapshots.
 All earlier regressions, all 57 media checks, normal unload and full
 RTC/system/recovery/audit pass. Wider POC ranges and broader codec, production
 and encoding work remain unfinished.
+
+Trial 55 retains 647 exact picture comparisons and all 57 media checks,
+including twelve original POC-boundary streams, but its observer misses the
+cleanup phase at the end of the live window; unload is unconfirmed. Its
+separate first RTC alarm reports zero interrupts. Recovery and the strict
+accepted-board audit pass. This incomplete trial does not qualify new scope.
+
+Trial 56 completes the same media suite with less observer overhead: 647
+pictures match over 648 frame commands, including the intentional timeout.
+`make-wide-poc-motion-fixture.py` builds 48 mathematical/FFmpeg-verified
+64x64 CAVLC streams. Twelve hardware streams cross -131072, +131072 and
++262144 with nearby references, spatial/temporal B skip/direct motion and
+unequal implicit weights. Full cached counts remain authoritative; only the
+hardware fields are masked to 18 bits, as in the pinned public related-core
+helper. The current hardware word is read back before reconstruction.
+Type-0 full-count/LSB and bottom-delta contradictions fail before DMA; host
+sanitizers cover full-width arithmetic and same-low-bit cache mismatches.
+All previous reference, weighted, HD, clocked and concurrency regressions,
+57 media checks, normal unload and the command-free encoder resource probe
+pass. The separate final RTC alarm observes zero interrupts and fails the
+system profile. Automatic recovery restores the accepted image, with taint
+zero and no temporary codec modules, but the strict board audit finds a
+recovered-boot Wi-Fi HIF fault. Both failures remain recorded; this is a media
+pass, with full system and production qualification incomplete.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
