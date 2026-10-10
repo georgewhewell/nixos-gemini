@@ -9,15 +9,17 @@ This development has not used a formally separated clean-room team.
 
 The current module decodes the listed progressive Baseline/Main I/P fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and one short-term
-reference. Trial 41 checks 106 exact pictures, including 720p and 1080p,
-five resolution/profile segments and visible-height I420 conversion. All 57
-default media checks and normal unload pass. Its cached private DMA buffers
-use explicit CPU/device ownership and picture storage is allocated only for
-valid decoding requests. Trial 42 checks two concurrent cached-buffer Main 1280x720 / Baseline
-640x480 streams; all sixteen pictures match.
-Hardware encoding, broader codec features, interrupt completion and production
-integration remain unfinished. All RTC/system checks and strict accepted-system recovery pass. Trial 38's
-RTC miss and trial 40's failed unlimited-open check remain recorded.
+reference. Trial 41 checks 106 exact pictures including HD, resolution changes
+and visible-height I420 output; all 57 default media checks pass. Trial 44
+checks 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
+native MM21 and four-thread I420 conversion each render all 32 with valid
+timestamps, real clock waits and zero drops. Concurrent contexts, fault/recovery,
+normal unload and strict accepted-system recovery pass. Trial 44's separate
+RTC alarm count is two instead of one, so its system profile does not qualify.
+The source uses cached private DMA with explicit ownership and lazy geometry
+allocation. Prior RTC/open-allocation/conversion failures remain recorded.
+Hardware encoding, broader codec features, interrupt completion, sustained
+playback/thermal qualification and production integration remain unfinished.
 
 The first module builds against the 7.1.3 candidate kernel with strict modpost
 and genuine exported-symbol metadata from that kernel and its media modules.
@@ -154,6 +156,13 @@ export GST_PLUGIN_PATH_1_0=
 export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
 "$GST_PACKAGE/bin/gst-launch-1.0" filesrc location=baseline.h264 \
   ! h264parse ! v4l2slh264dec ! filesink location=native-mm21.bin
+
+# Clocked I420 conversion, checked on the trial-44 1080p sample:
+"$GST_PACKAGE/bin/gst-launch-1.0" filesrc location=main.h264 \
+  ! h264parse ! v4l2slh264dec \
+  ! queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 \
+  ! videoconvert n-threads=4 ! video/x-raw,format=I420 \
+  ! filesink sync=true qos=true max-lateness=20000000 location=decoded.i420
 ```
 
 `../mt6797-vdec/make-baseline-fixture.py` reproduces the changing-gradient x264
@@ -285,6 +294,17 @@ unload pass. These short samples do not qualify sustained playback or thermal
 behavior. The failed conversion result remains archived.
 
 All RTC/system checks and strict accepted-system recovery also pass.
+
+Trial 44 sets `videoconvert n-threads=4` behind the two-buffer queue. Both
+native MM21 and I420 pipelines now emit all 32 Main 1080p pictures at valid
+25 fps timestamps. Each sink records 32 rendered and zero dropped; real clock
+waits occur and every sample matches. Native faults, Baseline and concurrent
+contexts bring the trial to 97 exact pictures. All 57 media checks, normal
+unload and strict accepted recovery pass. The RTC delivery-before alarm records
+two interrupts instead of one; the full system profile fails and remains
+archived without an established cause. The prior serial
+and queued one-thread conversion failures remain archived. These short
+1.28-second samples do not qualify sustained playback or thermal behavior.
 
 The encoder, interrupt completion, general codec features beyond this scope,
 system suspend and untested stream configurations remain unqualified. These experimental
