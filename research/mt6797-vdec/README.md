@@ -42,8 +42,22 @@ indices through 65535, picture-number mismatches and duplicate indices.
 Three native invalid-metadata requests fail before DMA, leave capture memory
 untouched and preserve a usable reference. The earlier B/direct/pyramid/High,
 weighted, 1080p, clocked and concurrent regressions, all 57 media checks,
-normal unload and full RTC/system/recovery/audit pass. Long-term direct-motion
-and replacement/extended chains still need hardware qualification.
+normal unload and full RTC/system/recovery/audit pass. Trial 53 below qualifies
+original long-term direct-motion cases; replacement/extended chains remain
+unqualified.
+
+Trial 53 reuses that module and checks 460 exact pictures over 461 hardware
+commands. `make-long-term-motion-fixture.py` builds twelve original three-picture
+streams covering short-term, initially long-term and promoted references,
+spatial/temporal direct prediction, and B_Skip/B_Direct_16x16. A moving P picture
+supplies retained co-located motion; temporal-direct prediction must change
+from a POC-scaled vector to the full vector when its reference becomes
+long-term, including promotion after the P picture was decoded. Every sample
+matches independent mathematics and FFmpeg; syntax traces check header sizes,
+direct flags and marking. Full reference pixel/motion/guard snapshots, all
+earlier regressions, all 57 media checks, normal unload and full
+RTC/system/recovery/audit pass. The original motion cases use 64x64 CAVLC and
+integer displacements. Sustained long-term direct throughput is unqualified.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
@@ -343,7 +357,7 @@ CRC entries are valid only because that configuration disables `MODVERSIONS`.
 The experimental driver now has hardware-qualified V4L2 request/queue handling,
 private DMA and reference storage, native MM21 capture, bounded recovery and
 exact software comparisons for the fixtures described above. Remaining work
-includes long-term direct-motion and extended chains, multiple slices,
+includes extended long-term chains, multiple slices,
 interlaced pictures, wider POC and HD-reference coverage, interrupt completion,
 system suspend/resume, sustained playback/thermal checks and accepted-system
 integration. Encoding needs its own public frame-programming contract and

@@ -12,7 +12,7 @@ Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
-Trial 52 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trials 52/53 qualify the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -147,9 +147,26 @@ weighted, 1080p, clocked and concurrent-context regressions from trial 51.
 Every retained pixel, motion and guard byte matches after a proven stop.
 All 57 media checks, normal unload, RTC/system checks, accepted recovery and
 the final board audit pass. The accepted system is healthy with taint zero,
-no temporary media modules and no failed services. Long-term temporal-direct
-motion, replacement/extended chains and broader codec features remain
-unqualified.
+no temporary media modules and no failed services. This trial does not qualify
+long-term temporal-direct motion; trial 53 below checks that separately.
+Replacement/extended chains and broader codec features remain unqualified.
+
+Trial 53 reuses the same module and qualifies twelve original 64x64 motion
+streams: short-term, initially long-term and subsequently promoted references,
+each with spatial or temporal direct prediction and B_Skip or B_Direct_16x16.
+A nonuniform I_PCM picture is followed by an explicit moving P picture; the
+final B picture must use its retained co-located motion. For temporal direct,
+the short-term case derives half the co-located vector, while the long-term
+case retains that full vector and gives list1 zero motion. Promotion after the
+P picture was decoded exercises the reference-identity rule in public H.264
+8.4.1.2.3, note 2. All three pictures in each stream match mathematical samples
+and FFmpeg, including image-edge replication. Independent syntax traces check
+marking, direct flags and header sizes. All 460 output pictures match over 461
+hardware commands, including the timeout; every retained pixel, motion and
+guard byte is unchanged. The trial reruns all trial 52 regressions and passes
+all 57 media checks, normal unload, RTC/system checks, accepted recovery and
+the final audit. These original motion fixtures use CAVLC and integer sample
+displacements; broader long-term direct-motion throughput remains unqualified.
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
@@ -208,7 +225,8 @@ checks, accepted recovery and the strict kernel-journal audit also pass.
 Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
 the High-profile streams in trial 47, weighted P streams in trial 49 and
 multiple-reference streams in trial 50, B streams in trial 51 and long-term
-reference mosaics in trial 52 above: one slice, Baseline I/P or Main/High I/P/B
+reference mosaics in trial 52 and original motion streams in trial 53 above:
+one slice, Baseline I/P or Main/High I/P/B
 pictures, up to 16 short-term references at SD, 16 short/long-term references
 in the original 64x64 mosaics and three short-term references in the listed HD fixtures, with
 enabled or disabled deblocking.
