@@ -3,7 +3,10 @@
 This branch packages Linux 7.2.9 and NixOS for the MT6797X Gemini.
 The earlier 7.2.9 image passed supervised device boot/RTC/paging/Nix checks.
 Current development adds GNOME and RAM-only paging; those changes are not yet
-qualified on the device. The installed baseline remains 7.1.3. See the
+qualified on the device. The complete GNOME system, initramfs, boot bundle and
+EFI files have cross-built for ARM64; see the
+[build record](research/desktop-consolidation-20261010.json).
+The installed baseline remains 7.1.3. See the
 [kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
 The default build includes EFI boot support, a persistent Nix daemon,
 GNOME Wayland desktop, Gemini keyboard layout, RAM-only zram swap, watchdog

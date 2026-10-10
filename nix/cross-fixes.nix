@@ -15,6 +15,19 @@ final: prev: {
     # for a target executable; documentation generation runs on the host.
     patches = (old.patches or []) ++ [./patches/gupnp-av-native-docgen.patch];
   });
+  gnome-session = prev.gnome-session.overrideAttrs (old: {
+    # Meson needs a separate native pkg-config to find gdbus-codegen.
+    # buildPackages.pkg-config still targets ARM64 in this package set.
+    depsBuildBuild = (old.depsBuildBuild or []) ++ [final.pkgsBuildBuild.pkg-config];
+    nativeBuildInputs = (old.nativeBuildInputs or []) ++ [final.buildPackages.glib];
+  });
+  gnome-browser-connector = prev.gnome-browser-connector.overrideAttrs (old: {
+    # Meson's configure-time gi import must use native Python extension
+    # modules; pythonPath still supplies target pygobject at runtime.
+    nativeBuildInputs = (old.nativeBuildInputs or []) ++ [
+      (final.buildPackages.python3.withPackages (p: [p.pygobject3]))
+    ];
+  });
   # These Meson custom targets invoke Cargo without selecting its target.
   # Keep Cargo's output directory and Meson's installed binary in agreement.
   gst-thumbnailers = prev.gst-thumbnailers.overrideAttrs (old:

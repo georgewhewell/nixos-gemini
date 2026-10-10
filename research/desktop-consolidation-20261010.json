@@ -91,7 +91,7 @@
     },
     "hardware_paging_tested": false
   },
-  "gnome_cross_build_complete": false,
+  "gnome_cross_build_complete": true,
   "gnome_hardware_tested": false,
   "zram_hardware_tested": false,
   "live_mitigation": {
@@ -160,7 +160,7 @@
     "nix/kernel.nix": "f16cac28ef9f0c623e56c2c0742a6f54397abbb89f5974d7b852f255ca40a222",
     "nix/gemini-zram-probe.c": "07c8db0ea58cfc074b23b6635fe3743d329994807aaf67da3fb99aa10013a19f",
     "nix/zram-probe.nix": "83b93157fdc41024b2dc409badc905ae2a7bdd6ef722f7e021510ad116023245",
-    "nix/cross-fixes.nix": "cf6b27bd07b9992ce56990e18974925c4803c6bc399a6304d405a6d424042929",
+    "nix/cross-fixes.nix": "e5260108deae65abc2fb23c6de7c9e2d9d276967919d05025d2f450322cec015",
     "nix/desktop-keyboard.nix": "caac70f0168b3bf4ebcb5360a51bbbe0b2dd1a3f6caff99f727d110e8d07b0b7",
     "nix/mesa.nix": "5215471874a15ef03e4e046e658faf832dfe67ee66f23bbbe35713f397aa8b20",
     "nix/mainline-nixos.nix": "b85aab55c427d4ec088b24aa12acf6322126164dca0fe2d26de3a38700dc53e5",
@@ -301,5 +301,345 @@
     "legacy_flash_paging_trial_rejected": true,
     "flash_backed_baseline_rejected_before_remote_io": true,
     "hardware_tested": false
+  },
+  "gnome_cross_build": {
+    "result": "passed",
+    "build_exit_code": 0,
+    "build_platform": "x86_64-linux",
+    "target_platform": "aarch64-linux",
+    "outputs": {
+      "toplevel": "/nix/store/zv2srrys20wx4r502dyrkbki7cpxdhxc-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "initramfs": "/nix/store/fpxhlpm67shz4xahj6zczim1hvpmc5cj-gemini-mainline-nixos-initramfs.cpio.gz",
+      "bundle": "/nix/store/340d08p2hnrkfrm93hzx58zhxydksv21-gemini-mainline-nixos-bundle",
+      "efi_files": "/nix/store/s62crchjaq63q9d37xpkia4x1s1f7g7n-gemini-efi-boot-files",
+      "bootloader": "/nix/store/x5qjq1aqr3pjc8ifh8rd7v0h0lm4c2mp-gemini-bootloader"
+    },
+    "hardware_tested": false,
+    "full_system_build_log": "handoff/desktop-consolidation-20261010/build-current-11.log",
+    "bundle_build_log": "handoff/desktop-consolidation-20261010/build-bundle-current.log",
+    "elf_proof": {
+      "gdm": {
+        "output": "/nix/store/hsw1q5rlsg1jswfh6w9sywxyqk21lmda-gdm-aarch64-unknown-linux-gnu-50.2",
+        "elf_files": {
+          "bin/gdm": {
+            "machine": 183,
+            "sha256": "f0c059dc7a3389695796a39a52c09463e20dcb6158076bdc2dc9f29c3da2333d"
+          },
+          "bin/gdm-config": {
+            "machine": 183,
+            "sha256": "0bd56d65816bcb74a2b8c1996b4bf3038fd7f06246e4f128f5c1cb4b6ae1107d"
+          },
+          "libexec/gdm-new-session": {
+            "machine": 183,
+            "sha256": "3757bc097473fdc9e98d29429880908afe5c9e697c7a9200f3903103f792d477"
+          },
+          "libexec/gdm-runtime-config": {
+            "machine": 183,
+            "sha256": "6c8318d895b7c466fbd48ede192d20c640ab54507184b1d470e5ee6d7c381362"
+          },
+          "libexec/gdm-session-worker": {
+            "machine": 183,
+            "sha256": "599654874d4e77bf1455dda02a635f7472e5c316118e4c55b1a2d1b7a6095e1c"
+          },
+          "libexec/gdm-wayland-session": {
+            "machine": 183,
+            "sha256": "a38ca6bd970853d7d9ec6e3d19e8b3a72dd6c003cde783355d16d83680d82396"
+          },
+          "libexec/gdm-x-session": {
+            "machine": 183,
+            "sha256": "c4a68db0c0499b1e8ab310f63a9d2ec4dc99cd3a6fd95bfe63cc0b8902abc515"
+          },
+          "lib/libgdm.so.1.0.0": {
+            "machine": 183,
+            "sha256": "344d6275894046e12df456b94b767f1abefcd4cd67a25c6eafd69a70e321a663"
+          },
+          "lib/security/pam_gdm.so": {
+            "machine": 183,
+            "sha256": "9a9c5c374ab6932af0b0fdf356d6f53c577b0fb5b0cb54c703f2abe6be75b31a"
+          }
+        }
+      },
+      "gnome-browser-connector": {
+        "output": "/nix/store/0va8lfylx0b8bnajbf7bxdxj6q2x6byn-gnome-browser-connector-42.1-aarch64-unknown-linux-gnu",
+        "elf_files": {
+          "bin/gnome-browser-connector": {
+            "machine": 183,
+            "sha256": "417ecae89c5857a728077699997746474621e786f48902423c241c750e642871"
+          },
+          "bin/gnome-browser-connector-host": {
+            "machine": 183,
+            "sha256": "a17e6cfc88253ce89c33cfd8fe46489e257e3361ec149e8853a88956eb543501"
+          }
+        }
+      },
+      "gnome-session": {
+        "output": "/nix/store/mc3j6caxvbp380l5mvnnxmfb0cnabv3x-gnome-session-aarch64-unknown-linux-gnu-50.1",
+        "elf_files": {
+          "bin/.gnome-session-inhibit-wrapped": {
+            "machine": 183,
+            "sha256": "db0fa1b22abc9bb1efb0fecd02a11a95a2b8d18ceff846d0d5c51f1c1ee125f7"
+          },
+          "bin/.gnome-session-quit-wrapped": {
+            "machine": 183,
+            "sha256": "f79eeddd211251988c145aa520ded636b6da64541b9522b97648e4f2a565d6e8"
+          },
+          "bin/.gnome-session-wrapped": {
+            "machine": 183,
+            "sha256": "d47d8164d3eb2d28e1fa22d52dfdee6ea785fa6fce2aaa2cef5043467ff1197b"
+          },
+          "bin/gnome-session": {
+            "machine": 183,
+            "sha256": "ee010bce964d68d2ae674b4f7e9c5dd838f670944306378fa0cac6ad74610498"
+          },
+          "bin/gnome-session-inhibit": {
+            "machine": 183,
+            "sha256": "2a951f2da3a5d4232fdf5d52d348fd8db39de918d7198300a7fa5b80af8a63ed"
+          },
+          "bin/gnome-session-quit": {
+            "machine": 183,
+            "sha256": "8c3f27f883696378c0febfafc58e7e04f26e18b4458445eee17ab22c0e91ab25"
+          },
+          "libexec/.gnome-session-init-worker-wrapped": {
+            "machine": 183,
+            "sha256": "16da42c840fa77b3fdbc95c549dd0d2a1ca47f5384ca5e31db9f874e0fbec586"
+          },
+          "libexec/.gnome-session-service-wrapped": {
+            "machine": 183,
+            "sha256": "81124647f5c4c573e1c7f0a8d914bdb1f0d93b84c731f72e5a44b200f25c3df1"
+          },
+          "libexec/gnome-session-init-worker": {
+            "machine": 183,
+            "sha256": "9b8207a21b93dd620f53080be608253cb18d3912f714ce3992e110487d1ef7d4"
+          },
+          "libexec/gnome-session-service": {
+            "machine": 183,
+            "sha256": "f86e2d56e368409e53c63147d74fd8e641aa50c7d85198d617c352d8003167e7"
+          }
+        }
+      },
+      "gnome-shell": {
+        "output": "/nix/store/jmraz5c56662wx9cdribgzf6zn16ymp2-gnome-shell-aarch64-unknown-linux-gnu-50.4",
+        "elf_files": {
+          "bin/.gnome-extensions-wrapped": {
+            "machine": 183,
+            "sha256": "8c5b94acc5e0974fc8faa7b109ba0c237ebb9c277bf4f50f849b82f52d8b8809"
+          },
+          "bin/.gnome-shell-wrapped": {
+            "machine": 183,
+            "sha256": "2004b1b77f6aa7eca96011a342de083aa560d0fc8914c1ce445ea82e32a5d301"
+          },
+          "bin/gnome-extensions": {
+            "machine": 183,
+            "sha256": "08d3a6dfd56e8e7ea4f790ee11abffe73801dcc6ff91712d83a223bf840ea1fe"
+          },
+          "bin/gnome-extensions-app": {
+            "machine": 183,
+            "sha256": "075cbae854102ae33d93537d8e45d34f8a398c2a01062aead699e01b4815dacf"
+          },
+          "bin/gnome-shell": {
+            "machine": 183,
+            "sha256": "b8ed67893e9163f9a4d21180ce11bd0786f0ba118b8b4ec8477cea6506863401"
+          },
+          "bin/gnome-shell-extension-tool": {
+            "machine": 183,
+            "sha256": "efa132fce51d541f12ff5e9828c7ec155b7bbf40ad6be89a09de7bf315e6bdae"
+          },
+          "bin/gnome-shell-test-tool": {
+            "machine": 183,
+            "sha256": "d4c5be04b15a016f473713908cd497d773dfa16d2dc5fab96c5fd7f342240faf"
+          },
+          "libexec/.gnome-shell-calendar-server-wrapped": {
+            "machine": 183,
+            "sha256": "2cee5a936ed8afa6e13486909cb2f04357bcfa24c56672be8048fc84863ec7a6"
+          },
+          "libexec/.gnome-shell-hotplug-sniffer-wrapped": {
+            "machine": 183,
+            "sha256": "114e4c30a52b874943117b030d33250f81236a496978317bcd165fc8dc33f18a"
+          },
+          "libexec/.gnome-shell-perf-helper-wrapped": {
+            "machine": 183,
+            "sha256": "11e12b4bc5aae092dde3237791c9d1a37bd3c2ff575d03a5c275fc01fb507198"
+          },
+          "libexec/.gnome-shell-portal-helper-wrapped": {
+            "machine": 183,
+            "sha256": "a6753519ead116529a5769db30b0ce21ac152fa93afde803ccdbf1ecd19e4972"
+          },
+          "libexec/gnome-shell-calendar-server": {
+            "machine": 183,
+            "sha256": "cf5fc92c8ef6dff21f856302daa2ae542a5c1125e888d3a3af6017e19b59cae6"
+          },
+          "libexec/gnome-shell-hotplug-sniffer": {
+            "machine": 183,
+            "sha256": "fb4972e3ba9a4571e20f499c401d6881338439f4c1a1482ade2c12ec5645db7f"
+          },
+          "libexec/gnome-shell-perf-helper": {
+            "machine": 183,
+            "sha256": "6dd292e99db3443244e4383669a70e93737838a456b0ee248ff71ee424076031"
+          },
+          "libexec/gnome-shell-portal-helper": {
+            "machine": 183,
+            "sha256": "2f485676bd27145b6f0cbaa6a4b0870d71387fff5d75d8fae71188b133540f3d"
+          },
+          "lib/gnome-shell/libgnome-shell-menu.so": {
+            "machine": 183,
+            "sha256": "1b9e33e2b8bbb732116ebebbd004cf20915bf0bdbcc590bb69f121a5b6d80f57"
+          },
+          "lib/gnome-shell/libgvc.so": {
+            "machine": 183,
+            "sha256": "7fdd24795511efdeb1399e26c5122a048ee8367b47e64cc452328520eeee6728"
+          },
+          "lib/gnome-shell/libshell-18.so": {
+            "machine": 183,
+            "sha256": "eaf056f1d21963f464f28a4fb5a020516e6783bb42b32575f786d9deafa1214b"
+          },
+          "lib/gnome-shell/libshew-0.so": {
+            "machine": 183,
+            "sha256": "28f722bdf879dab0600a576b7b10128a0ae5b27752076f5439548d049e942d58"
+          },
+          "lib/gnome-shell/libst-18.so": {
+            "machine": 183,
+            "sha256": "1e188405d674f9b95d2f03462711182a32ca7799c2e4f8b0d7115805c340dedc"
+          }
+        }
+      },
+      "mutter": {
+        "output": "/nix/store/fa300ab0k2mk54y8ffgwf4hv8kbm0cym-mutter-aarch64-unknown-linux-gnu-50.4",
+        "elf_files": {
+          "bin/.mutter-wrapped": {
+            "machine": 183,
+            "sha256": "b60a536305f75e603857a3a270204240a36be321816a50659528ed56d4c9f863"
+          },
+          "bin/gdctl": {
+            "machine": 183,
+            "sha256": "1d2e4c1b8436e3be44acd959343bc7eb4f62ba76035daed50d5fa2b1d09f1215"
+          },
+          "bin/gnome-service-client": {
+            "machine": 183,
+            "sha256": "767822b28832e060eb4234bff66d67ce09af5bb68b39daac3d2d8bbacdd09161"
+          },
+          "bin/mutter": {
+            "machine": 183,
+            "sha256": "47aa600fa46c0b82eac507e79fbf5b1eab7d1ccc73501c01bd46032f8ffbc9d3"
+          },
+          "libexec/.mutter-backlight-helper-wrapped": {
+            "machine": 183,
+            "sha256": "7f114d81c12cb556236272ea66fac8c8a50c8703b125d9155673249a55b1b262"
+          },
+          "libexec/.mutter-devkit-wrapped": {
+            "machine": 183,
+            "sha256": "44f29fad5b894eccfa553b9480a27c7e7d70e55570e946b01946a5448f927172"
+          },
+          "libexec/.mutter-x11-frames-wrapped": {
+            "machine": 183,
+            "sha256": "d3fbc674219b725d82b03fcece3ee96c33f076877db398036800ad018b58ebef"
+          },
+          "libexec/mutter-backlight-helper": {
+            "machine": 183,
+            "sha256": "0d91bc77e622af3003b86fe7b4f1dd07ed409f1e89b140e603172704bf10521a"
+          },
+          "libexec/mutter-devkit": {
+            "machine": 183,
+            "sha256": "27cfb39eb3ca782846a69ee257758388bbadae50bb04e9af2c06709baef64698"
+          },
+          "libexec/mutter-x11-frames": {
+            "machine": 183,
+            "sha256": "eb3544d19efb919020e4f086c94731ff07b04828333cc369a69eb22ecb146e3a"
+          },
+          "lib/libmutter-18.so.0.0.0": {
+            "machine": 183,
+            "sha256": "2de4a4f6ae687d2322051ea2af66f1511e319205da2cd48d372c0f0f76cab04f"
+          },
+          "lib/mutter-18/libmutter-clutter-18.so.0.0.0": {
+            "machine": 183,
+            "sha256": "44131f15c1a39943d2e163aca12637e1797a083bc01d042e0564d29f265503ee"
+          },
+          "lib/mutter-18/libmutter-cogl-18.so.0.0.0": {
+            "machine": 183,
+            "sha256": "aa8ae73f1834c9786dc7680ce90b93bf5cf4bcec7d747391da7c251a2ad1cac6"
+          },
+          "lib/mutter-18/libmutter-mtk-18.so.0.0.0": {
+            "machine": 183,
+            "sha256": "3a199adfb9f85f035013e53612e185c307e56a8fb7eb0b8129d84133a02add7c"
+          },
+          "lib/mutter-18/plugins/libdefault.so": {
+            "machine": 183,
+            "sha256": "88f05165abf4002c2e8e6ebca814d54d2f8d6fdd3dd9b4ac017411babb7675d3"
+          }
+        }
+      },
+      "webkitgtk_6_0": {
+        "output": "/nix/store/clsl07mfr1f2lkhs5pa35m0xd2y4qa6c-webkitgtk-2.52.6+abi=6.0-aarch64-unknown-linux-gnu",
+        "elf_files": {
+          "bin/WebKitWebDriver": {
+            "machine": 183,
+            "sha256": "538b52a3e89a2a09e191f1e7356141a32ccd5379db1cd690a5a7336af0174713"
+          },
+          "libexec/webkitgtk-6.0/MiniBrowser": {
+            "machine": 183,
+            "sha256": "0d1e338621714d85d8d8e6723a3fc16e6fcc792f9984ab2d614bc8ec30113a08"
+          },
+          "libexec/webkitgtk-6.0/WebKitGPUProcess": {
+            "machine": 183,
+            "sha256": "ed96ae4925e9ca346a872ba9a81325fca14f60e989c889388e522cc75765f4a0"
+          },
+          "libexec/webkitgtk-6.0/WebKitNetworkProcess": {
+            "machine": 183,
+            "sha256": "5363285de52a9ed7a7a68ca9ab41204084f09dae73498f30faa134413abe7e05"
+          },
+          "libexec/webkitgtk-6.0/WebKitWebProcess": {
+            "machine": 183,
+            "sha256": "33d2d162e3f1217562b2b26514068c977103c967c4ab2b6ec4f3567606a7d457"
+          },
+          "libexec/webkitgtk-6.0/jsc": {
+            "machine": 183,
+            "sha256": "3bf9679cedcce1abe73f072d57c845f957546985e6cabad4d7fd5cf3579f5c0c"
+          },
+          "lib/libjavascriptcoregtk-6.0.so.1.7.14": {
+            "machine": 183,
+            "sha256": "f26d6fedbf5725f7300c33a6a304d148d030cf5ca5a57794f13c0fc75afd82a8"
+          },
+          "lib/libwebkitgtk-6.0.so.4.16.10": {
+            "machine": 183,
+            "sha256": "24db13462a9d7c7131d90a30e7ff32d5d2dc871bb058d03241c265e527c1618c"
+          },
+          "lib/webkitgtk-6.0/injected-bundle/libwebkitgtkinjectedbundle.so": {
+            "machine": 183,
+            "sha256": "2fa2f5ce41260d3a8f3efe30a6c666cbcea3aa7e50363bce0af460415f9e2b8d"
+          }
+        }
+      }
+    },
+    "built_policy": {
+      "system": "/nix/store/zv2srrys20wx4r502dyrkbki7cpxdhxc-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "initramfs": "/nix/store/fpxhlpm67shz4xahj6zczim1hvpmc5cj-gemini-mainline-nixos-initramfs.cpio.gz",
+      "initramfs_sha256": "f0d4d2d931f9f9f58302e1f79a6f69ba0305a40a76d6b5c44527f88f7ff10a40",
+      "initramfs_entries": 37,
+      "early_swap_or_resume_commands": [],
+      "fstab_swap_entries": 0,
+      "zram_generator": "[zram0]\ncompression-algorithm=lz4\nswap-priority=5\nzram-size=50 / 100 * ram\n",
+      "default_target": "graphical.target",
+      "hardware_tested": false
+    },
+    "packaging_fixes": {
+      "gnome-session": "Native pkg-config in depsBuildBuild uses pkgsBuildBuild; native GLib provides gdbus-codegen; target linking retains ARM64 GLib.",
+      "gnome-browser-connector": "Configure-time gi import uses native Python and pygobject; installed wrappers use ARM64 Python and pygobject."
+    },
+    "source_sha256": "e5260108deae65abc2fb23c6de7c9e2d9d276967919d05025d2f450322cec015"
+  },
+  "normal_boot_preflight": {
+    "returncode": 1,
+    "candidate_artifacts_validated": true,
+    "hardware_trial_started": false,
+    "reason": "Installed accepted recovery still enables flash swap",
+    "log": "handoff/desktop-consolidation-20261010/ram-only-preflight-01.log"
+  },
+  "live_post_build_audit": {
+    "command": "set -eu\ntest \"$(cat /proc/sys/kernel/random/boot_id)\" = 214b3268-b481-4ccb-a693-260b114b1e9b\ntest \"$(readlink /run/current-system)\" = /nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade\ntest \"$(wc -l < /proc/swaps)\" -eq 1\ntest \"$(cat /sys/module/zswap/parameters/enabled)\" = N\ntest \"$(cat /sys/module/zswap/parameters/shrinker_enabled)\" = N\nunit=$(systemd-escape --path --suffix=swap /dev/disk/by-partuuid/5e0f3a1c-9b2d-4c8e-a7f6-2d1b0c9e8a71)\ntest \"$(readlink /run/systemd/system/\"$unit\")\" = /dev/null\ntest \"$(readlink /run/systemd/system/dev-mmcblk0p34.swap)\" = /dev/null\ncat /proc/swaps\ncat /sys/class/block/mmcblk0p34/stat\ncat /proc/sys/kernel/random/boot_id\n",
+    "returncode": 0,
+    "stdout": "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n      66        0     4720      841        0        0        0        0        0      612      841        0        0        0        0        0        0\n214b3268-b481-4ccb-a693-260b114b1e9b\n",
+    "stderr": "",
+    "persistent": false,
+    "flash_swap_writes_this_boot": 0,
+    "flash_swap_written_sectors_this_boot": 0
   }
 }
