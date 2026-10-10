@@ -4,7 +4,8 @@
 The rescue writer restores only the p22 bootloader, so it cannot undo a bad
 default generation. Require a passing supervised direct-boot trial of the
 exact system first, then install it with the standard NixOS path, reboot once
-and require self-acceptance. --execute is needed to change the device.
+and require self-acceptance. Both the qualified trial and accepted recovery
+must use RAM-only paging. --execute is needed to change the device.
 """
 import argparse
 import json
@@ -30,10 +31,25 @@ def trial_system(trial):
     result = json.loads((trial / 'result.json').read_text())
     if result.get('profile_qualified') is not True or result.get('result') != 'passed':
         raise RuntimeError(f'{trial} did not qualify')
-    if not json.loads((trial / 'final-idle-check.json').read_text()).get('no_writer'):
+    if json.loads((trial / 'final-idle-check.json').read_text()).get('no_writer') is not True:
         raise RuntimeError(f'{trial} lacks a clean final audit')
     # Measured on the candidate itself during the qualified boot.
-    system = json.loads((trial / 'power-swap-evidence.json').read_text())['system']
+    evidence = json.loads((trial / 'power-swap-evidence.json').read_text())
+    swap = evidence.get('swap', {})
+    paging = evidence.get('paging', {})
+    if (result.get('paging_policy') != 'zram' or
+            result.get('ram_only_paging_qualified') is not True or
+            evidence.get('paging_policy') != 'zram' or
+            evidence.get('ram_only_paging_qualified') is not True or
+            evidence.get('default_policy_paging_qualified') is not True or
+            evidence.get('runtime_policy_writes') is not False or
+            swap.get('device') != '/dev/zram0' or
+            swap.get('flash_swap_active') is not False or
+            swap.get('writeback') is not False or
+            type(paging.get('flash_swap_written_sectors')) is not int or
+            paging['flash_swap_written_sectors'] != 0):
+        raise RuntimeError(f'{trial} lacks qualified RAM-only paging evidence')
+    system = evidence['system']
     if not re.fullmatch(r'/nix/store/[0-9a-z]{32}-nixos-system-[A-Za-z0-9.+_-]+', system):
         raise RuntimeError(f'{trial} lacks a candidate system identity')
     if (trial / 'efi-install-result.json').exists():
@@ -56,6 +72,9 @@ def main():
     baseline = json.loads(baseline_file.read_text())
     if baseline.get('boot') != 'uboot-efi':
         raise RuntimeError('Generation updates need the U-Boot/systemd-boot baseline')
+    if baseline.get('paging_policy') != 'zram':
+        raise RuntimeError('Generation updates require an accepted RAM-only recovery baseline; '
+                           'the old flash-backed fallback must be migrated first')
     system = trial_system(args.trial.resolve())
     ok, boot = healthy(baseline['system'])
     if not ok:

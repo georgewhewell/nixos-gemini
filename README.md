@@ -85,6 +85,9 @@ the existing host USB/SSH setup. Copy the system closure into the installed Nix
 store before testing. From recovery, that store is accessible to Nix as
 `local?root=/persist/nixos`; its database and files are separate from recovery's
 overlay. Historical image trials still accept `--reclaim-cache`.
+The generation updater also requires an accepted RAM-only recovery baseline
+and a qualified zram trial; old successful disk-backed paging trials cannot
+promote a generation.
 
 For measurements that need services started after boot acceptance, add
 `--observe-seconds 90` (0–90 seconds, default 0). The runner records

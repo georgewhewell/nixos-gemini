@@ -67,6 +67,10 @@
     {
       "test": "test-zram-paging.py",
       "returncode": 0
+    },
+    {
+      "test": "test-update-system.py",
+      "returncode": 0
     }
   ],
   "zram_probe": {
@@ -174,7 +178,9 @@
     "tools/qualify-fixed-swap.py": "74478f16baf203df05d878eb89cf1cc3b9497ab1e48692cc8b91b6d8ce5e9380",
     "tools/qualify-uboot-recovery.py": "12f38b6a918c72e22e64486411a163c668154bc80fcba5a002e16323979c9307",
     "nix/patches/gupnp-av-native-docgen.patch": "f7c1f92d417a4716d6c26ee466f51c132f326496d34152b3bf022abd1e58a11d",
-    "nixos/cross-input-method.nix": "4da09c3e787f4e18b26d8a2900f30bbdf0778e1a21d7e422a48b631f56e89cac"
+    "nixos/cross-input-method.nix": "4da09c3e787f4e18b26d8a2900f30bbdf0778e1a21d7e422a48b631f56e89cac",
+    "tools/update-system.py": "37ebe3b4c31d52975b5f4afcf654091e358c5229f34cf22e30c6717cd3a945df",
+    "tools/test-update-system.py": "03f31571aabeb0523c2caeaa88035ed94e9dc14eef22aab86a73ad615fbe7f36"
   },
   "cross_build_components": {
     "thumbnailers": {
@@ -286,5 +292,14 @@
     },
     "build_evidence": "handoff/kernel-7.2.9-20261010/media-zram-kernel-build.log",
     "module_build_evidence": "handoff/kernel-7.2.9-20261010/media-zram-modules-build-final.log"
+  },
+  "generation_update_guard": {
+    "scope": "Host policy validation only; no generation installation or reboot",
+    "test_suite": "tools/test-update-system.py",
+    "test_count": 7,
+    "returncode": 0,
+    "legacy_flash_paging_trial_rejected": true,
+    "flash_backed_baseline_rejected_before_remote_io": true,
+    "hardware_tested": false
   }
 }
