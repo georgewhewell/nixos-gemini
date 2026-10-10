@@ -7,6 +7,15 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
+The current tested module decodes the listed progressive Baseline/Main I/P
+fixtures through 640x480 using one slice and one short-term reference. Trial 39
+checks 122 pictures, five resolution/profile transitions, visible-height I420
+conversion and two concurrent streams; every sample matches independent
+software references. All 57 default media checks, normal unload, RTC/system
+checks and strict accepted-system recovery pass. Trial 38's separate RTC miss
+remains recorded. Hardware encoding, broader codec features, interrupt
+completion and production integration remain unfinished.
+
 The first module builds against the 7.1.3 candidate kernel with strict modpost
 and genuine exported-symbol metadata from that kernel and its media modules.
 The first registered frontend trial (`boot-test-video-frame-24`) panicked when
@@ -55,8 +64,7 @@ I/P pictures, at most one short-term reference, with enabled or disabled deblock
 Main/CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
 `V4L2_PIX_FMT_MM21`. The current candidate admits coded widths 64..640 and heights 64..480 in steps
-of 16; media fixture qualification extends through 640x480 in trial 38; its full
-system profile fails the separate RTC check described below.
+of 16; media fixture qualification extends through 640x480 in trials 38/39.
 Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
 height, and cached references must match it. Trial 30 passes all 18 original
 request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
@@ -205,13 +213,16 @@ the independently matching preceding I picture. All 57 compliance checks and
 normal decoder/probe unload pass. The separate final RTC alarm check misses
 its interrupt; the supervisor preserves that system-profile failure, restores
 the accepted system, and the strict recovery audit passes. The same module is
-being repeated with stream reconfiguration and standard-output tests; this
-media result does not qualify the entire experimental system. `first_context_failure` also preserves each
+repeated in trial 39: 122 exact pictures cover the original SD/error cases,
+five sequential resolution/profile segments, 640x464 I420 output and two
+concurrent Main/Baseline reference chains. All media, RTC/system/recovery and
+strict accepted-board checks pass in the repeat. The previous RTC miss remains
+recorded without an established cause. `first_context_failure` also preserves each
 context's first rejection, so pre-DMA failures cannot be hidden by later
 missing references. The fixture
 generator's `--deblocking` and `--entropy cabac` options generate separately
 verified x264 references; their use makes no hardware encoder claim.
 
 The encoder, interrupt completion, general codec features beyond this scope,
-resolution changes and system suspend remain unqualified. These experimental
+system suspend and untested stream configurations remain unqualified. These experimental
 packages and source files do not enable the decoder in the accepted system.
