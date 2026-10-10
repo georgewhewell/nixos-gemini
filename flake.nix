@@ -130,6 +130,21 @@
         python3 test-networkmanager-import-wifi.py
         touch "$out"
       '';
+      wifi-connect = gemini.buildPkgs.runCommand "gemini-wifi-connect-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.stdenv.cc];
+      } ''
+        export CC=${gemini.buildPkgs.stdenv.cc}/bin/cc
+        python3 ${inputs.linux-gemini}/tools/gemini/test-wifi-radio-connect-host.py
+        touch "$out"
+      '';
+      networkmanager-scan = gemini.buildPkgs.runCommand "gemini-networkmanager-scan-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3];
+      } ''
+        cp ${./tools/networkmanager-scan-evidence.py} networkmanager-scan-evidence.py
+        cp ${./tools/test-networkmanager-scan-evidence.py} test-networkmanager-scan-evidence.py
+        python3 test-networkmanager-scan-evidence.py
+        touch "$out"
+      '';
       audio-playback-routing = gemini.buildPkgs.runCommand "gemini-audio-playback-routing-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.alsa-utils];
       } ''
