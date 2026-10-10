@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "recorded_utc": "2026-10-10T23:28:19.144908+00:00",
+  "scope": "Onboard speakers and wired headphone playback only; host route validation and read-only accepted88 observation. Physical orientation remains pending.",
+  "user_observation": {
+    "left_right_reversed": "both built-in speakers and wired headphones",
+    "channel_isolated_listening_qualification_recorded": false
+  },
+  "installed": {
+    "accepted_baseline": {
+      "name": "boot-test-88",
+      "image": "/nix/store/kvwx7hqhxzaxafzdanqylaw8gbw8dama-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "24a31a771580755bd65a14911f39f01dc29ac381129aef6b7c1d5b91c498137d",
+      "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "store": "normal",
+      "zswap_shrinker": "absent",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "previous": "boot-test-87",
+      "paging_policy": "zram",
+      "desktop": "gnome"
+    },
+    "boot_id": "c0a70fdd-b189-4361-9c27-3d4581b84b8b",
+    "kernel_release": "7.2.9-gemini-da921x-lkro",
+    "taint": 0,
+    "hardware_mutations_by_this_task": false,
+    "control_read_guarded_before_and_after": true,
+    "read_exit_evidence": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/shared-playback-read-exit.json"
+  },
+  "findings": [
+    {
+      "area": "Shared output path",
+      "evidence": "Speaker and Headphones UCM both open Playback_1 at hw:mt6797mt6351,0; DL1 -> ADDA -> MT6351 DAC and HP buffers. Speaker route adds external amplifiers.",
+      "conclusion": "Both outputs can use one shared software playback correction."
+    },
+    {
+      "area": "Effective accepted88 software map",
+      "evidence": "Onboard PipeWire sink is hw:mt6797mt6351,0 with logical FL/FR; ADDA_DL_CH1 DL1_CH1 and ADDA_DL_CH2 DL1_CH2 on, ADDA_DL_CH2 DL1_CH1 off.",
+      "conclusion": "No existing software swap found."
+    },
+    {
+      "area": "Hardware register contract",
+      "evidence": "Public GPL vendor sets AFE_PMIC_NEWIF_CFG2 bit15 and labels it PMIC RX serial-clock inversion; current codec matches. Vendor DL1 maps I05->O03, I06->O04. No proven playback L/R register correction identified.",
+      "conclusion": "Leave codec polarity and kernel routing unchanged. The user observation supports a scoped board correction, not an undocumented register guess."
+    },
+    {
+      "area": "Historical qualification limit",
+      "evidence": "nix/audio-playback.c assigns the same sample to frames[2*i] and frames[2*i+1].",
+      "conclusion": "Previous PCM/amp/restoration qualification did not distinguish physical left from right."
+    }
+  ],
+  "change": {
+    "layer": "ALSA PCM sample routing only",
+    "ucm_playback_pcm": "gemini_playback_ucm",
+    "ttable": {
+      "0.1": 1,
+      "1.0": 1
+    },
+    "ucm_devices": [
+      "Speaker",
+      "Headphones"
+    ],
+    "named_alsa_clients": [
+      "gemini_speakers",
+      "gemini_headphones",
+      "default playback"
+    ],
+    "single_swap_per_path": true,
+    "pipewire_logical_channel_map": [
+      "FL",
+      "FR"
+    ],
+    "capture_unchanged": true,
+    "bluetooth_usb_hdmi_unchanged": true,
+    "route_power_controls_unchanged": true,
+    "raw_hw_pcm_bypasses_correction": true,
+    "candidate_ucm_path": "/nix/store/rdka6y8c81s8nyj57cvwvivpm96xvif7-gemini-alsa-ucm/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf",
+    "candidate_ucm_sha256": "81d0b8ba9576639c63a7a6258707dbaf693606842125af33e5277e88523a4705",
+    "candidate_asound_sha256": "27b57396d6523b92a15985aad9e455d755877e8f22b02c84f5cc069bf7c6c731"
+  },
+  "validation": {
+    "host_real_alsa_fixture": "passed",
+    "host_execution_exit_code": 0,
+    "fixture_channels": [
+      "left-only",
+      "right-only",
+      "distinct-stereo"
+    ],
+    "production_pcm_paths": [
+      "gemini_speakers",
+      "gemini_headphones",
+      "gemini_playback_ucm",
+      "default"
+    ],
+    "exact_single_swap_captures": 12,
+    "identity_control_captures": 3,
+    "samples_per_capture": 49152,
+    "format": "S16_LE",
+    "rate_hz": 48000,
+    "synthetic_boundary": "Only hardware and control-hooks replaced by ALSA file/null sink; production plug, route and default definitions retained.",
+    "capture_pcm_definitions_equal_accepted88": true,
+    "ucm_scope": {
+      "capture_ucm_sections_unchanged": true,
+      "ucm_changes_only_shared_playback_pcm": true,
+      "original_ucm_sha256": "4e93df1fb462d13ff98900742fd63566c44fae7ad86917d53e2fa917068226c1",
+      "candidate_ucm_sha256": "81d0b8ba9576639c63a7a6258707dbaf693606842125af33e5277e88523a4705"
+    },
+    "candidate_gate": "tools/audio-playback-evidence.py compares exact candidate config hashes and requires effective onboard PipeWire gemini_playback_ucm with FL/FR. Read-only: no playback, profile changes, mixer writes or daemon restart.",
+    "candidate_cold_boot_pending": true,
+    "candidate_effective_pipewire_check_pending": true,
+    "physical_channel_orientation_qualified": false,
+    "listening_check": "After the combined image is accepted, a short distinct left-only/right-only cue on each physical output can confirm orientation; no audible check was run by this task."
+  },
+  "source_state": {
+    "packaging_head_at_record": "5044186c4b2a61665e9b9eb79f6a8a5cd783024f",
+    "kernel_head_at_record": "3164a039836c8bd1ae96a4bb31bc65db2e2dcaed",
+    "vendor_head": "8cfe6596a503612e3332d9c26e292a19525a7f07",
+    "note": "These are source heads at record time, not assertions of installed accepted88 kernel revision. Audio kernel files were read only."
+  },
+  "raw_evidence": [
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/pipewire-alsa-only.json",
+      "sha256": "123c06069e588b363c03e314333605d79a58d16a28ce977f8fa1ade342506eec"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/pipewire-read-exit.json",
+      "sha256": "90f74fb8438f3da71af0ffcc706a8bc8d5ddbc305a1359a391af9093dcdb9ed3"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/installed-asound-read.stdout",
+      "sha256": "de556f8a34aceb76bb0ad1ef09d8b8c8ddb318231828f9bda16d361ea6204ec9"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/installed-asound.conf",
+      "sha256": "8ff9b8d972740259d65e25f4430b3326274293517f9c64842158cfee589dbb22"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/shared-playback-read.sh",
+      "sha256": "3d39adf3f35e74f6a74d1a3ce129a7f5f616b347eac5bb825b1b62441033df96"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/shared-playback-read.stdout",
+      "sha256": "152fa4b408aa601d2321268a2db582b92ca81a35db3832491753521f1b68c475"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/shared-playback-read.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/shared-playback-read-exit.json",
+      "sha256": "f96b3a414db0007d2c918941483a87c7693c08ea781e494db439fe3a396da105"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/installed-ucm-hifi.conf",
+      "sha256": "4e93df1fb462d13ff98900742fd63566c44fae7ad86917d53e2fa917068226c1"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/candidate-asound.conf",
+      "sha256": "27b57396d6523b92a15985aad9e455d755877e8f22b02c84f5cc069bf7c6c731"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/candidate-ucm-path",
+      "sha256": "9f98904bd4e33ef39e4853ede46dea81d07bd23d3d024394041ef3210e728f47"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/host-playback-check.stdout",
+      "sha256": "3615bb878a1883e9c78e241048c4e799dd57a9ec4a2c8901e9370965d2ad5ea4"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/host-playback-check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/audio-channel-map-20261011/ucm-scope-check.json",
+      "sha256": "31c424eacb032762f8e8f2b6397259cfa4f8808d6ccdae7947ce70867f2b79f7"
+    }
+  ],
+  "source_evidence": [
+    {
+      "path": "/mnt/Home/src/nixos-gemini/repo/nixos/audio-routes.nix",
+      "sha256": "3771d32cc9ce7bf7c371d214d5e66d9ddc6dc9ef925f1ff0b00b2de5df0dc9be"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/repo/nix/test-audio-playback-routing.py",
+      "sha256": "d7a97f906df463c66241ff751c071167cab41780ba66546f2ebf09717d2ed7ab"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/repo/tools/audio-playback-evidence.py",
+      "sha256": "f076672cd75a5dd0970a16d366b49cce8f783686fca04427eb28a7e439f20c74"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/repo/nix/audio-playback.c",
+      "sha256": "8fa25c44eec61a25beb5833759fb804bac6c73e2efb34acd78320b86ba08b457"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/kernel-worktree/sound/soc/codecs/mt6351.c",
+      "sha256": "6871c8d019a4d954bb63ec3c57cbbe9458eba07558371f1a92e882400aee4e9f"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/kernel-worktree/sound/soc/mediatek/mt6797/mt6797-dai-adda.c",
+      "sha256": "1f8a3db8ef1bef3eb92f54a5dedae56ec635e855034f163a6c771e2bc01ea5dd"
+    },
+    {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/kernel-7.2.9-20261010/kernel-worktree/sound/soc/mediatek/mt6797/mt6797-mt6351.c",
+      "sha256": "e5445721efc5bdd7bb4518c26b953efeca0562963d18153cab9148831bdab203"
+    },
+    {
+      "path": "/home/grw/src/gemini-linux-kernel-3.18/sound/soc/mediatek/codec/mt6351/mt_soc_codec_6351.c",
+      "sha256": "40817e56e34a2a1aed5d722b353b32830e4ba061ee34412f70a65d40b721edd7"
+    },
+    {
+      "path": "/home/grw/src/gemini-linux-kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/mt_soc_pcm_dl1.c",
+      "sha256": "2030a800d4ae1d15ca7b160fed48a9f5b59ae5440a102268b32beba3353f9d3a"
+    },
+    {
+      "path": "/home/grw/src/gemini-linux-kernel-3.18/sound/soc/mediatek/mt_soc_audio_6797/mt_soc_afe_control.c",
+      "sha256": "d550c28bb71a5024953e4ef42af4a0b0646e2512fbbec341f5cbf12d5192b94e"
+    }
+  ],
+  "primary_reference": [
+    {
+      "url": "https://www.alsa-project.org/alsa-doc/alsa-lib/group__ucm.html",
+      "scope": "UCM PlaybackPCM/channel-map contract"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/PipeWire/pipewire/1.6.8/spa/plugins/alsa/acp/alsa-ucm.c",
+      "scope": "PlaybackChannelPos applies with split channel indices; downloaded source identical to locked PipeWire source."
+    }
+  ]
+}

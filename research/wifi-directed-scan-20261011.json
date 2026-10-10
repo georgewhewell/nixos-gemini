@@ -1,0 +1,167 @@
+{
+  "date": "2026-10-11",
+  "status": "source_and_host_qualified_hardware_pending",
+  "kernel_revision": "3164a039836c8bd1ae96a4bb31bc65db2e2dcaed",
+  "problem": {
+    "native_nm_path": "ap_scan=1 triggers named SSID scans; old cfg80211 admission returned -EOPNOTSUPP",
+    "observed_errno": -95,
+    "observed_scan_failure_uptime_seconds": 95.948803,
+    "observed_association_timeout_uptime_seconds": 116.001834,
+    "old_working_wpa2_path": "ap_scan=2 plus externally selected BSS avoided this normal supplicant scan request",
+    "private_evidence": "handoff/wifi-scan-regression-20261011/association-readonly-20261011.json"
+  },
+  "contract": {
+    "public_revision": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+    "sources": [
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/include-nic_cmd_event.h",
+        "relative": "include/nic_cmd_event.h",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/include/nic_cmd_event.h",
+        "sha256": "93c8d67b1bc039a8db5b635e5a00975f2b9e408f4ab1bc8a384f5db49bf00a3a"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/include-wlan_oid.h",
+        "relative": "include/wlan_oid.h",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/include/wlan_oid.h",
+        "sha256": "7bfbb248cc6288b7d8614159dffa203868a96520dcfec9668fdedc298bdcf819"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/include-mgmt-scan.h",
+        "relative": "include/mgmt/scan.h",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/include/mgmt/scan.h",
+        "sha256": "6e20c21a1e7e69d02b01a5f5d292ea5ec653540abd8920d44d13e7d1d081ea30"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/mgmt-scan_fsm.c",
+        "relative": "mgmt/scan_fsm.c",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/mgmt/scan_fsm.c",
+        "sha256": "f14bd3421fb7cae2d8879d7eaf8237c8837b0ced79e41310b4fd2b417bb66758"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/os-linux-gl_cfg80211.c",
+        "relative": "os/linux/gl_cfg80211.c",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/os/linux/gl_cfg80211.c",
+        "sha256": "30aa8d675fad0d895a402c5c6e052773661006334e60fe9a22a23c6b183487d8"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/mgmt-ais_fsm.c",
+        "relative": "mgmt/ais_fsm.c",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/mgmt/ais_fsm.c",
+        "sha256": "738b8fcf0d34098fef986c1dba4963ebe0676665b0a914d7a712a50e814838ba"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/common-wlan_oid.c",
+        "relative": "common/wlan_oid.c",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/common/wlan_oid.c",
+        "sha256": "ebfc83d78f86c4cee23207901d8cefbbdaa7b6939c8e078c28e46e703932f5d3"
+      },
+      {
+        "local": "/mnt/Home/src/nixos-gemini/handoff/wifi-scan-regression-20261011/public-gen3/include-config.h",
+        "relative": "include/config.h",
+        "url": "https://raw.githubusercontent.com/gemian/gemini-linux-kernel-3.18/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/connectivity/wlan/gen3/include/config.h",
+        "sha256": "c773b8e5e07978d60565c2eeee976dae3e285ecb9152062fe3bb50b1358a1c32"
+      }
+    ],
+    "declarations": {
+      "command": "include/nic_cmd_event.h lines1169-1187",
+      "ssid": "include/wlan_oid.h lines171-174",
+      "actual_sender": "mgmt/scan_fsm.c lines283-372",
+      "linux_wildcard_removal": "os/linux/gl_cfg80211.c lines585-600",
+      "ssid_type_selection": "mgmt/ais_fsm.c lines1339-1364"
+    },
+    "offset_basis": "public little-endian GEN3 V2 body plus 8-byte command header",
+    "command_offsets": {
+      "scan_type": 10,
+      "ssid_type": 11,
+      "ssid_count": 12,
+      "probe_count": 13,
+      "ssids": 16,
+      "probe_delay": 160,
+      "dwell": 162,
+      "timeout": 164,
+      "channel_type": 166,
+      "channel_count": 167,
+      "channels": 168,
+      "ie_length": 232,
+      "ies": 234
+    },
+    "ssid_stride": 36,
+    "max_ssids": 4,
+    "max_channels_per_command": 32,
+    "max_ie_bytes": 600,
+    "max_padded_command_bytes": 836,
+    "actual_sender_ssid_count_byte": 0,
+    "actual_sender_probe_count_byte": 0,
+    "wire_count_evidence": "sender zeroes whole body, copies runtime-count-controlled length-prefixed SSID slots, and never assigns either command count byte"
+  },
+  "behavior": {
+    "n_ssids_zero": "passive",
+    "wildcard_only": "active wildcard on permitted channels",
+    "named_only": "active specified, up to four bounded length-prefixed slots",
+    "mixed_named_wildcard": "specified phase then wildcard phase per active channel batch; avoids unobserved BIT0|BIT2 firmware semantics",
+    "no_ir_and_dfs": "all requested channels retained in passive batches, without SSID probes or IEs",
+    "ie_admission": "max600 bytes and complete bounded TLVs",
+    "scan_flags": [
+      "COLOCATED_6GHZ",
+      "FLUSH"
+    ],
+    "scan_ownership": "one cfg80211 request; generation ownership and matching SCAN_DONE cancellation retained; timeout still fences ambiguous firmware"
+  },
+  "host_validation": {
+    "compiler": "native GCC15.3.0",
+    "compiler_path": "/nix/store/3d1c302vw7kc8a5vknhmn34c0pd7zm6m-gcc-wrapper-15.3.0/bin/cc",
+    "observed_in_agent_tool_results": true,
+    "tests": [
+      {
+        "path": "tools/gemini/test-wifi-scan-probe-host.py",
+        "exit_code": 0,
+        "coverage": "wire bounds/alignment, mixed directed/wildcard + active/passive phases; 36 cancellation/timeout worker cases off/on-link; runs 18 existing cancellation cases"
+      },
+      {
+        "path": "tools/gemini/test-wifi-radio-admission-host.py",
+        "exit_code": 0,
+        "coverage": "SSID/IE bounds, directed/FLUSH admission and queue ownership"
+      },
+      {
+        "path": "tools/gemini/test-wifi-radio-tx-host.py",
+        "exit_code": 0,
+        "coverage": "TX worker + diagnostic lifecycle + pthread queue ordering"
+      },
+      {
+        "path": "tools/gemini/test-wifi-radio-worker-host.py",
+        "exit_code": 0,
+        "coverage": "connection/SAE worker lifecycle"
+      },
+      {
+        "path": "tools/gemini/test-wifi-hif-recovery-host.py",
+        "exit_code": 0,
+        "coverage": "HIF pump, NIC power-off proof and recovery fencing"
+      }
+    ],
+    "diff_check_exit_code": 0
+  },
+  "hardware_verifier": {
+    "path": "tools/networkmanager-scan-evidence.py",
+    "mode": "synthetic named + wildcard NM RequestScan only; no connection/profile mutations",
+    "accepted_scan_count": 1,
+    "admission_window_seconds": 35,
+    "scan_completion_timeout_seconds": 90,
+    "identity": "boot/system before/after, sole supplicant unit executable, unchanged NM/supplicant PIDs",
+    "checks": [
+      "LastScan advanced and supplicant Scanning=false",
+      "existing connection preserved if initially active",
+      "WLAN netdev/driver still registered",
+      "no new scan failure or WLAN/shared-radio fault/restart/fence"
+    ],
+    "offline_result": "handoff/wifi-scan-regression-20261011/networkmanager-scan-offline-result.json",
+    "offline_cases": 10,
+    "offline_exit_code": 0,
+    "hardware_result": null
+  },
+  "limitations": {
+    "directed_scan_hardware_qualified": false,
+    "association_qualified": false,
+    "data_qualified": false,
+    "hidden_ap_on_passive_only_channel": "probe emission remains prohibited; passive beacon discovery retained"
+  }
+}

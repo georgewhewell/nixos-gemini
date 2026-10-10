@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "problem": "GNOME Settings reports No Bluetooth Found although the HCI controller and BlueZ are running and powered.",
+  "current_before_fix": {
+    "accepted_baseline": "boot-test-88",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "boot_id": "c0a70fdd-b189-4361-9c27-3d4581b84b8b",
+    "observed_utc": "2026-10-10T23:18:48Z",
+    "observation": "Read-only snapshot during trial90 recovery; no power, discovery, pairing, loader or service changes.",
+    "rfkill_device_present": false,
+    "hci_rfkill_endpoint_present": false,
+    "unprivileged_user_bluez_powered": true,
+    "gnome_rfkill_service_running": true,
+    "gnome_rfkill_properties": {
+      "BluetoothHasAirplaneMode": false,
+      "BluetoothAirplaneMode": false,
+      "BluetoothHardwareAirplaneMode": false,
+      "AirplaneMode": false
+    },
+    "desktop_state_observer_exit": 1,
+    "failure_is_expected_before_fix": true
+  },
+  "root_cause": {
+    "kernel_RF_KILL_support_absent": true,
+    "gnome_control_center_branch": "cc-bluetooth-panel.c adapter_status_changed_cb selects no-devices-page whenever BluetoothHasAirplaneMode is false, before examining the powered adapter.",
+    "gnome_settings_daemon_property": "gsd-rfkill-manager.c engine_get_has_bluetooth_airplane_mode returns whether bt_killswitches has any entries; these come from /dev/rfkill.",
+    "linux_hci_registration": "net/bluetooth/hci_core.c hci_register_dev already calls rfkill_alloc(... RFKILL_TYPE_BLUETOOTH ...) and rfkill_register; no MT6797-specific rfkill driver is needed.",
+    "existing_user_access_rules": [
+      "50-udev-default.rules makes rfkill mode0664.",
+      "70-uaccess.rules tags miscellaneous rfkill device uaccess for the local desktop user."
+    ],
+    "conclusion": "Bluetooth controller startup was integrated, but the standard Linux radio-switch interface required by GNOME was omitted."
+  },
+  "changes": {
+    "kernel_defconfig": "arch/arm64/configs/gemini_defconfig sets CONFIG_RFKILL=y.",
+    "kernel_defconfig_sha256": "ed3b2c803f8ae6b923eb32621098c675ee076f26a3df3ea723499fbac4bf62b9",
+    "packaging_assertion": "nix/kernel.nix requires the resolved CONFIG_RFKILL=y rather than accepting a silently dropped symbol.",
+    "packaging_sha256": "03075a975b8a74b3e62eabef0a24e00c46f68360129e8af76d8202349bfb2142",
+    "widget_or_bluez_workaround": false,
+    "combined_kernel_revision": "3164a039836c8bd1ae96a4bb31bc65db2e2dcaed"
+  },
+  "host_validation": {
+    "fresh_gemini_defconfig_check_pass": true,
+    "resolved_rfkill_symbols": [
+      "CONFIG_RFKILL=y",
+      "CONFIG_RFKILL_LEDS=y",
+      "CONFIG_RFKILL_INPUT=y"
+    ],
+    "resolved_config_sha256": "63ace6d7889e6e1b3c6caac9cf55db8a90f03f06db067928d00ca3c10b334562",
+    "diff_checks_pass": true,
+    "kernel_build_pending_combined_image": false,
+    "hardware_after_fix_pending": true,
+    "combined_kernel_build_status": "Full build and required checks passed; combined image boot integration remains pending.",
+    "kernel_package": "/nix/store/f6nf1yx9wv980ghp3ky5bflxiy695cmz-linux-gemini-7.2.9",
+    "kernel_config_sha256": "63ace6d7889e6e1b3c6caac9cf55db8a90f03f06db067928d00ca3c10b334562"
+  },
+  "postboot_observer": {
+    "script": "/mnt/Home/src/nixos-gemini/handoff/bluetooth-ui-20261011/read-desktop.sh",
+    "required_environment": "EXPECTED_BOOT_ID must be the fresh accepted/candidate boot identity.",
+    "script_sha256": "c4149f988d8fcfc34fc638ceae5bae4970b7eeee18f37f742a4ad68875e20003",
+    "checks": [
+      "Character /dev/rfkill exists and the desktop user can read/write it.",
+      "HCI0 has a Bluetooth rfkill endpoint with soft and hardware block clear.",
+      "Desktop user can read BlueZ Adapter1 and it is powered.",
+      "GNOME session BluetoothHasAirplaneMode is true, and BluetoothAirplaneMode, BluetoothHardwareAirplaneMode and AirplaneMode are false."
+    ],
+    "side_effects": "Read-only; no discovery, power change, pairing or service activation. No nearby device addresses, names or controller UUIDs are retained.",
+    "scope": "Checks the exact state inputs used by GNOME50.4; it does not claim pairing/profile or sustained coexistence qualification.",
+    "supervised_entrypoint": "tools/test-network-audio-desktop.py",
+    "entrypoint_sha256": "100a2ea1099f4c1052841329076476d2e97f7b37ff53982f1890e377cd4de2e3",
+    "promotion_gate": "Wraps test-boot candidate_return so --keep requires GNOME Bluetooth radio inputs, a synthetic directed/wildcard NM scan and read-only onboard audio mapping. The existing durable supervisor remains the reboot and recovery owner.",
+    "bounded_gnome_startup_retry_seconds": 30,
+    "syntax_and_cli_help_checks_pass": true
+  },
+  "source_provenance": [
+    {
+      "package": "gnome-control-center",
+      "version": "50.4",
+      "upstream_archive": "https://download.gnome.org/sources/gnome-control-center/50/gnome-control-center-50.4.tar.xz",
+      "archive_sha256": "5856c73999bedf45e74f73bac3d61e2b5ec1689f8bcf1943737baeee8204fb11",
+      "matches_current_locked_nixpkgs_src_hash": true,
+      "inspected_file": "gnome-control-center-50.4/panels/bluetooth/cc-bluetooth-panel.c",
+      "inspected_file_sha256": "a96535bca73bbe1eeb546c607540776be24ced830e43006f111fd5f2d99775a6"
+    },
+    {
+      "package": "gnome-settings-daemon",
+      "version": "50.1",
+      "upstream_archive": "https://download.gnome.org/sources/gnome-settings-daemon/50/gnome-settings-daemon-50.1.tar.xz",
+      "archive_sha256": "dd2c9730914f0ececa0229dd8a8c2940a57ddeb0802434558d4b164d79cfe05c",
+      "matches_current_locked_nixpkgs_src_hash": true,
+      "inspected_file": "gnome-settings-daemon-50.1/plugins/rfkill/gsd-rfkill-manager.c",
+      "inspected_file_sha256": "8c0a044c1e901054e10ba65de97e89bdd85ad7d15ca3491655ad538924576a0f"
+    }
+  ],
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/bluetooth-ui-20261011",
+  "evidence_files": {
+    "before-fix.stdout": {
+      "sha256": "5830e9cd5943a4ef2b4e1022eac743037a148ff7ea4a476f8b107b83c8784f7e",
+      "bytes": 346
+    },
+    "before-fix.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "before-fix-exit.json": {
+      "sha256": "c1aa6e03b9be1df9efe6f294fb18a3b5a485c5058232e381c42d4b8ed01a34e9",
+      "bytes": 52
+    },
+    "kconfig-check.stdout": {
+      "sha256": "beb2e552b47a6297c4af7fdd5a722f741f46e2fddb3a48599d011b5a00657023",
+      "bytes": 1124
+    },
+    "kconfig-check.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "read-desktop.sh": {
+      "sha256": "c4149f988d8fcfc34fc638ceae5bae4970b7eeee18f37f742a4ad68875e20003",
+      "bytes": 2048
+    }
+  }
+}
