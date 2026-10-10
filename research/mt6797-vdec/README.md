@@ -95,6 +95,32 @@ zero and no temporary codec modules, but the strict board audit finds a
 recovered-boot Wi-Fi HIF fault. Both failures remain recorded; this is a media
 pass, with full system and production qualification incomplete.
 
+Trial 57 reuses the trial-56 module and checks 683 exact output pictures over
+684 owned frame commands. `make-poc-type-motion-fixture.py` builds original
+64x64 CAVLC I/P/B motion streams using POC type 1 with cycle offsets 8 and
+32760, and type 2 with derived counts 0/2/1. Thirty-eight software variants
+match independently calculated pixels and FFmpeg, and independent syntax
+traces derive all counts from frame numbers, cycle offsets and nonreference
+deltas. Twelve hardware variants cover temporal/spatial B skip/direct,
+ordinary and saturated POC distance scaling, and implicit weighting. All 36
+new output pictures match; full cached counts, hardware-word readback and
+complete retained pixel/motion/guard snapshots also match. All previous
+regressions, 57 media checks, normal unload and the command-free encoder
+resource probe pass. All RTC/system checks and strict accepted-system
+recovery/audit pass. The accepted boot is healthy with taint zero, no failed
+services, no temporary codec modules and no kernel fault patterns.
+
+[H.264 clause 8.2.1](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.264-202408-S%21%21PDF-E&lang=e&type=items) permits full signed 32-bit picture-order counts, while used
+`DiffPicOrderCnt` values must fit signed 16 bits. Both the pinned 2014 and
+2024 specifications agree. The exploratory 524296-distance stream is
+nonconformant and excluded. Two legal 32760-distance, exactly-midpoint
+spatial/implicit variants disagree with FFmpeg's one-reference midpoint
+shortcut: the normative clipped-distance calculation predicts weights 0/64,
+while that shortcut uses 32/32. Their original disagreement is retained;
+the generator rejects these variants and they remain hardware-unqualified.
+This does not establish all POC-type or field combinations. Multislice,
+interlace, IRQ completion, production integration and encoding remain unfinished.
+
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
 There is no proprietary codec firmware or `libvcodec` dependency in this work.

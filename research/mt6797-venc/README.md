@@ -62,3 +62,8 @@ normal unload. Its decoder media suite passes; the separate system profile
 fails the final RTC alarm, and the recovered boot's strict audit finds a Wi-Fi
 HIF fault. The accepted boot image and codec cleanup are verified. No encoder
 frame command, DMA or encoded output is qualified by this result.
+
+Trial 57 passes the same command-free probe, with normal unload, the full
+RTC/system profile and a clean accepted-board recovery audit. Its additional
+POC-type decoder fixtures do not program the encoder. The direct encoder
+frame contract and encoded output remain unfinished.
