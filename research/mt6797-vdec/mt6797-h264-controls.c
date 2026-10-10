@@ -148,6 +148,45 @@ int mt6797_h264_slice_words(const struct v4l2_ctrl_h264_sps *sps,
 	return 0;
 }
 
+int mt6797_h264_p_reference_words(const struct v4l2_h264_dpb_entry *entry,
+				unsigned int frame_buffer_index,
+				struct mt6797_h264_p_reference_words *output)
+{
+	const __u32 required = V4L2_H264_DPB_ENTRY_FLAG_VALID |
+		V4L2_H264_DPB_ENTRY_FLAG_ACTIVE;
+	const __u32 allowed = required | V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+	struct mt6797_h264_p_reference_words words;
+	__u32 order, long_term;
+	unsigned int i;
+
+	if (!entry || !output || frame_buffer_index >= V4L2_H264_NUM_DPB_ENTRIES)
+		return -EINVAL;
+	if ((entry->flags & required) != required)
+		return -EINVAL;
+	for (i = 0; i < sizeof(entry->reserved); i++)
+		if (entry->reserved[i])
+			return -EINVAL;
+	if ((entry->flags & ~allowed) || entry->fields != V4L2_H264_FRAME_REF)
+		return -EOPNOTSUPP;
+	if (entry->top_field_order_cnt == 0x7fffffff ||
+	    entry->bottom_field_order_cnt == 0x7fffffff)
+		return -EINVAL;
+	long_term = !!(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM);
+	/* pic_num represents signed PicNum for short-term references and
+	 * nonnegative LongTermPicNum for long-term references. Reject overflow
+	 * instead of silently wrapping the public 19-bit register field.
+	 */
+	if (long_term ? entry->pic_num > 0x7ffff :
+	    ((__s32)entry->pic_num < -262144 || (__s32)entry->pic_num > 262143))
+		return -ERANGE;
+	words.picture_number = (entry->pic_num & 0x7ffff) | (long_term << 19);
+	order = entry->top_field_order_cnt <= entry->bottom_field_order_cnt;
+	words.top = (frame_buffer_index << 23) | (order << 21) | (long_term << 20);
+	words.bottom = words.top | (1U << 22);
+	*output = words;
+	return 0;
+}
+
 int mt6797_h264_scaling_words(const struct v4l2_ctrl_h264_scaling_matrix *matrix,
 			     struct mt6797_h264_scaling_word output[MT6797_H264_SCALING_WORDS])
 {

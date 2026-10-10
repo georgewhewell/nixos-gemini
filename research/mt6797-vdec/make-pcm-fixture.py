@@ -266,13 +266,16 @@ def main():
         for name, data in sequence_artifacts.items():
             (args.out / name).write_bytes(data)
         predicted_info = dict(info, header_bit_size=predicted_header_bits, slice_type=0,
-                              nal_ref_idc=2, decode_flags=2, frame_num=1,
+                              nal_ref_idc=2, decode_flags=8, frame_num=1,
                               pic_order_cnt_lsb=2, top_field_order_cnt=2,
                               bottom_field_order_cnt=2, reference_frame_num=0,
                               frames_verified=2, sample_bytes_verified=len(expected) * 2,
                               hashes={name: hashlib.sha256(data).hexdigest()
                                       for name, data in sequence_artifacts.items()})
         (args.out / 'pcm64-p.json').write_text(json.dumps(predicted_info, indent=2) + '\n')
+        with (args.out / 'pcm64-fixture.h').open('a') as header:
+            header.write('static const u8 pskip64_nal[] = {\n\t' +
+                         ', '.join(f'0x{byte:02x}' for byte in predicted_nal) + '\n};\n')
         print('Verified original P-skip reference:', len(predicted_nal), 'NAL bytes,',
               predicted_header_bits, 'header bits,', len(expected) * 2,
               'matching decoded bytes across two frames')

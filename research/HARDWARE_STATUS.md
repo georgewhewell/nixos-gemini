@@ -26,6 +26,38 @@ therefore not qualified for normal use; policy continues to disable it.
 Host driver/admission tests, the package checks and flake checks pass. Existing
 uncommitted Grok allocator diagnostics in `mm/slab.h` and `mm/slub.c` were preserved.
 
+Private frame trial `handoff/boot-test-video-frame-21` identifies producer
+padding as the raw `0x40` trigger. The original poisoned padding retains that
+warning; zero padding and an original Annex B end-of-sequence NAL followed by
+zeros both give exact PCM output with error/message zero. Compressed grey also
+passes. The original compressed patterned intra fixture matches every sample;
+a separate valid-ending follow-up removes its warning too. The first follow-up
+health guard refused expected out-of-tree taint `4096` before issuing a command.
+The retry proved the same boot/module and completed idle matrix, admitted
+exactly that expected taint, and ran inside the existing observation window.
+No competing boot or forced unload occurred.
+Seven actual commands finish with exact 6,144-sample MM21 comparisons; five
+have zero hardware errors. Moving picture-number SRAM reset before SPS/PPS
+changes neither output nor the SPS max-reference readback difference. All input
+bytes and outer guards remain unchanged, stop/idle and normal unload pass,
+and full boot/paging/Nix/all RTC/recovery plus final no-writer audit pass.
+Aggregate: 37 frame commands, 11 complete exact pixel comparisons, 5 strict
+error-free comparisons and 5 command-free controls. The accepted board is
+healthy and untainted at `f7e5744a-fcb4-4e5b-96cf-a1382812bb19`.
+
+An original Linux DPB translator now prepares progressive P-reference metadata,
+rejecting inactive/invalid/field references, reserved bytes and PicNum overflow
+without altering output. ASan/UBSan host tests pass. A compiled private
+`frame_p_skip=1` diagnostic decodes PCM, requires zero-error completion and
+proven idle, preserves its actual hardware output in a separately allocated
+guarded reference, then submits the original five-byte P-skip NAL. Both CPU
+outputs and raw completion words are retained; final checks require the entire
+reference allocation unchanged. Reference metadata is captured before submission.
+No mapping is released on unproven stop. This reference test has not yet run.
+The P fixture metadata now uses public V4L2 PFRAME flag `8`; NAL/sample bytes
+are unchanged. Production IRQ handling, V4L2 lifecycle, varied geometry and
+encoding remain unqualified.
+
 Private frame trial `handoff/boot-test-video-frame-20` supplies TOP `0x70`
 pixel dimensions. Four frame commands complete with state `0x80000001` and
 match all 6,144 sample bytes in MM21: PCM with PP mode 0/1 and CRC off/on,

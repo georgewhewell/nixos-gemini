@@ -41,6 +41,21 @@ int mt6797_h264_slice_words(const struct v4l2_ctrl_h264_sps *sps,
 			   struct mt6797_h264_slice_words *output);
 
 #define MT6797_H264_SCALING_WORDS 56
+struct mt6797_h264_p_reference_words {
+	__u32 picture_number; /* AVC_VLD + 0xa8 + slot * 4 */
+	__u32 top;            /* AVC_MV + slot * 8 */
+	__u32 bottom;         /* AVC_MV + slot * 8 + 4 */
+};
+
+/* Progressive frame reference metadata from the public related-core map.
+ * The caller separately resolves reference_ts to a live capture buffer and
+ * writes its full DMA address to MC + 0x3dc + slot * 4. No address, lifetime,
+ * timestamp resolution or MMIO is handled here. MT6797 execution is pending.
+ */
+int mt6797_h264_p_reference_words(const struct v4l2_h264_dpb_entry *entry,
+				unsigned int frame_buffer_index,
+				struct mt6797_h264_p_reference_words *output);
+
 struct mt6797_h264_scaling_word {
 	__u32 location;
 	__u32 coefficients;

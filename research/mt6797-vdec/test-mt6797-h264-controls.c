@@ -59,6 +59,54 @@ static void reject_slice(struct v4l2_ctrl_h264_sps sps,
 	reject_slice(sps, pps, slice, bad, 64, error); \
 } while (0)
 
+static void test_p_references(void)
+{
+	struct v4l2_h264_dpb_entry entry = {
+		.fields = V4L2_H264_FRAME_REF,
+		.flags = V4L2_H264_DPB_ENTRY_FLAG_VALID | V4L2_H264_DPB_ENTRY_FLAG_ACTIVE,
+	};
+	struct mt6797_h264_p_reference_words output, saved;
+
+	assert(!mt6797_h264_p_reference_words(&entry, 0, &output));
+	assert(output.picture_number == 0 && output.top == 0x200000 &&
+		output.bottom == 0x600000);
+	entry.pic_num = (__u32)-1;
+	assert(!mt6797_h264_p_reference_words(&entry, 1, &output));
+	assert(output.picture_number == 0x7ffff && output.top == 0xa00000 &&
+		output.bottom == 0xe00000);
+	entry.flags |= V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+	entry.pic_num = 0x7ffff;
+	entry.top_field_order_cnt = 4;
+	entry.bottom_field_order_cnt = 2;
+	assert(!mt6797_h264_p_reference_words(&entry, 15, &output));
+	assert(output.picture_number == 0xfffff && output.top == 0x7900000 &&
+		output.bottom == 0x7d00000);
+
+	/* No rejected metadata may replace previously prepared reference words. */
+	saved = output;
+#define BAD_REF(member, value, error) do { \
+	struct v4l2_h264_dpb_entry bad = entry; bad.member = value; \
+	assert(mt6797_h264_p_reference_words(&bad, 0, &output) == error); \
+	assert(!memcmp(&output, &saved, sizeof(output))); \
+} while (0)
+	BAD_REF(pic_num, 0x80000, -ERANGE);
+	BAD_REF(pic_num, (__u32)-1, -ERANGE);
+	BAD_REF(flags, V4L2_H264_DPB_ENTRY_FLAG_VALID, -EINVAL);
+	BAD_REF(flags, entry.flags | V4L2_H264_DPB_ENTRY_FLAG_FIELD, -EOPNOTSUPP);
+	BAD_REF(fields, V4L2_H264_TOP_FIELD_REF, -EOPNOTSUPP);
+	BAD_REF(reserved[4], 1, -EINVAL);
+	BAD_REF(top_field_order_cnt, 0x7fffffff, -EINVAL);
+	BAD_REF(bottom_field_order_cnt, 0x7fffffff, -EINVAL);
+	entry.flags &= ~V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
+	BAD_REF(pic_num, 262144, -ERANGE);
+	BAD_REF(pic_num, (__u32)-262145, -ERANGE);
+	assert(mt6797_h264_p_reference_words(&entry, 16, &output) == -EINVAL);
+	assert(mt6797_h264_p_reference_words(NULL, 0, &output) == -EINVAL);
+	assert(mt6797_h264_p_reference_words(&entry, 0, NULL) == -EINVAL);
+	assert(!memcmp(&output, &saved, sizeof(output)));
+#undef BAD_REF
+}
+
 static void test_slices(void)
 {
 	struct v4l2_ctrl_h264_sps sps = valid_sps();
@@ -245,7 +293,8 @@ int main(void)
 	assert(result.reference_counts == 0x0007fdef);
 	assert(result.width_mbs == 256 && result.height_mbs == 135);
 	test_slices();
+	test_p_references();
 	test_scaling();
-	puts("PASS: H.264 SPS/PPS, slice fields, scaling SRAM words and atomic rejection");
+	puts("PASS: H.264 SPS/PPS, slice fields, P-reference metadata, scaling SRAM words and atomic rejection");
 	return 0;
 }

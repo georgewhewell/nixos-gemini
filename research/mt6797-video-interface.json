@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "implementation_status": "Original GPL control translation and hardware input DMA/barrel proof implemented. Four fixed 64x64 frames complete with exact 6,144-byte sample comparisons, but raw status reports 0x40. Public related-core verification accepts that status only on picture completion. No V4L2 video device is advertised; production decoding and encoding remain unqualified.",
+  "implementation_status": "Original GPL control translation and hardware input DMA/barrel proof implemented. Fixed 64x64 PCM, compressed grey and patterned intra frames complete with exact 6,144-byte comparisons and zero hardware errors using valid FIFO producer endings. References, varied geometry, real IRQ handling, production V4L2 lifecycle and encoding remain unqualified; no video node is advertised.",
   "target": {
     "soc": "MT6797",
     "board": "Planet Gemini PDA",
@@ -172,7 +172,7 @@
     "decoder_register_table": "Section 4.7, pages 799-820, documents VDEC_GCON, not the frame-programming banks.",
     "encoder_register_table": "Section 4.8, pages 821-822, documents three clock/chip-enable registers, not frame programming.",
     "existing_kernel": "Accepted kernel has no MT6797 mtk-vcodec match and omits the VDECSYS provider. Isolated e87e65549920 candidate enables the existing open-source provider, larb1 and a direct decoder DT node. No hardware video driver is installed as the accepted default; existing video nodes are JPEG only.",
-    "related_silicon": "Pinned public GPL MT8173 and MT6795 interfaces supply individually tested H.264 register facts. New local clock and pixel-size settings produce complete, exact 64x64 PCM/grey output on MT6797, with raw completion warning 0x40. This does not establish general decoder compatibility."
+    "related_silicon": "Pinned public GPL MT8173/MT6795 register facts are individually tested. MT6797 local clock and pixel-size settings plus valid FIFO producer endings now yield complete, exact and error-free fixed 64x64 PCM/grey/patterned intra output. General decoder compatibility remains unqualified."
   },
   "missing_contracts": [
     "MT6797 qualification of candidate decoder frame/slice register fields and sequencing, including references, quantization and start/completion",
@@ -250,7 +250,7 @@
     "final_board_audit": {
       "result": "passed",
       "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
-      "boot_id": "c4d13cb9-c801-437c-b187-b6cdcc533d42",
+      "boot_id": "f7e5744a-fcb4-4e5b-96cf-a1382812bb19",
       "tainted": 0,
       "bootloader_sha256": "095640ea9d27472ebe0ecf4198ac0aa89c2c0ff6c322d271f4ae5be56588c126",
       "failed_units": [],
@@ -1808,7 +1808,7 @@
       ],
       "current_source_sha256": {
         "probe.c": "07088fbbfb79b2a10595817eae5bb074738a2fbd62345cb4230a82a8d6feb618",
-        "fifo-probe.c": "4ad5fa0b190c3adc846fa09a3276c49b0c194447e0b0faa038fb12309b87a6af",
+        "fifo-probe.c": "e96e74db8be016689dc5262289ad47eb4bff97cd447a0f39b3a472c14c1ce909",
         "supplier-probe.c": "c3bcf10e956c9800131ad386a3c23e98a34d2fbb243400b7e4d9bf385a995ed3",
         "clock-probe.c": "845c1b68d5cadad080acef6cf15a3b98f8d48a8e843c49a7ca868815092ad1fc"
       }
@@ -8987,13 +8987,1995 @@
           "boot_trial_passed": true,
           "recovered_boot_id": "c4d13cb9-c801-437c-b187-b6cdcc533d42",
           "final_no_writer": true
+        },
+        {
+          "trial": "handoff/boot-test-video-frame-21",
+          "diagnostic": {
+            "passed": true,
+            "boot_id": "ab1cc999-a9b6-4aaa-99c8-5f35998c7bd2",
+            "module_sha256": "ed70773089346134ced2df9bbd9e45c77c2f159e33890df8e4b3a0cca24af43f",
+            "source_sha256": {
+              "fifo-probe.c": "4ad5fa0b190c3adc846fa09a3276c49b0c194447e0b0faa038fb12309b87a6af",
+              "mt6797-h264-controls.c": "8a70a5495f23db4d1a2f44a054a9eb04aca1e6c3c458b3b84d96e4ce049de884",
+              "mt6797-h264-controls.h": "b33fb71a659a6917eec09638033701866086e521eaa6fb1982f0bcc86a1ae766",
+              "pcm64-fixture.h": "477a6cfb9df42bdf7dc645add191edef5d358c35c5fe23b9e7fca5e5252f0893",
+              "Kbuild": "fcd149822e2622d3e9278be7d67e27b4cd2df6072dfa08647c91e759e427dcfc"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "passed": false,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 0,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": false,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 268304384,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4192256,
+                  "fifo_end": 4193280,
+                  "read_ptr": 268304384,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4192256,
+                  "read_ptr_before_reset": 268304384,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 268310656,
+                    "avc_control": 2283536391,
+                    "sram": 294919,
+                    "irq": 1
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": true,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 2,
+                  "reference_reset_first": true,
+                  "decode_started": false,
+                  "done": false,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 1,
+                  "irq": 1,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 0,
+                  "mby": 0,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 268042240,
+                  "mv_iova": 267911168,
+                  "vld_wrapper_iova": 267780096,
+                  "pp_wrapper_iova": 267649024
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 268173312,
+                    "mc_y": 268042240,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 523520,
+                    "pp_c": 1047056,
+                    "width_mbs": 4,
+                    "mv": 16744448,
+                    "vld_wrapper": 267780096,
+                    "pp_wrapper": 267649024
+                  },
+                  "status": {
+                    "avc_status": 513,
+                    "avc_complete": 0,
+                    "avc_control": 2283536391,
+                    "vld_proc": 8388608,
+                    "read_ptr": 268304384,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 268173616
+                  },
+                  "pipeline": {
+                    "mc_status": 75497472,
+                    "mb_intra": 0,
+                    "cbp": 0,
+                    "frame_dct": 0,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 268304896,
+                    "sram_pointers": 33816577,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  },
+                  "mm21": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 6138/6144 pixels differ; first byte 0: actual=211, expected=16\n"
+                  }
+                },
+                "output_bytes_changed": 0,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                },
+                "configuration_control_passed": true
+              },
+              {
+                "passed": true,
+                "strict_no_error": false,
+                "reference_completion_warning": true,
+                "index": 1,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 267517952,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4179968,
+                  "fifo_end": 4180992,
+                  "read_ptr": 267517952,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4179968,
+                  "read_ptr_before_reset": 267517952,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 267524224,
+                    "avc_control": 2283274247,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 0,
+                  "reference_reset_first": false,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 64,
+                  "message": 64,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 267255808,
+                  "mv_iova": 267124736,
+                  "vld_wrapper_iova": 266993664,
+                  "pp_wrapper_iova": 266862592
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 267386880,
+                    "mc_y": 267255808,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 521984,
+                    "pp_c": 1043984,
+                    "width_mbs": 4,
+                    "mv": 16695296,
+                    "vld_wrapper": 266993664,
+                    "pp_wrapper": 266862592
+                  },
+                  "status": {
+                    "avc_status": 131585,
+                    "avc_complete": 1,
+                    "avc_control": 2283274247,
+                    "vld_proc": 8388608,
+                    "read_ptr": 267517952,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 267387184
+                  },
+                  "pipeline": {
+                    "mc_status": 75538310,
+                    "mb_intra": 1,
+                    "cbp": 63,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 267524224,
+                    "sram_pointers": 33818627,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 5568/6144 pixels differ; first byte 16: actual=18, expected=32\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6138,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 196,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "006400feff821042082114110900c00300000000000000000000000000ff0f0000000000000000000000000000ff0f009d9c9b9a999897969594939291908f8e"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              },
+              {
+                "passed": true,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 2,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 268304384,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4192256,
+                  "fifo_end": 4193280,
+                  "read_ptr": 268304384,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4192256,
+                  "read_ptr_before_reset": 268304384,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 268310656,
+                    "avc_control": 2282225671,
+                    "sram": 229384,
+                    "irq": 4097
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 1,
+                  "reference_reset_first": false,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 4097,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 268042240,
+                  "mv_iova": 267911168,
+                  "vld_wrapper_iova": 267780096,
+                  "pp_wrapper_iova": 267649024
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 268173312,
+                    "mc_y": 268042240,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 523520,
+                    "pp_c": 1047056,
+                    "width_mbs": 4,
+                    "mv": 16744448,
+                    "vld_wrapper": 267780096,
+                    "pp_wrapper": 267649024
+                  },
+                  "status": {
+                    "avc_status": 33554945,
+                    "avc_complete": 0,
+                    "avc_control": 2282225671,
+                    "vld_proc": 8388608,
+                    "read_ptr": 268304384,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 268173616
+                  },
+                  "pipeline": {
+                    "mc_status": 75538310,
+                    "mb_intra": 1,
+                    "cbp": 63,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 268310656,
+                    "sram_pointers": 264200,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 5568/6144 pixels differ; first byte 16: actual=18, expected=32\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6138,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 196,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "006400feff821042082114110900c00300000000000000000000000000ff0f0000000000000000000000000000ff0f009d9c9b9a999897969594939291908f8e"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              },
+              {
+                "passed": true,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 3,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 267649024,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4182016,
+                  "fifo_end": 4183040,
+                  "read_ptr": 267649024,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4182016,
+                  "read_ptr_before_reset": 267649024,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 267655296,
+                    "avc_control": 671088647,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 2,
+                  "reference_reset_first": false,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 267911168,
+                  "mv_iova": 268042240,
+                  "vld_wrapper_iova": 268173312,
+                  "pp_wrapper_iova": 268304384
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 267780096,
+                    "mc_y": 267911168,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 523264,
+                    "pp_c": 1046544,
+                    "width_mbs": 4,
+                    "mv": 16752640,
+                    "vld_wrapper": 268173312,
+                    "pp_wrapper": 268304384
+                  },
+                  "status": {
+                    "avc_status": 513,
+                    "avc_complete": 1,
+                    "avc_control": 671088647,
+                    "vld_proc": 8388608,
+                    "read_ptr": 267649024,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 267780400
+                  },
+                  "pipeline": {
+                    "mc_status": 75538310,
+                    "mb_intra": 1,
+                    "cbp": 63,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 267655296,
+                    "sram_pointers": 50595843,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 5568/6144 pixels differ; first byte 16: actual=18, expected=32\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6138,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 196,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "006400feff821042082114110900c00300000000000000000000000000ff0f0000000000000000000000000000ff0f009d9c9b9a999897969594939291908f8e"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              },
+              {
+                "passed": true,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 4,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 266731520,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4167680,
+                  "fifo_end": 4168704,
+                  "read_ptr": 266731520,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4167680,
+                  "read_ptr_before_reset": 266731520,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 266737792,
+                    "avc_control": 671088647,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 2,
+                  "reference_reset_first": true,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573984,
+                  "input_data": 218169617,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 266469376,
+                  "mv_iova": 266338304,
+                  "vld_wrapper_iova": 266207232,
+                  "pp_wrapper_iova": 266076160
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 266600448,
+                    "mc_y": 266469376,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 520448,
+                    "pp_c": 1040912,
+                    "width_mbs": 4,
+                    "mv": 16646144,
+                    "vld_wrapper": 266207232,
+                    "pp_wrapper": 266076160
+                  },
+                  "status": {
+                    "avc_status": 513,
+                    "avc_complete": 1,
+                    "avc_control": 671088647,
+                    "vld_proc": 8388608,
+                    "read_ptr": 266731520,
+                    "fetch": 2065,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 266600752
+                  },
+                  "pipeline": {
+                    "mc_status": 75538310,
+                    "mb_intra": 1,
+                    "cbp": 63,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 266737792,
+                    "sram_pointers": 50595843,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 5568/6144 pixels differ; first byte 16: actual=18, expected=32\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6138,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 196,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "006400feff821042082114110900c00300000000000000000000000000ff0f0000000000000000000000000000ff0f009d9c9b9a999897969594939291908f8e"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              },
+              {
+                "passed": true,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 5,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 266862592,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4169728,
+                  "fifo_end": 4170752,
+                  "read_ptr": 266862592,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4169728,
+                  "read_ptr_before_reset": 266862592,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 266862720,
+                    "avc_control": 671088647,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": true,
+                  "pattern": false,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 2,
+                  "reference_reset_first": true,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573986,
+                  "input_data": 656877351,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 267124736,
+                  "mv_iova": 267255808,
+                  "vld_wrapper_iova": 267386880,
+                  "pp_wrapper_iova": 267517952
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917632,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 266993664,
+                    "mc_y": 267124736,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 521728,
+                    "pp_c": 1043472,
+                    "width_mbs": 4,
+                    "mv": 16703488,
+                    "vld_wrapper": 267386880,
+                    "pp_wrapper": 267517952
+                  },
+                  "status": {
+                    "avc_status": 513,
+                    "avc_complete": 1,
+                    "avc_control": 671088647,
+                    "vld_proc": 8388608,
+                    "read_ptr": 266862592,
+                    "fetch": 1041,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 266993968
+                  },
+                  "pipeline": {
+                    "mc_status": 75530246,
+                    "mb_intra": 1,
+                    "cbp": 0,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 266862720,
+                    "sram_pointers": 50595842,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=nv12, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6144,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 168,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "000c00000000000000001011a9691a0000000000000000000000000000ff0f0000000000000000000000000000ff0f0080808080808080808080808080808080"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              },
+              {
+                "passed": true,
+                "strict_no_error": false,
+                "reference_completion_warning": true,
+                "index": 6,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 266731520,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4167680,
+                  "fifo_end": 4168704,
+                  "read_ptr": 266731520,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4167680,
+                  "read_ptr_before_reset": 266731520,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 266731648,
+                    "avc_control": 2283143175,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": true,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 0,
+                  "reference_reset_first": false,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 64,
+                  "message": 64,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573829,
+                  "input_data": 648338587,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 266469376,
+                  "mv_iova": 266338304,
+                  "vld_wrapper_iova": 266207232,
+                  "pp_wrapper_iova": 266076160
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917652,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 266600448,
+                    "mc_y": 266469376,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 520448,
+                    "pp_c": 1040912,
+                    "width_mbs": 4,
+                    "mv": 16646144,
+                    "vld_wrapper": 266207232,
+                    "pp_wrapper": 266076160
+                  },
+                  "status": {
+                    "avc_status": 131585,
+                    "avc_complete": 1,
+                    "avc_control": 2283143175,
+                    "vld_proc": 8388608,
+                    "read_ptr": 266731520,
+                    "fetch": 1041,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 266600752
+                  },
+                  "pipeline": {
+                    "mc_status": 75537926,
+                    "mb_intra": 1,
+                    "cbp": 60,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 266731648,
+                    "sram_pointers": 264195,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 3520/6144 pixels differ; first byte 16: actual=136, expected=128\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6144,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 172,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "000c00020000000000001011e99a260000000000000000000000000000ff0f0000000000000000000000000000ff0f0080808080808080808080808080808080"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              }
+            ],
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "pattern_zero_padding_followup": {
+            "passed": true,
+            "boot_id": "ab1cc999-a9b6-4aaa-99c8-5f35998c7bd2",
+            "module_sha256": "ed70773089346134ced2df9bbd9e45c77c2f159e33890df8e4b3a0cca24af43f",
+            "source_sha256": {
+              "fifo-probe.c": "4ad5fa0b190c3adc846fa09a3276c49b0c194447e0b0faa038fb12309b87a6af",
+              "mt6797-h264-controls.c": "8a70a5495f23db4d1a2f44a054a9eb04aca1e6c3c458b3b84d96e4ce049de884",
+              "mt6797-h264-controls.h": "b33fb71a659a6917eec09638033701866086e521eaa6fb1982f0bcc86a1ae766",
+              "pcm64-fixture.h": "477a6cfb9df42bdf7dc645add191edef5d358c35c5fe23b9e7fca5e5252f0893",
+              "Kbuild": "fcd149822e2622d3e9278be7d67e27b4cd2df6072dfa08647c91e759e427dcfc"
+            },
+            "kernel": "/nix/store/l985g3scxmgcn03syimk8vpp5hqi4n95-linux-gemini-7.1.3",
+            "config_sha256": "a66a4bf55894bd67eefb4a51f03753a6bc1ffd012fb7cda6e4a1d37a1912feb6",
+            "results": [
+              {
+                "passed": true,
+                "strict_no_error": true,
+                "reference_completion_warning": false,
+                "index": 0,
+                "input": {
+                  "schema": 1,
+                  "dma_mask_bits": 28,
+                  "all_clocks": true,
+                  "subsystem_reset": true,
+                  "subsystem_reset_result": 0,
+                  "subsystem_after": {
+                    "clock": 273,
+                    "smi_clock": 1,
+                    "reset": 1
+                  },
+                  "nonposted": true,
+                  "common_reset": true,
+                  "async_write": false,
+                  "clear_caller_gate": true,
+                  "caller_gate_after_fetch": 0,
+                  "common_reset_original": 0,
+                  "async_original": 0,
+                  "async_after_fetch": 2103044,
+                  "caller_controls": {
+                    "misc_a8": 0,
+                    "misc_f4": 1
+                  },
+                  "global_before": {
+                    "clock": 273,
+                    "reset": 1
+                  },
+                  "minimal_clocks": false,
+                  "clear_legacy": true,
+                  "resources_held": false,
+                  "iommu_attached": true,
+                  "dma_started": true,
+                  "decode_started": true,
+                  "compared": true,
+                  "quiesced": true,
+                  "fenced": false,
+                  "input_unchanged": true,
+                  "scratch_unchanged": true,
+                  "result": 0,
+                  "reset_result": 0,
+                  "break_result": 0,
+                  "break_status": 17,
+                  "input_iova": 267517952,
+                  "fetch_status": 1041,
+                  "sram_status": 196610,
+                  "first": 324508639,
+                  "shift": 610839806,
+                  "second": 610839806,
+                  "fifo_start": 4179968,
+                  "fifo_end": 4180992,
+                  "read_ptr": 267517952,
+                  "clock_select_original": 0,
+                  "clock_select": 2,
+                  "power_down": 0,
+                  "power_down_programmed": 0,
+                  "clock_rate": 338000000,
+                  "pdn_spec_original": 4294967295,
+                  "pdn_module_original": 4294967295,
+                  "pdn_module2_original": 4294967295,
+                  "pdn_module2_after": 0,
+                  "pdn_module2_restored": 4294967295,
+                  "pdn_spec": 0,
+                  "pdn_module": 0,
+                  "larb_mmu": 1023,
+                  "fifo_start_before_reset": 4179968,
+                  "read_ptr_before_reset": 267517952,
+                  "dcm_original": 16,
+                  "dcm_programmed": 17,
+                  "global_after_fetch": {
+                    "clock": 273,
+                    "reset": 1,
+                    "dcm": 17
+                  },
+                  "after_fetch": {
+                    "clock_select": 2,
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "auto_pdn": 1,
+                    "write_ptr": 267518080,
+                    "avc_control": 672661511,
+                    "sram": 98312,
+                    "irq": 12289
+                  }
+                },
+                "frame": {
+                  "requested": true,
+                  "flat": false,
+                  "pattern": true,
+                  "error_bypass": false,
+                  "wrapper_bypass": true,
+                  "config_only": false,
+                  "h264_pp": true,
+                  "mc_output": false,
+                  "extended_clocks": 2,
+                  "bank8": false,
+                  "frame_format": false,
+                  "pixel_size_programmed": true,
+                  "crc_programmed": false,
+                  "input_padding": 2,
+                  "reference_reset_first": true,
+                  "decode_started": true,
+                  "done": true,
+                  "result": 0,
+                  "guards_unchanged": true,
+                  "snapshot_ready": true,
+                  "state": 2147483649,
+                  "irq": 12289,
+                  "error": 0,
+                  "message": 0,
+                  "mbx": 3,
+                  "mby": 3,
+                  "input_first": 1706573829,
+                  "input_data": 648338587,
+                  "width": 64,
+                  "height": 64,
+                  "work_changed": {
+                    "prediction": true,
+                    "mv": true,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "work_before": {
+                    "prediction": false,
+                    "mv": false,
+                    "vld_wrapper": false,
+                    "pp_wrapper": false
+                  },
+                  "stride": 64,
+                  "chroma_offset": 4096,
+                  "output_iova": 267255808,
+                  "mv_iova": 267124736,
+                  "vld_wrapper_iova": 266993664,
+                  "pp_wrapper_iova": 266862592
+                },
+                "registers": {
+                  "setup": {
+                    "sps": 3407873,
+                    "first_mb": 0,
+                    "pps": 65536,
+                    "shdr1": 16384,
+                    "shdr2": 917652,
+                    "mb_size": 196611,
+                    "total_mbs": 16,
+                    "prediction": 267386880,
+                    "mc_y": 267255808,
+                    "mc_chroma_offset": 4096,
+                    "pp_y": 521984,
+                    "pp_c": 1043984,
+                    "width_mbs": 4,
+                    "mv": 16695296,
+                    "vld_wrapper": 266993664,
+                    "pp_wrapper": 266862592
+                  },
+                  "status": {
+                    "avc_status": 513,
+                    "avc_complete": 1,
+                    "avc_control": 672661511,
+                    "vld_proc": 8388608,
+                    "read_ptr": 267517952,
+                    "fetch": 1041,
+                    "cycle": 0,
+                    "smi_clock": 1
+                  },
+                  "local": {
+                    "pdn_spec": 0,
+                    "pdn_module": 0,
+                    "pdn_legacy": 0,
+                    "wrapper_control": 3221225472,
+                    "wrapper_burst": 35,
+                    "prediction_end": 267387184
+                  },
+                  "pipeline": {
+                    "mc_status": 75537926,
+                    "mb_intra": 1,
+                    "cbp": 60,
+                    "frame_dct": 1,
+                    "mv_valid": 0,
+                    "pp_enable": 1,
+                    "post_writeback": 1,
+                    "opbuf": 6,
+                    "ddr0": 0,
+                    "ddr1": 0,
+                    "ddr3": 2097152,
+                    "mc_mode": 4096,
+                    "pp_wrapper_control": 0,
+                    "cycle_enable": 1,
+                    "dram_read_ptr": 267518080,
+                    "sram_pointers": 264195,
+                    "pp_mode": 1,
+                    "pdn_module2": 0,
+                    "frame_format": 16777489,
+                    "pixel_size": 4194368,
+                    "crc_control": 0
+                  }
+                },
+                "comparisons": {
+                  "nv12": {
+                    "passed": false,
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "FAIL: 3520/6144 pixels differ; first byte 16: actual=136, expected=128\n"
+                  },
+                  "mm21": {
+                    "passed": true,
+                    "returncode": 0,
+                    "stdout": "PASS: all 6144 decoded sample bytes match; layout=mm21, stride=64, chroma_offset=4096\n",
+                    "stderr": ""
+                  }
+                },
+                "output_bytes_changed": 6144,
+                "work_summary": {
+                  "prediction": {
+                    "nonzero_bytes": 172,
+                    "first_nonzero": 1,
+                    "last_nonzero": 367,
+                    "first_64_bytes": "000c00020000000000001011e99a260000000000000000000000000000ff0f0000000000000000000000000000ff0f0080808080808080808080808080808080"
+                  },
+                  "mv": {
+                    "nonzero_bytes": 64,
+                    "first_nonzero": 13,
+                    "last_nonzero": 1021,
+                    "first_64_bytes": "00000000000000000000000000020000000000000000000000000000000200000000000000000000000000000002000000000000000000000000000000020000"
+                  },
+                  "vld_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "pp_wrapper": {
+                    "nonzero_bytes": 0,
+                    "first_nonzero": null,
+                    "last_nonzero": null,
+                    "first_64_bytes": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+                  }
+                }
+              }
+            ],
+            "decode_qualified": false,
+            "encode_qualified": false,
+            "trial_owns_recovery": true
+          },
+          "boot_trial_passed": true,
+          "recovered_boot_id": "f7e5744a-fcb4-4e5b-96cf-a1382812bb19",
+          "final_no_writer": true,
+          "followup_note": "The first pattern follow-up health guard refused existing out-of-tree taint 4096 before any command. A second guard explicitly proved the same module/boot and completed idle matrix, then admitted exactly that expected taint. No force-unload or competing boot was used."
         }
       ],
-      "frame_submissions": 30,
-      "successful_frame_comparisons": 0,
-      "note": "Trial 20 supplies newer TOP 0x70 pixel dimensions. Four commands finish and match all 6,144 MM21 sample bytes: PCM with either PP mode and CRC off/on, plus compressed grey. Every completed command reports raw error/message 0x40; the original strict observer therefore fails and does not run the patterned follow-up. Direct MC output still times out without output. The newly inspected pinned public GPL verifier accepts exactly 0x40 when picture-complete is set; this source policy is distinct from an error-free hardware result. Input/guards, stop/idle/unload, complete system/RTC/recovery and final audit pass. Thirty commands include four completed exact pixel comparisons and zero strict error-free comparisons. References, varied geometry, real IRQ handling, V4L2 lifecycle and encoding remain unqualified.",
-      "input_fetch_commands": 68,
-      "configuration_only_controls": 4,
+      "frame_submissions": 37,
+      "successful_frame_comparisons": 5,
+      "note": "Trial 21 isolates FIFO producer padding: poisoned bytes yield raw 0x40 while zero padding or Annex B end-of-sequence plus zeros yields exact PCM samples with error/message zero. Compressed grey and independently calculated patterned intra both complete and match all 6,144 samples without hardware errors when a valid ending is supplied. Moving reference SRAM reset before SPS does not change pixels, status or the non-reading SPS max-reference bit. Seven actual commands complete exactly; five are strictly error-free. Full guards, stop/idle/unload, system/RTC/recovery and final audit pass. Aggregate 37 commands include 11 complete exact pixel comparisons and 5 strictly error-free comparisons. A guarded I-to-P reference diagnostic is compiled but not hardware tested; no V4L2 node or encoder is implemented.",
+      "input_fetch_commands": 84,
+      "configuration_only_controls": 5,
       "partial_output_analysis": {
         "complete_frame_qualified": false,
         "analysis": [
@@ -9107,23 +11089,47 @@
           }
         ]
       },
-      "exact_pixel_comparisons": 4,
-      "complete_frame_pixel_comparisons": 4,
-      "strict_error_free_frame_comparisons": 0
+      "exact_pixel_comparisons": 11,
+      "complete_frame_pixel_comparisons": 11,
+      "strict_error_free_frame_comparisons": 5
     },
     "p_skip_fixture": {
-      "evidence": "handoff/video-resource-20261009/fixtures-p-skip/pcm64-p.json",
-      "software_decode_verified": true,
-      "frames_verified": 2,
-      "sample_bytes_verified": 12288,
-      "nal_bytes": 5,
+      "schema": 1,
+      "width": 64,
+      "height": 64,
       "header_bit_size": 26,
-      "hardware_decode_verified": false,
+      "profile_idc": 66,
+      "level_idc": 10,
+      "constraint_set_flags": 3,
+      "max_num_ref_frames": 1,
+      "log2_max_frame_num_minus4": 0,
+      "pic_order_cnt_type": 0,
+      "log2_max_pic_order_cnt_lsb_minus4": 0,
+      "pic_width_in_mbs_minus1": 3,
+      "pic_height_in_map_units_minus1": 3,
+      "sps_flags": 80,
+      "pps_flags": 8,
+      "first_mb_in_slice": 0,
+      "slice_type": 0,
+      "slice_qp_delta": 0,
+      "disable_deblocking_filter_idc": 1,
+      "nal_ref_idc": 2,
+      "decode_flags": 8,
+      "software_decode_verified": true,
       "hashes": {
         "pcm64-p.h264": "2fa6406d91367a5556a05ea32a070b9ea6e1d7c34768b3b51c3c4437393c4fc8",
         "pcm64-p.nal": "8fe653422f870fe1ceee3c6e04111561090abc5cccc5670dde42d59adbea65ee",
         "pcm64-p.yuv": "ea52cfe0417144d2d620c0d7939a66a2d5248603e9d08a6247ee88fb02a482dd"
-      }
+      },
+      "frame_num": 1,
+      "pic_order_cnt_lsb": 2,
+      "top_field_order_cnt": 2,
+      "bottom_field_order_cnt": 2,
+      "reference_frame_num": 0,
+      "frames_verified": 2,
+      "sample_bytes_verified": 12288,
+      "metadata_note": "decode_flags corrected to the public V4L2 PFRAME value 8; the original five-byte NAL and all independently verified sample bytes are unchanged.",
+      "hardware_tested": false
     },
     "compressed_intra_fixture": {
       "evidence": "handoff/video-resource-20261009/fixtures-compressed/grey64.json",
@@ -9173,7 +11179,10 @@
         "pattern64.yuv": "a4398632f6758af6c79f4050774d0474b35b8f30510c86c62403e0d27c43c86d"
       },
       "hardware_decode_verified": false,
-      "note": "Original CAVLC I_16x16 DC coefficients and independently calculated inverse scaling/DC prediction. Neutral chroma does not establish UV ordering. FFmpeg comparison passes exactly."
+      "note": "Original CAVLC I_16x16 DC coefficients and independently calculated inverse scaling/DC prediction. Neutral chroma does not establish UV ordering. FFmpeg comparison passes exactly.",
+      "hardware_tested": true,
+      "hardware_trial": "handoff/boot-test-video-frame-21/frame-probe-pattern-zero",
+      "hardware_result": "Every one of 6,144 samples matches MM21, picture complete, raw error/message zero; fixed 64x64 intra only."
     }
   },
   "related_silicon_reference": {
@@ -9465,7 +11474,7 @@
       "scope": "Pinned MT6795 public H.264 frame initialization also programs pixel dimensions, in addition to macroblock size",
       "hardware_tested": true,
       "trial": "handoff/boot-test-video-frame-20",
-      "result": "64x64 complete exact MM21 output with raw error/message 0x40; fixed geometry only"
+      "result": "Fixed 64x64 complete exact MM21 output, including strictly zero-error jobs with valid producer padding"
     },
     "newer_crc_access": {
       "offset": "MISC + 0x4",
@@ -9482,13 +11491,32 @@
       "source": "https://github.com/DroidThug/android_kernel_leeco_MT6795/blob/3c1166fd1c809473bde680bf1f7ebdd07f395104/drivers/misc/mediatek/vdec/verify/vdec_verify_vdecode.c#L3493",
       "source_sha256": "d74a9ec6e6ac703ac9710308f6d97c71577c4dfbd9445bca05cf3d71452b99ff",
       "meaning": "Public verification accepts exactly 0x40 only when picture complete is true. Bit meaning remains undocumented; preserve raw status and never accept it on timeout or without exact pixels.",
-      "hardware_error_free": false
+      "hardware_error_free": false,
+      "later_hardware_observation": "Trial21: valid zero padding or an Annex B end-of-sequence NAL plus zeros removes 0x40 without changing pixels. New reference tests require error/message zero."
     },
     "sps_readback_observation": {
       "programmed": "0x342001",
       "readback": "0x340001",
       "difference": "max_num_ref_frames candidate bit13 does not read back, including command-free control",
-      "qualified": false
+      "qualified": false,
+      "reset_order_test": "Trial21: resetting picture-number SRAM before or after SPS still reads 0x340001; the difference is present before any frame command."
+    },
+    "input_producer_ending": {
+      "trial": "handoff/boot-test-video-frame-21",
+      "poisoned_padding": "complete exact pixels with raw error/message 0x40",
+      "zero_padding": "complete exact PCM with raw error/message zero",
+      "end_sequence_plus_zeros": "complete exact PCM/grey/patterned intra with raw error/message zero",
+      "guard": "Logical 64 KiB input area holds producer/padding; outer 64 KiB stays 0xa5 and every input byte is checked unchanged after proven idle.",
+      "production_recommendation": "Pad private producer memory with zero bytes, bound write pointer and retain the outer guard; do not suppress raw errors."
+    },
+    "p_reference_metadata": {
+      "source": "Pinned public MT6795 GPL H.264 register map and progressive reference metadata fields",
+      "mc_address": "MC + 0x3dc + 4*slot: full Y DMA address",
+      "field_mask": "MC + 0x564: zero for frame references",
+      "picture_number": "AVC + 0xa8 + 4*slot: low19 PicNum/LongTermPicNum, bit19 long-term",
+      "mv_parameters": "MV + 8*slot: frame-buffer index in bits27:23; bit21 top POC <= bottom POC; bit20 long-term. Bottom word also sets bit22.",
+      "implementation": "Original Linux DPB-entry translation with active/valid/frame, reserved-field and signed/unsigned 19-bit range validation. Timestamp lookup, buffer ownership and MMIO remain separate.",
+      "hardware_tested": false
     }
   },
   "implemented_components": {
