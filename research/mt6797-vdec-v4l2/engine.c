@@ -322,7 +322,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	if (job->sps.profile_idc != 66 ||
 	    job->width < 64 || job->width > 320 || job->width % 16 ||
 	    job->height < 64 || job->height > 256 || job->height % 32 ||
-	    header->width_mbs * 16 != job->width || header->height_mbs * 16 != job->height ||
+	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
+	    ALIGN(header->height_mbs * 16, 32) != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
 	    job->pps.flags & (V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE |
 		V4L2_H264_PPS_FLAG_WEIGHTED_PRED | V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
@@ -355,7 +356,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 			if (retained < 0)
 				return -ENOENT;
 			if (ctx->frame_numbers[retained] != entry->frame_num ||
-			    ctx->widths[retained] != job->width || ctx->heights[retained] != job->height ||
+			    ctx->widths[retained] != header->width_mbs * 16 ||
+			    ctx->heights[retained] != header->height_mbs * 16 ||
 			    ctx->top_poc[retained] != entry->top_field_order_cnt ||
 			    ctx->bottom_poc[retained] != entry->bottom_field_order_cnt)
 				return -EINVAL;
@@ -541,7 +543,10 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
 	SAVE(avc + 0x2c8, readl(avc + 0x2c8) & ~BIT(5));
 	SAVE(top + 0x68, (header.width_mbs - 1) | ((header.height_mbs - 1) << 16));
-	SAVE(top + 0x70, job->width | ((u32)job->height << 16));
+	/* Coded dimensions govern prediction; MM21's allocation height is rounded
+	 * to 32 luma rows and only controls the plane offsets and payload size.
+	 */
+	SAVE(top + 0x70, (header.width_mbs * 16) | ((u32)header.height_mbs * 16 << 16));
 	SAVE(top + 0x58, 0xffffffff);
 	SAVE(top + 0x6c, header.width_mbs * header.height_mbs);
 	SAVE(top + 0x50, 0xffffffff);
@@ -554,7 +559,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	 * picture width/height words. A width written as height clips references
 	 * below row 63 in the independently observed 64x96 inter-picture test.
 	 */
-	SAVE(mc + 0x20c, job->height);
+	SAVE(mc + 0x20c, header.height_mbs * 16);
 	SAVE(mc + 0x220, 1);
 	SAVE(mc + 0x224, lower_32_bits(picture->dma) >> 9);
 	SAVE(mc + 0x228, lower_32_bits(picture->dma + luma_size) >> 8);
@@ -586,6 +591,17 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->irq = readl(misc + 0xa4);
 	status->error = readl(avc + 0x284);
 	status->message = readl(avc + 0x270);
+	/* Public read-only progress and stable configuration words. Cache these
+	 * before stopping the engine; sysfs never accesses live hardware.
+	 */
+	status->mbx = readl(mc + 0x28);
+	status->mby = readl(mc + 0x2c);
+	status->stall = readl(avc + 0x25c);
+	status->read_pointer = readl(vld + 0xb0);
+	status->fetch_status = readl(vld + 0xe8);
+	status->top_status = readl(top + 0x80);
+	status->pred_config = readl(top + 0x2c);
+	status->pred_mode = readl(top + 0x40);
 	if (!ret && (status->error || status->message))
 		ret = -EIO;
 cleanup:
@@ -640,8 +656,8 @@ power:
 			mt6797_decode_context_reset(ctx);
 		ctx->timestamps[output] = job->timestamp;
 		ctx->frame_numbers[output] = job->decode.frame_num;
-		ctx->widths[output] = job->width;
-		ctx->heights[output] = job->height;
+		ctx->widths[output] = header.width_mbs * 16;
+		ctx->heights[output] = header.height_mbs * 16;
 		ctx->top_poc[output] = job->decode.top_field_order_cnt;
 		ctx->bottom_poc[output] = job->decode.bottom_field_order_cnt;
 		ctx->valid[output] = job->decode.nal_ref_idc != 0;

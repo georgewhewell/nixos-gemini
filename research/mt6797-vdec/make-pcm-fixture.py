@@ -72,8 +72,8 @@ def main():
     parser.add_argument('--height', type=int, default=64)
     args = parser.parse_args()
     width, height = args.width, args.height
-    if width < 64 or width > 320 or width % 16 or height < 64 or height > 256 or height % 32:
-        parser.error('Fixture geometry must be width 64..320 in steps of 16 and height 64..256 in steps of 32')
+    if width < 64 or width > 320 or width % 16 or height < 64 or height > 256 or height % 16:
+        parser.error('Fixture geometry must be width 64..320 and height 64..256 in steps of 16')
     mb_width, mb_height = width // 16, height // 16
     if args.p_motion and not args.p_skip:
         parser.error('--p-motion requires --p-skip')

@@ -16,8 +16,12 @@ def unpack(data, width, height, stride, chroma_offset, layout):
     if min(width, height, stride) <= 0 or stride < width or height % 2 or width % 2 or \
        chroma_offset < stride * height:
         raise ValueError('Invalid geometry or overlapping planes')
-    if layout == 'mm21' and (stride % 16 or height % 32):
-        raise ValueError('MM21 requires complete 16x32 luma tiles')
+    if layout == 'mm21':
+        padded_height = (height + 31) // 32 * 32
+        if stride % 16 or chroma_offset < stride * padded_height:
+            raise ValueError('MM21 requires complete 16x32 storage tiles')
+        if len(data) < chroma_offset + stride * padded_height // 2:
+            raise ValueError('Decoder allocation lacks complete MM21 storage tiles')
 
     def offset(x, y, tile_height):
         if layout == 'nv12':

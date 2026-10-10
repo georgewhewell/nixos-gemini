@@ -3,6 +3,8 @@
  * restricted by engine.c to the cases exercised by the private diagnostics.
  */
 #include <linux/module.h>
+#include <linux/ktime.h>
+#include <linux/math64.h>
 #include <linux/pm_runtime.h>
 #include <linux/sizes.h>
 #include <linux/workqueue.h>
@@ -305,6 +307,7 @@ static void decode_work(struct work_struct *work)
 	struct media_request *request = source->vb2_buf.req_obj.req;
 	const u8 *pixels = NULL;
 	struct mt6797_decode_status status = { 0 };
+	u64 started = ktime_get_ns();
 	unsigned long flags;
 	int ret;
 
@@ -328,10 +331,14 @@ static void decode_work(struct work_struct *work)
 			ctx->job.nal += source->vb2_buf.planes[0].data_offset;
 			ctx->job.bytes = vb2_get_plane_payload(&source->vb2_buf, 0) - source->vb2_buf.planes[0].data_offset;
 			ctx->job.timestamp = source->vb2_buf.timestamp;
+			status.nal_bytes = ctx->job.bytes;
+			status.header_bits = ctx->job.slice.header_bit_size;
 			ret = atomic_read(&ctx->abort) ? -ECANCELED :
 				mt6797_engine_decode(ctx->context, &ctx->job, &pixels, &status);
 		}
 	}
+	status.engine_result = ret;
+	status.elapsed_us = div_u64(ktime_get_ns() - started, 1000);
 	if (atomic_read(&ctx->abort))
 		ret = -ECANCELED;
 	if (!ret) {
@@ -545,10 +552,13 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	failures = decoder->failures;
 	result = decoder->last_result;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
-		status.quiesced, status.guards_unchanged);
+		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
+		status.nal_bytes, status.header_bits, status.mbx, status.mby, status.stall,
+		status.read_pointer, status.fetch_status, status.top_status, status.pred_config,
+		status.pred_mode);
 }
 static DEVICE_ATTR_RO(last_job);
 static struct attribute *decoder_attrs[] = { &dev_attr_last_job.attr, NULL };

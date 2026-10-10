@@ -52,8 +52,15 @@ checks, accepted recovery and the strict kernel-journal audit also pass.
 Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
 I/P pictures, at most one short-term reference and disabled deblocking. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The driver admits widths 64..320 in steps of 16 and
-heights 64..256 in steps of 32. Only the seven dimensions above have been tested.
+`V4L2_PIX_FMT_MM21`. The driver admits coded widths 64..320 and heights 64..256 in steps of 16.
+Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
+height, and cached references must match it. Trial 30 passes all 18 original
+request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
+GStreamer pipelines. The 64x80 and 320x240 motion streams match their coded
+samples in padded storage. The eight-frame x264 320x240 stream times out on its
+first picture and produces no output: zero error/message words, state 1, safe
+break/reset, unchanged guards and normal unload. All 57 compliance checks and
+supervisor/recovery/journal checks pass. That compressed stream is unqualified.
 Its independent coherent allocations are 256 KiB each, with separate 128 KiB
 data and trailing guard regions. GStreamer's initial 320x240 probe can negotiate
 320x256. Real GStreamer decoding is qualified only for the listed trial-29 streams. Queues
@@ -118,6 +125,17 @@ export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
 "$GST_PACKAGE/bin/gst-launch-1.0" filesrc location=baseline.h264 \
   ! h264parse ! v4l2slh264dec ! filesink location=native-mm21.bin
 ```
+
+`../mt6797-vdec/make-baseline-fixture.py` reproduces the changing-gradient x264
+fixtures and records their software-decoded references, commands, hashes and
+public header trace. It verifies Baseline CAVLC, one reference, unweighted
+prediction and disabled deblocking. It reproduces the original 128x96 stream
+and reference byte for byte with the pinned FFmpeg build.
+
+The next diagnostic build caches macroblock/pipeline progress, NAL/header size,
+elapsed time and the engine result before frontend cancellation. Reading
+`last_job` only accesses that snapshot. These fields have compiled but have not
+yet been hardware tested.
 
 The encoder, interrupt completion, general codec features, larger pictures,
 resolution changes and system suspend remain unqualified. These experimental

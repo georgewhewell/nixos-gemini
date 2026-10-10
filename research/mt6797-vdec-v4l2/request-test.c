@@ -26,7 +26,7 @@ struct stream {
 };
 static const char *status_path;
 static const char *fixture_directory;
-static unsigned int width = 64, height = 64;
+static unsigned int width = 64, height = 64, storage_height = 64;
 static int export_buffers;
 
 static void fail(const char *operation)
@@ -55,7 +55,7 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 	format.fmt.pix_mp.height = height;
 	checked_ioctl(stream->video, VIDIOC_TRY_FMT, &format, "TRY_FMT");
 	checked_ioctl(stream->video, VIDIOC_S_FMT, &format, "S_FMT");
-	if (format.fmt.pix_mp.width != width || format.fmt.pix_mp.height != height ||
+	if (format.fmt.pix_mp.width != width || format.fmt.pix_mp.height != storage_height ||
 	    format.fmt.pix_mp.pixelformat != (buffer.length == 1 ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21)) {
 		fprintf(stderr, "Unexpected negotiated format\n"); exit(1);
 	}
@@ -105,7 +105,7 @@ static void open_stream(struct stream *stream, const char *video, const char *me
 
 static void close_stream(struct stream *stream)
 {
-	size_t luma_size = width * height;
+	size_t luma_size = width * storage_height;
 	u8 *snapshot = malloc(luma_size * 3 / 2);
 	if (!snapshot) fail("snapshot allocation");
 	memcpy(snapshot, stream->capture[0].address, luma_size);
@@ -162,8 +162,8 @@ static int dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_er
 	}
 	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
 	    (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec ||
-	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : width * height) ||
-	     planes[1].bytesused != (expect_error ? 0U : width * height / 2))) {
+	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : width * storage_height) ||
+	     planes[1].bytesused != (expect_error ? 0U : width * storage_height / 2))) {
 		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); bad = 1;
 	}
 	return bad;
@@ -253,8 +253,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		}
 		FILE *file = fopen(path, "wb");
 		if (!file) fail("output file");
-		if (fwrite(stream->capture[0].address, 1, width * height, file) != width * height ||
-		    fwrite(stream->capture[1].address, 1, width * height / 2, file) != width * height / 2 || fclose(file)) fail("write output");
+		if (fwrite(stream->capture[0].address, 1, width * storage_height, file) != width * storage_height ||
+		    fwrite(stream->capture[1].address, 1, width * storage_height / 2, file) != width * storage_height / 2 || fclose(file)) fail("write output");
 	}
 	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
 	close(request);
@@ -287,12 +287,13 @@ int main(int argc, char **argv)
 		fixture_directory = argv[5];
 		width = strtoul(argv[6], NULL, 10);
 		height = strtoul(argv[7], NULL, 10);
-		if (width < 64 || width > 320 || width % 16 || height < 64 || height > 256 || height % 32 ||
+		if (width < 64 || width > 320 || width % 16 || height < 64 || height > 256 || height % 16 ||
 		    (strcmp(argv[8], "mmap") && strcmp(argv[8], "export"))) {
 			fprintf(stderr, "Invalid test geometry or mapping mode\n"); return 2;
 		}
 		export_buffers = !strcmp(argv[8], "export");
 	}
+	storage_height = (height + 31) & ~31U;
 	open_stream(&stream, argv[1], argv[2]);
 	decode(&stream, argv[3], "pcm64", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
 	decode(&stream, argv[3], "pcm64-p", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);

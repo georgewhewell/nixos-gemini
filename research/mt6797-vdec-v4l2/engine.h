@@ -19,11 +19,16 @@ struct mt6797_decode_job {
 	const u8 *nal;
 	size_t bytes;
 	u64 timestamp;
+	/* Negotiated storage dimensions; coded dimensions come from the SPS. */
 	u16 width, height;
 };
 
 struct mt6797_decode_status {
 	u32 state, error, message, irq;
+	u32 mbx, mby, stall, read_pointer, fetch_status, top_status;
+	u32 pred_config, pred_mode, nal_bytes, header_bits;
+	u64 elapsed_us;
+	int engine_result;
 	int break_result, reset_result;
 	bool fetched, submitted, quiesced, guards_unchanged;
 };
