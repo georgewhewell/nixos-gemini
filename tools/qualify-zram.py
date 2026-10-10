@@ -154,6 +154,9 @@ def install(context):
     context.probe_identity = lambda: probe_identity(context)[1]
 
     def baseline_paging(runner, directory, state):
+        if runner.qualify.BASELINE.get('paging_policy') == 'none':
+            recovery = context.f.q.module('qualified_ram_recovery', ROOT/'tools/qualify-ram-only-recovery.py')
+            return recovery.accepted_policy(context, runner, state, directory)
         if runner.qualify.BASELINE.get('paging_policy') != 'zram':
             raise RuntimeError('The accepted recovery image still enables flash swap. '
                                'Qualify a RAM-only recovery baseline before running normal boot trials.')

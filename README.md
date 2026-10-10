@@ -93,9 +93,22 @@ and a qualified zram trial; old successful disk-backed paging trials cannot
 promote a generation.
 The [temporary rescue build](research/ram-only-recovery-20261010.json) reuses the
 working 7.1.3 kernel and userspace with swap disabled from boot and early disk
-resume removed. Its host checks pass, but it has not been booted or accepted.
-Supervisor integration and device qualification remain prerequisites for the
-recovery migration; the current normal-trial gate remains in force.
+resume removed. Its host checks and migration preflight pass; it has not been
+booted or accepted. The durable runner supports an explicit migration:
+
+```sh
+python3 tools/test-boot.py --migrate-ram-only \
+  --bundle /nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery \
+  --out ../handoff/boot-test-NEW --observe-seconds 90 --execute
+```
+
+Both writer roles use this no-swap image. Admission still checks the actual
+installed baseline; acceptance requires distinct candidate and rescue boots,
+boot-generated masks, no disk resume, zero p34 writes, RTC checks and the final
+storage/source audit. A successful run writes `qualified-ram-only-baseline.json`
+in its trial directory for review. It does not change the repository's accepted
+baseline. Normal candidates still require zram; the updater retains its zram
+qualification requirement. The current normal-trial gate remains in force.
 
 For measurements that need services started after boot acceptance, add
 `--observe-seconds 90` (0–90 seconds, default 0). The runner records

@@ -5,8 +5,9 @@ Read-only preflight unless --execute is given. The durable boot-only supervisor
 owns both flashes. RTC startup, UTC, alarms, RAM-only paging and ordinary Nix builds are
 checked; --watchdog-expiry substitutes keepalive loss for the alarm sequence.
 --bootloader and --efi-files exercise an already installed boot-manager entry.
-Both the candidate and recovery must use RAM-only zram; old flash-backed
-recovery images are rejected before any reboot or flash.
+Normal candidates require zram and recovery must be qualified RAM-only. The
+explicit --migrate-ram-only mode trials the preserved no-swap image in both
+writer roles; old flash-backed recovery is never staged in that mode.
 """
 from contextlib import ExitStack
 import fcntl
@@ -37,13 +38,16 @@ EFI_MANIFEST = None
 BOOTLOADER = None
 INSTALL_EFI = False
 STORE_ROOT = None
+MIGRATION = None
 p.PROFILE = 'boot-test'
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
     'test-boot.py', 'qualify-rtc-alarm.py', 'qualify-rtc-calendar.py',
     'qualify-store-cache.py', 'qualify-rtc-stage1-rescue.py', 'qualify-rtc-startup.py')) + (
         'nix/gemini-boot-install.py', 'nix/gemini-efi-publish.sh',
-        'tools/qualify-zram.py', 'nix/gemini-zram-probe.c', 'nix/zram-probe.nix')
+        'tools/qualify-zram.py', 'nix/gemini-zram-probe.c', 'nix/zram-probe.nix',
+        'tools/qualify-ram-only-recovery.py', 'tools/build-ram-only-recovery.py',
+        'tools/test-ram-only-recovery.py', 'research/ram-only-recovery-20261010.json')
 base_configure, base_preflight, base_finish = p.configure, p.preflight, p.finish
 
 
@@ -52,7 +56,8 @@ def store_profile(provisioner):
 p.store_profile = store_profile
 
 
-def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi_files=None):
+def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi_files=None,
+              ram_only_recovery=False):
     global EFI_FILES, EFI_MANIFEST, BOOTLOADER, INSTALL_EFI, STORE_ROOT
     if bool(bootloader) != bool(efi_files) or (bootloader and (install_efi or reclaim_cache)):
         raise ValueError('--bootloader requires --efi-files and an already installed generation')
@@ -92,7 +97,7 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
     p.STORE_SHA, p.STORE_SIZE = sha, size
     p.BOOT_SHA = cache.digest(bundle/'boot-padded-p22.img')
     p.NOTES_SHA = p.f.q.r.power_kernel.notes_sha(kernel)
-    zram.probe_identity(p)
+    if not ram_only_recovery: zram.probe_identity(p)
     p.RECLAIM_CACHE = reclaim_cache.resolve(strict=True) if reclaim_cache else None
     EFI_FILES, EFI_MANIFEST, BOOTLOADER = None, None, None
     INSTALL_EFI = bool(install_efi)
@@ -115,6 +120,15 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
             raise ValueError('Bootloader does not contain the selected normal Linux fallback')
         p.BOOT_SHA = cache.digest(image)
         p.f.q.r.entry_dt.verify_carrier(image, p.BOOT_SHA, bundle)
+
+
+def migration_artifacts(bundle):
+    global MIGRATION
+    migration = p.f.q.module('ram_only_recovery', ROOT/'tools/qualify-ram-only-recovery.py')
+    record = migration.validate_bundle(bundle)
+    artifacts(bundle, ram_only_recovery=True)
+    initial, target = migration.install(p, record)
+    MIGRATION = (migration, record, initial, target)
 
 
 def verify_efi(runner, ssh, state, directory, name):
@@ -271,6 +285,9 @@ def configure(watchdog=False, pm_test=None, cycle=False):
     # checks; each later RTC check compares suspend counters in its own window.
     runner = base_configure(False, pm_test, cycle)
     runner.CANDIDATE_DESKTOP = 'gnome'
+    if MIGRATION is not None:
+        migration, record, initial, target = MIGRATION
+        migration.configure(p, runner, record, initial, target)
     runner.backend.MTK = runner.backend.MTK_RTC
     if BOOTLOADER is not None:
         runner.PROFILES[p.PROFILE] = (BOOTLOADER/'boot-padded-p22.img', p.BOOT_SHA)
@@ -466,9 +483,12 @@ def finish(runner, directory, before, error=None):
                 result.update(result='passed' if passed else 'failed', profile_qualified=passed)
                 if error is not None: result['error'] = str(error)
                 runner.qualify.save(directory, 'result.json', result)
+    if MIGRATION is not None and error is None:
+        migration, record, initial, target = MIGRATION
+        migration.qualified_baseline(p, runner, directory, record, initial, target)
 p.finish = finish
 
 
 if __name__ == '__main__':
-    try: p.main(artifacts)
+    try: p.main(artifacts, migration_artifacts)
     except (OSError, ValueError, RuntimeError, KeyError, subprocess.SubprocessError) as error: sys.exit(str(error))

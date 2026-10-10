@@ -268,6 +268,8 @@ def finish(r, directory, before, error=None):
         while any(f.owner_alive(units[key]) for key in ('candidate', 'supervisor')):
             if time.monotonic() > deadline: raise RuntimeError('Existing candidate/recovery service is still active')
             time.sleep(1)
+        if getattr(r, 'prepare_recovery_audit', None):
+            r.prepare_recovery_audit(directory, before)
         # Never stop ownership or networking until Linux and the absence of
         # a connected writer are independently verified.
         deadline = time.monotonic()+360
@@ -335,8 +337,8 @@ def finish(r, directory, before, error=None):
             fixed_swap_preserved=True, default_policy_paging_qualified=passed,
             recovered_boot_id=after['boot_id'], ordinary_outputs_retained=outputs,
             source_hashes_match=True, no_writer=True)
-        if PAGING_POLICY == 'zram':
-            result.update(paging_policy='zram', ram_only_paging_qualified=passed)
+        if PAGING_POLICY in ('zram', 'none'):
+            result.update(paging_policy=PAGING_POLICY, ram_only_paging_qualified=passed)
         if error is not None: result['error'] = str(error)
         r.qualify.save(directory, 'result.json', result)
         r.qualify.save(directory, 'final-idle-check.json', dict(healthy_boot=after['boot_id'],
@@ -345,7 +347,7 @@ def finish(r, directory, before, error=None):
         if not passed: raise RuntimeError('Power/swap candidate did not qualify; M69 recovery and retained evidence are recorded')
 
 
-def main(configure_artifacts=None):
+def main(configure_artifacts=None, configure_migration=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--execute', action='store_true')
@@ -364,6 +366,9 @@ def main(configure_artifacts=None):
     if configure_artifacts is not None:
         parser.description = 'Test the normal Gemini bundle with automatic M69 recovery'
         parser.add_argument('--bundle', type=Path, default=ROOT/'result')
+        if configure_migration is not None:
+            parser.add_argument('--migrate-ram-only', action='store_true',
+                                help='Trial the preserved no-swap image as both candidate and rescue')
         parser.add_argument('--reclaim-cache', type=Path,
                             help='Host copy of an unused squashfs to archive and remove if space is needed')
         parser.add_argument('--install-efi', type=Path,
@@ -375,6 +380,10 @@ def main(configure_artifacts=None):
     args = parser.parse_args(); directory = args.out.resolve()
     if not 0 <= args.observe_seconds <= 90:
         parser.error('--observe-seconds must be between 0 and 90')
+    migration = getattr(args, 'migrate_ram_only', False)
+    if migration and (args.keep or args.watchdog_expiry or args.pm_test or args.usb_cycle or
+                      args.reclaim_cache or args.install_efi or args.bootloader or args.efi_files):
+        parser.error('--migrate-ram-only requires a plain candidate-and-rescue trial')
     artifact_args = []
     if configure_artifacts is not None:
         args.bundle = args.bundle.resolve(strict=True)
@@ -382,8 +391,12 @@ def main(configure_artifacts=None):
         if args.install_efi: args.install_efi = args.install_efi.resolve(strict=True)
         if args.bootloader: args.bootloader = args.bootloader.resolve(strict=True)
         if args.efi_files: args.efi_files = args.efi_files.resolve(strict=True)
-        configure_artifacts(args.bundle, args.reclaim_cache, args.install_efi, args.bootloader, args.efi_files)
+        if migration:
+            configure_migration(args.bundle)
+        else:
+            configure_artifacts(args.bundle, args.reclaim_cache, args.install_efi, args.bootloader, args.efi_files)
         artifact_args = ['--bundle', str(args.bundle)]
+        if migration: artifact_args += ['--migrate-ram-only']
         if args.reclaim_cache: artifact_args += ['--reclaim-cache', str(args.reclaim_cache)]
         if args.install_efi: artifact_args += ['--install-efi', str(args.install_efi)]
         if args.bootloader: artifact_args += ['--bootloader', str(args.bootloader)]
@@ -422,7 +435,7 @@ def main(configure_artifacts=None):
         (directory/'worker-error.txt').write_text(str(caught)+'\n')
         print('Candidate observer failed; awaiting the existing recovery services', flush=True)
     finish(r, directory, before, error)
-    print('PASS: built-in zswap policy, real paging, ordinary Nix build and M69 recovery', flush=True)
+    print('PASS: '+PAGING_POLICY+' policy, ordinary Nix build and supervised recovery', flush=True)
 
 
 if __name__ == '__main__':

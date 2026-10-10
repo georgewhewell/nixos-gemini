@@ -63,7 +63,7 @@
   "source_test_sha256": "e5a8d1e09f1c16ded285a9be23c2ae252942138168fdb12159190c4c199b8e82",
   "accepted_baseline_changed": false,
   "hardware_trial_started": false,
-  "migration_supervisor_integration_complete": false,
+  "migration_supervisor_integration_complete": true,
   "independent_host_reproduction": {
     "returncode": 0,
     "byte_identical_files": [
@@ -98,5 +98,60 @@
     "implementation_sha256": "4ed929cdfe1198bea274fc0ac97c8ef639663987d06978309d4d9c716bf1801c",
     "requires_active_swap_or_enabled_zswap_in_shell": false,
     "scope": "Referenced service shell scripts; this is not a hardware boot or binary behavior qualification."
+  },
+  "supervisor_integration": {
+    "entrypoint": "tools/test-boot.py --migrate-ram-only",
+    "initial_baseline_admission_unchanged": true,
+    "candidate_image_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "rescue_image_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "old_flash_swap_image_staged": false,
+    "new_expected_return_requires_verified_rescue_readback": true,
+    "qualified_descriptor_requires_three_distinct_boot_ids": true,
+    "normal_candidate_zram_requirement_unchanged": true,
+    "preflight": {
+      "directory": "/mnt/Home/src/nixos-gemini/handoff/ram-only-recovery-20261010/migration-preflight-02",
+      "result": "passed",
+      "exit_code": 0,
+      "flash_started": false,
+      "reboot_requested": false,
+      "initial_boot_id": "214b3268-b481-4ccb-a693-260b114b1e9b",
+      "plan_sha256": "693c0a9e253f09b500f73fc634b9eaf1c03ca92d90843087c6852879b9fe0f4a",
+      "initial_policy": {
+        "boot_id": "214b3268-b481-4ccb-a693-260b114b1e9b",
+        "cmdline": "initrd=\\EFI\\Gemini\\454e264d04abce4d29d11c733799307774356598b4febbbf9015f1be3e3fd8a0\\initrd.cpio.gz slub_debug=- slub_max_order=3 init=/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade/init console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr loglevel=4 log_buf_len=1M rdinit=/init panic=5 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused modprobe.blacklist=mt6797_spm,clk_mt6797_cam,clk_mt6797_seninf_mclk,hi556 fw_devlink=rpm GEMINI_A72_CI9_M39 mtk_wdt.start_at_boot=1 gemini.baseline_lease_capability=gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052",
+        "p34_stat": "      66        0     4720      841        0        0        0        0        0      612      841        0        0        0        0        0        0",
+        "swap_rows": "0",
+        "zswap": "N",
+        "resume": "259:2",
+        "p34_dev": "259:2",
+        "paging_policy": "none",
+        "active_swap": false,
+        "flash_swap_active": false,
+        "flash_swap_written_sectors": 0,
+        "masks_from_boot": false,
+        "runtime_policy_writes": false
+      }
+    },
+    "host_tests": {
+      "tools/test-ram-only-migration.py": 11
+    },
+    "source_sha256": {
+      "tools/test-boot.py": "61b343be0b1365e712b92e35513bea7741893dbf782306791055a3fa309f131e",
+      "tools/qualify-power-swap.py": "29b9d1887ff56267ff6500655817e09bed8c6a89e95ae4fe7e618f65058337a2",
+      "tools/qualify-uboot-recovery.py": "97f9a101929ffb8dbee22a7fdafb898c247cda1636a02af73911461d7c4f9d7f",
+      "tools/qualify-zram.py": "fb53db5d803906fd3f77863cc52ef615e33f0fc07303b512fae227d8903c767f",
+      "tools/qualify-ram-only-recovery.py": "bb49dd10c8929f1ee6245d7cd0161fbef7d64a4f17d6ec9e4358610ed24c5fab",
+      "tools/test-ram-only-migration.py": "278b44c6a5f4205109d1b757dd55400a67bb640ca9b1e6818f163ed649f22042"
+    },
+    "hardware_tested": false,
+    "note": "Read-only preflight is preliminary; execute always takes a fresh preflight and captures current sources.",
+    "regression_tests": {
+      "tools/test-boot-runner.py": 17,
+      "tools/test-zram-paging.py": 4,
+      "tools/test-power-swap.py": 11,
+      "tools/test-qualify-mtkclient.py": 16,
+      "tools/test-rtc-recovery.py": 8,
+      "tools/test-ram-only-recovery.py": 8
+    }
   }
 }

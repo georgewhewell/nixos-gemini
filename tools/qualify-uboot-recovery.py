@@ -32,6 +32,9 @@ KEEP = False
 BASELINE = json.loads(Path(os.environ.get('GEMINI_ACCEPTED_BASELINE') or
                            ROOT / 'research/accepted-baseline.json').read_text())
 ACCEPTED = Path(BASELINE['image'])
+# An explicit migration may rescue to a separately validated image. Initial
+# admission always uses BASELINE; changing the rescue target does not accept it.
+RESCUE_BASELINE = None
 PROFILES = {
     'power-kernel': (WORKSPACE / 'handoff/power-kernel-linux/boot-padded-p22.img', 'd2bb1ef41563db0bffaa64f5293f979aeae167b93ab85ea5db67c9fe7d1d1fbc'),
     'desktop-keyboard': (WORKSPACE / 'handoff/desktop-keyboard-linux/boot-padded-p22.img',
@@ -487,10 +490,13 @@ def request_linux_rescue(ssh, before, directory, profile, wait_seconds=0):
     # A recovered baseline or an unidentified instance must never be rebooted.
     deadline = time.monotonic() + wait_seconds
     while True:
-        if read_state(directory / 'supervisor.state').startswith(SUCCESS):
+        if (read_state(directory / 'supervisor.state').startswith(SUCCESS) or
+                read_state(directory / 'supervisor-rollback.state').startswith('flash_rc=0 ')):
             return False
         if candidate_needs_rescue_reboot(ssh, before, profile):
             wait_state(directory / 'supervisor-rollback.state', 'tool_started ', 30, terminal=False)
+            if read_state(directory / 'supervisor-rollback.state').startswith('flash_rc=0 '):
+                return False
             print('Rebooting the identified candidate into the waiting rescue writer', flush=True)
             reboot(ssh, directory, 'rescue-reboot-request.json')
             return True
@@ -596,7 +602,9 @@ def profile_qualified(profile, phase, elapsed, host_rescue_reboot_requested):
 def stage(directory, profile, before):
     candidate_path, candidate_sha = PROFILES[profile]
     candidate = backend.checked_image(candidate_path.resolve(strict=True), candidate_sha)
-    rescue = qualify.accepted_boot_bytes(ACCEPTED)
+    rescue_target = RESCUE_BASELINE or BASELINE
+    rescue = backend.checked_image(Path(rescue_target['image']).resolve(strict=True),
+                                   rescue_target['boot_sha256'])
     for name in ('p22-proof-supervisor.sh', 'trex-gadget-net-watcher.sh',
                  'p22-flash-wrapper.sh', 'p22-mtkclient-backend.py'):
         shutil.copyfile(ROOT / 'research' / name, directory / name)
@@ -610,11 +618,45 @@ def stage(directory, profile, before):
     config = dict(version=1, mtk=backend.MTK, stage_image=str(directory / 'boot.img'),
                   candidate_state=str(directory / 'candidate.state'),
                   rollback_state=str(directory / 'supervisor-rollback.state'),
-                  candidate_sha256=candidate_sha, rollback_sha256=qualify.ACCEPTED_BOOT,
+                  candidate_sha256=candidate_sha, rollback_sha256=rescue_target['boot_sha256'],
                   gpt_sha256=before['gpt_sha256'], usb_port='3-2')
     backend.config_for_state(config, directory / 'candidate.state')
     backend.save(directory / 'backend.json', config)
     return config
+
+
+def expect_verified_rescue(directory, before):
+    """Change this process's expected return only after verified rescue I/O.
+
+    The installed/accepted JSON stays unchanged. Both actual readbacks and GPT
+    bytes are checked independently of the supervisor's completion string.
+    """
+    if RESCUE_BASELINE is None:
+        return before
+    if not read_state(directory/'supervisor.state').startswith(SUCCESS):
+        raise RuntimeError('Migration rescue has not completed')
+    config = json.loads((directory/'backend.json').read_text())
+    target = RESCUE_BASELINE
+    if (config['rollback_sha256'] != target['boot_sha256'] or
+            config['candidate_sha256'] != target['boot_sha256'] or
+            config['gpt_sha256'] != before['gpt_sha256']):
+        raise RuntimeError('RAM-only migration writer identities differ')
+    backend.checked_image(directory/'rescue.img', target['boot_sha256'])
+    backend.checked_image(directory/'boot.img', target['boot_sha256'])
+    evidence = json.loads((directory/'supervisor-rollback.state.mtk.json').read_text())
+    if (evidence.get('backend') != 'mtkclient' or evidence.get('returncode') != 0 or
+            evidence.get('expected_sha256') != target['boot_sha256'] or
+            evidence.get('first_boot_window_departed') is not True):
+        raise RuntimeError('Migration rescue lacks verified write and reboot evidence')
+    attempt = Path(evidence['attempt']).resolve(strict=True)
+    if attempt.parent != directory.resolve() or not attempt.name.startswith('supervisor-rollback.state-mtk-'):
+        raise RuntimeError('Migration rescue evidence is outside its owned trial')
+    backend.checked_image(attempt/'boot-readback.img', target['boot_sha256'])
+    gpt = (attempt/'gpt-primary.bin').read_bytes()
+    if len(gpt) != 32768 or backend.digest(gpt) != before['gpt_sha256']:
+        raise RuntimeError('Migration rescue GPT readback differs')
+    qualify.adopt_baseline(target)
+    return dict(before, boot_sha256=target['boot_sha256'], system=target['system'])
 
 
 def keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit):
@@ -678,7 +720,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     wait_state(directory / 'transaction-owner', 'owner=trex-transaction-holder pid=', 15)
     # The holder now owns staging. A second harness cannot change the shared
     # writer lane after preflight. All staged images here are private copies.
-    stage(directory, profile, before)
+    staged = stage(directory, profile, before)
     current = snapshot(ssh)
     if current != before:
         raise RuntimeError('Baseline changed between preflight and transaction ownership')
@@ -690,7 +732,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
     candidate_state = directory / 'candidate.state'
     supervisor_state = directory / 'supervisor.state'
     unit(supervisor_unit, 1000, [sh, directory / 'p22-proof-supervisor.sh', directory,
-         candidate_state, directory / 'rescue.img', qualify.ACCEPTED_BOOT, directory / 'boot.img',
+         candidate_state, directory / 'rescue.img', staged['rollback_sha256'], directory / 'boot.img',
          xml, LOCKS / '.p22-flash-writer.lock', '360', wrapper,
          directory / 'supervisor-rollback.state', directory / 'supervisor-rollback.log',
          supervisor_state, '720',
@@ -766,6 +808,7 @@ def trial(directory, profile, before, ssh, verify_persistence=False):
             wait_seconds=0 if read_state(candidate_state).startswith('flash_rc=0 ') else 150)
     wait_state(supervisor_state, SUCCESS, 680)
     print('Rescue write/readback and reboot verified; waiting for healthy M69', flush=True)
+    recovery_before = expect_verified_rescue(directory, recovery_before)
     after = healthy_return(ssh, recovery_before, directory, 'after')
     nix_retained = False
     if profile in NIX_PROFILES:
@@ -882,6 +925,8 @@ def main():
             _,manifest=efi_files.payload(files_profile_for(args.profile))
             entry_dt.cross_carrier(candidate,sha,entry_dt.BUNDLE/'tree'/manifest['entry_device_tree'])
         qualify.accepted_boot_bytes(ACCEPTED)
+        rescue_target = RESCUE_BASELINE or BASELINE
+        backend.checked_image(Path(rescue_target['image']).resolve(strict=True), rescue_target['boot_sha256'])
         usb = backend.usb_snapshot('3-2')
         if usb is None or usb[:2] != ('0525', 'a4a2'):
             raise RuntimeError('Gemini is not enumerated on the qualified USB port')
@@ -926,7 +971,9 @@ def main():
             (sources / name).write_bytes(raw)
             source_hashes[name] = backend.digest(raw)
         qualify.save(directory, 'plan.json', dict(profile=args.profile, candidate=str(candidate),
-                     candidate_sha256=sha, rescue=str(ACCEPTED), execute=args.execute,
+                     candidate_sha256=sha, rescue=rescue_target['image'],
+                     rescue_sha256=rescue_target['boot_sha256'], initial_baseline=BASELINE,
+                     execute=args.execute,
                      verify_persistence=args.verify_persistence,
                      executed_sources_sha256=source_hashes,
                      nix_verifier_sha256=backend.digest(
