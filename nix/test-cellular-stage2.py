@@ -131,3 +131,25 @@ for case in cases:
    assert subprocess.run(['sh',str(script),'--verify'],env=env,capture_output=True).returncode!=0
   print('PASS actual stage2 shell:',case)
 print('PASS one-shot refusal, same-boot/live-fatal/backing-drift acceptance rejection')
+
+# Normal startup must keep volatile-root ownership and one-shot registration,
+# while avoiding AT qualification and repeated partition hashing at every boot.
+start_cases = ['pass', 'bad-at', 'watchdog-off', 'check-fail', 'mount-fail',
+               'register-fail', 'fatal', 'late', 'archive-fail']
+for case in start_cases:
+ with tempfile.TemporaryDirectory() as directory:
+  root,script,env=fixture(directory,case)
+  if case=='late': (root/'proc/uptime').write_text('600.0 10\n')
+  result=subprocess.run(['sh',str(script),'--start'],env=env,capture_output=True,text=True)
+  success=root/'run/gemini-cellular/success'
+  passed=case in ('pass','bad-at')
+  assert (result.returncode==0)==passed,(case,result.stderr)
+  assert success.exists()==passed,case
+  if passed:
+   assert success.read_text().strip()=='CELLULAR_STAGE2_READY hs2=ready backing=volatile roots=ZXY'
+   assert not (root/'run/gemini-cellular/at-response').exists()
+   assert not list((root/'run/gemini-cellular').glob('*.sha256'))
+   before=(root/'commands').read_text()
+   assert subprocess.run(['sh',str(script),'--start'],env=env,capture_output=True).returncode!=0
+   assert (root/'commands').read_text()==before
+  print('PASS normal stage2 startup:',case)

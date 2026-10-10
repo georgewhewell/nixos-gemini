@@ -1,0 +1,343 @@
+{
+  "scope": "GNOME HiDPI and persistent dock on the consolidated normal-startup system",
+  "kernel_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+  "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "kernel": "/nix/store/ssljlfky7jbc365brxikv6vnw1ppywnq-linux-gemini-7.2.9",
+  "bundle": "/nix/store/s2wjd4fwhxr5vgwfxpld9m0l7av4ggij-gemini-mainline-nixos-bundle",
+  "display_scale": 2,
+  "dock": {
+    "package": "/nix/store/cqbwsbacf13qimwl4ns9433pk6z881l0-gnome-shell-extension-dash-to-dock-aarch64-unknown-linux-gnu-105",
+    "extension_uuid": "dash-to-dock@micxgx.gmail.com",
+    "version": 105,
+    "position": "BOTTOM",
+    "always_visible": true,
+    "icon_size": 32,
+    "favorites": [
+      "org.gnome.Nautilus.desktop",
+      "org.gnome.Console.desktop",
+      "org.gnome.TextEditor.desktop",
+      "org.gnome.Settings.desktop"
+    ]
+  },
+  "cross_runtime": {
+    "passed": true,
+    "elf_files": 1211,
+    "script_files": 122,
+    "errors": []
+  },
+  "rtc_startup_fix": "Bind shutdown clock writer presence and SHA to selected immutable NixOS system; preserve unexecuted-writer, UTC and RTC_HCTOSYS checks",
+  "tests": {
+    "rtc_startup": 11,
+    "boot_runner": 17,
+    "keep_baseline": 5,
+    "rtc_alarm": 6
+  },
+  "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-81",
+  "device_qualified": true,
+  "source_sha256": {
+    "nixos/gnome.nix": "ffd25d16d29052e4ea28df90905ee24fbbc4aa7a50afd22cf2e0322d1e852e1e",
+    "tools/qualify-rtc-startup.py": "3f8907044bc878d995c7257fe064deb9c2192bd938c656fcaf323fc29522ef95",
+    "tools/test-rtc-startup.py": "7b658f1826e8394bc2bf1a596e0b4d9bebf204721ddc7d4d20080c5bb597947a",
+    "tools/qualify-rtc-alarm.py": "c78d08a090f7d00a3cbcd73670a91f070740a5246d4433c4403367273ad80d16",
+    "tools/test-rtc-alarm.py": "a8fa3feaf085df3aec90ffb0e47696cfe8e044cf4aba17a8072e08053105d9bd"
+  },
+  "host_evidence_sha256": {
+    "desktop-ui-eval.json": "ea3a13d79a04b63d8d2cab40b3d6315473d51321f47c3785eaab58bb8241939c",
+    "desktop-ui-build-02.json": "c894dcf3f44310dec3d449fb145329b4e6f65f09fea1641d6be0fca95f64e504",
+    "desktop-ui-build-02-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+    "copy-desktop-ui-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+    "desktop-ui-root.sh": "580097b87d1066bf9dda9281230405ed28db4dc22f88ce64b8cc3cae26e79be1",
+    "desktop-ui-root.stdout": "afc767d795bf1bb83d22ddd3730217148faa18381d4d73d52571cb28c241ef51"
+  },
+  "trial_80": {
+    "profile_qualified": false,
+    "trial_exit_code": 1,
+    "ui": {
+      "passed": true,
+      "boot_id": "9abf54a0-4121-4cf6-986c-0bf78b7e7f2f",
+      "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "display": {
+        "connector": "DSI-1",
+        "physical_mode": [
+          2160,
+          1080
+        ],
+        "scale": 2.0,
+        "logical_size": [
+          1080,
+          540
+        ],
+        "refresh_hz": 57.09748840332031
+      },
+      "dock": {
+        "extension_uuid": "dash-to-dock@micxgx.gmail.com",
+        "state": 1,
+        "active": true,
+        "enabled": true,
+        "errors": [],
+        "position": "BOTTOM",
+        "always_visible": true,
+        "autohide": false,
+        "intellihide": false,
+        "icon_size": 32
+      },
+      "boot_seconds": {
+        "kernel": 50.855,
+        "userspace": 41.19,
+        "total": 92.045
+      },
+      "read_only": true
+    },
+    "gnome_ipv6": {
+      "passed": true,
+      "boot_id": "9abf54a0-4121-4cf6-986c-0bf78b7e7f2f",
+      "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "gnome_local_wayland": true,
+      "ipv6_enabled": true,
+      "usb_linklocal": "fe80::4000:15ff:fe19:8201",
+      "host_interface": "enp167s0u2",
+      "ipv6_ping_exit_code": 0,
+      "scope": "Local GNOME runtime and IPv6 over USB; no external IPv6 routing proof",
+      "system_profile_qualification_pending": true
+    },
+    "zram": {
+      "bytes": 134217728,
+      "swapped_kib": 131072,
+      "read_sectors": 262208,
+      "written_sectors": 394024,
+      "pattern_verified": true,
+      "flash_swap_written_sectors": 0
+    },
+    "rtc_startup": {
+      "boot_id": "9abf54a0-4121-4cf6-986c-0bf78b7e7f2f",
+      "native_rtc_epoch": 1791662656,
+      "kernel_hctosys_epoch": 1791662428,
+      "kernel_hctosys_monotonic": 0.275383,
+      "uptime": 228.99,
+      "host_start": 1791662655.734429,
+      "host_end": 1791662656.556169,
+      "rtc_startup_qualified": true,
+      "before_explicit_clock_write": true,
+      "shutdown_writer_unexecuted": true
+    },
+    "rtc_utc": {
+      "boot_id": "9abf54a0-4121-4cf6-986c-0bf78b7e7f2f",
+      "rtc_utc_write_read_qualified": true,
+      "before_rtc": 1791662659,
+      "after_rtc": 1791662660,
+      "tick_rtc": 1791662662,
+      "host_start": 1791662658.6615074,
+      "host_end": 1791662663.4685755,
+      "elapsed_seconds": 4.807068184018135,
+      "sleep_requested": false,
+      "kernel_periodic_rtc_updates": false,
+      "same_boot_health": true,
+      "watchdog_owner_unchanged": true
+    },
+    "failure": "Online-only /proc/interrupts sum fell from 2 to 1 during CPU parking; alarm-cancellation counter invalid",
+    "cancel": {
+      "mode": "cancel",
+      "boot_id": "9abf54a0-4121-4cf6-986c-0bf78b7e7f2f",
+      "elapsed_seconds": 13.38,
+      "irq_delta": -1,
+      "alarm_delivery_qualified": false,
+      "alarm_cancellation_qualified": false,
+      "software_alarm_disabled": true,
+      "sleep_requested": false,
+      "wake_from_suspend_qualified": false,
+      "result": "failed",
+      "same_boot_health": true,
+      "watchdog_owner_unchanged": true
+    },
+    "independent_audit": {
+      "result": "passed",
+      "final_boot_id": "58d6ce0d-068a-4a92-ba5c-1d0840e3a9e8",
+      "kept_candidate": false,
+      "no_writer": true,
+      "all_trial_units_terminal": true,
+      "source_hashes_match": true,
+      "source_count": 42
+    },
+    "raw_sha256": {
+      "plan.json": "6e081057e64c7b3f3e2b81e7fd91bddfb96e157e4036316ceb4130ea65ce3c3f",
+      "result.json": "346a8cf976ac05ac47fd4715a593c63588f3ef079706c614f53f0878e3acd1b8",
+      "candidate-linux.json": "8f004d4a25574cb3869a79791bfb84b2a263cafee6944bf07748444a6b18b5bd",
+      "after.json": "03ae7f1ad463bcab192530191c877d53d6db30005ce636baeb027ca427c17c5b",
+      "power-swap-evidence.json": "c98b90188d4101be17d3228391dbad218104dff2787db65b760bc4c14b86a290",
+      "rtc-startup/result.json": "93b75440ebff9bcb03c47ec24142a04799c521ddf3955d302b384aa368e96baa",
+      "rtc-calendar/result.json": "265cf816316af32247cdd4624910237144051328f6acf1a13e55b1ea8408b0dd",
+      "rtc-delivery-before/output.stdout": "2015eff5f2dc0bbdec7ef94fb77f7d3897a93e08d509eb2d72eee81de825432b",
+      "rtc-cancel/output.stdout": "18e878c5352c7449a64ab284848963d57e8f3fa41fbbaf2ac161d067e8ec0bf1",
+      "rtc-cancel/result.json": "f66ea7622ea67bd6bd52c225fa551ecdeddba5a9809f7c4f2b8a984935ebe623",
+      "desktop-ui-02/result.json": "7bf2a084a8ff737c0d787219e403fc14a0e6808bd5a54f4935cf2a84f76994ce",
+      "desktop-ui-02/device.sh": "795b60c7df529b3e1e082168080bc8f1811bf43d70123dbb5d24a7e3fc21d4e3",
+      "desktop-ui-02/device.stdout": "3f2355fc64d79d079d1620a6893f492af358f6bf8d30c87c3ba0e0e8d88d8867",
+      "desktop-ui-02/dock-settings.sh": "9cb264359ef70fcce17507d36986b567289c5170a8012fe7f0b8c80e428471b5",
+      "desktop-ui-02/dock-settings.stdout": "7e51ddae109e41176e565e31f098652fd19d6261f62eba85500aa75e22d27878",
+      "boot-timing.stdout": "6233e4d880bcacd0393784a49567707b95477baf435d1c670bfd9749380828e1"
+    },
+    "audit_sha256": "3933efb846e71a224882895ec4833be6e2225a3a2cdb9014a8df68306f09355f"
+  },
+  "rtc_alarm_fix": "Use the unique RTC IRQ descriptor and /sys/kernel/irq/N/per_cpu_count (all possible CPUs); retain exact delivery/cancellation/rearm deltas of 1/0/1.",
+  "trial_81": {
+    "trial_exit_code": 0,
+    "profile_qualified": true,
+    "kept_boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+    "baseline": {
+      "name": "boot-test-81",
+      "image": "/nix/store/g846rn4c3k3zpxl02q3vpfpwn3i9fhqj-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "9a736e4663d6daf09f8752c7ab246ab9cdcd268eaccb39d26b067dcd75f9281f",
+      "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "store": "normal",
+      "zswap_shrinker": "absent",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "previous": "boot-test-76",
+      "paging_policy": "zram",
+      "desktop": "gnome"
+    },
+    "paging": {
+      "bytes": 134217728,
+      "swapped_kib": 131076,
+      "read_sectors": 262208,
+      "written_sectors": 394280,
+      "pattern_verified": true,
+      "flash_swap_written_sectors": 0
+    },
+    "rtc_stages": {
+      "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+      "stages": [
+        {
+          "mode": "delivery",
+          "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+          "elapsed_seconds": 13.43,
+          "irq_delta": 1,
+          "irq_counter": "sysfs-all-possible-cpus",
+          "alarm_delivery_qualified": true,
+          "alarm_cancellation_qualified": false,
+          "software_alarm_disabled": true,
+          "sleep_requested": false,
+          "wake_from_suspend_qualified": false,
+          "result": "passed",
+          "same_boot_health": true,
+          "watchdog_owner_unchanged": true
+        },
+        {
+          "mode": "cancel",
+          "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+          "elapsed_seconds": 13.46,
+          "irq_delta": 0,
+          "irq_counter": "sysfs-all-possible-cpus",
+          "alarm_delivery_qualified": false,
+          "alarm_cancellation_qualified": true,
+          "software_alarm_disabled": true,
+          "sleep_requested": false,
+          "wake_from_suspend_qualified": false,
+          "result": "passed",
+          "same_boot_health": true,
+          "watchdog_owner_unchanged": true
+        },
+        {
+          "mode": "delivery",
+          "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+          "elapsed_seconds": 13.38,
+          "irq_delta": 1,
+          "irq_counter": "sysfs-all-possible-cpus",
+          "alarm_delivery_qualified": true,
+          "alarm_cancellation_qualified": false,
+          "software_alarm_disabled": true,
+          "sleep_requested": false,
+          "wake_from_suspend_qualified": false,
+          "result": "passed",
+          "same_boot_health": true,
+          "watchdog_owner_unchanged": true
+        }
+      ],
+      "rtc_alarm_diagnostics_qualified": true,
+      "sleep_requested": false,
+      "wake_from_suspend_qualified": false
+    },
+    "rtc_startup": {
+      "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+      "native_rtc_epoch": 1791663322,
+      "kernel_hctosys_epoch": 1791663093,
+      "kernel_hctosys_monotonic": 0.281746,
+      "uptime": 229.62,
+      "host_start": 1791663322.1853137,
+      "host_end": 1791663322.8644288,
+      "rtc_startup_qualified": true,
+      "before_explicit_clock_write": true,
+      "shutdown_writer_unexecuted": true
+    },
+    "rtc_utc": {
+      "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+      "rtc_utc_write_read_qualified": true,
+      "before_rtc": 1791663325,
+      "after_rtc": 1791663326,
+      "tick_rtc": 1791663328,
+      "host_start": 1791663324.7613578,
+      "host_end": 1791663329.5739298,
+      "elapsed_seconds": 4.812572365859523,
+      "sleep_requested": false,
+      "kernel_periodic_rtc_updates": false,
+      "same_boot_health": true,
+      "watchdog_owner_unchanged": true
+    },
+    "rtc_reboot_persistence_qualified": null,
+    "kept_desktop": {
+      "passed": true,
+      "boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+      "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "scale": 2.0,
+      "dock_active": true,
+      "dock_errors": [],
+      "read_only": true
+    },
+    "boot_seconds": {
+      "kernel": 50.736,
+      "userspace": 44.325,
+      "total": 95.061
+    },
+    "independent_audit": {
+      "result": "passed",
+      "final_boot_id": "fe38f475-ef36-4a5f-b89f-b6aaeedebe5b",
+      "kept_candidate": true,
+      "no_writer": true,
+      "all_trial_units_terminal": true,
+      "source_hashes_match": true,
+      "source_count": 42,
+      "ordinary_outputs_retained": {
+        "persistent-nix-01": "/nix/store/y05f867msys00kbdwy1ivjpifg3h6rw6-gemini-daemon-ab69a8311a0d48e18c57e72d629aa364",
+        "efi-nix-provision-01": "/nix/store/kayq99jxh03r74nmwik52xcfhhcbs0zb-gemini-daemon-ee61f1b8a37442b3a2c6936104d3f687",
+        "efi-nix-manager-01": "/nix/store/10ihy8gva9za862c1vhq3ak2yhyw60id-gemini-daemon-2cec893b5e3b4c21b5ffc8f514e78fec",
+        "efi-nix-provision-02": "/nix/store/961a7xb23gl33a38lnpdsf1h0d17lnr1-gemini-daemon-0fb866788b1a4dce90c71fc1a87a13dd",
+        "efi-entry-dt-provision-01": "/nix/store/43vh1dmg87qv9zhax566h9n2h1cs2pfr-gemini-daemon-9c32e81ce86d4d0f9e8b9bc8ea408ce9",
+        "efi-entry-dt-manager-01": "/nix/store/6g12n0f3bxs94ww5s6z0nzkq5rnpdqsj-gemini-daemon-33f8f91e6996441787d08442d5b9288a",
+        "efi-entry-dt-cross-manager-01": "/nix/store/xs9rihi5nvjqd44l7smxw7a6r37mq19j-gemini-daemon-0903d3c227654da4a9be340dfb186a49",
+        "efi-key-events-manager-02": "/nix/store/c7679k2rcaqw74hax6pcxdjcsr5bmkv6-gemini-daemon-99d09aee533443478a6242c44eb0f09f",
+        "desktop-keyboard-01": "/nix/store/b9armv8b79prchpd35fkwb351djah5vq-gemini-daemon-acc3205b3d71497f8abbd9be0f44885f",
+        "power-kernel-01": "/nix/store/55yqnig6lbaah84qksw4vq3hpgjvshy1-gemini-daemon-03881eb51b284c24969acba4294c6fdf",
+        "boot-test-81": "/nix/store/rchrlh4ccgskphm7svl55lrxfva2ci0h-gemini-daemon-80ec056192a240d080c9d2b3a2604fe7"
+      }
+    },
+    "raw_sha256": {
+      "plan.json": "f4339ca0617f0dd337f3d0bf2619e79881354b6b7762e76316740aa842b067a4",
+      "backend.json": "e16c65e4a7fafaa875d7a7a5a38ab340076947cdb97d5ec08c71e90ff7afc73b",
+      "result.json": "ad7374204e795ad85f55dc678c7428733c709b7ddb5fa06611a98bc0be124d63",
+      "candidate-linux.json": "2ad7e3bfc8b4699c749d615e93ba411e4e1504bc64bb85e74fa28176d76e28f2",
+      "promoted-baseline.json": "8f738c117cb779f5203990889c5d0ccc00fda223f21205b489f582e9ed76acc4",
+      "power-swap-evidence.json": "eecd52a216cc90a4171113f62f1d74c2b43232ca3b981a647ef29a552a3bee0f",
+      "candidate-observation.json": "f1d064cef3852b1adfa75c6f0b0a9e8e3995286896b81c1a12290a62300dceac",
+      "rtc-startup/result.json": "fc87cb7bbd6b76e8f4dfa77c92bf1ea73e7931cc3fdd96976dd1324bb30ad04a",
+      "rtc-calendar/result.json": "192ba5338f36d7a314945c95db882d96fa618306e3d52eb8c505ef4ee5968e29",
+      "rtc-stages.json": "e1c15d46f71886cb924af97a638c5548cd57d6a90d2bbb79682f311b392a20ab",
+      "nix-candidate.json": "aa93876e8c7e16571531db2816b36fe4a83061dfa2134d6046f8aa6b850a1551",
+      "final-idle-check.json": "cc9c285bf3982adb2827f3433f5c8d30736bd693a7cb59dd0bd282f6e7ba2215",
+      "supervisor.state": "dc4e563d0fa1d0bcb8ebdc2c8ecea21d4e791d39ead97ab1bd7d36da785eaf63",
+      "kept-desktop/result.json": "ab05001064173a0537b05ad53c8c2f75403ce2334fc9edad70887f3a0df902df",
+      "kept-desktop/device.sh": "50dbd8036baebd54412609be6740cd88d69f3cf031097b1ba924991995901adf",
+      "kept-desktop/device.stdout": "2d7ed28a5d6e59f9caf7ccc7a61db71564b75fef633dd6b53942c700432b189f"
+    },
+    "audit_sha256": "9daaf30d9fadd35d21fde9abbeb236a6491cd68e56676938ad10c34744d9ba6e"
+  }
+}

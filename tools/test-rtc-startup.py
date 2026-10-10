@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check startup evidence, temporary policy ownership and recovery on failures."""
 from datetime import datetime, timezone
+import hashlib
 import os
 import importlib.util
 import json
@@ -74,6 +75,27 @@ class Startup(unittest.TestCase):
         self.assertIn('trap cleanup_failed_setup EXIT',script)
         self.assertIn('ConditionPathExists=/run/gemini-rtc-startup-'+BOOT+'/allow-save',script)
         with self.assertRaises(ValueError): s.policy('shell; text')
+
+    def test_current_generation_without_shutdown_writer(self):
+        system = '/nix/store/l95d902d84xv30bs7ilgr4zxbyq8fmb5-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b'
+        with tempfile.TemporaryDirectory() as tmp:
+            unit = Path(tmp)/'save-hwclock.service'
+            with mock.patch.object(s, 'shutdown_unit', return_value=unit):
+                runner = m.base_configure()
+                runner.qualify = SimpleNamespace(**vars(runner.qualify))
+                runner.qualify.ACCEPTED_SYSTEM = system
+                script = s.policy_script(runner, dict(boot_id=BOOT), 'a'*64)
+                subprocess.run(['sh', '-n'], input=script, text=True, check=True)
+                self.assertIn('LoadState --value)" = not-found', script)
+                self.assertIn('ExecMainStartTimestampMonotonic --value)" = 0', script)
+                self.assertNotIn('systemctl start', script)
+                self.assertNotIn('mkdir', script)
+                with self.assertRaises(ValueError): s.unit_guard(s.DROP, system)
+                unit.write_text('[Service]\nExecStart=/clock-writer\n')
+                present = s.unit_guard(system=system)
+                self.assertNotIn('not-found', present)
+                self.assertIn(hashlib.sha256(unit.read_bytes()).hexdigest(), present)
+        with self.assertRaises(ValueError): s.shutdown_unit('/tmp/unpinned')
 
     def test_diagnostics_remain_mutually_exclusive(self):
         for args in (dict(watchdog=True, pm_test='devices'), dict(watchdog=True, cycle=True),

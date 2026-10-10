@@ -49,7 +49,11 @@ same_owner() {
  test "$(cat /sys/class/watchdog/watchdog0/state)" = active
 }
 irq_count() {
- awk '$NF == "mt6397-rtc" {n++; s=0; for(i=2;i<=NF && $i ~ /^[0-9]+$/;i++) s+=$i; print s} END {if(n!=1)exit 1}' /proc/interrupts
+ # /proc/interrupts hides parked CPUs. Sum the stable possible-CPU vector.
+ irq=$(awk '$NF == "mt6397-rtc" {n++; gsub(":", "", $1); print $1} END {if(n!=1)exit 1}' /proc/interrupts)
+ case "$irq" in ''|*[!0-9]*) return 1;; esac
+ test "$(cat /sys/kernel/irq/$irq/actions)" = mt6397-rtc
+ awk -F, 'NR==1 {s=0; for(i=1;i<=NF;i++) {if($i !~ /^[0-9]+$/)exit 1; s+=$i} print s} END {if(NR!=1)exit 1}' /sys/kernel/irq/$irq/per_cpu_count
 }
 snapshot() {
  printf '%s_irq=' "$1"; irq_count
@@ -139,6 +143,7 @@ def verify(raw, service, boot, mode):
     if service!=expected: raise RuntimeError('RTC service failed or was not bounded')
     delta=int(values['after_irq'])-int(values['before_irq'])
     return dict(mode=mode,boot_id=boot,elapsed_seconds=round(elapsed,3),irq_delta=delta,
+        irq_counter='sysfs-all-possible-cpus',
         alarm_delivery_qualified=(mode=='delivery' and delta==1),
         alarm_cancellation_qualified=(mode=='cancel' and delta==0),
         software_alarm_disabled=True,sleep_requested=False,wake_from_suspend_qualified=False,
@@ -216,6 +221,7 @@ def verify_final(directory):
         raise RuntimeError('Missing complete RTC alarm sequence')
     for stage,delta in zip(proof['stages'],(1,0,1)):
         if (stage.get('boot_id')!=candidate['boot_id'] or stage.get('result')!='passed' or stage.get('irq_delta')!=delta or
+                stage.get('irq_counter')!='sysfs-all-possible-cpus' or
                 any(stage.get(k) is not True for k in ('same_boot_health','watchdog_owner_unchanged','software_alarm_disabled')) or
                 stage.get('sleep_requested') is not False):
             raise RuntimeError('Incomplete RTC alarm and post-stage health evidence')

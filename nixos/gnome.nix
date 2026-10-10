@@ -20,15 +20,11 @@
     };
   };
 
-  # Weston owns KMS during the existing graphics/keyboard qualification.
-  # GDM starts only after those checks finish, and releases that test session
-  # before opening its own seat. Each compositor has a separate runtime dir.
+  # Normal startup loads the GPU and audio routes, then opens the GNOME seat.
+  # Weston and the hardware qualification services are explicitly requested.
   systemd.services.display-manager = {
-    after = ["gemini-desktop-qualify.service"];
-    requires = ["gemini-desktop-qualify.service"];
-    preStart = lib.mkBefore ''
-      ${config.systemd.package}/bin/systemctl stop gemini-desktop.service gemini-seatd.service
-    '';
+    after = ["gemini-gpu.service" "gemini-audio.service"];
+    requires = ["gemini-gpu.service" "gemini-audio.service"];
   };
 
   systemd.services.gemini-gnome-qualify = {
@@ -45,6 +41,16 @@
     };
     script = ''
       uid=$(id -u gemini)
+      shell_running() {
+        # Nix's wrapper executes .gnome-shell-wrapped, whose kernel comm
+        # field is truncated. Verify the installed executable and its UID.
+        for pid in $(pgrep -u "$uid" -f /bin/gnome-shell || true); do
+          if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "${pkgs.gnome-shell}/bin/.gnome-shell-wrapped" ]; then
+            return 0
+          fi
+        done
+        return 1
+      }
       attempt=0
       while [ "$attempt" -lt 90 ]; do
         for session in $(loginctl list-sessions --no-legend | awk -v uid="$uid" '$2 == uid {print $1}'); do
@@ -52,7 +58,7 @@
              [ "$(loginctl show-session "$session" -p Class --value)" = user ] &&
              [ "$(loginctl show-session "$session" -p Active --value)" = yes ] &&
              [ "$(loginctl show-session "$session" -p Remote --value)" = no ] &&
-             pgrep -u "$uid" -x gnome-shell >/dev/null; then
+             shell_running; then
             printf 'desktop=gnome\nsession=%s\nuid=%s\ntype=wayland\n' "$session" "$uid" > /run/gemini-gnome-session
             exit 0
           fi
@@ -81,6 +87,8 @@
   # independent idle sleep or a competing CPU power-policy daemon.
   services.power-profiles-daemon.enable = false;
   services.desktopManager.gnome.extraGSettingsOverrides = ''
+    [org.gnome.desktop.interface]
+    scaling-factor=uint32 2
     [org.gnome.desktop.input-sources]
     sources=[('xkb', 'gemini+us')]
     [org.gnome.desktop.session]
@@ -90,6 +98,30 @@
     sleep-inactive-battery-type='nothing'
   '';
   services.desktopManager.gnome.extraGSettingsOverridePackages = [pkgs.gnome-settings-daemon];
+  services.desktopManager.gnome.favoriteAppsOverride = ''
+    [org.gnome.shell]
+    favorite-apps=['org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Settings.desktop']
+  '';
+
+  # The 1080x2160 panel needs HiDPI sizing. A compact fixed dock keeps
+  # launchers available without opening the overview on the small screen.
+  programs.dconf.profiles.user.databases = [{
+    settings = {
+      "org/gnome/shell" = {
+        enabled-extensions = [pkgs.gnomeExtensions.dash-to-dock.extensionUuid];
+        disable-user-extensions = false;
+      };
+      "org/gnome/shell/extensions/dash-to-dock" = {
+        dock-position = "BOTTOM";
+        dock-fixed = true;
+        autohide = false;
+        intellihide = false;
+        dash-max-icon-size = lib.gvariant.mkInt32 32;
+        show-trash = false;
+        show-mounts = false;
+      };
+    };
+  }];
 
   services.pipewire = {
     enable = true;
@@ -105,5 +137,6 @@
     gnome-console
     gnome-text-editor
     gnome-control-center
+    gnomeExtensions.dash-to-dock
   ];
 }

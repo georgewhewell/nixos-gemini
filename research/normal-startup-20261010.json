@@ -1,0 +1,100 @@
+{
+  "scope": "Normal boot initializes hardware and starts GNOME; recorded hardware tests are explicit",
+  "kernel_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+  "system": "/nix/store/l95d902d84xv30bs7ilgr4zxbyq8fmb5-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "bundle": "/nix/store/ai98cq690jrdbv91n98isjz9pjh6appz-gemini-mainline-nixos-bundle",
+  "kernel": "/nix/store/ssljlfky7jbc365brxikv6vnw1ppywnq-linux-gemini-7.2.9",
+  "automatic_boot_graph": {
+    "passed": true,
+    "excluded_automatic_units": [
+      "gemini-gpu-qualify",
+      "gemini-audio-qualify",
+      "gemini-connectivity-qualify",
+      "gemini-desktop-qualify",
+      "gemini-desktop",
+      "gemini-seatd",
+      "gemini-desktop-presentation"
+    ],
+    "automatic_service_count": 52,
+    "display_manager_requires": [
+      "gemini-gpu.service",
+      "gemini-audio.service"
+    ]
+  },
+  "runtime_check": {
+    "passed": true,
+    "elf_files": 1211,
+    "script_files": 122,
+    "system": "/nix/store/l95d902d84xv30bs7ilgr4zxbyq8fmb5-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "shell": "/nix/store/avkq5b9a6bcgzghdq5qi7xc4qi9v7h6g-gnome-shell-aarch64-unknown-linux-gnu-50.4",
+    "orca": "/nix/store/nydqv66pq6ainyk9dja0rsjq591lpkkx-orca-50.2-aarch64-unknown-linux-gnu",
+    "orca_environment": {
+      "GDK_PIXBUF_MODULE_FILE": "/nix/store/zmqyp06zrzq7bcq1p1vh4kw58wd7ppz5-librsvg-aarch64-unknown-linux-gnu-2.62.3/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache",
+      "GI_TYPELIB_PATH": "/nix/store/bsx7a6vxj6d9r2hsg2pqbp52bpni5fva-glib-aarch64-unknown-linux-gnu-2.88.3/lib/girepository-1.0:/nix/store/h0cwaych1phmbagqmwx56f4hgh2mm70p-gobject-introspection-aarch64-unknown-linux-gnu-1.86.0/lib/girepository-1.0:/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/girepository-1.0:/nix/store/zmqyp06zrzq7bcq1p1vh4kw58wd7ppz5-librsvg-aarch64-unknown-linux-gnu-2.62.3/lib/girepository-1.0:/nix/store/f69nfkyymls8j84fjzjd6kxg2iqm871x-at-spi2-core-aarch64-unknown-linux-gnu-2.60.6/lib/girepository-1.0:/nix/store/8p3k8azjivl5mj99r6vna7kdy90x92fx-gsettings-desktop-schemas-aarch64-unknown-linux-gnu-50.1/lib/girepository-1.0:/nix/store/fjxdi4hk6zncmlwsir6sigpgw4xcppaf-harfbuzz-aarch64-unknown-linux-gnu-13.2.1/lib/girepository-1.0:/nix/store/sq9fcxqa9sq8pn9n56d8mjfakrjwgq40-pango-aarch64-unknown-linux-gnu-1.57.1/lib/girepository-1.0:/nix/store/5v96n0cynz7v0gzpgh1fx835j3kk0d1n-gtk+3-aarch64-unknown-linux-gnu-3.24.52/lib/girepository-1.0:/nix/store/r5rrsl5i31pa6kcaaq5zlg7r3bbi6h9p-gstreamer-aarch64-unknown-linux-gnu-1.28.6/lib/girepository-1.0:/nix/store/6b9vvapl7my487mjsdhzsynnlqakwp79-gst-plugins-base-aarch64-unknown-linux-gnu-1.28.6/lib/girepository-1.0:/nix/store/id9nicsv4wdjh7894rax7w4dwzibv1p3-gobject-introspection-wrapped-aarch64-unknown-linux-gnu-1.86.0/lib/girepository-1.0"
+    },
+    "pixbuf_loaders": [
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-bmp.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-gif.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-icns.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-ico.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-pnm.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-qtif.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-tga.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-tiff.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-xbm.so",
+      "/nix/store/8ciajv0rvqijdzb3mymhmrbjjn3h8ghz-gdk-pixbuf-aarch64-unknown-linux-gnu-2.44.7/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader-xpm.so",
+      "/nix/store/zmqyp06zrzq7bcq1p1vh4kw58wd7ppz5-librsvg-aarch64-unknown-linux-gnu-2.62.3/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.so"
+    ],
+    "errors": [],
+    "hardware_tested": false
+  },
+  "cellular_startup_tests": "27 qualification cases plus nine startup cases pass, including failure refusal, RAM-root ownership and one-shot registration",
+  "wifi_worker_tests": "13 passed",
+  "normal_boot_removes": [
+    "GPU render/readback/autosuspend exercises",
+    "Audio playback/capture/headset/route exercises",
+    "Two Wi-Fi passive scans and fixed ten-second sleep",
+    "Weston buffer, presentation and keyboard tests",
+    "Modem AT round trip and repeated NV partition hashing"
+  ],
+  "normal_boot_retains": [
+    "Panfrost loading and render-node readiness",
+    "ALSA digital route setup",
+    "Connectivity firmware loading, driver binding and interface startup",
+    "Modem initialization with read-only source mounts and RAM-backed runtime state",
+    "Local GNOME Wayland readiness against the actual compositor executable",
+    "Watchdog ownership, storage identity and recovery lease"
+  ],
+  "device_trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-79",
+  "device_qualified": false,
+  "source_sha256": {
+    "flake.nix": "185b71b8fd539cde5ac515086c1d36e62b4577309ccc452456af40f5ca792a1b",
+    "flake.lock": "c986fedcc54680f2a99498f5219531956f6a5a38c1d67d65dbb8131f4a182df2",
+    "nix/kernel.nix": "7e3fc60798f20975a612fd8cde79c1c8d7860315d2b789c6abc4c7b02914d95a",
+    "nix/cross-fixes.nix": "4a6169618f819b65190c6863a612dd9e4be05e7a405f9ee5b20be7dffe1bfd98",
+    "nix/cellular-stage2.sh": "da2bae8a00e5cd3c00ad0cba1261ea67c2faf5269d9c511c554edcc9148bdd99",
+    "nix/wifi-autoconnect.py": "bd2a02ab56cd44ead277c5483fda1b347b9c2b58ec66b7fae045c12251c21ac5",
+    "nixos/mainline-configuration.nix": "834bae45ba6bb538a2d29a67c3b92b297dbd9cf593763a294c42cafb5b98164e",
+    "nixos/gpu.nix": "81a9187f636b15ddd028ba28fc6ab352bacb99df901f555e7450ba43d0532830",
+    "nixos/audio.nix": "f78ac27b7535d25fa2a30658ee5d27c90619835f0b5f63e3f8b808ea189e1510",
+    "nixos/connectivity.nix": "364cd065d3971c1e598ad79fde9e3042918270373aba817ee3ed61a5444caeec",
+    "nixos/cellular.nix": "54243bc1c4f8ee6b27cbf29d813f9874224a79158552cf45ad6e9c0a172ca26d",
+    "nixos/desktop.nix": "3bce4e82d4583f22a20556ce2f7cf24133dc5d28254fdab339be0db512fadcd2",
+    "nixos/gnome.nix": "78a6a71f4f9d6a00cf8c1c919fe19fe010c68cb51fb922dd4bad8193a396870a",
+    "tools/check-gnome-cross-runtime.py": "740df88ab1d39637f02f6ea4e75e8fa193d75223fdd3487540bff3d6967830aa"
+  },
+  "build_evidence_sha256": {
+    "normal-startup-eval.json": "1862b81b1e79d42644717f67b5319aa0d978ea6bb80a95fc9b851c6946b70756",
+    "normal-startup-graph.json": "08b398caaf1fc3a30367aea7c98a1d9c71bda569a54a28c69f9e75bfe62cbd0d",
+    "normal-startup-build.json": "fdb461be3228d424e5ca4879491e2a0467a1ed663ef86bec59c9972d8ab5b761",
+    "normal-startup-build-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+    "copy-normal-startup-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+  },
+  "device_results": "normal-startup-trial-79.json",
+  "qualified_components": [
+    "local GNOME Wayland startup",
+    "IPv6 ping and authenticated SSH over USB",
+    "real LZ4 zram paging with zero flash-swap writes",
+    "seven explicit hardware test services did not run during boot"
+  ]
+}

@@ -1,15 +1,19 @@
 # Current Gemini hardware status
 
-The installed recovery is the accepted no-swap Linux 7.1.3 system in
-[accepted-baseline.json](accepted-baseline.json). The development system is
-Linux 7.2.9 with GNOME and LZ4 zram. These are separate, deliberate roles.
+The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
+bottom dock, IPv6 and RAM-only zram in [accepted-baseline.json](accepted-baseline.json).
+[Trial 81](desktop-ui-20261010.json) passed and was kept on the device; the
+independent terminal audit passed. Its healthy boot is
+`fe38f475-ef36-4a5f-b89f-b6aaeedebe5b`. The no-swap 7.1.3 fallback is preserved
+in [baselines](baselines/boot-test-76.json).
 
 | Area | Current conclusion | Evidence and remaining work |
 | --- | --- | --- |
-| Recovery, protected storage, watchdog and native RTC | Working on the accepted recovery | [Trial 76 and independent audit](ram-only-recovery-hardware-20261010.json). Both image writes/readbacks, distinct boots, RTC startup/UTC/alarms, persistent Nix build and final audit pass. No further baseline trial is needed for this image. |
-| Flash-safe recovery paging | Working: no swap | Swap is disabled from boot, zswap is off, disk resume is unset, generated masks are present, and p34 receives zero writes. This temporary kernel has no zram. |
-| Linux 7.2.9 platform port | Earlier port qualified; current zram change built | [Kernel record](KERNEL_BASELINE.md). The current RAM-only kernel needs its first device qualification. Old disk-backed paging results do not qualify zram. |
-| GNOME/GDM and normal zram policy | ARM64 build and inspected runtime paths pass | [Runtime record](gnome-cross-runtime-20261010.json): 711 ELF files and 90 script checks, zero foreign ELF files; three helper CLI checks pass under QEMU. Normal and media bundles build. Desktop and zram need their first device qualification. |
+| Protected storage, watchdog and native RTC | Working on the installed system | [Trial 81 and independent audit](desktop-ui-20261010.json). Exact image/readback identity, native RTC startup/UTC/awake alarms, ordinary Nix build, retained data and terminal audit pass. The kept image was not rebooted after its explicit clock write. |
+| Flash-safe paging | Working: RAM-only zram | Trial 81 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
+| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Source `7eb0d52` includes decoder resources, built-in IPv6 and zram. Earlier feature results remain scoped to their recorded inputs. |
+| GNOME/GDM, HiDPI, dock and IPv6 | Working for the recorded checks | [Desktop proof](desktop-ui-20261010.json) confirms local Wayland, active 200% scaling and an enabled fixed bottom dock with no extension errors. IPv6 ping and SSH over USB passed on the same kernel/configuration; external IPv6 routing is untested. |
+| Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units remained unstarted. The kept image reaches graphical startup in 95.061 seconds, including 50.736 seconds in kernel/initramfs. |
 | Experimental H.264 decoder | Recorded polling implementation works for tested cases | [Decoder evidence](mt6797-vdec-v4l2/README.md), particularly trials 66–67. Progressive 8-bit I/P/B, Baseline/Main/High and tested multi-slice cases have exact pixel comparisons on their recorded 7.1.3 build. Production IRQ completion, shared hardware surfaces and the rebased module remain open. |
 | Decoder IRQ completion | Host candidate built | [IRQ build](mt6797-vdec-v4l2/irq-build-20261010.json). Strict ARM64 MODPOST and `W=1` pass. Actual delivered done IRQs are unqualified. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
@@ -30,22 +34,26 @@ integration checks. Do not run another baseline cycle simply to reconfirm an
 unchanged accepted image. Diagnostic watchdog/PM runs are explicit experiments.
 
 Ordinary boot trials use `tools/test-boot.py` with the durable supervisor. Its
-required recovery and final audit remain mandatory. Retention checks protect
+required supervised recovery protection and final audit remain mandatory;
+`--keep` leaves a passing image installed. Retention checks protect
 the fixed data/build fixtures and the accepted trial's Nix build; the current
 candidate's new output is checked separately. Historical output records no
 longer make the admission set grow with every trial. They remain on disk.
 
 The supported build is `nix build` / `nixosConfigurations.gemini`, composed by
 `nix/gemini.nix`. Old configurations are in the frozen recovery input. Linux
-and U-Boot keep their own source repositories; extra source worktrees serve
-preserved diagnostics or the experimental media branch. New features belong
-in the maintained default build.
+and U-Boot keep their own source repositories; extra source worktrees preserve
+historical diagnostics. The temporary media kernel branch was merged and
+deleted locally and remotely. Normal and media development use the same
+`gemini-7.2.9` kernel in the maintained default build. Packaging development
+uses `master`; its duplicate development branch is also retired.
 
 [Board store cleanup](development-store-cleanup-20261010.json) removed 1,485
 unrooted obsolete kernel/system paths, all preserved on the host, freeing
 6.1 GiB of filesystem space. Accepted recovery, protected files, retained Nix
-outputs and boot entries are unchanged. The current media system is staged
-and rooted in the normal store; it has not been booted.
+outputs and boot entries are unchanged. Trials 77–79 restored the accepted
+recovery after their respective startup or assertion failures. Their independent
+terminal audits pass; see the recorded trial for its exact boot identities.
 
 The former 966-line chronological status log is preserved in
 [history](history/HARDWARE_STATUS-20261010-before-consolidation.md). Its dated

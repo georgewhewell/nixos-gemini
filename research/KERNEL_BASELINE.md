@@ -11,44 +11,41 @@ a moving branch during a build.
 The 7.2.9 port is in branch `gemini-7.2.9`, with the full upstream ancestry,
 854 replayed board commits and the original 11 merges. The normal kernel,
 DTB and modules build successfully, and every required kernel host check passes.
-The native media modules also build with strict MODPOST against the generated
-7.2.9 `Module.symvers` and matching kernel configuration. The supervised normal-operation
-profile passes on the device: boot identity, native RTC startup, UTC and awake
-alarms, actual swap I/O and an ordinary unprivileged Nix build. The supervisor
-restores the accepted 7.1.3 system, with all stored outputs retained, matching
-executed sources, no remaining writer and a clean board audit. The installed
-baseline remains 7.1.3. Media, suspend and hibernation proofs have not been rerun
-on 7.2.9.
+The native media modules build with strict MODPOST against the generated
+7.2.9 `Module.symvers` and matching kernel configuration. Earlier platform
+qualification used source `5fb8876` and restored 7.1.3 after its tests. The
+current source and installed GNOME image are qualified below. Media hardware,
+suspend and hibernation remain unqualified on 7.2.9.
 Previous hardware results describe their exact source, configuration and kernel;
 they do not qualify a rebased kernel. Historical reproduction packages retain
 their original version pins. Uncommitted allocator diagnostics in the original
 kernel checkout are preserved separately and are not part of this build.
 
-The hardware-qualified port source is `5fb8876d52f20cf79d8618c675d478633b052fc5`.
-Current development pins `6a338355fefbc5ec31baee53f7ad22ca9098111c`, which
-enables built-in LZ4 zram and disables both zswap and zram writeback. The new
-configuration has built successfully, but has not been boot-qualified. The
-older paging evidence exercised eMMC-backed swap and does not qualify zram.
-The experimental `gemini-video-7.2.9` branch also uses this RAM-only policy at
-`c22f516a93aee65f2a6a6741d5e7e9873d56c852`. Its kernel and all three original
-media modules build with strict MODPOST, matching configuration and release
-string. This is a host build result; none of these new modules has been loaded
-on the device. Their identities are recorded in
-[`desktop-consolidation-20261010.json`](desktop-consolidation-20261010.json).
-The subsequent [decoder IRQ candidate](mt6797-vdec-v4l2/irq-build-20261010.json)
-also passes ARM64 compilation with `W=1` and strict MODPOST against that media
-kernel. It requires a delivered done event before accepting a picture, and
-synchronizes the handler before reset or power release. This candidate has
-not been loaded; previous polling results do not qualify IRQ delivery.
-For recovery migration only, a [temporary no-swap rescue derivative](ram-only-recovery-20261010.json)
-preserves the recorded working 7.1.3 kernel, DTB and userspace. It removes early
-disk resume, disables zswap and masks swap at every boot. This image is now
-the [accepted recovery](ram-only-recovery-hardware-20261010.json): two distinct
-supervised boots, byte-exact writes/readbacks, boot masks, zero p34 writes,
-RTC/Nix/storage checks and an independent terminal audit pass. Its paging
-policy is accurately recorded as `none`. The normal development base remains
-the current 7.2.9 zram system; its changed paging policy needs its first device
-qualification. The accepted recovery does not need another baseline trial.
+The earlier qualified port source was `5fb8876d52f20cf79d8618c675d478633b052fc5`.
+Current development pins `7eb0d527f1b549bb373908dfe644728e55d9a911` on
+`gemini-7.2.9`. This single kernel includes the decoder's device-tree resources,
+its clock provider, built-in IPv6 and LZ4 zram, with zswap and zram writeback
+disabled. The temporary `gemini-video-7.2.9` branch was merged, then deleted
+locally and remotely. Its earlier source snapshot remains detached for
+reproducing recorded build evidence; it is not a development branch.
+
+[Trial 81](desktop-ui-20261010.json) qualifies the current GNOME/zram image and
+keeps it installed after a passing independent audit. Local Wayland, HiDPI and
+the dock pass; IPv6 ping passed on this configuration in trial 80.
+The seven explicit hardware test units did not start during normal boot.
+RTC startup, UTC and awake alarm delivery/cancellation/rearming, actual zram
+I/O and ordinary Nix builds pass. The RTC IRQ test now counts all possible
+CPUs, preserving events when cores park; no RTC driver change was needed.
+The [consolidated build record](consolidated-kernel-gnome-ipv6-20261010.json)
+records the decoder IRQ module rebuilt against this kernel's exact configuration
+and symbol table, with `W=1` and strict MODPOST. It requires a delivered done
+event before accepting a picture and synchronizes before reset or power release.
+This module has not been loaded; earlier polling results do not qualify IRQ delivery.
+
+The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) and its immutable
+[host](ram-only-recovery-20261010.json) and [hardware](ram-only-recovery-hardware-20261010.json)
+proofs remain preserved. Its unchanged image needs no new baseline trial.
+Current development and the installed system use the single 7.2.9 kernel.
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the

@@ -1,4 +1,4 @@
-# M5: accepted CI9 cellular service plus read-only A72 admission preflight.
+# Cellular startup on volatile NV storage plus A72 resource admission.
 { pkgs, lib, geminiCellularHelper, ... }:
 let
   runtimePath = lib.makeBinPath [pkgs.coreutils pkgs.diffutils pkgs.gnugrep pkgs.gnused pkgs.util-linux pkgs.systemd];
@@ -63,7 +63,7 @@ in {
     };
   };
   systemd.services.gemini-cellular = {
-    description = "Qualify Gemini cellular HS2 and AT on bounded volatile storage";
+    description = "Start Gemini cellular on bounded volatile storage";
     wantedBy = ["multi-user.target"];
     after = ["gemini-watchdog-takeover.service" "gemini-mainline-usb.service" "gemian.mount" "gemini-a72-preflight.service"];
     requires = ["gemini-watchdog-takeover.service" "gemian.mount" "gemini-a72-preflight.service"];
@@ -73,18 +73,20 @@ in {
       RemainAfterExit = true;
       Restart = "no";
       TimeoutStartSec = "310s";
-      ExecStart = runner;
+      ExecStart = "${runner} --start";
       UMask = "0077";
     };
   };
   systemd.services.gemini-baseline-self-accept = {
     after = ["gemini-cellular.service"];
     requires = ["gemini-cellular.service"];
-    # The ordinary baseline gate retains final lease locking/publication.
-    # Recheck actual same-boot protocol evidence and live state before it runs.
+    # The ordinary gate retains lease locking and verifies same-boot startup.
+    # Partition hashing and AT round trips belong to explicit qualification.
     script = lib.mkBefore ''
       ${pkgs.systemd}/bin/systemctl is-active --quiet gemini-cellular.service
-      ${runner} --verify
+      test "$(cat /run/gemini-cellular/boot-id)" = "$(cat /proc/sys/kernel/random/boot_id)"
+      ${pkgs.gnugrep}/bin/grep -Fxq 'CELLULAR_STAGE2_READY hs2=ready backing=volatile roots=ZXY' /run/gemini-cellular/success
     '';
   };
+  system.build.geminiCellularQualification = runner;
 }

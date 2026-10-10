@@ -1,4 +1,4 @@
-# A local Wayland session, qualified before the guarded boot is accepted.
+# Explicit Weston display/input qualification; normal startup uses GNOME.
 { pkgs, lib, geminiDesktop, geminiDesktopKeyboard, ... }:
 let
   inherit (geminiDesktop) weston mesa seatd presentationCheck;
@@ -141,6 +141,7 @@ in {
     description = "Gemini accelerated Wayland desktop";
     after = ["gemini-seatd.service" "gemini-gpu.service" "gemini-audio.service" "gemini-connectivity.service"];
     requires = ["gemini-seatd.service" "gemini-gpu.service" "gemini-audio.service" "gemini-connectivity.service"];
+    conflicts = ["display-manager.service"];
     environment = sessionEnvironment;
     serviceConfig = {
       User = "gemini";
@@ -180,10 +181,8 @@ in {
   };
   systemd.services.gemini-desktop-qualify = {
     description = "Qualify Gemini desktop presentation and console restoration";
-    wantedBy = ["multi-user.target"];
     after = ["gemini-gpu.service" "gemini-audio.service" "gemini-connectivity.service"];
     requires = ["gemini-gpu.service" "gemini-audio.service" "gemini-connectivity.service"];
-    before = ["gemini-baseline-self-accept.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -192,9 +191,5 @@ in {
       UMask = "0077";
       Restart = "no";
     };
-  };
-  systemd.services.gemini-baseline-self-accept = {
-    after = ["gemini-desktop-qualify.service"];
-    requires = ["gemini-desktop-qualify.service"];
   };
 }

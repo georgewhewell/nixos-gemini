@@ -8,8 +8,10 @@ No persistent clock policy or RTC register is changed by this helper.
 from contextlib import ExitStack
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import math
+from pathlib import Path
 import re
 import shlex
 import time
@@ -25,9 +27,34 @@ def policy(boot):
     return '[Unit]\nConditionPathExists=/run/gemini-rtc-startup-'+boot+'/allow-save\n'
 
 
-def unit_guard(drop=''):
+def shutdown_unit(system):
+    """Bind the clock writer to the selected immutable NixOS generation."""
+    if not re.fullmatch('/nix/store/[0-9a-z]{32}-[A-Za-z0-9.+_-]+', str(system)):
+        raise ValueError('Unpinned clock-writer system')
+    root = Path(system).resolve(strict=True)
+    unit = root/'etc/systemd/system/save-hwclock.service'
+    if unit.is_symlink() and not unit.exists():
+        raise RuntimeError('Broken clock-writer unit')
+    return unit
+
+
+def unit_guard(drop='', system=None):
+    unit = shutdown_unit(system) if system is not None else None
+    if unit is not None and not unit.exists():
+        if drop:
+            raise ValueError('An absent clock writer cannot have a runtime override')
+        return '''
+test ! -e /etc/systemd/system/save-hwclock.service
+test ! -L /etc/systemd/system/save-hwclock.service
+test "$(systemctl show save-hwclock.service -p LoadState --value)" = not-found
+test "$(systemctl show save-hwclock.service -p ActiveState --value)" = inactive
+test "$(systemctl show save-hwclock.service -p ExecMainPID --value)" = 0
+test "$(systemctl show save-hwclock.service -p ExecMainStartTimestampMonotonic --value)" = 0
+test "$(systemctl show save-hwclock.service -p DropInPaths --value)" = ''
+'''
+    sha = hashlib.sha256(unit.read_bytes()).hexdigest() if unit is not None else UNIT_SHA
     return f'''
-test "$(sha256sum /etc/systemd/system/save-hwclock.service | cut -d' ' -f1)" = {UNIT_SHA}
+test "$(sha256sum /etc/systemd/system/save-hwclock.service | cut -d' ' -f1)" = {sha}
 test "$(systemctl show save-hwclock.service -p UnitFileState --value)" = enabled
 test "$(systemctl show save-hwclock.service -p ActiveState --value)" = inactive
 test "$(systemctl show save-hwclock.service -p ExecMainPID --value)" = 0
@@ -88,14 +115,20 @@ printf 'system='; date -u +%s
 def prepare(context, runner, calendar, directory, before):
     baseline = json.loads((directory/'rtc-calendar-baseline.json').read_text())
     sample(runner, calendar, context.f.q.SSH, directory, 'rtc-startup-baseline',
-           baseline_guard(runner, before, baseline['notes'])+unit_guard()+
+           baseline_guard(runner, before, baseline['notes'])+unit_guard(system=runner.qualify.ACCEPTED_SYSTEM)+
            f'test ! -e {DROP_DIR}\n'+CLOCK_READ, before['boot_id'])
 
 
 def policy_script(runner, before, notes):
+    system = runner.qualify.ACCEPTED_SYSTEM
+    guard = unit_guard(system=system)
+    # Current NixOS has no shutdown clock writer. Prove that absence instead
+    # of creating or attempting to start a legacy service.
+    if not shutdown_unit(system).exists():
+        return baseline_guard(runner, before, notes)+guard+f'test ! -e {DROP_DIR}\n'+CLOCK_READ
     body = shlex.quote(policy(before['boot_id']))
     condition = '/run/gemini-rtc-startup-'+before['boot_id']+'/allow-save'
-    return baseline_guard(runner, before, notes)+unit_guard()+f'''
+    return baseline_guard(runner, before, notes)+guard+f'''
 test ! -e {DROP_DIR}
 test ! -e {condition}
 umask 077
@@ -113,11 +146,11 @@ mkdir {DROP_DIR}
 owned=yes
 printf '%s' {body} > {DROP}
 systemctl daemon-reload
-{unit_guard(DROP)}
+{unit_guard(DROP, system)}
 # Exercise the real systemd condition; ExecStart must remain unexecuted.
 systemctl start save-hwclock.service
 test "$(systemctl show save-hwclock.service -p ConditionResult --value)" = no
-{unit_guard(DROP)}
+{unit_guard(DROP, system)}
 {CLOCK_READ}
 trap - EXIT
 '''
@@ -185,7 +218,7 @@ test "$(cat /proc/sys/kernel/random/boot_id)" = {state['boot_id']}
 test "$(readlink /run/current-system)" = {context.SYSTEM}
 test "$(sha256sum /sys/kernel/notes | cut -d' ' -f1)" = {context.NOTES_SHA}
 test ! -e {DROP_DIR}
-{unit_guard()}
+{unit_guard(system=context.SYSTEM)}
 zcat /proc/config.gz | grep -qx '# CONFIG_RTC_SYSTOHC is not set'
 {CLOCK_READ}
 printf 'uptime='; cut -d' ' -f1 /proc/uptime
@@ -237,7 +270,7 @@ if test {state['boot_id']} = {before['boot_id']} && test -e {DROP}; then
  systemctl daemon-reload
 fi
 test ! -e {DROP_DIR}
-{unit_guard()}
+{unit_guard(system=state.get('system'))}
 echo runtime-clock-policy=original
 ''', directory, 'rtc-startup-policy-cleanup')
         if raw.strip() != 'runtime-clock-policy=original':

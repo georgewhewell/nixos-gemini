@@ -1,29 +1,34 @@
 # NixOS on the Planet Computers Gemini PDA
 
-This branch packages Linux 7.2.9 and NixOS for the MT6797X Gemini.
-The earlier 7.2.9 image passed supervised device boot/RTC/paging/Nix checks.
-Current development adds GNOME and RAM-only paging; those changes are not yet
-qualified on the device. The complete GNOME system, initramfs, boot bundle and
-EFI files have cross-built for ARM64; see the
-[build record](research/desktop-consolidation-20261010.json) and
-[installed runtime check](research/gnome-cross-runtime-20261010.json).
-The latter checks 711 ELF files and 90 script interpreters, including Orca's
-runtime libraries and loaders, and catches native-host paths in installed tools.
-The accepted recovery remains 7.1.3 and now disables swap and disk resume from
-boot. Its [device qualification](research/ram-only-recovery-hardware-20261010.json)
-and independent audit pass. See the
-[kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
-The default build includes EFI boot support, a persistent Nix daemon,
-GNOME Wayland desktop, Gemini keyboard layout, RAM-only zram swap, watchdog
-and MT6351 RTC fixes.
-The normal configuration enables no eMMC or SD swap and no zram writeback
-device. Earlier qualified images used zswap backed by the eMMC p34 partition;
-those old paging results do not qualify the new zram policy. The installed
-recovery uses no swap, boot-generated masks and no disk resume. Two supervised
-boots and the final audit confirm zero writes to p34. GNOME and zram remain
-built artifacts awaiting their first device qualification.
-Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
-Camera and vibrator are outside the owner's completion scope.
+The installed system is Linux 7.2.9 with GNOME Wayland, 200% display scaling,
+a fixed bottom dock, IPv6 and LZ4 zram. [Trial 81](research/desktop-ui-20261010.json)
+passed the supervised installation and independent terminal audit, and was
+kept as the [accepted baseline](research/accepted-baseline.json).
+Native RTC startup, UTC read/write, alarm delivery/cancellation/rearming,
+128 MiB of actual zram paging, an ordinary Nix build and retained storage pass.
+The cross-built desktop runtime check passes 1,211 ARM64 ELF files and 122
+script checks, including service entrypoints, target Python and GI libraries.
+
+Normal boot initializes devices and opens GNOME. GPU render tests, audio
+playback/capture tests, Wi-Fi scan loops and Weston qualification are explicit
+diagnostics; they no longer run before the desktop. Measured graphical boot
+is about 95 seconds, including 51 seconds in kernel/initramfs. The installer's
+observation, RTC, paging and retention checks run during an explicit trial.
+
+Normal paging uses RAM only: no eMMC or SD swap, zswap, zram writeback or
+hibernation. Actual paging tests verified exact data and zero flash-swap writes.
+Historical disk-backed paging results describe retired images. The preserved
+[7.1.3 fallback](research/baselines/boot-test-76.json) now has no swap or disk
+resume and has its own completed [hardware proof](research/ram-only-recovery-hardware-20261010.json).
+
+Packaging development uses `master`; Linux development uses one
+`gemini-7.2.9` branch for normal and media work. Both duplicate development
+branches are retired locally and remotely. The default build includes EFI
+support, a persistent Nix daemon, Gemini keyboard layout, watchdog and MT6351
+RTC fixes. See the [kernel baseline](research/KERNEL_BASELINE.md) and
+[current hardware status](research/HARDWARE_STATUS.md). Decoder IRQ completion,
+shared hardware surfaces and video encoding remain unfinished. Camera and
+vibrator are outside the owner's completion scope.
 
 ## Build
 
@@ -47,6 +52,7 @@ nix build .#mtkclient      # Open-source flashing tool, including RTC preservati
 nix build .#checks.x86_64-linux.gnome-cross-runtime # Installed ARM64 runtime paths
 ```
 
+Packaging development uses `master`; its former `gemini-7.2.9` alias is retired.
 The maintained Linux source is branch `gemini-7.2.9`, pinned by `flake.lock`.
 The port uses a separate worktree while the original `../linux` checkout keeps
 its uncommitted diagnostics. [nix/gemini.nix](nix/gemini.nix) composes one kernel and one NixOS
@@ -76,45 +82,28 @@ build. Historical experiments and the vendor 3.18 system are available under
 recorded images and layouts. Use the matching historical revision when
 reproducing an old trial; new features belong in the default system.
 
-Normal boot trials use the durable supervisor and an accepted recovery image:
+Normal boot trials use the durable supervisor and the accepted RAM-only image:
 
 ```sh
 python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s) --observe-seconds 90 --execute
 ```
 
 Omit `--execute` for a read-only preflight, using a fresh output directory.
-The command checks RTC startup/alarms, RAM-only zram paging, an ordinary Nix
-build and retained data before returning to recovery. It refuses recovery
-baselines that enable physical swap. The accepted no-swap 7.1.3 recovery satisfies
-this gate. It records negotiated USB link speed at both
-the gadget and its host interface in `usb-link.json`. The existing p34 partition
-is preserved but remains unused; tests reject eMMC or SD swap. Trials retain
-the existing host USB/SSH setup. Copy the system closure into the installed Nix
-store before testing. From recovery, that store is accessible to Nix as
-`local?root=/persist/nixos`; its database and files are separate from recovery's
-overlay. Historical image trials still accept `--reclaim-cache`.
-The generation updater also requires an accepted RAM-only recovery baseline
-and a qualified zram trial; old successful disk-backed paging trials cannot
-promote a generation.
-The [recovery build record](research/ram-only-recovery-20261010.json) preserves
-the working kernel, DTB and userspace. Its exact hash is bound into the accepted
-recovery evidence, so that host record remains unchanged. The later
-[hardware record](research/ram-only-recovery-hardware-20261010.json) records the
-successful migration through `--migrate-ram-only`, using the new image in both
-writer roles. Normal candidates still require zram; the updater retains its
-zram qualification requirement.
+The supervisor checks the candidate and restores the accepted image afterwards.
+Add `--keep` to leave a fully passing candidate installed; adopt its recorded
+`promoted-baseline.json` after the independent terminal audit. Trial 81 did this
+for the current GNOME image. The unchanged accepted image needs no new baseline
+cycle. Test changed behavior and unmet acceptance checks using the
+[current testing criteria](research/HARDWARE_STATUS.md).
 
-The accepted result is the stopping point for this recovery image. Test changed
-behavior and unmet acceptance checks; use the
-[current status and testing criteria](research/HARDWARE_STATUS.md) when deciding
-which integration checks a change requires. Routine data retention checks keep
-the protected fixtures and the accepted Nix build, rather than every old trial.
-
-For measurements that need services started after boot acceptance, add
-`--observe-seconds 90` (0–90 seconds, default 0). The runner records
-`candidate-observation.json` and repeatedly checks candidate health and identity
-during this window, then runs the same strict qualification. Recovery deadlines
-remain unchanged; completing the observation does not qualify the candidate.
+Copy the system closure into the registered store before testing. From the
+preserved 7.1.3 fallback, Nix accesses that store as `local?root=/persist/nixos`;
+from normal Linux it is the usual local store. Normal candidates require zram,
+and the supervisor rejects a fallback with physical swap. The existing p34
+partition stays unused. Retention checks protect fixed data/build fixtures and
+the accepted trial's Nix build; archived outputs no longer expand admission.
+`usb-link.json` records both sides' negotiated USB speed. Completed observation
+alone does not qualify a candidate.
 
 Normal builds install through NixOS's `system.build.installBootLoader` hook.
 After the initial installation, `nixos-rebuild boot` or `switch` installs the
@@ -136,57 +125,23 @@ It briefly remounts the boot volume writable and restores it read-only, with
 the ext4 journal enabled throughout. Recovery retains its original `noload`
 mount and cannot run this installer. `gemini-boot-install --system SYSTEM
 --check` verifies an installed default without writes. These generation changes
-have passed host builds/tests; GNOME and RAM-only paging still require device
-qualification after the recovery baseline is migrated.
-The earlier installation trials include automatic recovery after an allocator
-panic. Subsequent boot and update results describe their exact recorded images;
-they do not qualify the new GNOME or RAM-only paging configuration.
-
-To exercise installation during the supervised boot test, add
-`--install-efi /path/to/efiBootFiles`. For normal generations the runner invokes
-NixOS's `switch-to-configuration boot` after Linux passes its health checks;
-it checks the new files and retained older entries again after M69 returns.
-
-Once installed, test that entry through U-Boot using the same command with
-`--bootloader /path/to/bootloader --efi-files /path/to/efiBootFiles`.
-It checks the actual EFI memory map, systemd-boot's selected entry and volume,
-the native CPU device tree, Linux health and automatic M69 recovery.
+have host coverage and earlier device evidence for their recorded images. The
+current GNOME image was installed through the direct Linux boot path. To test
+an already installed EFI generation, use `tools/test-boot.py` with matching
+`--bootloader` and `--efi-files` outputs. See [boot and UEFI](research/BOOT_HANDOFF.md)
+for the historical installation proofs.
 
 ## Device status
 
-The maintained Linux kernel boots both A72s without a generated build record or
-the retired CPU startup models and tracing.
-The normal system passed runtime EFI installation in `boot-test-06`, followed
-by the complete consolidated U-Boot/systemd-boot test in `boot-test-07`.
-The manager selected the installed entry after its unattended menu timeout;
-Linux verified the native CPU tree, both A72s, the full 4 GiB EFI memory map
-and LK reservations. Linux health, real paging, an unprivileged Nix build,
-native RTC startup/UTC/awake alarms and automatic M69 recovery all passed.
-The final audit retained home, previous EFI entries and all 26 ordinary Nix
-outputs. These are historical installation results. The accepted installed
-baseline is now the persistent-store 7.1.3 generation recorded in
-[accepted-baseline.json](research/accepted-baseline.json). Its old physical
-swap policy has been removed from the accepted recovery's boot path; swap masks
-and disabled disk resume persist across boots. GNOME and zram have not been
-installed or qualified on the device. Current conclusions and the criteria for
-further tests are in [hardware status](research/HARDWARE_STATUS.md); older trials
-remain historical evidence.
-mtkclient now ends idle USB scans before the outer transfer
-deadline, preserving time for a late-arriving device to finish.
+[Current hardware status](research/HARDWARE_STATUS.md) records accepted features,
+their exact proof scope and unfinished work. GNOME, HiDPI, the dock, IPv6 over
+USB and RAM-only zram are qualified for their recorded checks. Earlier proofs
+cover touch, ten CPUs, Wi-Fi, audio, USB host/gadget, eMMC and persistent storage
+on their stated builds. Display scanout still bypasses IOMMU translation; USB
+has been observed at USB2 speeds.
 
-Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
-audio, USB host/gadget, eMMC and persistent home/Nix storage. The unused 5 GiB
-p34 partition remains on disk; the normal configuration does not activate it.
-Native RTC startup, UTC write/read, awake alarms and hardware watchdog recovery
-pass. Display scanout still bypasses IOMMU translation. USB is currently
-configured and observed at USB2 speeds.
-
-Remaining work includes suspend/wake, battery capacity and
-power policy, cellular/eSIM calls/SMS/data, GNSS, Bluetooth profiles, hardware
-video, USB3, and normal NixOS boot-generation updates. The separate suspend
-guard is an untested experiment and is excluded from the default kernel.
-
-See [boot and UEFI](research/BOOT_HANDOFF.md),
-[storage](research/PERSISTENCE.md), [power](research/POWER_QUALIFICATION.md)
-and [mtkclient](research/MTKCLIENT.md) for implementation and hardware results.
-Current workspace state is recorded in `../handoff/current-device.md`.
+Remaining work includes hardware video, suspend/wake, battery capacity and
+power policy, cellular/eSIM calls/SMS/data, GNSS, Bluetooth profiles, USB3 and
+normal NixOS boot-generation updates. See [storage](research/PERSISTENCE.md),
+[power](research/POWER_QUALIFICATION.md) and [mtkclient](research/MTKCLIENT.md)
+for the underlying results. Workspace state is in `../handoff/current-device.md`.

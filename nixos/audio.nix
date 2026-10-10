@@ -197,7 +197,7 @@ in {
   imports = [./audio-routes.nix];
   system.build.geminiAudioControls = controlSnapshot;
   systemd.services.gemini-audio = {
-    description = "Qualify Gemini playback, capture and application audio routes";
+    description = "Initialize Gemini application audio routes";
     wantedBy = ["multi-user.target"];
     after = ["gemini-gpu.service"];
     requires = ["gemini-gpu.service"];
@@ -206,6 +206,22 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       Restart = "no";
+      TimeoutStartSec = "60s";
+      UMask = "0077";
+      ExecStart = pkgs.writeShellScript "gemini-audio-start" ''
+        set -eu
+        ${pkgs.gnugrep}/bin/grep -wFq GEMINI_A72_CI9_M39 /proc/cmdline
+        exec ${config.system.build.geminiAudioDigitalRoutes}
+      '';
+    };
+  };
+  systemd.services.gemini-audio-qualify = {
+    description = "Explicit playback, capture and route qualification";
+    requires = ["gemini-audio.service"];
+    after = ["gemini-audio.service"];
+    conflicts = ["display-manager.service"];
+    serviceConfig = {
+      Type = "oneshot";
       TimeoutStartSec = "60s";
       UMask = "0077";
       ExecStart = qualify;

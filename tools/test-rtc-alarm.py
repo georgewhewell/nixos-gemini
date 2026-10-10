@@ -3,6 +3,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -14,6 +15,35 @@ BOOT='11111111-1111-1111-1111-111111111111'
 
 
 class Evidence(unittest.TestCase):
+    def test_actual_counter_keeps_parked_cpu_events(self):
+        action, _ = m.scripts(BOOT, '/nix/store/'+'a'*32+'-system', 'b'*64,
+                              123, 456, 'gemini-rtc-alarm-123-456', 'cancel')
+        body = action.split('irq_count() {', 1)[1].split('\n}\n', 1)[0]
+        body = 'irq_count() {'+body+'\n}\nirq_count\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root/'irq/77').mkdir(parents=True)
+            proc = root/'interrupts'; counts = root/'irq/77/per_cpu_count'
+            actions = root/'irq/77/actions'; actions.write_text('mt6397-rtc\n')
+            body = body.replace('/proc/interrupts', str(proc)).replace('/sys/kernel/irq', str(root/'irq'))
+            def run():
+                return subprocess.check_output(['sh', '-e', '-c', body], text=True,
+                                               stderr=subprocess.PIPE).strip()
+            proc.write_text(' CPU0 CPU9\n77: 1 1 mt6351 mt6397-rtc\n')
+            counts.write_text('1,1,0,0,0,0,0,0,0,0\n')
+            self.assertEqual(run(), '2')
+            proc.write_text(' CPU0\n77: 1 mt6351 mt6397-rtc\n')
+            self.assertEqual(run(), '2')
+            counts.write_text('1,2,0,0,0,0,0,0,0,0\n')
+            self.assertEqual(run(), '3')
+            for malformed in ('1,corrupt\n', '1\n2\n', ''):
+                counts.write_text(malformed)
+                with self.assertRaises(subprocess.CalledProcessError): run()
+            counts.write_text('1,2\n'); actions.write_text('foreign\n')
+            with self.assertRaises(subprocess.CalledProcessError): run()
+            actions.write_text('mt6397-rtc\n')
+            proc.write_text('77: 1 mt6397-rtc\n78: 1 mt6397-rtc\n')
+            with self.assertRaises(subprocess.CalledProcessError): run()
+
     def raw(self,mode,delta):
         fields=dict(boot_id=BOOT,mode=mode,alarm='1010',software_alarm_disabled='yes',
             before_irq='4',after_irq=str(4+delta),before_rtc='1000',after_rtc='1013',

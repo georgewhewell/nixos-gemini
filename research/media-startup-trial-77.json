@@ -1,0 +1,62 @@
+{
+  "scope": "First device boot of the GNOME/zram media candidate; startup failed before decoder observation",
+  "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-77",
+  "trial_exit_code": 1,
+  "profile_qualified": false,
+  "candidate_system": "/nix/store/w3dnlm0l0f9na21031pxrqbpkisxli40-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "candidate_kernel": "/nix/store/gi6b7392qcv90d8x6nyq9knzim43b8w5-linux-gemini-7.2.9",
+  "candidate_boot_id": "83c1d6e9-6d1c-4534-867b-2aebed9b478f",
+  "device_observations": {
+    "kernel_release": "7.2.9-gemini-da921x-lkro",
+    "taint_before_media": 0,
+    "active_swap": "/dev/zram0 only",
+    "zram_size_kib": 1888252,
+    "zram_io_qualified": false,
+    "gdm_failure": "set-session wrapper places native GLib/GI typelibs ahead of ARM libraries; native library paths are absent on board",
+    "dhcpcd_failure": "226/NAMESPACE: /proc/sys/net/ipv6 absent because CONFIG_IPV6 was unset",
+    "p34_written_sectors": 0,
+    "decoder_module_loaded": false,
+    "irq_test_executed": false
+  },
+  "expanded_host_runtime_check": {
+    "old_candidate_passed": false,
+    "foreign_elf_files": 8,
+    "scope": "Adds service entrypoints and recursively follows installed scripts/C wrappers and their GI library paths"
+  },
+  "recovery": {
+    "image_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "recovered_boot_id": "854f7a04-ccf3-4979-9196-354412414117",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-irq-20261010/independent-audit-77",
+    "independent_audit_exit_code": 0,
+    "all_trial_units_terminal": true,
+    "no_writer": true,
+    "source_hashes_match": true,
+    "protected_outputs_retained": 11,
+    "paging_policy": "none"
+  },
+  "next_action": "Consolidate decoder resources into the single development kernel, enable built-in IPv6, fix GDM set-session cross runtime, then retry the changed candidate",
+  "trial_evidence_sha256": {
+    "plan.json": "b1c3d6c3f9460876129c44ab63ca957ebb3ee8df177df762f0eecbff4c63c201",
+    "before.json": "7d8ca65558515ec23959c5a8963ea5472638eb3d1894f01a330eda898890c422",
+    "after.json": "4c16f251e70011f094ca13dd65bf6f81692d5dabed6e5df92f654933c90a7f91",
+    "result.json": "758b884f9becb5ead131feb5cfdf441ed9d135dcf10031d19fa368073104b0f4",
+    "final-idle-check.json": "fc62b0358dea39d02657c5e6acc3638b9c491b2ac0a5b625643656e39b1eb7e0",
+    "backend.json": "d23760b479665f135f4efcf6ac1fa7ec008dac1da4a5db5b61f9bcd75b5d6cab",
+    "candidate.state.mtk.json": "af31511fe7bfcba89f00244a0ffc175c18188b70ce510768d28b82fcf73f6440",
+    "supervisor-rollback.state.mtk.json": "908f45edaba041403d7c373b3faf7c0b17f74ed76a11ac970975a1bf5feb8afa"
+  },
+  "diagnostic_directory": "/mnt/Home/src/nixos-gemini/handoff/media-irq-20261010",
+  "diagnostic_sha256": {
+    "run-irq-trial-observer.py": "671a297f968efb9e254260552bd5463443da1e85ad139d5c691e7a3780725a3c",
+    "boot-test-77.log": "7214cf07776175e108e635566a448821a65e7ba48f074921b15b7b3b2213e1a3",
+    "boot-test-77-exit.json": "5cc319f54b05a38799195a491c303aa686eab7caccfdbbf1e8b8c07405cb7392",
+    "candidate-startup-readonly-02.stdout": "2018ecd43904a7f31fe7ecb53ccba613d0e500095b081dfc0fb97f767940f86f",
+    "candidate-service-failures.stdout": "1c64df33873e40ef0ef0f878c92e959af7ed94474f593237663f945525e2dcf2",
+    "candidate-startup-dhcp-01.stdout": "dbb8c577b0267426421c02554a51cf57b760835cea54577ae27d87f3f8ba03c6",
+    "cross-service-before.json": "1296e99888314dd652530b46ceaf4ab64ddd43b48b95a8fe07ceeef7a801b6b8",
+    "cross-service-before.log": "0ba3174f4678fa1cb9568a877555d692a4b302d4d0d7cc62ecc2db82e5d2f3cd",
+    "independent-trial-audit.py": "00605d69fd4dedabd056b7a6c0f1737969fdfcbb5ee9ed62c1ee797e7fe3a58b",
+    "independent-audit-77/result.json": "d92d5047a5bd97760fbbc0a6fa29b4e0b790d1a7e0856701c6a9f11ebf47fdd2",
+    "independent-trial-audit-77-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+  }
+}

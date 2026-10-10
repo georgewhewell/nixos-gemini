@@ -1,10 +1,29 @@
-# Stage-2 firmware/HIF and passive-scan qualification. Connection tests are explicit.
+# Stage-2 firmware/HIF startup. Passive scans are explicit qualification.
 { pkgs, geminiConnectivityKernel, geminiConnectivityFirmware, ... }:
 let
   firmwareBundle = pkgs.symlinkJoin {
     name = "gemini-connectivity-and-regulatory-firmware";
     paths = [geminiConnectivityFirmware pkgs.wireless-regdb];
   };
+  start = pkgs.writeShellScript "gemini-connectivity-start" ''
+    set -eu
+    export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.kmod pkgs.iproute2]}:$PATH
+    grep -wFq GEMINI_A72_CI9_M39 /proc/cmdline
+    firmware=${firmwareBundle}/lib/firmware
+    test -r "$firmware/WMT_SOC.cfg" && test -r "$firmware/WIFI_RAM_CODE_6797"
+    echo "$firmware" > /sys/module/firmware_class/parameters/path
+    modprobe -d ${geminiConnectivityKernel} mt6797-btif-pio-platform
+    modprobe -d ${geminiConnectivityKernel} mt6797-wifi
+    test "$(basename "$(readlink -f /sys/bus/platform/devices/180f0000.wifi/driver)")" = mt6797-wifi
+    set -- /sys/bus/platform/devices/180f0000.wifi/net/*
+    test "$#" = 1 && test -d "$1"
+    interface=$(basename "$1")
+    ip link set dev "$interface" up
+    mkdir /run/gemini-connectivity
+    cat /proc/sys/kernel/random/boot_id > /run/gemini-connectivity/boot-id
+    printf '%s\n' "$interface" > /run/gemini-connectivity/interface
+    echo 'connectivity=firmware-ready' > /run/gemini-connectivity/result
+  '';
   qualify = pkgs.writeShellScript "gemini-connectivity-qualify" ''
     set -eu
     export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.kmod pkgs.systemd pkgs.util-linux pkgs.iproute2 pkgs.iw]}:$PATH
@@ -14,7 +33,7 @@ let
     test "$(cat /sys/class/watchdog/watchdog0/state)" = active
     test "$(cat /sys/class/watchdog/watchdog0/timeout)" = 31
     test "$(basename "$(readlink -f /sys/bus/platform/devices/10203000.emi-mpu/driver)")" = mt6797-consys-emi-mpu
-    mkdir /run/gemini-connectivity
+    mkdir -p /run/gemini-connectivity
     cat /proc/sys/kernel/random/boot_id > /run/gemini-connectivity/boot-id
     capture_final() {
       dmesg > /run/gemini-connectivity/kernel-final.txt || :
@@ -51,7 +70,7 @@ let
     fi
     test "$(basename "$(readlink -f /sys/bus/platform/devices/180f0000.wifi/driver)")" = mt6797-wifi
     systemctl is-active --quiet gemini-watchdog-takeover.service gemini-cellular.service gemini-gpu.service
-    echo 'connectivity=passive-scans-ready' > /run/gemini-connectivity/result
+    echo 'connectivity=passive-scans-ready' > /run/gemini-connectivity/qualification-result
   '';
 in {
   # Udev must not load these via modalias before the ordered service runs.
@@ -70,6 +89,17 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       Restart = "no";
+      TimeoutStartSec = "180s";
+      UMask = "0077";
+      ExecStart = start;
+    };
+  };
+  systemd.services.gemini-connectivity-qualify = {
+    description = "Explicit WLAN passive-scan qualification";
+    requires = ["gemini-connectivity.service"];
+    after = ["gemini-connectivity.service"];
+    serviceConfig = {
+      Type = "oneshot";
       TimeoutStartSec = "180s";
       UMask = "0077";
       ExecStart = qualify;

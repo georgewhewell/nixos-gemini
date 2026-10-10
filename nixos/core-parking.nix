@@ -105,8 +105,7 @@ in {
   systemd.services.gemini-core-parking = {
     description = "Gemini load-driven core parking";
     wantedBy = ["multi-user.target"];
-    # The boot qualifiers (gpu, connectivity, ...) check for CPUs 0-9 and
-    # all order before the self-accept; park only after them.
+    # Leave the startup topology stable until the recovery lease is accepted.
     after = ["gemini-cpufreq.service" "gemini-baseline-self-accept.service" "gemini-a72-preflight.service"];
     wants = ["gemini-cpufreq.service"];
     serviceConfig = {

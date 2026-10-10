@@ -2,6 +2,19 @@
 final: prev: {
   pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
     (pythonFinal: pythonPrev: {
+      buildPythonApplication = pythonPrev.buildPythonApplication // {
+        __functor = _: args:
+          pythonPrev.buildPythonApplication (
+            if prev.lib.isFunction args then args
+            else args // prev.lib.optionalAttrs (
+              (args.name or "") == "set-session"
+              && !prev.stdenv.buildPlatform.canExecute prev.stdenv.hostPlatform
+            ) {
+              # NixOS's private GDM helper forces strictDeps=false. Its native
+              # scanner then puts host GLib typelibs before the target libraries.
+              strictDeps = true;
+            });
+      };
       dbus-python = pythonPrev.dbus-python.overrideAttrs (old: {
         # pygobject's test dependency propagates the introspection hook.
         # In the cross package set that hook requires a host g-ir-scanner,

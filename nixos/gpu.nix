@@ -1,6 +1,16 @@
 # Load Panfrost only after the watchdog, A72 and modem startup have completed.
 { pkgs, geminiGpuKernel, geminiGpuSmoke, ... }:
 let
+  start = pkgs.writeShellScript "gemini-gpu-start" ''
+    set -eu
+    export PATH=${pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.kmod]}:$PATH
+    grep -wFq GEMINI_A72_CI9_M39 /proc/cmdline
+    modprobe -d ${geminiGpuKernel} panfrost
+    gpu=/sys/bus/platform/devices/13040000.gpu
+    test "$(basename "$(readlink -f "$gpu/driver")")" = panfrost
+    set -- "$gpu"/drm/renderD*
+    test "$#" -eq 1 && test -c /dev/dri/$(basename "$1")
+  '';
   logCheck = pkgs.runCommand "gemini-gpu-log-check" {
     nativeBuildInputs = [pkgs.buildPackages.python3 pkgs.buildPackages.bash pkgs.buildPackages.gnugrep];
   } ''
@@ -66,7 +76,7 @@ let
 in {
   environment.etc."gemini/gpu-render".source = "${geminiGpuSmoke}/bin/gpu-render-smoke";
   systemd.services.gemini-gpu = {
-    description = "Qualify Panfrost rendering and runtime autosuspend";
+    description = "Initialize the Gemini Panfrost GPU";
     wantedBy = ["multi-user.target"];
     after = ["gemini-cellular.service" "gemini-watchdog-takeover.service"];
     requires = ["gemini-cellular.service" "gemini-watchdog-takeover.service"];
@@ -75,6 +85,18 @@ in {
       Type = "oneshot";
       RemainAfterExit = true;
       Restart = "no";
+      TimeoutStartSec = "100s";
+      UMask = "0077";
+      ExecStart = start;
+    };
+  };
+  systemd.services.gemini-gpu-qualify = {
+    description = "Explicit Panfrost rendering and autosuspend qualification";
+    requires = ["gemini-gpu.service"];
+    after = ["gemini-gpu.service"];
+    conflicts = ["display-manager.service"];
+    serviceConfig = {
+      Type = "oneshot";
       TimeoutStartSec = "100s";
       UMask = "0077";
       ExecStart = qualify;

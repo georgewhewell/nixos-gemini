@@ -1,29 +1,13 @@
 {
-  "name": "boot-test-76",
-  "image": "/nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery/boot-padded-p22.img",
-  "boot_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
-  "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+  "name": "boot-test-81",
+  "image": "/nix/store/g846rn4c3k3zpxl02q3vpfpwn3i9fhqj-gemini-mainline-nixos-padded.img",
+  "boot_sha256": "9a736e4663d6daf09f8752c7ab246ab9cdcd268eaccb39d26b067dcd75f9281f",
+  "system": "/nix/store/nyz8r9hskaski5y3ai3j12x6qida85gs-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
   "store": "normal",
+  "zswap_shrinker": "absent",
   "boot": "direct",
   "rtc_epoch": "native",
-  "zswap_enabled": false,
-  "paging_policy": "none",
-  "previous": "update-cleanup-trial-02",
-  "ram_only_recovery": {
-    "package": "/nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery",
-    "host_proof_sha256": "e38353041091b38ca630ffa819164bf1f478c62cc987620e6fa8e886abca09f0",
-    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-76",
-    "evidence_sha256": {
-      "result.json": "0200f423e2cd1da7387266c2883633a83c91a4c4f0e2ce5a2bd3827277899a39",
-      "before.json": "f3ec33b552d9ee8437e91334c4e902de60e90e13b3d28a8a4b72660af84c5a4f",
-      "candidate-linux.json": "42f37fd3d63d134bc35aea11b93430e1036ee14563acf25bf81e8553fc4a8f78",
-      "after.json": "7d8ca65558515ec23959c5a8963ea5472638eb3d1894f01a330eda898890c422",
-      "final-idle-check.json": "f57e5cd54b3fae5dec1c6eb1c43ad2bb3fd0f31a66c72ac1618edb43d871c049",
-      "qualified-no-paging-policy.json": "8bda86c00b1c943c76fa746e1754e25ff2f16ee98653bb1d67a61016e2056c2b",
-      "plan.json": "edf727f89f96e8f0419e189bb84dfa98f1d6cb4ad964aec99094b268edc17834",
-      "backend.json": "cce302ddc093c4859712a57dd5b5aabda79fe148084372ab0eadaa61e55cbd12",
-      "candidate.state.mtk.json": "03d806dbbe6f889cd5ba44f023a647735a261a9e907669b66abe8dd19e340269",
-      "supervisor-rollback.state.mtk.json": "6e672017ab686abcdece08fc2683fdc5edf2f146779f7c56a5edf8c0bf274b5b"
-    }
-  }
+  "previous": "boot-test-76",
+  "paging_policy": "zram",
+  "desktop": "gnome"
 }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# One boot, bounded volatile FS and protocol qualification; never copy back.
+# One boot, bounded volatile FS startup; explicit protocol qualification.
 set -eu
 umask 077
 out=/run/gemini-cellular
@@ -87,7 +87,12 @@ verify() {
     check_sources live
 }
 if [ "${1:-}" = --verify ]; then verify; exit 0; fi
-[ "$#" = 0 ]
+mode=qualify
+if [ "${1:-}" = --start ] && [ "$#" = 1 ]; then
+    mode=start
+else
+    [ "$#" = 0 ]
+fi
 mkdir "$out" # Persistent for this boot: failures and restarts cannot repeat registration.
 exec > "$out/result.log" 2>&1
 capture() {
@@ -101,10 +106,10 @@ lease_ok 320 # Keep setup inside the original Stage1 deadline; never extend it.
 dmesg > "$out/dmesg-before"
 if grep -Eq 'MD1 accepted CCCI HS1|MD1 completed CCCI HS2|MT6797_CCCI_TERMINAL_FAILURE|FIRST_FATAL' "$out/dmesg-before"; then exit 1; fi
 timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-roots-device
-sha256sum /dev/mmcblk0p19 > "$out/nvram-before.sha256"
+if [ "$mode" = qualify ]; then sha256sum /dev/mmcblk0p19 > "$out/nvram-before.sha256"; fi
 for drive in Z X Y; do
     source_for "$drive"
-    sha256sum "$source_device" > "$out/$source_name-before.sha256"
+    if [ "$mode" = qualify ]; then sha256sum "$source_device" > "$out/$source_name-before.sha256"; fi
     mkdir "$out/$source_name" "$out/$ram_name"
     timeout -k 1 10 mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$source_device" "$out/$source_name"
     timeout -k 1 5 "$GEMINI_CELLULAR_HELPER" --check-root-mount "$drive" "$out/$source_name"
@@ -114,10 +119,10 @@ for drive in Z X Y; do
     fi
     watchdog_ok
 done
-check_sources seeded
+if [ "$mode" = qualify ]; then check_sources seeded; fi
 watchdog_ok
 timeout -k 1 30 "$GEMINI_CELLULAR_RESTORE" --profile gemini-stock-ecci-md3-v1 --sha256 1b7fb822e90492b4d14eee735c4b16bf0d34638b14407c1ee108ba8e459240c9
-check_backup prepared
+if [ "$mode" = qualify ]; then check_backup prepared; fi
 watchdog_ok
 timeout -k 1 60 "$GEMINI_CELLULAR_HELPER" --ram-roots "$out/nvdata" "$out/ram" "$out/protect1" "$out/ramX" "$out/protect2" "$out/ramY"
 attempt=0
@@ -129,6 +134,16 @@ while :; do
     watchdog_ok
     sleep 1
 done
+if [ "$mode" = start ]; then
+    capture
+    grep -Fq 'MD1 accepted CCCI HS1 v2; runtime reply queued' "$out/dmesg-final"
+    grep -Fq 'MD1 completed CCCI HS2' "$out/dmesg-final"
+    if grep -Eq 'Kernel panic|Internal error:|BUG:|SError Interrupt|MT6797_CCCI_TERMINAL_FAILURE|FIRST_FATAL' "$out/dmesg-final"; then exit 1; fi
+    watchdog_ok
+    echo 'CELLULAR_STAGE2_READY hs2=ready backing=volatile roots=ZXY' > "$out/success.tmp"
+    mv "$out/success.tmp" "$out/success"
+    exit 0
+fi
 set -- /dev/wwan*at*
 [ "$#" = 1 ] && [ -c "$1" ]
 exec 3<>"$1"

@@ -42,6 +42,7 @@
 
   swapDevices = [];
   networking.hostName = "gemini-mainline-nixos";
+  networking.enableIPv6 = true;
   networking.useDHCP = true;
   networking.interfaces.usb0.useDHCP = false;
   networking.dhcpcd.extraConfig = "denyinterfaces usb0";
@@ -79,7 +80,6 @@
       PasswordAuthentication = false;
       PermitRootLogin = "prohibit-password";
       UsePAM = true;
-      ListenAddress = "0.0.0.0";
     };
     hostKeys = [
       {

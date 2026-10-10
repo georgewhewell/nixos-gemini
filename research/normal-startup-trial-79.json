@@ -1,0 +1,127 @@
+{
+  "scope": "GNOME, IPv6, RAM-only paging and normal-startup cleanup on the consolidated kernel; overall trial failed on obsolete shutdown-unit assertion",
+  "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-79",
+  "profile_qualified": false,
+  "trial_exit_code": 1,
+  "candidate_kernel_revision": "7eb0d527f1b549bb373908dfe644728e55d9a911",
+  "candidate_boot_id": "ee3963ae-112a-40fa-9d40-c04f0ad2738f",
+  "candidate_system": "/nix/store/l95d902d84xv30bs7ilgr4zxbyq8fmb5-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "gnome_ipv6": {
+    "passed": true,
+    "boot_id": "ee3963ae-112a-40fa-9d40-c04f0ad2738f",
+    "system": "/nix/store/l95d902d84xv30bs7ilgr4zxbyq8fmb5-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "gnome_local_wayland": true,
+    "ipv6_enabled": true,
+    "usb_linklocal": "fe80::4000:15ff:fe19:8201",
+    "host_interface": "enp167s0u2",
+    "ipv6_ping_exit_code": 0,
+    "scope": "Local GNOME runtime and IPv6 over USB; no external IPv6 routing proof",
+    "system_profile_qualification_pending": true
+  },
+  "paging": {
+    "bytes": 134217728,
+    "swapped_kib": 131076,
+    "read_sectors": 262200,
+    "written_sectors": 394224,
+    "pattern_verified": true,
+    "flash_swap_written_sectors": 0
+  },
+  "ram_only_paging_qualified": true,
+  "boot_timing_seconds": {
+    "kernel": 50.808,
+    "userspace": 44.594,
+    "total": 95.402,
+    "cellular": 17.57,
+    "gnome_readiness": 8.401
+  },
+  "automatic_hardware_test_units_started": false,
+  "failure": "Pinned NixOS 26.11 contains no save-hwclock.service; old assertion required the NixOS 23.05 unit",
+  "independent_audit": {
+    "result": "passed",
+    "baseline": {
+      "name": "boot-test-76",
+      "image": "/nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery/boot-padded-p22.img",
+      "boot_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+      "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+      "store": "normal",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "zswap_enabled": false,
+      "paging_policy": "none",
+      "previous": "update-cleanup-trial-02",
+      "ram_only_recovery": {
+        "package": "/nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery",
+        "host_proof_sha256": "e38353041091b38ca630ffa819164bf1f478c62cc987620e6fa8e886abca09f0",
+        "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-76",
+        "evidence_sha256": {
+          "result.json": "0200f423e2cd1da7387266c2883633a83c91a4c4f0e2ce5a2bd3827277899a39",
+          "before.json": "f3ec33b552d9ee8437e91334c4e902de60e90e13b3d28a8a4b72660af84c5a4f",
+          "candidate-linux.json": "42f37fd3d63d134bc35aea11b93430e1036ee14563acf25bf81e8553fc4a8f78",
+          "after.json": "7d8ca65558515ec23959c5a8963ea5472638eb3d1894f01a330eda898890c422",
+          "final-idle-check.json": "f57e5cd54b3fae5dec1c6eb1c43ad2bb3fd0f31a66c72ac1618edb43d871c049",
+          "qualified-no-paging-policy.json": "8bda86c00b1c943c76fa746e1754e25ff2f16ee98653bb1d67a61016e2056c2b",
+          "plan.json": "edf727f89f96e8f0419e189bb84dfa98f1d6cb4ad964aec99094b268edc17834",
+          "backend.json": "cce302ddc093c4859712a57dd5b5aabda79fe148084372ab0eadaa61e55cbd12",
+          "candidate.state.mtk.json": "03d806dbbe6f889cd5ba44f023a647735a261a9e907669b66abe8dd19e340269",
+          "supervisor-rollback.state.mtk.json": "6e672017ab686abcdece08fc2683fdc5edf2f146779f7c56a5edf8c0bf274b5b"
+        }
+      }
+    },
+    "final_boot_id": "0a953aa9-a16b-485b-ad98-8857414f82e7",
+    "kept_candidate": false,
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 42,
+    "ordinary_outputs_retained": {
+      "persistent-nix-01": "/nix/store/y05f867msys00kbdwy1ivjpifg3h6rw6-gemini-daemon-ab69a8311a0d48e18c57e72d629aa364",
+      "efi-nix-provision-01": "/nix/store/kayq99jxh03r74nmwik52xcfhhcbs0zb-gemini-daemon-ee61f1b8a37442b3a2c6936104d3f687",
+      "efi-nix-manager-01": "/nix/store/10ihy8gva9za862c1vhq3ak2yhyw60id-gemini-daemon-2cec893b5e3b4c21b5ffc8f514e78fec",
+      "efi-nix-provision-02": "/nix/store/961a7xb23gl33a38lnpdsf1h0d17lnr1-gemini-daemon-0fb866788b1a4dce90c71fc1a87a13dd",
+      "efi-entry-dt-provision-01": "/nix/store/43vh1dmg87qv9zhax566h9n2h1cs2pfr-gemini-daemon-9c32e81ce86d4d0f9e8b9bc8ea408ce9",
+      "efi-entry-dt-manager-01": "/nix/store/6g12n0f3bxs94ww5s6z0nzkq5rnpdqsj-gemini-daemon-33f8f91e6996441787d08442d5b9288a",
+      "efi-entry-dt-cross-manager-01": "/nix/store/xs9rihi5nvjqd44l7smxw7a6r37mq19j-gemini-daemon-0903d3c227654da4a9be340dfb186a49",
+      "efi-key-events-manager-02": "/nix/store/c7679k2rcaqw74hax6pcxdjcsr5bmkv6-gemini-daemon-99d09aee533443478a6242c44eb0f09f",
+      "desktop-keyboard-01": "/nix/store/b9armv8b79prchpd35fkwb351djah5vq-gemini-daemon-acc3205b3d71497f8abbd9be0f44885f",
+      "power-kernel-01": "/nix/store/55yqnig6lbaah84qksw4vq3hpgjvshy1-gemini-daemon-03881eb51b284c24969acba4294c6fdf",
+      "boot-test-76": "/nix/store/6vbxynz1hyygw4wd13qddfv6fpi37hvc-gemini-daemon-b6ce03cefdde49b68f9ad6f756724590",
+      "boot-test-79": "/nix/store/v2fm4864nzr52xlr9f6dsb9rv16yshy9-gemini-daemon-26d343c8a26c4f3dbf7df8389544a1b7"
+    },
+    "paging": {
+      "boot_id": "0a953aa9-a16b-485b-ad98-8857414f82e7",
+      "cmdline": "console=tty0 console=ttyMT0,921600n1 root=/dev/ram vmalloc=496M slub_max_order=0 slub_debug=OFZPU androidboot.hardware=mt6797 maxcpus=5 androidboot.verifiedbootstate=green bootopt=64S3,32N2,64N2 init=/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade/init slub_debug=- slub_max_order=3 zswap.enabled=0 noresume systemd.gpt_auto=0 systemd.mask=dev-mmcblk0p34.swap systemd.mask=dev-disk-by\\x2dpartuuid-5e0f3a1c\\x2d9b2d\\x2d4c8e\\x2da7f6\\x2d2d1b0c9e8a71.swap systemd.mask=swap.target androidboot.veritymode=enforcing printk.disable_uart=1 bootprof.pl_t=4721 bootprof.lk_t=4283 boot_reason=3 androidboot.serialno=0123456789ABCDEF androidboot.bootreason=wdt gpt=1 usb2jtag_mode=0 mrdump_ddrsv=yes mrdump_rsvmem=0x46000000,0x400000,0x44800000,0xa0e80,0x44000000,0x80000,0x448a0e40,0x1671 console=tty0 console=ttyS0,921600n8 earlycon maxcpus=8 nokaslr loglevel=4 log_buf_len=1M rdinit=/init panic=5 g_ether.dev_addr=42:00:15:19:82:01 g_ether.host_addr=42:00:15:19:82:00 g_ether.iManufacturer=gemini-pda-mainline g_ether.iProduct=Gemini-L-DA921x-Bind g_ether.iSerialNumber=GEMINI_DA921X_BIND_20260729 clk_ignore_unused fbcon=rotate:3 consoleblank=0 fbcon=font:TER16x32 regulator_ignore_unused modprobe.blacklist=mt6797_spm,clk_mt6797_cam,clk_mt6797_seninf_mclk,hi556 fw_devlink=rpm GEMINI_A72_CI9_M39 mtk_wdt.start_at_boot=1 gemini.baseline_lease_capability=gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052",
+      "p34_stat": "      28        0     2080     1115        0        0        0        0        0      732     1115        0        0        0        0        0        0",
+      "swap_rows": "0",
+      "zswap": "N",
+      "resume": "0:0",
+      "p34_dev": "259:2",
+      "paging_policy": "none",
+      "active_swap": false,
+      "flash_swap_active": false,
+      "flash_swap_written_sectors": 0,
+      "masks_from_boot": true,
+      "runtime_policy_writes": false
+    }
+  },
+  "decoder_module_loaded": false,
+  "raw_sha256": {
+    "plan.json": "a7ac96d6a03ff1b7274ebdcd61826aa81f8e33cfa7c2ca84a28eb7a2d7570e1c",
+    "result.json": "9cbb743e5c74a5bcff9c957630f5e58eca4f244206ddbebabfedbe2ce568beb4",
+    "candidate-linux.json": "6ab63085c09ee5a4e46bc309d99721212f3dbaf4d9c47b89c7fb2ac0026b7184",
+    "after.json": "afef5ae4810883026cd16c055ec48339dcd3621eac0d2626c3f2af431cf9a846",
+    "final-idle-check.json": "b7f0ddc514f46cdc0a20904cc0b8940e6e4f9ce2f774a2413a52e2f1ec8b62a6",
+    "power-swap-evidence.json": "aed5ea5d458fd23926381e749c79aa3bc314da3e1f3e0f4bc3ccb03155c48a4c",
+    "candidate-observation.json": "6199d1f67dcdadf03f102479eda4c096237122ce48a08d1101aab0db9bf1e5aa",
+    "rtc-startup/clock.sh": "1ae8e53b00764792beb6a1f5afacf21afedfd0c6db421171966195ef30d4dbea",
+    "rtc-startup/clock.stderr": "e6003999c15c187294b3795837c627862ad07d967e05415096ec4dc92329e20e",
+    "gnome-ipv6/result.json": "7371ec168b9d02ea4f520ac3db4094fd0033b679442fbb4c9dfa34ff7c80aa16"
+  },
+  "diagnostic_sha256": {
+    "candidate-79-ipv6-ssh-timing.stdout": "6243091935fd5e15c2e46ff702eeeabd84c4fa7cf29afe8669f918b678d1be14",
+    "boot-test-79.log": "39296a5292ab3397a078411acffae6f61127672c1e5ca08b802d885906ccdf8f",
+    "boot-test-79-exit.json": "5cc319f54b05a38799195a491c303aa686eab7caccfdbbf1e8b8c07405cb7392",
+    "independent-audit-79/result.json": "fe10e29f6f44a4792f9cbe8fa5a97892dac73027c6d9936e7292d2581ffa67fa",
+    "audit-gnome-terminal.py": "bcc771f0a1617695e6a2b1ff29d09284c831a9802aa976e7332638f14dea2b49"
+  }
+}

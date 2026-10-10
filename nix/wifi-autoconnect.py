@@ -245,7 +245,7 @@ def main():
             accepted = Path('/run/unattended-recovery.accepted').read_text().strip()
             ready_boot = Path('/run/gemini-connectivity/boot-id').read_text().strip()
             ready = Path('/run/gemini-connectivity/result').read_text().strip()
-            if accepted == 'unattended_recovery=healthy' and ready_boot == boot and ready == 'connectivity=passive-scans-ready':
+            if accepted == 'unattended_recovery=healthy' and ready_boot == boot and ready == 'connectivity=firmware-ready':
                 break
         except OSError:
             pass

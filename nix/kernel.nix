@@ -48,6 +48,7 @@ in
       grep -Fqx CONFIG_ARM64_LATE_CPU_PROFILE=y .config
       grep -Fqx CONFIG_DYNAMIC_FTRACE=y .config
       grep -Fqx CONFIG_EVENT_TRACING=y .config
+      grep -Fqx CONFIG_IPV6=y .config
       grep -Fqx CONFIG_ZRAM=y .config
       grep -Fqx CONFIG_ZRAM_BACKEND_LZ4=y .config
       ! grep -Fqx CONFIG_ZRAM_WRITEBACK=y .config
