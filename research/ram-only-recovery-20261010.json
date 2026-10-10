@@ -1,0 +1,102 @@
+{
+  "result": "passed",
+  "hardware_tested": false,
+  "package": "/nix/store/r04f3jp8p4js7r2q6s0s6vh29q9q520n-gemini-ram-only-recovery",
+  "build": {
+    "result": "host-built-not-booted",
+    "hardware_tested": false,
+    "paging_policy": "none",
+    "boot": "direct",
+    "source_bundle": "/nix/store/f6caxvgai44276m24kn0fhwzivs3ir56-gemini-mainline-nixos-bundle",
+    "source_image_sha256": "3d424a1928edd82e314d77a8c1979e18d8129629b3bdb8d3d0220d80997928dd",
+    "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+    "kernel": "/nix/store/ikvqqs4f7qf6q8qd361b5mbhniwla0n2-linux-gemini-7.1.3",
+    "kernel_payload_unchanged": true,
+    "kernel_config_sha256": "0d90a5f2ce7106b7b7ca62c7123059a2b3fb94685dff6391e439c726f8fafc5a",
+    "image_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "initramfs_sha256": "a160914e4a03037e5d925f609f207ac16238edec4fb6fef76a18297b4623e0c5",
+    "archive_entries": 38,
+    "changed_archive_entries": [
+      {
+        "name": "init",
+        "before_sha256": "c4dcf2cdf8977f88e805a5ea656c5f14b2435eccf4b71156f0866f1e8f424b01",
+        "after_sha256": "c579a4202a4d28aa80168b659fe87ef19cd3620e51de6001a951383ccbe0180b"
+      }
+    ],
+    "command_line": "bootopt=64S3,32N2,64N2 init=/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade/init slub_debug=- slub_max_order=3 zswap.enabled=0 noresume systemd.gpt_auto=0 systemd.mask=dev-mmcblk0p34.swap systemd.mask=dev-disk-by\\x2dpartuuid-5e0f3a1c\\x2d9b2d\\x2d4c8e\\x2da7f6\\x2d2d1b0c9e8a71.swap systemd.mask=swap.target",
+    "command_line_bytes": 357,
+    "mask_units": [
+      "dev-mmcblk0p34.swap",
+      "dev-disk-by\\x2dpartuuid-5e0f3a1c\\x2d9b2d\\x2d4c8e\\x2da7f6\\x2d2d1b0c9e8a71.swap",
+      "swap.target"
+    ],
+    "systemd_generator_qualification_required": true,
+    "accepted_baseline_changed": false
+  },
+  "generator": {
+    "program": "/nix/store/wmxjss8gx93bnz0bcj3si4gqrxl25p72-systemd-minimal-aarch64-unknown-linux-gnu-253.6/lib/systemd/system-generators/systemd-debug-generator",
+    "program_sha256": "36ba04bd18a54fd56508e5a25007ba1c95e0809c713cb9b7ae15007062346247",
+    "emulator": "/nix/store/glylmrad7ipgfi9jih2gqjnzzjgxqbwb-qemu-11.1.0/bin/qemu-aarch64",
+    "emulator_sha256": "7018956f78b0f077c9b902154f0bae392660e19f005ef90f29195c8c802393e6",
+    "returncode": 0,
+    "stderr": "",
+    "generated_masks": {
+      "early/dev-mmcblk0p34.swap": "/dev/null",
+      "early/dev-disk-by\\x2dpartuuid-5e0f3a1c\\x2d9b2d\\x2d4c8e\\x2da7f6\\x2d2d1b0c9e8a71.swap": "/dev/null",
+      "early/swap.target": "/dev/null"
+    },
+    "escape_negative_case": "Double backslashes produced incorrect filenames; tested separately and rejected."
+  },
+  "arm64_busybox_syntax": {
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "kernel_notes_sha256": "9ebc2b57f008d474106ff279b60271d100a1ee0d82b695895a8481c3dd5e9839",
+  "matches_current_live_kernel_notes_and_config": true,
+  "build_exit_code": 0,
+  "unit_tests": {
+    "count": 8,
+    "result": "passed"
+  },
+  "source_builder_sha256": "8420818ae0f6137efc0b7097322ea1aeba14a7638f0611255c994e294f5f8a5b",
+  "source_test_sha256": "e5a8d1e09f1c16ded285a9be23c2ae252942138168fdb12159190c4c199b8e82",
+  "accepted_baseline_changed": false,
+  "hardware_trial_started": false,
+  "migration_supervisor_integration_complete": false,
+  "independent_host_reproduction": {
+    "returncode": 0,
+    "byte_identical_files": [
+      "boot-padded-p22.img",
+      "initramfs.cpio.gz",
+      "MANIFEST",
+      "build-result.json"
+    ]
+  },
+  "source_direct_boot_qualification": {
+    "trial": "cleanup-trial-02",
+    "result": "passed",
+    "profile_qualified": true,
+    "candidate_system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+    "candidate_sha256": "3d424a1928edd82e314d77a8c1979e18d8129629b3bdb8d3d0220d80997928dd",
+    "does_not_qualify_rescue_derivative": true
+  },
+  "migration_requirements": {
+    "starting_baseline": "Keep the real installed baseline identity; verify the existing boot has no active swap and both runtime masks before any transition.",
+    "candidate_and_rescue_image_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "supervisor_rescue_image": "The new no-swap derivative only; never stage the old flash-backed image as rollback.",
+    "expected_recovery": "Direct Linux boot of the preserved S70 system and kernel with boot-time swap masks, zswap disabled, no resume and no active swap.",
+    "qualification": "Verify candidate and distinct rescue boots, RTC startup/alarm/cancel/rearm, ordinary Nix build and retained data, untouched GPT/protected partitions, zero p34 writes, terminal supervisor and independent source/no-writer audit.",
+    "baseline_publication": "Write accepted metadata only after full hardware qualification; record paging_policy=none accurately, not zram.",
+    "normal_zram_trials": "Allow a qualified no-swap migration recovery as a temporary RAM-only fallback; candidates still require actual zram paging and GNOME qualification.",
+    "current_status": "Host build and component checks passed; supervisor integration and hardware qualification not performed."
+  },
+  "self_accept_shell_inspection": {
+    "wrapper": "/nix/store/lizfh2hj38dajxwrqwzjx4s9k0j92hsn-unit-script-gemini-baseline-self-accept-start/bin/gemini-baseline-self-accept-start",
+    "wrapper_sha256": "1b9dd02b1fec63a02f9a10eea648a27d6ad84929076609f63897c47a0661082f",
+    "implementation": "/nix/store/d42vclg5bdd3zzk79dlji4mnfmd8krri-unattended-recovery-baseline-self-accept.sh",
+    "implementation_sha256": "4ed929cdfe1198bea274fc0ac97c8ef639663987d06978309d4d9c716bf1801c",
+    "requires_active_swap_or_enabled_zswap_in_shell": false,
+    "scope": "Referenced service shell scripts; this is not a hardware boot or binary behavior qualification."
+  }
+}

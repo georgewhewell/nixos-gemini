@@ -40,6 +40,11 @@ also passes ARM64 compilation with `W=1` and strict MODPOST against that media
 kernel. It requires a delivered done event before accepting a picture, and
 synchronizes the handler before reset or power release. This candidate has
 not been loaded; previous polling results do not qualify IRQ delivery.
+For recovery migration only, a [temporary no-swap rescue derivative](ram-only-recovery-20261010.json)
+preserves the recorded working 7.1.3 kernel, DTB and userspace. It removes early
+disk resume, disables zswap and masks swap at every boot. This host-built image
+is not accepted or hardware-qualified; the normal development base remains
+the current 7.2.9 zram system.
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the

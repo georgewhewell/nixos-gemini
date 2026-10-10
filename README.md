@@ -91,6 +91,11 @@ overlay. Historical image trials still accept `--reclaim-cache`.
 The generation updater also requires an accepted RAM-only recovery baseline
 and a qualified zram trial; old successful disk-backed paging trials cannot
 promote a generation.
+The [temporary rescue build](research/ram-only-recovery-20261010.json) reuses the
+working 7.1.3 kernel and userspace with swap disabled from boot and early disk
+resume removed. Its host checks pass, but it has not been booted or accepted.
+Supervisor integration and device qualification remain prerequisites for the
+recovery migration; the current normal-trial gate remains in force.
 
 For measurements that need services started after boot acceptance, add
 `--observe-seconds 90` (0–90 seconds, default 0). The runner records
