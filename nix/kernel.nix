@@ -8,7 +8,7 @@
 in
   buildPkgs.stdenv.mkDerivation {
     pname = "linux-gemini";
-    version = "7.1.3";
+    version = "7.2.9";
     src = source;
     hardeningDisable = ["all"];
     nativeBuildInputs =
@@ -41,6 +41,7 @@ in
       unset NIX_LDFLAGS
       kernelMakeFlags=(ARCH=arm64 CROSS_COMPILE=aarch64-unknown-linux-gnu-)
       make "''${kernelMakeFlags[@]}" gemini_defconfig
+      test "$(make -s "''${kernelMakeFlags[@]}" kernelversion)" = "$version"
       # Kconfig can silently drop a requested symbol when a dependency
       # changes. Both parts are required before late A72 startup is usable.
       grep -Fqx CONFIG_ARM64_MT6797_A72_CAPABILITY_PROFILE=y .config
@@ -99,7 +100,7 @@ in
     installPhase = ''
       runHook preInstall
       mkdir -p "$out"
-      cp arch/arm64/boot/Image arch/arm64/boot/Image.gz System.map vmlinux "$out/"
+      cp arch/arm64/boot/Image arch/arm64/boot/Image.gz System.map vmlinux Module.symvers "$out/"
       cp arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dtb "$out/base.dtb"
       cp .config "$out/kernel.config"
       release=$(make -s "''${kernelMakeFlags[@]}" kernelrelease)
@@ -109,7 +110,7 @@ in
       {
         echo "source-revision=${source.rev or source.narHash}"
         echo "kernel-release=$release"
-        (cd "$out" && sha256sum Image Image.gz base.dtb kernel.config System.map vmlinux)
+        (cd "$out" && sha256sum Image Image.gz base.dtb kernel.config System.map vmlinux Module.symvers)
       } > "$out/BUILD-MANIFEST"
       runHook postInstall
     '';

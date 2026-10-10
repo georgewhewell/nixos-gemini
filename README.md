@@ -1,6 +1,9 @@
 # NixOS on the Planet Computers Gemini PDA
 
-This repository packages Linux 7.1.3 and NixOS for the MT6797X Gemini.
+This branch packages Linux 7.2.9 and NixOS for the MT6797X Gemini.
+The 7.2.9 port passes the kernel build, host checks and supervised device
+boot/RTC/paging/Nix checks. The accepted installed baseline remains 7.1.3. See the
+[kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
 The default build includes EFI boot support, a persistent Nix daemon,
 desktop keyboard layout, zswap writeback, watchdog and MT6351 RTC fixes.
 Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
@@ -28,8 +31,9 @@ nix build .#mtkclient      # Open-source flashing tool, including RTC preservati
 nix build .#recovery       # Exact installed M69 recovery bundle
 ```
 
-The maintained Linux checkout is `../linux`, branch `gemini`, pinned by
-`flake.lock`. [nix/gemini.nix](nix/gemini.nix) composes one kernel and one NixOS
+The maintained Linux source is branch `gemini-7.2.9`, pinned by `flake.lock`.
+The port uses a separate worktree while the original `../linux` checkout keeps
+its uncommitted diagnostics. [nix/gemini.nix](nix/gemini.nix) composes one kernel and one NixOS
 system; driver fixes belong in Linux, rather than new package variants.
 The hardware settings now live in Linux's board DTS and `gemini_defconfig`;
 the default build no longer applies hardware overlays or edits DT properties.
@@ -45,8 +49,9 @@ the installed systemd-boot image without the former fixed disk hashes or
 embedded display/storage test apps. Its flashable image includes the normal
 Linux fallback. The keyboard build depends only on its keymap and input header,
 so unrelated firmware changes no longer rebuild the userspace image.
-The flake currently uses local Git inputs for Linux and U-Boot; reproducing it
-requires those checkouts, or explicit `--override-input` paths.
+The active Linux input points to the pinned commit in our GitHub kernel remote.
+The remaining local Git inputs, including U-Boot, still require their checkouts
+or explicit `--override-input` paths.
 
 The `mainlineNixosBundle` and component names remain aliases of the normal
 build. Historical experiments and the vendor 3.18 system are available under
