@@ -1,8 +1,8 @@
 # Independent MT6797 H.264 implementation
 
 This directory contains original GPL-2.0-only control translation, temporary
-kernel diagnostics and independently verified H.264 fixtures. It does not expose
-a video device or decode a frame. Encoding is not implemented.
+kernel diagnostics and independently verified H.264 fixtures. It produces partial
+decoded pixels but no complete qualified frame or video device. Encoding is not implemented.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.
@@ -235,6 +235,17 @@ other bits; `frame_format=1` sets its non-field-compact output bit at `0x920[24]
 Both MC words are restored after idle. The newer reference has different core
 routing on some configurations; none of its extra MMIO banks is mapped here.
 These additional facts are candidates, not proven MT6797 compatibility.
+Trial 19 finds MISC `0x178` initially `0xffffffff`. Its `0x1f` reference mask
+does not unlock output; zero produces 4,992 pixel writes. PCM matches 4,608 of
+6,144 samples in the candidate MM21 layout, with additional written chroma
+mismatches; the grey fixture matches all 4,992 written samples. Missing strips
+and frame timeout remain. The MC queue bit changes no output, and bit24 at
+`0x920` is already set. Clock restoration, guards, idle/unload and full system
+recovery pass. Partial matches do not qualify the entire layout or a frame.
+`frame_pixels=1` tests the newer TOP `0x70` width/height word for the fixed
+64x64 fixture. `frame_crc=1` separately tests the newer MISC `0x4[4]` setting,
+preserving other bits. Both words use the existing post-idle save/restore path;
+they are compiled but not yet hardware tested.
 These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM

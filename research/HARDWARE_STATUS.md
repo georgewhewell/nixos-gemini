@@ -77,7 +77,14 @@ remains unchanged. Twenty frame commands have zero successful pixel comparisons.
 System/RTC/recovery and the final accepted-board audit pass. The newer pinned
 GPL MT6795 reference adds a third local power-down mask at MISC `0x178` and
 two MC memory/output mode bits; bounded save/restore diagnostics are prepared
-but not yet tested. A
+but not yet tested at that point. Trial 19 subsequently enables partial pixel
+output by clearing MISC `0x178`; its reference `0x1f` mask leaves output untouched.
+PCM matches 4,608 of 6,144 candidate MM21 samples; grey matches all 4,992 written
+samples. Missing strips, PCM chroma mismatches and frame timeout remain.
+Twenty-five frame commands have no completed-frame comparison. Clock restoration,
+guards, idle/unload and full system/RTC/recovery pass. The next bounded test adds
+the newer public pixel-dimension word at TOP `0x70` and isolates output routes.
+A
 27-byte patterned compressed intra reference passes all 6,144 samples against
 FFmpeg; it has not run on hardware. Hardware video decoding and encoding remain
 unqualified. The target is

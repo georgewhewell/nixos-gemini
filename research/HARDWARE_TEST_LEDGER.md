@@ -1512,3 +1512,27 @@ read back after proven idle. No additional MMIO bank, arbitrary buffer address,
 reference picture or firmware is used. The external module builds with strict
 modpost against the exact candidate kernel. These new variants are not yet
 hardware qualified.
+
+Private frame trial `handoff/boot-test-video-frame-19` runs one command-free
+control and five frame commands. MISC `0x178` initially reads `0xffffffff`;
+the `0x1f` reference mask still stalls at MB 1/1 without output. Clearing it
+to zero advances MC to 3/3, produces 64 MV flags and writes 4,992 output bytes.
+Three PCM output allocations are identical, SHA256
+`81f406a83336d4e58cc14748d0cbc402aea53fd8339cb7ba38f0fd3a422d5eb2`.
+Candidate MM21 unpacking matches 4,608 of 6,144 sample bytes, including every
+written luma byte, but 384 written chroma samples differ. The grey job matches
+all 4,992 written samples; 1,152 samples remain poisoned. Missing luma strips
+are rows 12..15, 28..31 and 44..47. Neither partial pixels nor MC coordinates
+establish a completed frame or full layout. All commands still time out.
+MC bank8 makes no output difference; MC `0x920[24]` was already set.
+The third clock word restores exactly to its original value. Input, guards,
+both stop acknowledgements, idle reset and normal unload pass. Full boot/
+paging/Nix/all RTC/recovery and final source/no-writer checks pass. The accepted
+board is healthy and untainted at `eefc734a-cc9b-4296-bfc2-c685a009044d`.
+Twenty-five frame commands have zero completed-frame comparisons.
+
+The newer public H.264 frame setup also writes pixel width/height to TOP `0x70`
+and MISC `0x4[4]`. Separate optional diagnostics preserve unrelated bits and
+restore both words only after proven idle. The fixed 64x64 picture and all DMA
+bounds remain the same. These changes build against the exact kernel; the next
+trial tests pixel dimensions, PP modes/direct MC output and the MISC setting.

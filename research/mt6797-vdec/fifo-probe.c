@@ -94,6 +94,12 @@ MODULE_PARM_DESC(frame_bank8, "Test public MC_QIU_BANK8 at MC 0x5e4 bit17, prese
 static bool frame_format;
 module_param(frame_format, bool, 0444);
 MODULE_PARM_DESC(frame_format, "Test the newer public non-field-compact setting at MC 0x920 bit24");
+static bool frame_pixels;
+module_param(frame_pixels, bool, 0444);
+MODULE_PARM_DESC(frame_pixels, "Program the newer public TOP 0x70 pixel-size word for the fixed 64x64 picture");
+static bool frame_crc;
+module_param(frame_crc, bool, 0444);
+MODULE_PARM_DESC(frame_crc, "Test the newer public MISC 0x4 bit4 setting before frame submission");
 static unsigned int dma_bits = TEST_DMA_BITS;
 module_param(dma_bits, uint, 0444);
 MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
@@ -174,7 +180,7 @@ struct fifo_probe {
 	unsigned int frame_saved_count;
 	u32 frame_state, frame_irq, frame_error, frame_message, frame_mbx, frame_mby;
 	u32 frame_input_first, frame_input_data;
-	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[19];
+	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[21];
 	bool frame_work_changed[4]; /* prediction, MV, VLD wrapper, PP wrapper */
 	bool frame_work_before[4];
 	int frame_result;
@@ -517,6 +523,14 @@ static int test_frame(struct fifo_probe *p)
 	frame_reg(p, p->avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
 	frame_reg(p, p->avc + 0x2c8, readl(p->avc + 0x2c8) & ~BIT(5));
 	frame_reg(p, p->top + 0x68, 3 | (3 << 16));
+	/* The newer pinned public interface also supplies dimensions in pixels.
+	 * The original fixture fixes both dimensions, so no unvalidated geometry
+	 * or additional DMA destination is introduced by this diagnostic.
+	 */
+	if (frame_pixels)
+		frame_reg(p, p->top + 0x70, 64 | (64U << 16));
+	if (frame_crc)
+		frame_reg(p, p->misc + 0x4, readl(p->misc + 0x4) | BIT(4));
 	frame_reg(p, p->top + 0x58, 0xffffffff);
 	frame_reg(p, p->top + 0x6c, 16);
 	frame_reg(p, p->top + 0x50, 0xffffffff);
@@ -633,6 +647,8 @@ static int test_frame(struct fifo_probe *p)
 	p->frame_pipeline[16] = readl(p->mc + 0x268);
 	p->frame_pipeline[17] = readl(p->misc + PDN_MODULE2);
 	p->frame_pipeline[18] = readl(p->mc + 0x920);
+	p->frame_pipeline[19] = readl(p->top + 0x70);
+	p->frame_pipeline[20] = readl(p->misc + 0x4);
 	return ret;
 }
 
@@ -652,7 +668,7 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		"\"mv_valid\":%u,\"pp_enable\":%u,\"post_writeback\":%u,\"opbuf\":%u,"
 		"\"ddr0\":%u,\"ddr1\":%u,\"ddr3\":%u,\"mc_mode\":%u,\"pp_wrapper_control\":%u,"
 		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u,\"pp_mode\":%u,"
-		"\"pdn_module2\":%u,\"frame_format\":%u}}\n",
+		"\"pdn_module2\":%u,\"frame_format\":%u,\"pixel_size\":%u,\"crc_control\":%u}}\n",
 		p->frame_setup[0], p->frame_setup[1], p->frame_setup[2], p->frame_setup[3],
 		p->frame_setup[4], p->frame_setup[5], p->frame_setup[6], p->frame_setup[7],
 		p->frame_setup[8], p->frame_setup[9], p->frame_setup[10], p->frame_setup[11],
@@ -665,7 +681,8 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		p->frame_pipeline[4], p->frame_pipeline[5], p->frame_pipeline[6], p->frame_pipeline[7],
 		p->frame_pipeline[8], p->frame_pipeline[9], p->frame_pipeline[10], p->frame_pipeline[11],
 		p->frame_pipeline[12], p->frame_pipeline[13], p->frame_pipeline[14], p->frame_pipeline[15],
-		p->frame_pipeline[16], p->frame_pipeline[17], p->frame_pipeline[18]);
+		p->frame_pipeline[16], p->frame_pipeline[17], p->frame_pipeline[18],
+		p->frame_pipeline[19], p->frame_pipeline[20]);
 }
 static DEVICE_ATTR_RO(frame_registers);
 
@@ -675,6 +692,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 	return sysfs_emit(buf,
 		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,\"config_only\":%s,"
 		"\"h264_pp\":%s,\"mc_output\":%s,\"extended_clocks\":%u,\"bank8\":%s,\"frame_format\":%s,"
+		"\"pixel_size_programmed\":%s,\"crc_programmed\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
@@ -690,6 +708,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		frame_h264_pp ? "true" : "false",
 		frame_mc_output ? "true" : "false",
 		extended_clocks, frame_bank8 ? "true" : "false", frame_format ? "true" : "false",
+		frame_pixels ? "true" : "false", frame_crc ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -856,7 +875,7 @@ static int fifo_probe(struct platform_device *pdev)
 		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output || extended_clocks || frame_bank8 || frame_format || frame_pixels || frame_crc)) ||
 	    (frame_flat && frame_pattern))
 		return -EINVAL;
 	if (extended_clocks > 2)
