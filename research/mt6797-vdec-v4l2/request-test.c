@@ -1,0 +1,245 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/* Original public-API exerciser. Fixtures are generated from public H.264
+ * syntax; compare-frame.py independently checks every returned sample.
+ */
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/media.h>
+#include <linux/videodev2.h>
+#include <poll.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <time.h>
+#include <unistd.h>
+typedef uint8_t u8;
+#include "../mt6797-vdec/pcm64-fixture.h"
+
+struct mapping { void *address; size_t bytes; };
+struct stream {
+	int video, media;
+	struct mapping source, capture[2];
+};
+static const char *status_path;
+
+static void fail(const char *operation)
+{
+	perror(operation);
+	exit(1);
+}
+
+static void checked_ioctl(int fd, unsigned long command, void *arg, const char *operation)
+{
+	int ret;
+	do { ret = ioctl(fd, command, arg); } while (ret < 0 && errno == EINTR);
+	if (ret < 0)
+		fail(operation);
+}
+
+static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
+{
+	struct v4l2_format format = { .type = type };
+	struct v4l2_requestbuffers request = { .type = type, .memory = V4L2_MEMORY_MMAP, .count = 1 };
+	struct v4l2_plane planes[2] = { 0 };
+	struct v4l2_buffer buffer = { .type = type, .memory = V4L2_MEMORY_MMAP,
+		.length = type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ? 1 : 2, .m.planes = planes };
+	checked_ioctl(stream->video, VIDIOC_G_FMT, &format, "G_FMT");
+	if (format.fmt.pix_mp.width != 64 || format.fmt.pix_mp.height != 64 ||
+	    format.fmt.pix_mp.pixelformat != (buffer.length == 1 ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21)) {
+		fprintf(stderr, "Unexpected advertised format\n"); exit(1);
+	}
+	checked_ioctl(stream->video, VIDIOC_TRY_FMT, &format, "TRY_FMT");
+	checked_ioctl(stream->video, VIDIOC_S_FMT, &format, "S_FMT");
+	checked_ioctl(stream->video, VIDIOC_REQBUFS, &request, "REQBUFS");
+	if (!request.count || (buffer.length == 1 && !(request.capabilities & V4L2_BUF_CAP_SUPPORTS_REQUESTS))) {
+		fprintf(stderr, "Queue does not support the required allocation/request API\n"); exit(1);
+	}
+	checked_ioctl(stream->video, VIDIOC_QUERYBUF, &buffer, "QUERYBUF");
+	for (unsigned int i = 0; i < buffer.length; i++) {
+		struct mapping *mapping = buffer.length == 1 ? &stream->source : &stream->capture[i];
+		mapping->bytes = planes[i].length;
+		mapping->address = mmap(NULL, mapping->bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
+					stream->video, planes[i].m.mem_offset);
+		if (mapping->address == MAP_FAILED)
+			fail("mmap");
+	}
+}
+
+static void open_stream(struct stream *stream, const char *video, const char *media)
+{
+	struct v4l2_capability cap;
+	memset(stream, 0, sizeof(*stream));
+	stream->video = open(video, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+	if (stream->video < 0) fail("open video");
+	stream->media = open(media, O_RDWR | O_CLOEXEC);
+	if (stream->media < 0) fail("open media");
+	checked_ioctl(stream->video, VIDIOC_QUERYCAP, &cap, "QUERYCAP");
+	if (strcmp((char *)cap.driver, "mt6797-vdec")) {
+		fprintf(stderr, "Unexpected video driver\n"); exit(1);
+	}
+	allocate_queue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
+	allocate_queue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+	for (unsigned int i = 0; i < 2; i++) {
+		enum v4l2_buf_type type = i ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+		checked_ioctl(stream->video, VIDIOC_STREAMON, &type, "STREAMON");
+	}
+}
+
+static void close_stream(struct stream *stream)
+{
+	for (unsigned int i = 0; i < 2; i++) {
+		enum v4l2_buf_type type = i ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+		checked_ioctl(stream->video, VIDIOC_STREAMOFF, &type, "STREAMOFF");
+	}
+	munmap(stream->source.address, stream->source.bytes);
+	for (unsigned int i = 0; i < 2; i++) munmap(stream->capture[i].address, stream->capture[i].bytes);
+	close(stream->media);
+	close(stream->video);
+}
+
+static int64_t milliseconds(void)
+{
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now)) fail("clock_gettime");
+	return now.tv_sec * 1000LL + now.tv_nsec / 1000000;
+}
+
+static void dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_error,
+		    unsigned int timestamp, unsigned int sequence)
+{
+	struct v4l2_plane planes[2] = { 0 };
+	struct v4l2_buffer buffer = { .type = type, .memory = V4L2_MEMORY_MMAP,
+		.length = type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ? 1 : 2, .m.planes = planes };
+	int64_t deadline = milliseconds() + 5000;
+	for (;;) {
+		if (!ioctl(stream->video, VIDIOC_DQBUF, &buffer)) break;
+		if (errno == EINTR) continue;
+		if (errno != EAGAIN) fail("DQBUF");
+		if (milliseconds() >= deadline) {
+			fprintf(stderr, "DQBUF timed out\n"); exit(1);
+		}
+		struct pollfd pollfd = { .fd = stream->video, .events = POLLIN | POLLOUT };
+		if (poll(&pollfd, 1, 50) < 0 && errno != EINTR) fail("poll video");
+	}
+	if (!!(buffer.flags & V4L2_BUF_FLAG_ERROR) != expect_error || buffer.index) {
+		fprintf(stderr, "Unexpected completed buffer flags %#x\n", buffer.flags); exit(1);
+	}
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+	    (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec ||
+	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : 4096U) ||
+	     planes[1].bytesused != (expect_error ? 0U : 2048U))) {
+		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); exit(1);
+	}
+}
+
+static void decode(struct stream *stream, const char *out, const char *name,
+		   const u8 *nal, size_t bytes, int predicted, int patterned,
+		   int expect_error, unsigned int timestamp, unsigned int sequence)
+{
+	struct v4l2_ctrl_h264_sps sps = {
+		.profile_idc = 66, .level_idc = 10, .constraint_set_flags = 3,
+		.chroma_format_idc = 1, .max_num_ref_frames = 1,
+		.pic_width_in_mbs_minus1 = 3, .pic_height_in_map_units_minus1 = 3,
+		.flags = V4L2_H264_SPS_FLAG_FRAME_MBS_ONLY | V4L2_H264_SPS_FLAG_DIRECT_8X8_INFERENCE,
+	};
+	struct v4l2_ctrl_h264_pps pps = { .flags = V4L2_H264_PPS_FLAG_DEBLOCKING_FILTER_CONTROL_PRESENT };
+	struct v4l2_ctrl_h264_slice_params slice = {
+		.header_bit_size = predicted ? 26 : patterned ? 38 : 28,
+		.slice_qp_delta = patterned ? 20 : 0,
+		.slice_type = predicted ? V4L2_H264_SLICE_TYPE_P : V4L2_H264_SLICE_TYPE_I,
+		.disable_deblocking_filter_idc = 1,
+	};
+	struct v4l2_ctrl_h264_decode_params params = {
+		.nal_ref_idc = predicted ? 2 : 3,
+		.flags = predicted ? V4L2_H264_DECODE_PARAM_FLAG_PFRAME : V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC,
+		.frame_num = predicted ? 1 : 0, .pic_order_cnt_lsb = predicted ? 2 : 0,
+		.top_field_order_cnt = predicted ? 2 : 0, .bottom_field_order_cnt = predicted ? 2 : 0,
+	};
+	if (predicted) {
+		params.dpb[0].reference_ts = 1000000000ULL;
+		params.dpb[0].fields = V4L2_H264_FRAME_REF;
+		params.dpb[0].flags = V4L2_H264_DPB_ENTRY_FLAG_VALID | V4L2_H264_DPB_ENTRY_FLAG_ACTIVE;
+		slice.ref_pic_list0[0].fields = V4L2_H264_FRAME_REF;
+	}
+	struct v4l2_ext_control values[] = {
+		{ .id = V4L2_CID_STATELESS_H264_SPS, .size = sizeof(sps), .ptr = &sps },
+		{ .id = V4L2_CID_STATELESS_H264_PPS, .size = sizeof(pps), .ptr = &pps },
+		{ .id = V4L2_CID_STATELESS_H264_SLICE_PARAMS, .size = sizeof(slice), .ptr = &slice },
+		{ .id = V4L2_CID_STATELESS_H264_DECODE_PARAMS, .size = sizeof(params), .ptr = &params },
+	};
+	int request;
+	checked_ioctl(stream->media, MEDIA_IOC_REQUEST_ALLOC, &request, "REQUEST_ALLOC");
+	struct v4l2_ext_controls controls = { .which = V4L2_CTRL_WHICH_REQUEST_VAL,
+		.request_fd = request, .count = sizeof(values) / sizeof(values[0]), .controls = values };
+	checked_ioctl(stream->video, VIDIOC_S_EXT_CTRLS, &controls, "S_EXT_CTRLS request");
+	memcpy(stream->source.address, nal, bytes);
+	memset(stream->capture[0].address, 0x79, stream->capture[0].bytes);
+	memset(stream->capture[1].address, 0x79, stream->capture[1].bytes);
+	struct v4l2_plane source_plane = { .bytesused = bytes, .length = stream->source.bytes };
+	struct v4l2_buffer source = { .type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+		.memory = V4L2_MEMORY_MMAP, .length = 1, .m.planes = &source_plane,
+		.flags = V4L2_BUF_FLAG_REQUEST_FD, .request_fd = request, .timestamp.tv_sec = timestamp };
+	struct v4l2_plane capture_planes[] = { { .length = stream->capture[0].bytes },
+		{ .length = stream->capture[1].bytes } };
+	struct v4l2_buffer capture = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+		.memory = V4L2_MEMORY_MMAP, .length = 2, .m.planes = capture_planes };
+	checked_ioctl(stream->video, VIDIOC_QBUF, &capture, "QBUF capture");
+	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
+	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
+	dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
+	dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
+	struct pollfd pollfd = { .fd = request, .events = POLLPRI };
+	if (poll(&pollfd, 1, 1000) != 1 || !(pollfd.revents & POLLPRI)) {
+		fprintf(stderr, "Request did not complete\n"); exit(1);
+	}
+	if (!expect_error) {
+		char path[1024];
+		if (snprintf(path, sizeof(path), "%s/%s.bin", out, name) >= (int)sizeof(path)) {
+			fprintf(stderr, "Output path too long\n"); exit(1);
+		}
+		FILE *file = fopen(path, "wb");
+		if (!file) fail("output file");
+		if (fwrite(stream->capture[0].address, 1, 4096, file) != 4096 ||
+		    fwrite(stream->capture[1].address, 1, 2048, file) != 2048 || fclose(file)) fail("write output");
+	}
+	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
+	close(request);
+	char status[512], status_output[1024];
+	FILE *status_file = fopen(status_path, "r");
+	if (!status_file || !fgets(status, sizeof(status), status_file)) fail("read cached job status");
+	fclose(status_file);
+	if (snprintf(status_output, sizeof(status_output), "%s/%s-status.txt", out, name) >= (int)sizeof(status_output)) {
+		fprintf(stderr, "Status path too long\n"); exit(1);
+	}
+	status_file = fopen(status_output, "w");
+	if (!status_file || fputs(status, status_file) == EOF || fclose(status_file)) fail("write cached job status");
+	printf("{\"fixture\":\"%s\",\"expected_error\":%d,\"timestamp\":%u,\"sequence\":%u,\"request_completed\":true}\n",
+		name, expect_error, timestamp, sequence);
+	fflush(stdout);
+}
+
+int main(int argc, char **argv)
+{
+	struct stream stream;
+	if (argc != 5) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH\n", argv[0]); return 2;
+	}
+	status_path = argv[4];
+	open_stream(&stream, argv[1], argv[2]);
+	decode(&stream, argv[3], "pcm64", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
+	decode(&stream, argv[3], "pcm64-p", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);
+	close_stream(&stream);
+	open_stream(&stream, argv[1], argv[2]);
+	decode(&stream, argv[3], "grey64", grey64_nal, sizeof(grey64_nal), 0, 0, 0, 1, 0);
+	decode(&stream, argv[3], "pattern64", pattern64_nal, sizeof(pattern64_nal), 0, 1, 0, 2, 1);
+	close_stream(&stream);
+	open_stream(&stream, argv[1], argv[2]);
+	decode(&stream, argv[3], "missing-reference", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 2, 0);
+	close_stream(&stream);
+	puts("{\"public_api_test_passed\":true}");
+	return 0;
+}

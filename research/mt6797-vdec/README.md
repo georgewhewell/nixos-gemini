@@ -395,3 +395,55 @@ The next matrix tests corrected restart, active wrapper path and real IRQs.
 These additions build with strict modpost against the exact kernel, but P
 decoding and interrupt-driven jobs remain unqualified. V4L2 and encoding
 are not implemented.
+
+Private frame trial `handoff/boot-test-video-frame-23` proves the corrected
+PCM-to-P-skip restart. Both actual hardware I/P snapshots match all 6,144
+samples with zero error/message words, under active and extended wrapper
+paths. Whole reference allocations remain unchanged. Slot0 receives the
+full reference IOVA, PicNum0 and MV metadata `0x200000/0x600000`; the current
+P picture uses frameNum1 and POC2. Active-wrapper patterned intra also passes.
+Two interrupt-driven PCM/grey jobs produce exact pixels and native complete
+status, but zero IRQs arrive and their software completion waits time out.
+They remain failed jobs. No unclassified interrupt or storm occurs.
+Seven actual commands produce complete exact pixel comparisons; five polling
+jobs meet every required completion check. Input/guards, documented stop/idle
+and normal unload pass for every profile. Full boot/paging/Nix/all RTC/
+recovery and final no-writer audit pass. The accepted board is healthy and
+untainted at `8857cf5e-abd1-47d5-970f-4a878d9d263f`. Aggregate: 46 commands, 19 native-complete
+exact pixel comparisons, 13 error-free pixel comparisons and 11 successful
+zero-error polling jobs, with 7 command-free controls.
+
+The separately developed V4L2 backend initially targets the tested fixed
+64x64 progressive Baseline, single-slice, one short-term reference cases.
+It uses bounded worker polling, request control translation, private guarded
+DMA, full reference comparisons and per-context timestamp lookup. A fatal
+stop failure retains independent DMA ownership and power until reboot.
+Backend/frontend integration is still being implemented and is not hardware
+qualified. No V4L2 video node is advertised by the accepted system. Varied
+geometry, broader codec coverage and encoding remain unqualified.
+
+
+### 2026-10-10: V4L2 registration trial 24 and callback correction
+
+The original Request-API frontend and private-DMA backend build with strict
+modpost against the exact candidate kernel and genuine media-module exports.
+Trial `handoff/boot-test-video-frame-24` first failed to load because BusyBox
+modprobe looked for absent `/lib/modules`; explicit candidate Nix-store module
+paths resolved that setup failure. The same-boot/same-blob retry registered the
+driver, then udev `v4l_id` triggered a kernel panic in `query_capability+0x48`.
+Retained pstore proves Linux 7.1 passed `priv=NULL`; the new callback wrongly
+converted it to a file context. No owned userspace decode test or frame command
+ran. The corrected capability query uses no per-file state, and set-format now
+uses `file_to_v4l2_fh(file)`. Both changes compile; a new trial is pending.
+
+The supervisor rejected the candidate and verified accepted recovery boot
+`d59d8301-c9a0-470e-8ec1-c476743d9a3d`, protected hashes, all 35 source hashes
+and no writer. The stricter recovered-board journal audit also failed: it found
+a WiFi HIF fault `-75` and an automatic WLAN restart in the accepted kernel.
+That boot is healthy and untainted, but has no fault-free audit. Both failures
+are retained separately; no decoder qualification is inferred from trial 24.
+
+The original fixture generator now admits 64/128 pixel widths and 64/96/128
+pixel heights. Independent FFmpeg checks prove all samples in new 128x96 PCM,
+grey, patterned intra and I-to-P streams. Default 64x64 NALs, streams, sample
+bytes and C arrays remain byte-identical. Wider hardware decoding is untested.

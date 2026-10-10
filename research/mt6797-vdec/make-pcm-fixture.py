@@ -66,8 +66,13 @@ def main():
                         help='Independent software decoder used to check every pixel')
     parser.add_argument('--p-skip', action='store_true',
                         help='Also verify an original P picture referencing the I_PCM frame')
+    parser.add_argument('--width', type=int, default=64)
+    parser.add_argument('--height', type=int, default=64)
     args = parser.parse_args()
-    width = height = 64
+    width, height = args.width, args.height
+    if width not in (64, 128) or height not in (64, 96, 128):
+        parser.error('Fixture geometry must be width 64/128 and height 64/96/128')
+    mb_width, mb_height = width // 16, height // 16
     sps = Bits()
     sps.put(66, 8)  # Baseline
     sps.put(0xc0, 8)  # Constraint sets 0 and 1
@@ -108,7 +113,7 @@ def main():
     header_bits = 8 + len(picture.bits)  # From NAL header, excluding start code
     y = bytes(16 + (x + 2 * row) % 220 for row in range(height) for x in range(width))
     u = bytes(64 + x + row for row in range(height // 2) for x in range(width // 2))
-    v = bytes(128 + x + 2 * row for row in range(height // 2) for x in range(width // 2))
+    v = bytes(128 + (x + 2 * row) % 128 for row in range(height // 2) for x in range(width // 2))
     for mb_y in range(height // 16):
         for mb_x in range(width // 16):
             picture.ue(25)  # I_PCM in an I slice
@@ -144,18 +149,18 @@ def main():
                 profile_idc=66, level_idc=10, constraint_set_flags=3,
                 max_num_ref_frames=1, log2_max_frame_num_minus4=0,
                 pic_order_cnt_type=0, log2_max_pic_order_cnt_lsb_minus4=0,
-                pic_width_in_mbs_minus1=3, pic_height_in_map_units_minus1=3,
+                pic_width_in_mbs_minus1=mb_width - 1, pic_height_in_map_units_minus1=mb_height - 1,
                 sps_flags=0x50, pps_flags=8, first_mb_in_slice=0, slice_type=2,
                 slice_qp_delta=0, disable_deblocking_filter_idc=1, nal_ref_idc=3,
                 decode_flags=1, software_decode_verified=True,
                 hashes={name: hashlib.sha256(data).hexdigest()
                         for name, data in artifacts.items()})
     (args.out / 'pcm64.json').write_text(json.dumps(info, indent=2) + '\n')
-    print('Verified 64x64 baseline I_PCM frame:', len(nals[2]), 'NAL bytes,',
+    print(f'Verified {width}x{height} baseline I_PCM frame:', len(nals[2]), 'NAL bytes,',
           header_bits, 'header bits,', len(expected), 'matching decoded bytes')
     flat = Bits()
     flat.bits = picture.bits[:header_bits - 8].copy()
-    for _ in range(16):
+    for _ in range(mb_width * mb_height):
         flat.ue(3)  # I_16x16, DC prediction, no coded AC or chroma residual
         flat.ue(0)  # DC chroma prediction
         flat.se(0)  # Unchanged QP
@@ -193,8 +198,8 @@ def main():
     pattern.ue(1)
     pattern_header_bits = 8 + len(pattern.bits)
     block_values = []
-    for mb_y in range(4):
-        for mb_x in range(4):
+    for mb_y in range(mb_height):
+        for mb_x in range(mb_width):
             negative = (mb_x * 3 + mb_y * 5) % 4 >= 2
             pattern.ue(3)
             pattern.ue(0)
@@ -205,15 +210,15 @@ def main():
             # ITU-T H.264 8.3.3.3 and 8.5.10: flat scaling 16, QP46,
             # DC level +/-1 -> scaled DC +/-512 -> sample residual +/-8.
             left = block_values[-1] if mb_x else None
-            top = block_values[(mb_y - 1) * 4 + mb_x] if mb_y else None
+            top = block_values[(mb_y - 1) * mb_width + mb_x] if mb_y else None
             prediction = ((left + top + 1) // 2 if left is not None and top is not None
                           else left if left is not None else top if top is not None else 128)
             block_values.append(max(0, min(255, prediction + (-8 if negative else 8))))
     pattern.trailing()
     pattern_nal = nal(0x65, pattern.bytes())
     pattern_stream = b''.join(b'\0\0\0\1' + item for item in (*nals[:2], pattern_nal))
-    pattern_expected = bytes(block_values[(row // 16) * 4 + x // 16]
-                             for row in range(64) for x in range(64)) + bytes([128]) * 2048
+    pattern_expected = bytes(block_values[(row // 16) * mb_width + x // 16]
+                             for row in range(height) for x in range(width)) + bytes([128]) * (width * height // 2)
     decoded = subprocess.run(
         [args.ffmpeg, '-v', 'error', '-nostdin', '-f', 'h264', '-i', 'pipe:0',
          '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', 'pipe:1'],
@@ -250,7 +255,7 @@ def main():
         predicted.se(0)
         predicted.ue(1)  # Deblocking disabled
         predicted_header_bits = 8 + len(predicted.bits)
-        predicted.ue(16)  # All sixteen macroblocks skip with inferred zero MV
+        predicted.ue(mb_width * mb_height)  # All macroblocks skip with inferred zero MV
         predicted.trailing()
         predicted_nal = nal(0x41, predicted.bytes())
         sequence = stream + b'\0\0\0\1' + predicted_nal
