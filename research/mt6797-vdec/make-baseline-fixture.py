@@ -28,9 +28,9 @@ def main():
     w, h, count = args.width, args.height, args.frames
     cabac = args.entropy == 'cabac'
     profile = 'main' if cabac else 'baseline'
-    if not (64 <= w <= 640 and 64 <= h <= 480 and not w % 16 and not h % 16
+    if not (64 <= w <= 1920 and 64 <= h <= 1088 and not w % 16 and not h % 2
             and 2 <= count <= 32):
-        parser.error('Use 64..640 by 64..480 in steps of 16 and 2..32 frames')
+        parser.error('Use width64..1920 in steps16, even height64..1088 and2..32frames')
     args.out.mkdir(parents=True, exist_ok=True)
     original = bytearray()
     for frame in range(count):
@@ -73,10 +73,17 @@ def main():
                             ('num_ref_idx_l0_default_active_minus1', 0),
                             ('max_num_ref_frames', 1),
                             ('frame_mbs_only_flag', 1),
+                            ('pic_width_in_mbs_minus1', w // 16 - 1),
+                            ('pic_height_in_map_units_minus1', (h + 15) // 16 - 1),
+                            ('frame_cropping_flag', int(bool(h % 16))),
                             ('disable_deblocking_filter_idc', 0 if args.deblocking else 1)]:
         values = re.findall(r'\b' + field + r'\s+\S+\s+=\s+(\d+)', syntax)
         if not values or any(int(v) != expected for v in values):
             raise RuntimeError(f'Unexpected public syntax {field}: {values}')
+    if h % 16:
+        crop = re.findall(r'\bframe_crop_bottom_offset\s+\S+\s+=\s+(\d+)', syntax)
+        if not crop or any(int(v) != (16 - h % 16) // 2 for v in crop):
+            raise RuntimeError(f'Unexpected progressive4:2:0 crop bottom: {crop}')
     starts = re.findall(r'\bfirst_mb_in_slice\s+\S+\s+=\s+(\d+)', syntax)
     if len(starts) != count or any(int(v) for v in starts):
         raise RuntimeError('Expected exactly one complete slice per frame')
@@ -87,6 +94,7 @@ def main():
                     fixture_encoder='Open-source FFmpeg libx264; no hardware encoder claim',
                     reference='Independent FFmpeg software decode of the lossy stream',
                     software_decode_verified=True, hardware_tested=False,
+                    coded_height=(h+15)//16*16, storage_height=(h+31)//32*32,
                     deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
                     encode_command=command, decode_command=decode_command,
                     public_syntax_checked=True,

@@ -5,8 +5,9 @@
 #include <linux/platform_device.h>
 #include <linux/v4l2-controls.h>
 
-#define MT6797_MAX_WIDTH 640U
-#define MT6797_MAX_HEIGHT 480U
+#define MT6797_MAX_WIDTH 1920U
+#define MT6797_MAX_HEIGHT 1088U
+#define MT6797_MAX_NAL_BYTES (1024U * 1024U - 256U)
 
 struct mt6797_engine;
 struct mt6797_decode_context;

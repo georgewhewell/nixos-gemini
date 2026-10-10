@@ -18,7 +18,7 @@
 #include <media/videobuf2-vmalloc.h>
 #include "engine.h"
 
-#define INPUT_SIZE (SZ_128K - 256)
+#define INPUT_SIZE (MT6797_MAX_NAL_BYTES)
 
 struct decoder {
 	struct device *dev;

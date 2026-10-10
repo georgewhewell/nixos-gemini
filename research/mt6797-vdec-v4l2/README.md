@@ -63,8 +63,8 @@ streams qualified in trial 37 below, one slice,
 I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
 Main/CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The current candidate admits coded widths 64..640 and heights 64..480 in steps
-of 16; media fixture qualification extends through 640x480 in trials 38/39.
+`V4L2_PIX_FMT_MM21`. The current HD candidate admits coded widths 64..1920 and heights 64..1088
+in steps of 16; media fixture qualification extends through 640x480 in trials 38/39.
 Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
 height, and cached references must match it. Trial 30 passes all 18 original
 request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
@@ -168,7 +168,19 @@ ioctl pictures and 66 GStreamer pictures, including both formerly stalled
 streams and a 32-picture 320x240 chain crossing four-bit frame-number wrap.
 All 57 default compliance checks, normal unload, RTC/system/recovery and strict
 kernel-journal audit pass. NAL/header sizes are now assigned after engine status
-initialization and are validated in this trial. Maximum NAL size is 130816 bytes.
+initialization and are validated in this trial. That tested SD build's maximum NAL size is 130816 bytes. The next HD candidate
+uses a 1 MiB private input region plus a 128 KiB guard, with maximum NAL size
+1048320 bytes and the same bounded end-marker lookahead. Its motion buffer
+uses 512 KiB data plus a guard; picture capacity is 3 MiB plus a guard.
+Prediction and wrap buffers retain their qualified sizes. Trial 40 verifies all 66 positive pictures, including Baseline/Main 720p,
+Main 1080p in 1088 coded rows, uncropped Baseline 1920x1088, and exact 1080p
+I420 output. All guards, normal unload, RTC/system/recovery and strict accepted
+board audit pass. Default compliance passes 56/57: many unused opens exhaust
+the eager per-file HD allocations. Large uncached guard scans/copies also add
+130–235 ms to native jobs, so real-time playback is unqualified. A staged fix
+allocates private pictures only after a valid request and to its actual storage
+geometry, and uses the public Linux cached DMA API with explicit ownership.
+That lifecycle/coherence change awaits hardware qualification.
 
 Trial 33 tests enabled deblocking at 64x80, 128x96 and 320x240, plus the original
 long chain. Its 73 successful pictures match independent software references.

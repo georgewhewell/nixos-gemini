@@ -22,12 +22,15 @@
 #include "../mt6797-vdec/mt6797-h264-controls.h"
 
 #define DATA_SIZE SZ_128K
-#define ALLOC_SIZE (2 * DATA_SIZE)
-#define MAX_NAL (DATA_SIZE - 256)
+#define GUARD_SIZE SZ_128K
+#define INPUT_DATA_SIZE SZ_1M
+#define ALLOC_SIZE (DATA_SIZE + GUARD_SIZE)
+#define MOTION_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4, SZ_64K)
+#define MAX_NAL MT6797_MAX_NAL_BYTES
 #define PICTURE_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT * 3 / 2, SZ_64K)
 #define PICTURE_ALLOC_SIZE (PICTURE_DATA_SIZE + DATA_SIZE)
 
-static_assert(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4 <= DATA_SIZE);
+static_assert(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4 <= MOTION_DATA_SIZE);
 
 enum bank { MISC, VLD, TOP, MC, AVC, MV, PP, BANK_COUNT };
 enum memory { INPUT, PREDICTION, MOTION, VLD_WRAP, PP_WRAP, MEMORY_COUNT };
@@ -202,7 +205,9 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	if (!engine->larb_mmu)
 		return ERR_PTR(-ENOMEM);
 	for (i = 0; i < MEMORY_COUNT; i++) {
-		ret = allocate_buffer(engine, &engine->memory[i], ALLOC_SIZE);
+		ret = allocate_buffer(engine, &engine->memory[i],
+				      i == INPUT ? INPUT_DATA_SIZE + GUARD_SIZE :
+				      i == MOTION ? MOTION_DATA_SIZE + GUARD_SIZE : ALLOC_SIZE);
 		if (ret)
 			goto fail;
 	}
@@ -432,7 +437,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	int reference, ret, stop_ret;
 	bool dma_started = false;
 
-	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= DATA_SIZE);
+	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= INPUT_DATA_SIZE);
 	memset(status, 0, sizeof(*status));
 	*pixels = NULL;
 	if (engine->fenced)
@@ -454,14 +459,15 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	 * attempt fails before a replacement picture can be retained.
 	 */
 	ctx->valid[output] = false;
-	memset(input->cpu, 0xa5, ALLOC_SIZE);
+	memset(input->cpu, 0xa5, input->bytes);
 	memcpy(input->cpu, job->nal, job->bytes);
-	memset(input->cpu + job->bytes, 0, DATA_SIZE - job->bytes);
+	memset(input->cpu + job->bytes, 0, INPUT_DATA_SIZE - job->bytes);
 	/* Private end marker and readable zero padding; userspace remains untouched. */
 	memcpy(input->cpu + job->bytes, ending, ending_bytes);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++) {
-		memset(engine->memory[i].cpu, 0, DATA_SIZE);
-		memset(engine->memory[i].cpu + DATA_SIZE, 0xd3, DATA_SIZE);
+		size_t data_bytes = engine->memory[i].bytes - GUARD_SIZE;
+		memset(engine->memory[i].cpu, 0, data_bytes);
+		memset(engine->memory[i].cpu + data_bytes, 0xd3, GUARD_SIZE);
 	}
 	memset(picture->cpu, 0xd3, picture->bytes);
 	if (reference >= 0)
@@ -518,7 +524,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(mc + 0x24, 6);
 	SAVE(top + 0x28, lower_32_bits(prediction->dma));
 	write_word(lower_32_bits(input->dma) >> 6, vld + 0xb4);
-	write_word(lower_32_bits(input->dma + DATA_SIZE) >> 6, vld + 0xb8);
+	write_word(lower_32_bits(input->dma + INPUT_DATA_SIZE) >> 6, vld + 0xb8);
 	write_word(readl(vld + 0x110) | BIT(0), vld + 0x110);
 	write_word(lower_32_bits(input->dma), vld + 0xb0);
 	write_word(lower_32_bits(input->dma), vld + 0xb0);
@@ -685,12 +691,13 @@ cleanup:
 	status->guards_unchanged = !memcmp(input->cpu, job->nal, job->bytes) &&
 		!memcmp(input->cpu + job->bytes, ending, ending_bytes) &&
 		!memchr_inv(input->cpu + job->bytes + ending_bytes, 0,
-			    DATA_SIZE - job->bytes - ending_bytes) &&
-		!memchr_inv(input->cpu + DATA_SIZE, 0xa5, DATA_SIZE) &&
+			    INPUT_DATA_SIZE - job->bytes - ending_bytes) &&
+		!memchr_inv(input->cpu + INPUT_DATA_SIZE, 0xa5, GUARD_SIZE) &&
 		!memchr_inv(picture->cpu + luma_size * 3 / 2, 0xd3,
 			    picture->bytes - luma_size * 3 / 2);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++)
-		if (memchr_inv(engine->memory[i].cpu + DATA_SIZE, 0xd3, DATA_SIZE))
+		if (memchr_inv(engine->memory[i].cpu + engine->memory[i].bytes - GUARD_SIZE,
+				0xd3, GUARD_SIZE))
 			status->guards_unchanged = false;
 	if (reference >= 0 && memcmp(ctx->pictures[reference].cpu, engine->reference_snapshot,
 			      ctx->pictures[reference].bytes))
