@@ -25,15 +25,14 @@
 #define GUARD_SIZE SZ_128K
 #define INPUT_DATA_SIZE SZ_1M
 #define ALLOC_SIZE (DATA_SIZE + GUARD_SIZE)
-#define MOTION_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4, SZ_64K)
 #define MAX_NAL MT6797_MAX_NAL_BYTES
-#define PICTURE_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT * 3 / 2, SZ_64K)
+#define PICTURE_DATA_SIZE ALIGN(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT * 7 / 4, SZ_64K)
 #define PICTURE_ALLOC_SIZE (PICTURE_DATA_SIZE + DATA_SIZE)
 
-static_assert(MT6797_MAX_WIDTH * MT6797_MAX_HEIGHT / 4 <= MOTION_DATA_SIZE);
+/* Public uncompressed picture area: Y + interleaved chroma + luma/4 motion. */
 
 enum bank { MISC, VLD, TOP, MC, AVC, MV, PP, BANK_COUNT };
-enum memory { INPUT, PREDICTION, MOTION, VLD_WRAP, PP_WRAP, MEMORY_COUNT };
+enum memory { INPUT, PREDICTION, VLD_WRAP, PP_WRAP, MEMORY_COUNT };
 
 struct private_buffer {
 	u8 *cpu;
@@ -48,7 +47,7 @@ struct saved_register {
 };
 
 struct register_save {
-	struct saved_register words[128];
+	struct saved_register words[256];
 	unsigned int count;
 };
 
@@ -61,6 +60,7 @@ struct mt6797_engine {
 	u8 *reference_snapshot;
 	size_t snapshot_bytes;
 	struct register_save saved;
+	struct mt6797_h264_p_reference_words refs[2][V4L2_H264_NUM_DPB_ENTRIES];
 	struct list_head contexts;
 	bool fenced;
 };
@@ -80,7 +80,7 @@ static void write_word(u32 value, void __iomem *address)
 
 static void save_word(struct register_save *save, void __iomem *address, u32 value)
 {
-	/* The closed fixed-size programming sequence below uses fewer than 128.
+	/* The closed fixed-size programming sequence below uses fewer than 256.
 	 * No register write can escape the save area if that sequence is extended.
 	 */
 	if (WARN_ON_ONCE(save->count == ARRAY_SIZE(save->words)))
@@ -205,7 +205,7 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	for (i = 0; i < MEMORY_COUNT; i++) {
 		ret = allocate_buffer(engine, &engine->memory[i],
 				      i == INPUT ? INPUT_DATA_SIZE + GUARD_SIZE :
-				      i == MOTION ? MOTION_DATA_SIZE + GUARD_SIZE : ALLOC_SIZE);
+				      ALLOC_SIZE);
 		if (ret)
 			goto fail;
 	}
@@ -338,10 +338,11 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    (job->sps.profile_idc != 100 &&
 	     (job->pps.flags & (V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
 			       V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT))) ||
-	    job->pps.weighted_bipred_idc || job->slice.slice_type == V4L2_H264_SLICE_TYPE_B ||
+	    (job->sps.profile_idc == 66 && job->slice.slice_type == V4L2_H264_SLICE_TYPE_B) ||
 	    (!!(job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_PFRAME) !=
 	     (job->slice.slice_type == V4L2_H264_SLICE_TYPE_P)) ||
-	    (job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_BFRAME) ||
+	    (!!(job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_BFRAME) !=
+	     (job->slice.slice_type == V4L2_H264_SLICE_TYPE_B)) ||
 	    (job->nal[0] & 0x80) || ((job->nal[0] >> 5) & 3) != job->decode.nal_ref_idc ||
 	    ((job->nal[0] & 31) != ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ? 5 : 1)))
 		return -EOPNOTSUPP;
@@ -396,7 +397,7 @@ static void buffers_to_cpu(struct mt6797_decode_context *ctx)
 static int prepare_pictures(struct mt6797_decode_context *ctx, size_t luma_size,
 			    unsigned int output)
 {
-	size_t bytes = ALIGN(luma_size * 3 / 2, SZ_64K) + GUARD_SIZE;
+	size_t bytes = ALIGN(luma_size * 7 / 4, SZ_64K) + GUARD_SIZE;
 	unsigned int i;
 	int ret;
 	bool resize = false;
@@ -471,7 +472,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct mt6797_engine *engine = ctx->engine;
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words slice;
-	struct mt6797_h264_p_reference_words ref_words[V4L2_H264_NUM_DPB_ENTRIES];
+	struct mt6797_h264_p_reference_words (*ref_words)[V4L2_H264_NUM_DPB_ENTRIES] = engine->refs;
 	struct mt6797_h264_reference_plan plan;
 	struct mt6797_h264_weight_range weights = { 0 };
 	struct mt6797_h264_scaling_word scaling[MT6797_H264_SCALING_WORDS];
@@ -482,7 +483,9 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct private_buffer *input = &engine->memory[INPUT], *prediction = &engine->memory[PREDICTION];
 	struct private_buffer *picture;
 	u32 state, original_dcm, original_irq, original_break, original_gate;
-	unsigned int remaining, i, luma_size = job->width * job->height;
+	unsigned int remaining, i, list, luma_size = job->width * job->height;
+	unsigned int pixel_bytes = luma_size * 3 / 2, motion_bytes = luma_size / 4;
+	bool b_picture = job->slice.slice_type == V4L2_H264_SLICE_TYPE_B;
 	int ret, stop_ret;
 	size_t snapshot_offset;
 	bool dma_started = false;
@@ -515,12 +518,21 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		if (ret)
 			return ret;
 	}
-	for (i = 0; i < plan.count; i++) {
-		ret = mt6797_h264_p_reference_words(&job->decode.dpb[job->slice.ref_pic_list0[i].index],
-						   i, &ref_words[i]);
-		if (ret)
-			return ret;
-	}
+	if (b_picture && (job->decode.top_field_order_cnt < -131072 ||
+	    job->decode.top_field_order_cnt > 131071 || job->decode.bottom_field_order_cnt < -131072 ||
+	    job->decode.bottom_field_order_cnt > 131071))
+		return -ERANGE;
+	for (list = 0; list < (b_picture ? 2 : 1); list++)
+		for (i = 0; i < (list ? plan.count1 : plan.count); i++) {
+			const struct v4l2_h264_reference *ref = list ?
+				&job->slice.ref_pic_list1[i] : &job->slice.ref_pic_list0[i];
+			unsigned int identity = list ? plan.list1[i] : plan.list0[i];
+			ret = b_picture ?
+				mt6797_h264_b_reference_words(&job->decode.dpb[ref->index], identity, &ref_words[list][i]) :
+				mt6797_h264_p_reference_words(&job->decode.dpb[ref->index], identity, &ref_words[list][i]);
+			if (ret)
+				return ret;
+		}
 	ret = prepare_pictures(ctx, luma_size, plan.output);
 	if (ret)
 		return ret;
@@ -529,6 +541,8 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		return ret;
 	picture = &ctx->pictures[plan.output];
 	status->reference_count = plan.count;
+	status->reference_count1 = plan.count1;
+	status->motion_bytes = motion_bytes;
 	status->reference_mask = plan.protected_mask;
 	status->snapshot_mask = plan.snapshot_mask;
 	status->picture_slot = plan.output;
@@ -545,6 +559,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		memset(engine->memory[i].cpu + data_bytes, 0xd3, GUARD_SIZE);
 	}
 	memset(picture->cpu, 0xd3, picture->bytes);
+	memset(picture->cpu + pixel_bytes, 0, motion_bytes);
 
 	ret = pm_runtime_resume_and_get(engine->dev);
 	if (ret < 0)
@@ -712,13 +727,33 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	 */
 	if (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)
 		write_word(1, avc + 0x234);
-	if (plan.count) {
+	if (b_picture) {
+		SAVE(mc + 0x568, 0);
+		SAVE(mc + 0x56c, 0);
+		for (list = 0; list < 2; list++)
+			for (i = 0; i < (list ? plan.count1 : plan.count); i++) {
+				unsigned int identity = list ? plan.list1[i] : plan.list0[i];
+				dma_addr_t address = ctx->pictures[identity].dma;
+				SAVE(mc + (list ? 0x4dc : 0x45c) + i * 4, lower_32_bits(address));
+				SAVE(avc + (list ? 0x1a8 : 0x128) + i * 4, ref_words[list][i].picture_number);
+				SAVE(mv + (list ? 0x100 : 0x80) + i * 8, ref_words[list][i].top);
+				SAVE(mv + (list ? 0x100 : 0x80) + i * 8 + 4, ref_words[list][i].bottom);
+				if (list) {
+					/* Public full motion layout: bottom-field base is64bytes
+					 * after top; retain the whole buffer with its picture.
+					 */
+					u32 motion = lower_32_bits(address + pixel_bytes) >> 4;
+					SAVE(mv + 0x180 + i * 8, motion);
+					SAVE(mv + 0x180 + i * 8 + 4, motion + 4);
+				}
+			}
+	} else if (plan.count) {
 		SAVE(mc + 0x564, 0);
 		for (i = 0; i < plan.count; i++) {
 			SAVE(mc + 0x3dc + i * 4, lower_32_bits(ctx->pictures[plan.list0[i]].dma));
-			SAVE(avc + 0xa8 + i * 4, ref_words[i].picture_number);
-			SAVE(mv + i * 8, ref_words[i].top);
-			SAVE(mv + i * 8 + 4, ref_words[i].bottom);
+			SAVE(avc + 0xa8 + i * 4, ref_words[0][i].picture_number);
+			SAVE(mv + i * 8, ref_words[0][i].top);
+			SAVE(mv + i * 8 + 4, ref_words[0][i].bottom);
 		}
 	}
 	SAVE(avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
@@ -760,7 +795,8 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(mv + 0x200, min(job->decode.top_field_order_cnt, job->decode.bottom_field_order_cnt) & 0x3ffff);
 	SAVE(mv + 0x204, job->decode.top_field_order_cnt & 0x3ffff);
 	SAVE(mv + 0x208, job->decode.bottom_field_order_cnt & 0x3ffff);
-	SAVE(mv + 0x20c, lower_32_bits(engine->memory[MOTION].dma) >> 4);
+	SAVE(mv + 0x220, readl(mv + 0x220) & ~BIT(5));
+	SAVE(mv + 0x20c, lower_32_bits(picture->dma + pixel_bytes) >> 4);
 	SAVE(pp + 0x804, readl(pp + 0x804) & ~BIT(4));
 	ret = readl_poll_timeout(avc + 0x25c, state, !(state & BIT(25)), 10, 100000);
 	if (ret)
@@ -833,8 +869,8 @@ cleanup:
 		!memchr_inv(input->cpu + job->bytes + ending_bytes, 0,
 			    INPUT_DATA_SIZE - job->bytes - ending_bytes) &&
 		!memchr_inv(input->cpu + INPUT_DATA_SIZE, 0xa5, GUARD_SIZE) &&
-		!memchr_inv(picture->cpu + luma_size * 3 / 2, 0xd3,
-			    picture->bytes - luma_size * 3 / 2);
+		!memchr_inv(picture->cpu + pixel_bytes + motion_bytes, 0xd3,
+			    picture->bytes - pixel_bytes - motion_bytes);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++)
 		if (memchr_inv(engine->memory[i].cpu + engine->memory[i].bytes - GUARD_SIZE,
 				0xd3, GUARD_SIZE))
@@ -844,14 +880,15 @@ cleanup:
 		struct private_buffer *buf = &ctx->pictures[i];
 		if (!buf->cpu)
 			continue;
-		if (memchr_inv(buf->cpu + luma_size * 3 / 2, 0xd3,
-			       buf->bytes - luma_size * 3 / 2))
+		if (memchr_inv(buf->cpu + pixel_bytes + motion_bytes, 0xd3,
+			       buf->bytes - pixel_bytes - motion_bytes))
 			status->guards_unchanged = false;
 		if (plan.snapshot_mask & BIT(i)) {
 			if (memcmp(buf->cpu, engine->reference_snapshot + snapshot_offset, buf->bytes))
 				status->guards_unchanged = false;
 			snapshot_offset += buf->bytes;
 			status->reference_guard_count++;
+			status->motion_guard_count++;
 		}
 	}
 	if (!status->guards_unchanged) {

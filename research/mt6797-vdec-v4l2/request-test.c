@@ -184,7 +184,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 			!strcmp(name, "weight-reference") ? "pcm64" :
 			!strcmp(name, "fault-weight") ? "weighted64-p" :
 			!strcmp(name, "fault-refmissing") ? "multi16-p" :
-			!strcmp(name, "fault-refmetadata") ? "multi2-p" : name;
+			!strcmp(name, "fault-refmetadata") ? "multi2-p" :
+			!strcmp(name, "fault-b-list1") || !strcmp(name, "fault-b-poc") ? "fault-b2" : name;
 		char path[1024];
 		if (snprintf(path, sizeof(path), "%s/%s.nal", fixture_directory, fixture) >= (int)sizeof(path)) {
 			fprintf(stderr, "Fixture path too long\n"); exit(1);
@@ -268,6 +269,33 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		if (!strcmp(name, "fault-refmetadata"))
 			params.dpb[1].bottom_field_order_cnt++; /* Real retained second picture; wrong metadata. */
 	}
+	if (!strcmp(name, "fault-b-list1") || !strcmp(name, "fault-b-poc")) {
+		sps.profile_idc = 77;
+		sps.constraint_set_flags = 0;
+		sps.log2_max_frame_num_minus4 = sps.log2_max_pic_order_cnt_lsb_minus4 = 2;
+		sps.max_num_ref_frames = 2;
+		pps.num_ref_idx_l0_default_active_minus1 = pps.num_ref_idx_l1_default_active_minus1 = 1;
+		slice.num_ref_idx_l0_active_minus1 = slice.num_ref_idx_l1_active_minus1 = 1;
+		slice.header_bit_size = 33;
+		slice.slice_type = V4L2_H264_SLICE_TYPE_B;
+		slice.flags = V4L2_H264_SLICE_FLAG_DIRECT_SPATIAL_MV_PRED;
+		params.flags = V4L2_H264_DECODE_PARAM_FLAG_BFRAME;
+		params.nal_ref_idc = 0;
+		params.frame_num = 2;
+		params.pic_order_cnt_lsb = 1;
+		params.top_field_order_cnt = params.bottom_field_order_cnt = 1;
+		params.dpb[1] = params.dpb[0];
+		params.dpb[1].reference_ts = 2000000000ULL;
+		params.dpb[1].frame_num = params.dpb[1].pic_num = 1;
+		params.dpb[1].top_field_order_cnt = params.dpb[1].bottom_field_order_cnt = 2;
+		for (unsigned int i = 0; i < 2; i++) {
+			slice.ref_pic_list0[i].fields = slice.ref_pic_list1[i].fields = V4L2_H264_FRAME_REF;
+			slice.ref_pic_list0[i].index = i;
+			slice.ref_pic_list1[i].index = 1 - i;
+		}
+		if (!strcmp(name, "fault-b-list1")) slice.ref_pic_list1[1].index = 2;
+		else params.top_field_order_cnt = params.bottom_field_order_cnt = 131072;
+	}
 	struct v4l2_ctrl_h264_scaling_matrix scaling;
 	struct v4l2_ctrl_h264_pred_weights weights = { 0 };
 	memset(&scaling, 16, sizeof(scaling));
@@ -323,7 +351,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
 	int bad = dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
 	if (!strcmp(name, "fault-scaling") || !strcmp(name, "fault-weight") ||
-	    !strcmp(name, "fault-refmissing") || !strcmp(name, "fault-refmetadata")) {
+	    !strcmp(name, "fault-refmissing") || !strcmp(name, "fault-refmetadata") ||
+	    !strcmp(name, "fault-b-list1") || !strcmp(name, "fault-b-poc")) {
 		for (unsigned int plane = 0; plane < 2; plane++)
 			for (size_t byte = 0; byte < stream->capture[plane].bytes; byte++)
 				if (((u8 *)stream->capture[plane].address)[byte] != 0x79) {
@@ -422,7 +451,9 @@ int main(int argc, char **argv)
 			decode(&stream, argv[3], "reference-recovery", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 2);
 			decode(&stream, argv[3], "fault-refmissing", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 3, 3);
 			decode(&stream, argv[3], "fault-refmetadata", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 4, 4);
-			decode(&stream, argv[3], "reference-after-reject", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 5, 5);
+			decode(&stream, argv[3], "fault-b-list1", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 5, 5);
+			decode(&stream, argv[3], "fault-b-poc", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 6, 6);
+			decode(&stream, argv[3], "reference-after-reject", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 7, 7);
 			close_stream(&stream);
 		}
 	}

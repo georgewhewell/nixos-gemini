@@ -46,7 +46,7 @@ static unsigned int escape(const struct bits *bits, __u8 *nal)
 	return size;
 }
 
-static void test_header(unsigned int mode, unsigned int references)
+static void test_header(unsigned int mode, unsigned int references, unsigned int b_picture)
 {
 	struct v4l2_ctrl_h264_sps sps = {
 		.profile_idc = 77, .chroma_format_idc = 1, .max_num_ref_frames = 1,
@@ -72,6 +72,17 @@ static void test_header(unsigned int mode, unsigned int references)
 	__u8 nal[1024];
 	unsigned int begin, start, end, bytes;
 	int explicit = mode & 1, cabac = mode & 2;
+	unsigned int lists = b_picture ? 2 : 1;
+	if (b_picture) {
+		slice.slice_type = V4L2_H264_SLICE_TYPE_B;
+		decode.flags = V4L2_H264_DECODE_PARAM_FLAG_BFRAME;
+		pps.weighted_bipred_idc = 1;
+		pps.flags &= ~V4L2_H264_PPS_FLAG_WEIGHTED_PRED;
+		if (mode & 1) slice.flags = V4L2_H264_SLICE_FLAG_DIRECT_SPATIAL_MV_PRED;
+		if (mode & 4) decode.nal_ref_idc = 0;
+		slice.num_ref_idx_l1_active_minus1 = references - 1;
+		pps.num_ref_idx_l1_default_active_minus1 = references - 1;
+	}
 	sps.max_num_ref_frames = references;
 	slice.num_ref_idx_l0_active_minus1 = references - 1;
 	pps.num_ref_idx_l0_default_active_minus1 = references - 1;
@@ -93,17 +104,18 @@ static void test_header(unsigned int mode, unsigned int references)
 		weights.luma_log2_weight_denom = weights.chroma_log2_weight_denom = 7;
 		explicit = 0;
 	}
-	for (unsigned int ref = 0; ref < references; ref++) {
-		int encoded = explicit && !(ref % 3 == 1);
-		weights.weight_factors[0].luma_weight[ref] = encoded ? -7 + (int)ref : 1 << weights.luma_log2_weight_denom;
-		weights.weight_factors[0].luma_offset[ref] = encoded ? -128 + (int)ref : 0;
-		for (unsigned int j = 0; j < 2; j++) {
-			weights.weight_factors[0].chroma_weight[ref][j] = encoded ? 5 + (int)j + (int)ref : 1 << weights.chroma_log2_weight_denom;
-			weights.weight_factors[0].chroma_offset[ref][j] = encoded ? 127 - 130 * (int)j - (int)ref : 0;
+	for (unsigned int list = 0; list < lists; list++)
+		for (unsigned int ref = 0; ref < references; ref++) {
+			int encoded = explicit && !(ref % 3 == 1);
+			weights.weight_factors[list].luma_weight[ref] = encoded ? -7 + (int)ref + (int)list : 1 << weights.luma_log2_weight_denom;
+			weights.weight_factors[list].luma_offset[ref] = encoded ? -128 + (int)ref : 0;
+			for (unsigned int j = 0; j < 2; j++) {
+				weights.weight_factors[list].chroma_weight[ref][j] = encoded ? 5 + (int)j + (int)ref : 1 << weights.chroma_log2_weight_denom;
+				weights.weight_factors[list].chroma_offset[ref][j] = encoded ? 127 - 130 * (int)j - (int)ref - (int)list : 0;
+			}
 		}
-	}
-	put(&bits, 0x41, 8);
-	ue(&bits, 0); ue(&bits, 5); ue(&bits, 0);
+	put(&bits, (decode.nal_ref_idc << 5) | 1, 8);
+	ue(&bits, 0); ue(&bits, slice.slice_type + 5); ue(&bits, 0);
 	put(&bits, decode.frame_num, sps.log2_max_frame_num_minus4 + 4);
 	begin = bits.count;
 	if (!sps.pic_order_cnt_type)
@@ -113,27 +125,34 @@ static void test_header(unsigned int mode, unsigned int references)
 		se(&bits, decode.delta_pic_order_cnt1);
 	}
 	decode.pic_order_cnt_bit_size = bits.count - begin;
+	if (b_picture) put(&bits, !!(slice.flags & V4L2_H264_SLICE_FLAG_DIRECT_SPATIAL_MV_PRED), 1);
 	put(&bits, 1, 1); ue(&bits, references - 1); /* explicit active-list override */
-	put(&bits, 1, 1); ue(&bits, 0); ue(&bits, 0); ue(&bits, 3); /* short-term list modification */
+	if (b_picture) ue(&bits, references - 1);
+	for (unsigned int list = 0; list < lists; list++) {
+		put(&bits, 1, 1); ue(&bits, 0); ue(&bits, 0); ue(&bits, 3); /* short-term list modification */
+	}
 	start = bits.count;
 	ue(&bits, weights.luma_log2_weight_denom);
 	ue(&bits, weights.chroma_log2_weight_denom);
-	for (unsigned int ref = 0; ref < references; ref++) {
-		int encoded = explicit && !(ref % 3 == 1);
-		put(&bits, encoded, 1);
-		if (encoded) {
-			se(&bits, weights.weight_factors[0].luma_weight[ref]);
-			se(&bits, weights.weight_factors[0].luma_offset[ref]);
-		}
-		put(&bits, encoded, 1);
-		if (encoded)
-			for (unsigned int j = 0; j < 2; j++) {
-				se(&bits, weights.weight_factors[0].chroma_weight[ref][j]);
-				se(&bits, weights.weight_factors[0].chroma_offset[ref][j]);
+	for (unsigned int list = 0; list < lists; list++)
+		for (unsigned int ref = 0; ref < references; ref++) {
+			int encoded = explicit && !(ref % 3 == 1);
+			put(&bits, encoded, 1);
+			if (encoded) {
+				se(&bits, weights.weight_factors[list].luma_weight[ref]);
+				se(&bits, weights.weight_factors[list].luma_offset[ref]);
 			}
-	}
+			put(&bits, encoded, 1);
+			if (encoded)
+				for (unsigned int j = 0; j < 2; j++) {
+					se(&bits, weights.weight_factors[list].chroma_weight[ref][j]);
+					se(&bits, weights.weight_factors[list].chroma_offset[ref][j]);
+				}
+		}
 	end = begin = bits.count;
-	put(&bits, 1, 1); ue(&bits, 1); ue(&bits, 0); ue(&bits, 0); /* MMCO1, then terminator */
+	if (decode.nal_ref_idc) {
+		put(&bits, 1, 1); ue(&bits, 1); ue(&bits, 0); ue(&bits, 0); /* MMCO1, then terminator */
+	}
 	decode.dec_ref_pic_marking_bit_size = bits.count - begin;
 	if (cabac) ue(&bits, slice.cabac_init_idc);
 	se(&bits, slice.slice_qp_delta);
@@ -168,6 +187,10 @@ static void test_header(unsigned int mode, unsigned int references)
 	REJECT(bad.luma_log2_weight_denom = 8, -ERANGE);
 	REJECT(bad.weight_factors[0].luma_offset[0]++, -EINVAL);
 	REJECT(bad.weight_factors[0].chroma_weight[references - 1][1]++, -EINVAL);
+	if (b_picture) {
+		REJECT(bad.weight_factors[1].luma_weight[references - 1]++, -EINVAL);
+		REJECT(bad.weight_factors[1].chroma_offset[0][0]++, -EINVAL);
+	}
 #undef REJECT
 	decode.dec_ref_pic_marking_bit_size++;
 	assert(mt6797_h264_weight_range(&sps, &pps, &slice, &decode, &weights, nal, bytes, &output) == -EINVAL);
@@ -195,7 +218,8 @@ int main(void)
 {
 	const unsigned int counts[] = {1, 2, 4, 16};
 	for (unsigned int i = 0; i < sizeof(counts) / sizeof(counts[0]); i++)
-		for (unsigned int mode = 0; mode < 64; mode++) test_header(mode, counts[i]);
-	puts("PASS:256 independently written1/2/4/16-reference weighted-P headers, signed/default weights, POC variants, escaping, control mismatches and truncation bounds");
+		for (unsigned int mode = 0; mode < 64; mode++)
+			for (unsigned int b = 0; b < 2; b++) test_header(mode, counts[i], b);
+	puts("PASS:512 independently written1/2/4/16-entry weighted P/B headers across both lists, signed/default weights, POC variants, escaping, control mismatches and truncation bounds");
 	return 0;
 }

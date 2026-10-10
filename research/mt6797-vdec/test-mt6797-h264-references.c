@@ -52,6 +52,26 @@ static void test_count(unsigned int count)
 #undef REJECT
 	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1,&plan)==-EINVAL);
 	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	/* B lists have separate order and count; private identity remains stable. */
+	slice.slice_type = V4L2_H264_SLICE_TYPE_B;
+	slice.num_ref_idx_l1_active_minus1 = count - 1;
+	for (unsigned int i = 0; i < count; i++) {
+		slice.ref_pic_list1[i].fields = V4L2_H264_FRAME_REF;
+		slice.ref_pic_list1[i].index = i;
+	}
+	assert(!mt6797_h264_reference_plan(&sps, &slice, &decode, cache, 1000, &plan));
+	assert(plan.count1 == count);
+	for (unsigned int i = 0; i < count; i++)
+		assert(plan.list1[i] == count - 1 - i && plan.list0[i] == i);
+	saved = plan;
+	slice.ref_pic_list1[count - 1].index = 16;
+	assert(mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan)==-EINVAL);
+	assert(!memcmp(&plan,&saved,sizeof(plan)));
+	slice.ref_pic_list1[count - 1].index = count - 1;
+	slice.slice_type = V4L2_H264_SLICE_TYPE_P;
+	slice.num_ref_idx_l1_active_minus1 = 0;
+	assert(!mt6797_h264_reference_plan(&sps,&slice,&decode,cache,1000,&plan));
+	saved = plan;
 	/* Duplicate list entries are valid; duplicate active DPB entries are not. */
 	if (count > 1) {
 		slice.ref_pic_list0[1] = slice.ref_pic_list0[0];
@@ -73,6 +93,6 @@ static void test_count(unsigned int count)
 int main(void)
 {
 	for (unsigned int count=1; count<=V4L2_H264_NUM_DPB_ENTRIES; count++) test_count(count);
-	puts("PASS:1..16 reference plans, reordered/duplicate lists, protected output, retained snapshots and atomic invalid metadata rejection");
+	puts("PASS:1..16 P/B reference plans with independent lists, reordered/duplicate lists, protected output, retained snapshots and atomic invalid metadata rejection");
 	return 0;
 }

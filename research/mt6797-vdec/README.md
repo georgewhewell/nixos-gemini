@@ -6,7 +6,7 @@ frames complete with exact pixel comparisons and zero hardware errors when
 the private FIFO producer has a valid ending.
 A production decoder or video device is not yet qualified. Encoding is not implemented.
 The [experimental V4L2 Request driver](../mt6797-vdec-v4l2/README.md) now
-qualifies listed Baseline/Main/High I/P streams through 1080p. Trial 47 checks
+qualifies listed Baseline I/P and Main/High I/P/B streams through 1080p. Trial 47 checks
 169 exact pictures, including High 8x8 transforms and custom scaling matrices,
 all 57 media checks, normal unload and strict RTC/system recovery.
 Trial 50 extends the current driver to up to 16 short-term references in SD
@@ -19,7 +19,15 @@ weighted headers. Independent FFmpeg traces check 68 real weighted headers.
 `make-multi-reference-fixture.py` builds original 2..16-reference mosaics with
 optional reordering or signed weighting. All 45 variants match independently
 calculated pixels and software decoding; the three sixteen-reference variants
-are hardware-qualified in trial 50. B pictures and hardware encoding remain
+are hardware-qualified in trial 50. Trial 51's media run adds B pictures: 288 exact output comparisons include
+spatial/temporal direct, reference B pictures, explicit/implicit weighting,
+custom High matrices and Main 1080p. All 57 media checks, normal unload, full RTC/system checks and strict
+accepted-system recovery/audit pass.
+The B translator uses stable private reference identities and signed 18-bit
+picture-order metadata. Both lists have independently verified planning;
+512 weighted P/B headers and 74 FFmpeg traces check the bounded reader.
+`make-b-reference-fixture.py` supplies mathematical forward/backward/bi
+prediction mosaics; 18 software variants pass. Hardware encoding remains
 unfinished.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive

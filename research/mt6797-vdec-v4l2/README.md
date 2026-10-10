@@ -7,10 +7,11 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
-The current module decodes the listed progressive Baseline/Main/High I/P fixtures
+The current module decodes the listed progressive H.264 Baseline I/P and
+Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
 short-term references in SD fixtures, or three in the listed HD fixtures.
-Trial 50 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trial 51 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -94,6 +95,39 @@ the latter avoids enlarging the kernel stack as reference tables grow. The
 qualified sixteen-entry weighted sequence saves and restores 122 registers.
 Single-reference streams retain the two-picture allocation path.
 
+Trial 51 adds the B-picture backend. Its media run passes 288 exact output
+pictures over 289 hardware commands, including the intentional timeout.
+Five original 64x64 streams exercise two sixteen-entry lists with forward,
+backward, bidirectional, explicit signed and unequal implicit prediction.
+Their mathematical pixel references also match independent FFmpeg decoding.
+x264 Main streams exercise spatial and temporal direct prediction and both
+CABAC and CAVLC. A custom-matrix High stream includes reference B pictures
+and implicit weighting; Main 1080p temporal-direct output matches in MM21
+and I420. The P16, weighted-P and clocked 32-picture Main 1080p regressions
+also pass. Invalid B list-1 and out-of-range signed POC controls fail before
+DMA, leave capture storage untouched and retain the next valid reference.
+Concurrent contexts, all 57 media checks and normal unload pass. All RTC/system checks, strict accepted-system recovery and the final board
+audit pass. The accepted boot is healthy with taint zero, no temporary media
+modules and no failed services.
+
+The B backend retains full motion data with each private picture. The public
+uncompressed layout occupies Y + interleaved chroma + Ysize/4 motion; the
+allocation then has padding and a trailing guard. Motion addresses use
+16-byte units and the full layout places bottom-field data 64 bytes after
+top-field data. Reduced motion mode is cleared. Reference identities use
+stable private picture slots across reordered and repeated lists. Snapshots
+compare every retained pixel, motion and guard byte after a proven stop;
+userspace sees the image planes alone. The shared register save area grows
+to 256 entries; the weighted sixteen-entry B sequence saves and restores
+220 registers. Host ASan/UBSan covers 512 weighted P/B headers and both
+reference lists at every count from 1 through 16. Seventy-four weighted
+headers, including six original B headers, match independent FFmpeg traces.
+The 18 original B count/prediction/weighting combinations also match every
+mathematically calculated software sample. Independent syntax traces confirm
+53 B pictures in the hardware run, including five reference B pictures.
+Encoder statistics report actual direct-prediction and skip macroblock use. B-picture sustained or clocked
+throughput remains unqualified.
+
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
 or DMA ownership transfer. It handles emulation-prevention bytes, signed and
@@ -150,8 +184,8 @@ checks, accepted recovery and the strict kernel-journal audit also pass.
 
 Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
 the High-profile streams in trial 47, weighted P streams in trial 49 and
-multiple-reference streams in trial 50 above: one slice, I/P pictures, up to
-16 short-term references at SD and three in the listed HD fixtures, with
+multiple-reference streams in trial 50 and B streams in trial 51 above:
+one slice, Baseline I/P or Main/High I/P/B pictures, up to 16 short-term references at SD and three in the listed HD fixtures, with
 enabled or disabled deblocking.
 CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
@@ -246,6 +280,22 @@ copy plain `final-p.nal` outputs with 16 and 2 references into the existing
 python3 research/mt6797-vdec/make-multi-reference-fixture.py \
   --out /path/to/multi16 --ffmpeg /path/to/ffmpeg --refs 16
 # Add --reorder or --weighted for the other original qualification streams.
+```
+
+`make-b-reference-fixture.py` constructs original B16x16 prediction mosaics
+with two lists of 2..16 references. Select forward (`l0`), backward (`l1`) or
+bidirectional (`bi`) prediction and `none`, `explicit` or `implicit` weighting.
+The reference file records display order, including the B picture before its
+future reference. `make-baseline-fixture.py --bframes 2` generates compressed
+Main/High samples; select `--direct spatial|temporal`, `--b-pyramid normal` and
+`--implicit-bipred` for the listed qualification modes. The native fault test
+also needs the plain two-reference B fixture's `final-b.nal` copied as
+`fault-b2.nal` into the 64x64 fixture directory.
+
+```sh
+python3 research/mt6797-vdec/make-b-reference-fixture.py \
+  --out /path/to/b16 --ffmpeg /path/to/ffmpeg --refs 16 \
+  --prediction bi --weighting explicit
 ```
 
 The cross-build recipe in `gstreamer-userspace.nix` accepts `buildPkgs` and

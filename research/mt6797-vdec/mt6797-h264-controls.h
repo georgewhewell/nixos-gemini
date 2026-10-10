@@ -6,7 +6,7 @@
 
 /* Common H.264 control words identified in the public MT8173 test interface.
  * No DMA, register access or video device is exposed by this prototype.
- * DMA setup, reference programming and actual slice submission remain.
+ * The V4L2 backend handles private DMA, register access and slice submission.
  */
 struct mt6797_h264_header_words {
 	__u32 sps;             /* AVC_VLD + 0x88 */
@@ -52,7 +52,8 @@ struct mt6797_h264_cached_picture {
 
 struct mt6797_h264_reference_plan {
 	__u32 protected_mask, snapshot_mask;
-	__u8 output, count, list0[V4L2_H264_NUM_DPB_ENTRIES];
+	__u8 output, count, count1, list0[V4L2_H264_NUM_DPB_ENTRIES];
+	__u8 list1[V4L2_H264_NUM_DPB_ENTRIES];
 };
 
 /* Resolve public active DPB entries to private metadata and choose an output
@@ -74,11 +75,18 @@ struct mt6797_h264_p_reference_words {
 /* Progressive frame reference metadata from the public related-core map.
  * The caller separately resolves reference_ts to a live capture buffer and
  * writes its full DMA address to MC + 0x3dc + slot * 4. No address, lifetime,
- * timestamp resolution or MMIO is handled here. MT6797 execution is pending.
+ * timestamp resolution or MMIO is handled here.
  */
 int mt6797_h264_p_reference_words(const struct v4l2_h264_dpb_entry *entry,
 				unsigned int frame_buffer_index,
 				struct mt6797_h264_p_reference_words *output);
+
+/* Progressive B metadata adds signed18bit POC to the P identity words.
+ * B1 separately binds each reference's retained motion address (16byte units).
+ */
+int mt6797_h264_b_reference_words(const struct v4l2_h264_dpb_entry *entry,
+                                unsigned int frame_buffer_index,
+                                struct mt6797_h264_p_reference_words *output);
 
 struct mt6797_h264_scaling_word {
 	__u32 location;
@@ -98,7 +106,7 @@ struct mt6797_h264_weight_range {
 	__u32 start_word, start_mask, end_word, end_mask;
 };
 
-/* Locate a progressive P prediction table with up to16 list entries and verify its
+/* Locate a progressive P or explicit B prediction table with up to16 entries per list and verify its
  * values and complete slice header against the public stateless controls.
  * Emulation-prevention bytes do not count as RBSP bits. No MMIO or DMA.
  * A rejected header leaves output unchanged.

@@ -48,7 +48,11 @@ The resource probe also passes in trials 36–41, with normal unload and release
 power votes. Trial 38 separately misses the supervisor's final RTC alarm; that
 failure remains recorded. No trial produces an encoded picture.
 
-Trials 47–50 also pass the command-free resource probe with normal unload and
+Trials 47–51 also pass the command-free resource probe with normal unload and
 released power votes. Trials 49/50 qualify weighted and multiple-reference
 decoder pictures and pass the full RTC/system/recovery/audit checks. The encoder frame contract remains
 unfinished; these results produce no encoded picture.
+
+Trial 51 also qualifies listed B decoder pictures and passes full system
+recovery and audit. Its encoder probe still performs no encoder register
+writes, DMA fetches or frame commands; hardware encoding remains unfinished.

@@ -100,11 +100,33 @@ static void test_p_references(void)
 	entry.flags &= ~V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM;
 	BAD_REF(pic_num, 262144, -ERANGE);
 	BAD_REF(pic_num, (__u32)-262145, -ERANGE);
-	assert(mt6797_h264_p_reference_words(&entry, 16, &output) == -EINVAL);
+	assert(mt6797_h264_p_reference_words(&entry, 17, &output) == -EINVAL);
 	assert(mt6797_h264_p_reference_words(NULL, 0, &output) == -EINVAL);
 	assert(mt6797_h264_p_reference_words(&entry, 0, NULL) == -EINVAL);
 	assert(!memcmp(&output, &saved, sizeof(output)));
 #undef BAD_REF
+}
+
+static void test_b_references(void)
+{
+	struct v4l2_h264_dpb_entry entry = {
+		.pic_num = (__u32)-2, .top_field_order_cnt = -131072,
+		.bottom_field_order_cnt = 131071, .fields = V4L2_H264_FRAME_REF,
+		.flags = V4L2_H264_DPB_ENTRY_FLAG_VALID | V4L2_H264_DPB_ENTRY_FLAG_ACTIVE,
+	};
+	struct mt6797_h264_p_reference_words words, saved;
+	assert(!mt6797_h264_b_reference_words(&entry, 16, &words));
+	assert(words.picture_number == 0x7fffe && words.top == 0x8220000 && words.bottom == 0x861ffff);
+	saved = words;
+	entry.top_field_order_cnt--;
+	assert(mt6797_h264_b_reference_words(&entry, 16, &words) == -ERANGE);
+	assert(!memcmp(&words, &saved, sizeof(words)));
+	entry.top_field_order_cnt++;
+	entry.bottom_field_order_cnt++;
+	assert(mt6797_h264_b_reference_words(&entry, 16, &words) == -ERANGE);
+	assert(!memcmp(&words, &saved, sizeof(words)));
+	assert(mt6797_h264_b_reference_words(NULL, 0, &words) == -EINVAL);
+	assert(mt6797_h264_b_reference_words(&entry, 0, NULL) == -EINVAL);
 }
 
 static void test_slices(void)
@@ -294,6 +316,7 @@ int main(void)
 	assert(result.width_mbs == 256 && result.height_mbs == 135);
 	test_slices();
 	test_p_references();
+	test_b_references();
 	test_scaling();
 	puts("PASS: H.264 SPS/PPS, slice fields, P-reference metadata, scaling SRAM words and atomic rejection");
 	return 0;

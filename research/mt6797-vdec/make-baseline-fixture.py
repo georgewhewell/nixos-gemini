@@ -22,6 +22,10 @@ def main():
     parser.add_argument('--frames', type=int, default=8)
     parser.add_argument('--refs', type=int, default=1, choices=range(1, 17),
                         help='Number of short-term references for separate hardware qualification')
+    parser.add_argument('--bframes', type=int, default=0, choices=range(5))
+    parser.add_argument('--direct', choices=('spatial', 'temporal', 'auto'), default='spatial')
+    parser.add_argument('--b-pyramid', choices=('none', 'normal'), default='none')
+    parser.add_argument('--implicit-bipred', action='store_true')
     parser.add_argument('--entropy', choices=('cavlc', 'cabac'), default='cavlc',
                         help='CABAC generates Main profile for separate hardware qualification')
     parser.add_argument('--deblocking', action='store_true',
@@ -38,7 +42,7 @@ def main():
     w, h, count = args.width, args.height, args.frames
     cabac = args.entropy == 'cabac'
     high = args.transform_8x8 or args.scaling != 'flat'
-    profile = 'high' if high else 'main' if cabac or args.weighted_pred else 'baseline'
+    profile = 'high' if high else 'main' if cabac or args.weighted_pred or args.bframes else 'baseline'
     if not (64 <= w <= 1920 and 64 <= h <= 1088 and not w % 16 and not h % 2
             and 2 <= count <= 32):
         parser.error('Use width64..1920 in steps16, even height64..1088 and2..32frames')
@@ -74,11 +78,11 @@ def main():
     command = [args.ffmpeg, '-v', 'info', '-nostdin', '-y', '-f', 'rawvideo',
                '-pix_fmt', 'yuv420p', '-s', f'{w}x{h}', '-r', '25', '-i', str(source),
                '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', profile,
-               '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', str(args.refs),
-               '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high or args.weighted_pred else '') +
+               '-preset', 'fast', '-qp', '24', '-bf', str(args.bframes), '-refs', str(args.refs),
+               '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high or args.weighted_pred or args.bframes else '') +
                f'no-deblock={0 if args.deblocking else 1}:'
                f'8x8dct={int(args.transform_8x8)}:weightp={2 if args.weighted_pred else 0}:repeat-headers=1:'
-               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' + matrix_params,
+               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' + matrix_params + (f':b-adapt=0:b-pyramid={args.b_pyramid}:direct={args.direct}:weightb={int(args.implicit_bipred)}' if args.bframes else ''),
                str(stream)]
     encode = subprocess.run(command, check=True, capture_output=True)
     (args.out / 'encode-stderr.txt').write_bytes(encode.stderr)
@@ -98,11 +102,11 @@ def main():
     trace = subprocess.run(trace_command, check=True, capture_output=True)
     (args.out / 'public-syntax-trace.txt').write_bytes(trace.stderr)
     syntax = trace.stderr.decode()
-    for field, expected in [('profile_idc', 100 if high else 77 if cabac or args.weighted_pred else 66),
+    for field, expected in [('profile_idc', 100 if high else 77 if cabac or args.weighted_pred or args.bframes else 66),
                             ('entropy_coding_mode_flag', int(cabac)),
-                            ('weighted_pred_flag', int(args.weighted_pred)), ('weighted_bipred_idc', 0),
+                            ('weighted_pred_flag', int(args.weighted_pred)), ('weighted_bipred_idc', 2 if args.bframes and args.implicit_bipred else 0),
                             ('num_ref_idx_l0_default_active_minus1', args.refs - 1),
-                            ('max_num_ref_frames', args.refs),
+                            ('max_num_ref_frames', max(args.refs, 2 if args.b_pyramid == 'none' else 4) if args.bframes else args.refs),
                             ('frame_mbs_only_flag', 1),
                             ('pic_width_in_mbs_minus1', w // 16 - 1),
                             ('pic_height_in_map_units_minus1', (h + 15) // 16 - 1),
@@ -144,6 +148,8 @@ def main():
                     deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
                     transform_8x8=args.transform_8x8, scaling=args.scaling,
                     weighted_prediction=args.weighted_pred, fade=args.fade, references=args.refs,
+                    bframes=args.bframes, direct_prediction=args.direct, b_pyramid=args.b_pyramid,
+                    implicit_bipred=args.implicit_bipred,
                     encoded_luma_weight_flags=weight_flags,
                     encoder_transform_usage=transform_usage,
                     encode_command=command, decode_command=decode_command,
