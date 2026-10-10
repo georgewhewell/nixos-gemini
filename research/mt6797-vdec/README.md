@@ -628,3 +628,18 @@ An original explicit-motion P_16x16 fixture now independently decodes to the
 derived four-pixel horizontal luma shift (two chroma pixels), including right
 edge replication. Both full 64x64 pictures match all 12,288 reference samples
 in FFmpeg. This fixture has not been submitted to hardware.
+
+The Request frontend now collects complete picture packets from slice requests.
+Trial 61 qualifies the listed original 64x64 Baseline packets, held-buffer
+lifetime, rejection before DMA and retained-reference recovery; see the
+[frontend's qualification notes](../mt6797-vdec-v4l2/README.md). Private trials
+58/59 remain evidence for whole packets rather than partial-slice completion.
+
+`make-baseline-fixture.py --slices N` generates compressed multislice fixtures
+for separate qualification, with one slice by default. It checks the software
+picture count and independently traced slice starts: each picture starts at
+macroblock zero, stays inside its coded geometry and uses strictly increasing
+starts. The default 64x80 stream and decoded reference remain byte-identical to
+the earlier fixture. Software fixtures cover Baseline, Main/CABAC, custom-scaling
+High CAVLC/CABAC, temporal/implicit B and weighted P streams; they make no hardware
+encoder claim. The hardware status of each fixture is recorded separately.

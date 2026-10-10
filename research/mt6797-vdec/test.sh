@@ -24,3 +24,7 @@ cp "$1/include/uapi/linux/v4l2-controls.h" "$test_dir/include/linux/"
   -I "$test_dir/include" "$source_dir/mt6797-h264-controls.c" \
   "$source_dir/test-mt6797-h264-references.c" -o "$test_dir/test-references"
 "$test_dir/test-references"
+"${CC:-cc}" -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+  -I "$test_dir/include" "$source_dir/mt6797-h264-controls.c" \
+  "$source_dir/test-mt6797-h264-slices.c" -o "$test_dir/test-slices"
+"$test_dir/test-slices"

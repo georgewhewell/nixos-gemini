@@ -40,6 +40,16 @@ int mt6797_h264_slice_words(const struct v4l2_ctrl_h264_sps *sps,
 			   __u32 payload_bytes,
 			   struct mt6797_h264_slice_words *output);
 
+/* Verify complete RBSP slice headers match except first_mb_in_slice. This
+ * initial packet boundary admits identical per-slice settings only. The NAL
+ * header is compared too; input is bounded and emulation bytes are removed.
+ */
+int mt6797_h264_slice_headers_match(
+	const struct v4l2_ctrl_h264_slice_params *first,
+	const __u8 *first_nal, __u32 first_bytes,
+	const struct v4l2_ctrl_h264_slice_params *next,
+	const __u8 *next_nal, __u32 next_bytes);
+
 #define MT6797_H264_SCALING_WORDS 56
 #define MT6797_H264_PICTURE_SLOTS (V4L2_H264_NUM_DPB_ENTRIES + 1)
 

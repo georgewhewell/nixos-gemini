@@ -312,7 +312,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 			const struct mt6797_decode_job *job,
 			struct mt6797_h264_header_words *header,
 			struct mt6797_h264_slice_words *slice,
-			struct mt6797_h264_reference_plan *plan)
+			struct mt6797_h264_reference_plan *plan,
+			bool continuation)
 {
 	int ret;
 
@@ -334,7 +335,7 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    job->height < 64 || job->height > MT6797_MAX_HEIGHT || job->height % 32 ||
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
 	    ALIGN(header->height_mbs * 16, 32) != job->height ||
-	    job->slice.first_mb_in_slice ||
+	    (!continuation && job->slice.first_mb_in_slice) ||
 	    (job->sps.profile_idc != 100 &&
 	     (job->pps.flags & (V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
 			       V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT))) ||
@@ -351,6 +352,32 @@ static int validate_job(struct mt6797_decode_context *ctx,
 		return ret;
 	return mt6797_h264_reference_plan(&job->sps, &job->slice, &job->decode,
 					 ctx->cache, job->timestamp, plan);
+}
+
+int mt6797_engine_validate_slice(struct mt6797_decode_context *ctx,
+			       const struct mt6797_decode_job *job)
+{
+	struct mt6797_h264_header_words header;
+	struct mt6797_h264_slice_words slice;
+	struct mt6797_h264_reference_plan plan;
+	struct mt6797_h264_weight_range weights;
+	struct mt6797_h264_scaling_word scaling[MT6797_H264_SCALING_WORDS];
+	int ret;
+
+	if (ctx->engine->fenced)
+		return -EIO;
+	ret = validate_job(ctx, job, &header, &slice, &plan, true);
+	if (ret)
+		return ret;
+	if (V4L2_H264_CTRL_PRED_WEIGHTS_REQUIRED(&job->pps, &job->slice)) {
+		ret = mt6797_h264_weight_range(&job->sps, &job->pps, &job->slice,
+					     &job->decode, &job->weights,
+					     job->nal, job->bytes, &weights);
+		if (ret)
+			return ret;
+	}
+	return job->pps.flags & V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT ?
+		mt6797_h264_scaling_words(&job->scaling, scaling) : 0;
 }
 
 /* Every buffer starts CPU-owned. Only the serialized worker gives it to
@@ -500,7 +527,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	if (engine->fenced)
 		return -EIO;
 	saved->count = 0;
-	ret = validate_job(ctx, job, &header, &slice, &plan);
+	ret = validate_job(ctx, job, &header, &slice, &plan, false);
 	if (ret)
 		return ret;
 	if (V4L2_H264_CTRL_PRED_WEIGHTS_REQUIRED(&job->pps, &job->slice)) {

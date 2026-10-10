@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--width', type=int, default=128)
     parser.add_argument('--height', type=int, default=96)
     parser.add_argument('--frames', type=int, default=8)
+    parser.add_argument('--slices', type=int, default=1, choices=range(1, 17),
+                        help='Slices per picture for separate packet/Request qualification')
     parser.add_argument('--refs', type=int, default=1, choices=range(1, 17),
                         help='Number of short-term references for separate hardware qualification')
     parser.add_argument('--bframes', type=int, default=0, choices=range(5))
@@ -46,6 +48,8 @@ def main():
     if not (64 <= w <= 1920 and 64 <= h <= 1088 and not w % 16 and not h % 2
             and 2 <= count <= 32):
         parser.error('Use width64..1920 in steps16, even height64..1088 and2..32frames')
+    if args.slices > (h + 15) // 16:
+        parser.error('Slice count cannot exceed coded macroblock rows')
     args.out.mkdir(parents=True, exist_ok=True)
     original = bytearray()
     for frame in range(count):
@@ -82,7 +86,8 @@ def main():
                '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high or args.weighted_pred or args.bframes else '') +
                f'no-deblock={0 if args.deblocking else 1}:'
                f'8x8dct={int(args.transform_8x8)}:weightp={2 if args.weighted_pred else 0}:repeat-headers=1:'
-               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' + matrix_params + (f':b-adapt=0:b-pyramid={args.b_pyramid}:direct={args.direct}:weightb={int(args.implicit_bipred)}' if args.bframes else ''),
+               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' +
+               (f':slices={args.slices}' if args.slices != 1 else '') + matrix_params + (f':b-adapt=0:b-pyramid={args.b_pyramid}:direct={args.direct}:weightb={int(args.implicit_bipred)}' if args.bframes else ''),
                str(stream)]
     encode = subprocess.run(command, check=True, capture_output=True)
     (args.out / 'encode-stderr.txt').write_bytes(encode.stderr)
@@ -135,11 +140,18 @@ def main():
         if not crop or any(int(v) != (16 - h % 16) // 2 for v in crop):
             raise RuntimeError(f'Unexpected progressive4:2:0 crop bottom: {crop}')
     starts = re.findall(r'\bfirst_mb_in_slice\s+\S+\s+=\s+(\d+)', syntax)
-    if len(starts) != count or any(int(v) for v in starts):
-        raise RuntimeError('Expected exactly one complete slice per frame')
+    picture_starts = [list(map(int, starts[i:i + args.slices]))
+                      for i in range(0, len(starts), args.slices)]
+    total_mbs = (w // 16) * ((h + 15) // 16)
+    if len(starts) != count * args.slices or any(
+            not group or group[0] != 0 or len(group) != args.slices or
+            any(a >= b for a, b in zip(group, group[1:])) or
+            any(mb >= total_mbs for mb in group) for group in picture_starts):
+        raise RuntimeError('Expected ordered slices starting at MB0 for every picture')
     names = ('original.yuv', 'stream.h264', 'reference.yuv', 'encode-stderr.txt',
              'decode-stderr.txt', 'public-syntax-trace.txt')
     metadata = dict(schema=1, width=w, height=h, frames=count,
+                    slices_per_picture=args.slices, slice_first_macroblocks=picture_starts,
                     original_input='Changing arithmetic Y/U/V gradients; generated here',
                     fixture_encoder='Open-source FFmpeg libx264; no hardware encoder claim',
                     reference='Independent FFmpeg software decode of the lossy stream',

@@ -345,6 +345,41 @@ static void weight_expect(struct weight_reader *reader, __s64 actual, __s64 expe
 		reader->error = -EINVAL;
 }
 
+int mt6797_h264_slice_headers_match(
+	const struct v4l2_ctrl_h264_slice_params *first,
+	const __u8 *first_nal, __u32 first_bytes,
+	const struct v4l2_ctrl_h264_slice_params *next,
+	const __u8 *next_nal, __u32 next_bytes)
+{
+	struct weight_reader a = { .nal = first_nal, .bytes = first_bytes };
+	struct weight_reader b = { .nal = next_nal, .bytes = next_bytes };
+	__u32 remaining;
+
+	if (!first || !next || !first_nal || !next_nal ||
+	    first_bytes < 4 || next_bytes < 4 ||
+	    first->header_bit_size < 9 || next->header_bit_size < 9 ||
+	    first->header_bit_size > 16384 || next->header_bit_size > 16384 ||
+	    (__u64)first->header_bit_size > (__u64)first_bytes * 8 ||
+	    (__u64)next->header_bit_size > (__u64)next_bytes * 8)
+		return -EINVAL;
+	a.limit = first->header_bit_size;
+	b.limit = next->header_bit_size;
+	if (weight_bits(&a, 8) != weight_bits(&b, 8))
+		return -EINVAL;
+	weight_expect(&a, weight_ue(&a), first->first_mb_in_slice);
+	weight_expect(&b, weight_ue(&b), next->first_mb_in_slice);
+	if (a.error || b.error || a.limit - a.position != b.limit - b.position)
+		return -EINVAL;
+	remaining = a.limit - a.position;
+	while (remaining && !a.error && !b.error) {
+		unsigned int count = remaining < 32 ? remaining : 32;
+		if (weight_bits(&a, count) != weight_bits(&b, count))
+			return -EINVAL;
+		remaining -= count;
+	}
+	return a.error ? a.error : b.error;
+}
+
 static __s32 weight_factor(struct weight_reader *reader, __s16 expected)
 {
 	__s32 value = weight_se(reader);

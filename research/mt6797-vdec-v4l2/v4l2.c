@@ -7,6 +7,7 @@
 #include <linux/math64.h>
 #include <linux/pm_runtime.h>
 #include <linux/sizes.h>
+#include <linux/slab.h>
 #include <linux/workqueue.h>
 #include <media/media-device.h>
 #include <media/v4l2-ctrls.h>
@@ -17,6 +18,7 @@
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-vmalloc.h>
 #include "engine.h"
+#include "../mt6797-vdec/mt6797-h264-controls.h"
 
 #define INPUT_SIZE (MT6797_MAX_NAL_BYTES)
 
@@ -34,6 +36,7 @@ struct decoder {
 	spinlock_t status_lock;
 	int last_result, failed_result, first_failed_result;
 	u64 jobs, failures, failed_job, first_failed_job;
+	u64 fetch_commands, frame_commands;
 };
 
 struct decode_file {
@@ -42,6 +45,10 @@ struct decode_file {
 	struct v4l2_ctrl_handler controls;
 	struct mt6797_decode_context *context;
 	struct mt6797_decode_job job;
+	struct mt6797_decode_job first_slice;
+	u8 *packet;
+	size_t packet_bytes, first_nal_bytes;
+	u32 packet_slices, last_mb;
 	struct v4l2_ctrl *sps, *pps, *slice, *decode, *scaling, *weights;
 	atomic_t abort;
 	bool failure_recorded;
@@ -246,6 +253,80 @@ static int start_stream(struct vb2_queue *queue, unsigned int count)
 	return 0;
 }
 
+static void reset_packet(struct decode_file *ctx)
+{
+	kvfree(ctx->packet);
+	ctx->packet = NULL;
+	ctx->packet_bytes = ctx->first_nal_bytes = 0;
+	ctx->packet_slices = ctx->last_mb = 0;
+	memset(&ctx->first_slice, 0, sizeof(ctx->first_slice));
+}
+
+/* The first implementation keeps every slice setting identical except its
+ * first macroblock and header length. Compare the complete RBSP headers too:
+ * contradictory in-band picture/list/weight/marking syntax cannot enter the
+ * packet merely by supplying identical out-of-band controls.
+ */
+static int collect_slice(struct decode_file *ctx, bool hold)
+{
+	const struct mt6797_decode_job *job = &ctx->job;
+	struct v4l2_ctrl_h264_slice_params next = job->slice;
+	const struct mt6797_decode_job *first = &ctx->first_slice;
+	size_t prefix = ctx->packet_bytes ? 4 : 0;
+	int ret;
+
+	ret = mt6797_engine_validate_slice(ctx->context, job);
+	if (ret)
+		return ret;
+	if (!ctx->packet_bytes) {
+		if (!hold || job->slice.first_mb_in_slice)
+			return -EINVAL;
+		ret = mt6797_h264_slice_headers_match(&job->slice, job->nal, job->bytes,
+						    &job->slice, job->nal, job->bytes);
+		if (ret)
+			return ret;
+		ctx->packet = kvmalloc(INPUT_SIZE, GFP_KERNEL);
+		if (!ctx->packet)
+			return -ENOMEM;
+		ctx->first_slice = *job;
+		ctx->first_slice.nal = ctx->packet;
+		ctx->first_nal_bytes = job->bytes;
+	} else {
+		if (job->timestamp != first->timestamp || job->width != first->width ||
+		    job->height != first->height ||
+		    memcmp(&job->sps, &first->sps, sizeof(job->sps)) ||
+		    memcmp(&job->pps, &first->pps, sizeof(job->pps)) ||
+		    memcmp(&job->decode, &first->decode, sizeof(job->decode)) ||
+		    job->slice.first_mb_in_slice <= ctx->last_mb)
+			return -EINVAL;
+		next.first_mb_in_slice = first->slice.first_mb_in_slice;
+		next.header_bit_size = first->slice.header_bit_size;
+		if (memcmp(&next, &first->slice, sizeof(next)) ||
+		    memcmp(&job->scaling, &first->scaling, sizeof(job->scaling)) ||
+		    memcmp(&job->weights, &first->weights, sizeof(job->weights)))
+			return -EOPNOTSUPP;
+		ret = mt6797_h264_slice_headers_match(&first->slice, ctx->packet,
+						    ctx->first_nal_bytes, &job->slice,
+						    job->nal, job->bytes);
+		if (ret)
+			return ret;
+	}
+	/* Check the entire addition before either copy; the CPU packet can never
+ * exceed the guarded engine's already-qualified input aperture.
+ */
+	if (prefix > INPUT_SIZE - ctx->packet_bytes ||
+	    job->bytes > INPUT_SIZE - ctx->packet_bytes - prefix)
+		return -ENOSPC;
+	if (prefix)
+		memcpy(ctx->packet + ctx->packet_bytes, "\0\0\0\1", prefix);
+	memcpy(ctx->packet + ctx->packet_bytes + prefix, job->nal, job->bytes);
+	ctx->packet_bytes += prefix + job->bytes;
+	ctx->first_slice.bytes = ctx->packet_bytes;
+	ctx->last_mb = job->slice.first_mb_in_slice;
+	ctx->packet_slices++;
+	return 0;
+}
+
 static void stop_stream(struct vb2_queue *queue)
 {
 	struct decode_file *ctx = vb2_get_drv_priv(queue);
@@ -258,10 +339,25 @@ static void stop_stream(struct vb2_queue *queue)
 			complete_buffer_request(&buffer->vb2_buf);
 			v4l2_m2m_buf_done(buffer, VB2_BUF_STATE_ERROR);
 		}
-	} else {
-		while ((buffer = v4l2_m2m_dst_buf_remove(ctx->fh.m2m_ctx)))
+		/* OUTPUT-only streamoff must also release an unfinished held picture.
+ * There is no DMA in a collected packet; the running job has been drained.
+ */
+		buffer = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
+		if (buffer && buffer->is_held) {
+			v4l2_m2m_dst_buf_remove(ctx->fh.m2m_ctx);
+			buffer->is_held = false;
+			buffer->sequence = ctx->sequence++;
 			v4l2_m2m_buf_done(buffer, VB2_BUF_STATE_ERROR);
+		}
+	} else {
+		while ((buffer = v4l2_m2m_dst_buf_remove(ctx->fh.m2m_ctx))) {
+			if (buffer->is_held)
+				buffer->sequence = ctx->sequence++;
+			buffer->is_held = false;
+			v4l2_m2m_buf_done(buffer, VB2_BUF_STATE_ERROR);
+		}
 	}
+	reset_packet(ctx);
 	mt6797_decode_context_reset(ctx->context);
 }
 
@@ -295,6 +391,8 @@ static int initialize_queues(void *priv, struct vb2_queue *source, struct vb2_qu
 		queue->max_num_buffers = 32;
 		queue->supports_requests = !i;
 		queue->requires_requests = !i;
+		if (!i)
+			queue->subsystem_flags |= VB2_V4L2_FL_SUPPORTS_M2M_HOLD_CAPTURE_BUF;
 		ret = vb2_queue_init(queue);
 		if (ret)
 			return ret;
@@ -313,6 +411,8 @@ static void decode_work(struct work_struct *work)
 	struct mt6797_decode_status status = { 0 };
 	u64 started = ktime_get_ns();
 	unsigned long flags;
+	bool hold = source->flags & V4L2_BUF_FLAG_M2M_HOLD_CAPTURE_BUF;
+	bool collected = false;
 	int ret;
 
 	ret = request ? v4l2_ctrl_request_setup(request, &ctx->controls) : -EINVAL;
@@ -337,17 +437,33 @@ static void decode_work(struct work_struct *work)
 			ctx->job.nal += source->vb2_buf.planes[0].data_offset;
 			ctx->job.bytes = vb2_get_plane_payload(&source->vb2_buf, 0) - source->vb2_buf.planes[0].data_offset;
 			ctx->job.timestamp = source->vb2_buf.timestamp;
-			ret = atomic_read(&ctx->abort) ? -ECANCELED :
-				mt6797_engine_decode(ctx->context, &ctx->job, &pixels, &status);
-			status.nal_bytes = ctx->job.bytes;
-			status.header_bits = ctx->job.slice.header_bit_size;
+			ret = atomic_read(&ctx->abort) ? -ECANCELED : 0;
+			if (!ret && (hold || ctx->packet_bytes)) {
+				ret = collect_slice(ctx, hold);
+				if (!ret && hold) {
+					collected = true;
+					status.collected = true;
+					status.quiesced = status.guards_unchanged = true;
+				} else if (!ret) {
+					ret = mt6797_engine_decode(ctx->context, &ctx->first_slice,
+								   &pixels, &status);
+				}
+				status.slice_count = ctx->packet_slices;
+				status.nal_bytes = ctx->packet_bytes;
+				status.header_bits = ctx->first_slice.slice.header_bit_size;
+			} else if (!ret) {
+				ret = mt6797_engine_decode(ctx->context, &ctx->job, &pixels, &status);
+				status.slice_count = 1;
+				status.nal_bytes = ctx->job.bytes;
+				status.header_bits = ctx->job.slice.header_bit_size;
+			}
 		}
 	}
 	status.engine_result = ret;
 	status.elapsed_us = div_u64(ktime_get_ns() - started, 1000);
 	if (atomic_read(&ctx->abort))
 		ret = -ECANCELED;
-	if (!ret) {
+	if (!ret && !collected) {
 		unsigned int luma_size = ctx->width * ctx->height;
 		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 0), pixels, luma_size);
 		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 1), pixels + luma_size, luma_size / 2);
@@ -358,6 +474,8 @@ static void decode_work(struct work_struct *work)
 	decoder->last_status = status;
 	decoder->last_result = ret;
 	decoder->jobs++;
+	decoder->fetch_commands += status.fetched;
+	decoder->frame_commands += status.submitted;
 	if (ret)
 		decoder->failures++;
 	if (ret && !ctx->failure_recorded) {
@@ -372,8 +490,21 @@ static void decode_work(struct work_struct *work)
 		decoder->failed_job = decoder->jobs;
 	}
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	v4l2_m2m_buf_copy_metadata(source, capture);
-	capture->sequence = ctx->sequence++;
+	if (collected && !ret) {
+		/* The core otherwise returns a held buffer as DONE on a timestamp
+ * change, before this worker can reject the inconsistent picture. Publish
+ * completed metadata only on the final request; retain the pending timestamp
+ * for streamoff/error reporting without authorizing that automatic release.
+ */
+		capture->vb2_buf.timestamp = ctx->first_slice.timestamp;
+		capture->vb2_buf.copied_timestamp = false;
+	} else {
+		v4l2_m2m_buf_copy_metadata(source, capture);
+		capture->sequence = ctx->sequence++;
+		if (ret)
+			source->flags &= ~V4L2_BUF_FLAG_M2M_HOLD_CAPTURE_BUF;
+		reset_packet(ctx);
+	}
 	if (request)
 		v4l2_ctrl_request_complete(request, &ctx->controls);
 	v4l2_m2m_buf_done_and_job_finish(decoder->m2m, ctx->fh.m2m_ctx,
@@ -469,6 +600,7 @@ static int release_decoder(struct file *file)
 	struct decoder *decoder = ctx->decoder;
 	mutex_lock(&decoder->mutex);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
+	reset_packet(ctx);
 	v4l2_fh_del(&ctx->fh, file);
 	v4l2_fh_exit(&ctx->fh);
 	v4l2_ctrl_handler_free(&ctx->controls);
@@ -558,7 +690,7 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	struct decoder *decoder = dev_get_drvdata(dev);
 	struct mt6797_decode_status status;
 	unsigned long flags;
-	u64 jobs, failures;
+	u64 jobs, failures, fetch_commands, frame_commands;
 	int result;
 	spin_lock_irqsave(&decoder->status_lock, flags);
 	if (!strcmp(attr->attr.name, "first_context_failure")) {
@@ -575,8 +707,10 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 		result = decoder->last_result;
 	}
 	failures = decoder->failures;
+	fetch_commands = decoder->fetch_commands;
+	frame_commands = decoder->frame_commands;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x slice_count=%u collected=%u fetch_commands=%llu frame_commands=%llu\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
@@ -590,7 +724,8 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 		status.reference_mask, status.snapshot_mask, status.picture_slot,
 		status.reference_guard_count, status.registers_saved, status.reference_count1,
 		status.motion_bytes, status.motion_guard_count, status.long_term_mask,
-		status.current_poc, status.reference_min_poc, status.reference_max_poc, status.current_poc_word);
+		status.current_poc, status.reference_min_poc, status.reference_max_poc, status.current_poc_word, status.slice_count, status.collected,
+		fetch_commands, frame_commands);
 }
 static DEVICE_ATTR_RO(last_job);
 static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);

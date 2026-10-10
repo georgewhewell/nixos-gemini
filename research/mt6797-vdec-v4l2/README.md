@@ -9,11 +9,12 @@ This development has not used a formally separated clean-room team.
 
 The current module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
-through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
+through 1920x1088 coded / 1920x1080 visible in the listed one-slice cases, with up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
-Trials 52–54 qualify the earlier module; trials 56/57 below check the current
-module with full-width cached POCs and POC types 1/2. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trials 52–57 qualify earlier modules. Trial 62 reruns all 683 listed pictures
+on the current module, including full-width cached POCs and POC types 1/2.
+Trial 61 separately qualifies the original 64x64 Baseline multislice packets. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -235,17 +236,44 @@ the generator rejects these variants and they remain hardware-unqualified.
 This does not establish all POC-type or field combinations. Multislice,
 interlace, IRQ completion, production integration and encoding remain unfinished.
 
-Private diagnostic trials 58/59 establish a next step for multislice support:
-complete original 64x64 CAVLC I_PCM/P_Skip packets with two, four, sixteen and
-uneven slices produce exact pixels and safely retain their hardware-decoded
-references. Isolated eight-macroblock slices do not finish the picture or flush
-all output. These packet results do not enable multislice in this Request driver.
-It still rejects a nonzero first macroblock and has no request accumulation.
-The planned extension must collect slices per picture, validate their identity,
-retain capture ownership, and submit the whole packet after the final request.
-Abandoned or inconsistent batches must return errors before any DMA and leave
-retained references usable. See the [private diagnostic](../mt6797-vdec/README.md)
-and `qualification.multislice_private_probe` in the interface ledger.
+Private diagnostic trials 58/59 establish complete-picture packet consumption.
+The Request frontend now collects nonfinal slices in a bounded per-context CPU
+packet and completes each OUTPUT request while retaining its untouched CAPTURE.
+The final request submits that packet once through the existing guarded engine.
+All slices must share timestamp, geometry, SPS/PPS/decode metadata and slice
+settings. The first macroblock starts at zero and then increases; a bounded
+RBSP reader compares complete headers after excluding the first-macroblock code.
+Changing per-slice lists, weights, QP or deblocking remains unsupported. A rejected
+batch releases capture as an error before DMA and leaves earlier references usable.
+Streamoff and close discard unfinished packets. Held capture timestamps are
+kept private until completion to prevent the mem2mem core from publishing an
+unfinished picture on a timestamp change. See the [private diagnostic](../mt6797-vdec/README.md)
+and the stateless decoder [Request contract](https://docs.kernel.org/userspace-api/media/v4l/dev-stateless-decoder.html).
+
+Trial 60 passes the native and five GStreamer picture checks with 49 exact
+pictures, but its overall media diagnostic fails when the observer's incorrect
+15-second compliance deadline interrupts the blocking-wait check. Normal unload,
+full RTC/system checks and strict accepted-board recovery pass; this failed
+attempt remains recorded. Trial 61 repeats the same driver with the established
+30-second deadline and passes all 57 media checks. Its 86 native multislice
+requests produce 27 exact pictures, complete 54 intermediate requests without
+DMA, and reject five timestamp/order/control/header/capacity faults before DMA.
+OUTPUT-only and CAPTURE-only streamoff, close/reopen, interleaved contexts and
+retained-reference recovery pass. Original 64x64 Baseline I_PCM/P_Skip pictures
+use one, two, four, sixteen and uneven slices. The whole run compares 49 pictures
+and records 164 requests, 50 hardware picture commands (including the existing
+intentional timeout) and 98 intermediate requests without DMA. Full RTC/system
+checks, normal unload and strict accepted-board recovery pass. Main/High/CABAC
+multislice and compressed packets require separate qualification.
+
+Trial 62 qualifies the same driver against the complete earlier regression:
+683 exact pictures over 684 hardware commands, including the intentional timeout.
+All 62 dynamic streams, sixteen-reference and long-term cases, full POCs, B/direct
+prediction, weighted tables, High matrices, HD MM21/I420, the clocked Main sample,
+concurrent contexts and all 57 media checks pass. Normal unload, the command-free
+encoder resource probe, every RTC/system check and the strict accepted-board audit
+pass. The extra Request buffering leaves this earlier single-slice scope intact.
+
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote

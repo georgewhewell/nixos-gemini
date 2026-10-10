@@ -41,11 +41,13 @@ struct mt6797_decode_status {
 	u32 reference_count1, motion_bytes, motion_guard_count, long_term_mask;
 	s32 current_poc, reference_min_poc, reference_max_poc;
 	u32 current_poc_word;
+	u32 slice_count;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;
 	bool fetched, submitted, quiesced, guards_unchanged;
 	bool cabac_tail_valid;
+	bool collected;
 };
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev);
@@ -55,6 +57,11 @@ int mt6797_engine_suspend(struct mt6797_engine *engine);
 struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine *engine);
 void mt6797_decode_context_destroy(struct mt6797_decode_context *ctx);
 void mt6797_decode_context_reset(struct mt6797_decode_context *ctx);
+/* Controls, header ranges and private-reference binding only; no allocation,
+ * power vote, MMIO, cache mutation or DMA. Continuation first-MB is admitted.
+ */
+int mt6797_engine_validate_slice(struct mt6797_decode_context *ctx,
+			       const struct mt6797_decode_job *job);
 int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
 			 const u8 **pixels, struct mt6797_decode_status *status);
