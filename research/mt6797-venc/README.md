@@ -44,6 +44,13 @@ setup to port. The
 is a stub unless a private overlay is present. These findings are limited to
 the inspected sources; they do not establish that MT6797 requires firmware.
 
+The [April 2026 common encoder interface proposal](https://lists.openwall.net/linux-kernel/2026/04/23/383)
+also delegates SPS, PPS and frame commands to `vpu_enc_encode`. It supplies plane
+and bitstream addresses through shared firmware parameters and reads the byte
+count at `0x98`. It provides no direct MT6797 frame-register contract. The
+archived source hashes and this limited finding are recorded in
+[the source lead](encoder-common-interface-20260423-lead.json).
+
 The resource probe also passes in trials 36–41, with normal unload and released
 power votes. Trial 38 separately misses the supervisor's final RTC alarm; that
 failure remains recorded. No trial produces an encoded picture.
@@ -67,3 +74,8 @@ Trial 57 passes the same command-free probe, with normal unload, the full
 RTC/system profile and a clean accepted-board recovery audit. Its additional
 POC-type decoder fixtures do not program the encoder. The direct encoder
 frame contract and encoded output remain unfinished.
+
+Trial 67 repeats the same command-free probe while checking the corrected
+decoder module. Released power votes, normal unload, full RTC/system checks
+and the strict accepted-board recovery audit pass. No encoder DMA, frame
+command or encoded picture is qualified.

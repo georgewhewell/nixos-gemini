@@ -46,7 +46,7 @@ struct mt6797_decode_status {
 	int engine_result;
 	int break_result, reset_result;
 	bool fetched, submitted, quiesced, guards_unchanged;
-	bool cabac_tail_valid;
+	bool cabac_tail_checked, cabac_tail_window_valid, cabac_tail_valid;
 	bool collected;
 };
 

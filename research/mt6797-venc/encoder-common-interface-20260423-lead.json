@@ -1,0 +1,16 @@
+{
+  "checked_date": "2026-10-10",
+  "source": "https://lists.openwall.net/linux-kernel/2026/04/23/383",
+  "message_id": "20260423073345.27402-3-irui.wang@mediatek.com",
+  "author": "Irui Wang, MediaTek",
+  "subject": "PATCH v6 2/6 media: mediatek: encoder: Add a new encoder driver interface",
+  "patch_date": "2026-04-23",
+  "public_license": "GPL-2.0",
+  "html_sha256": "3249990b3135faca3f9bc9c6a4b76f95f1b0e47b1fde4adb2a9c8e9909b48d61",
+  "patch_text_sha256": "d484fdb3301a4d637c5baee9f100c0eccd5d7a83e76d29145044595b93c90aba",
+  "fact": "The new interface places source and bitstream addresses in shared firmware parameters and delegates SPS, PPS and frame commands to vpu_enc_encode. It reads the encoded-byte count at0x98 after the IRQ wait.",
+  "inference": "This examined modern public interface supplies no direct MT6797 source/reference/reconstruction/scratch/start/stop register contract. It cannot justify a firmware-free Gemini encoder backend.",
+  "hardware_qualified": false,
+  "proprietary_source_or_binary_examined": false,
+  "archive_directory": "/mnt/Home/src/nixos-gemini/handoff/video-resource-20261009"
+}

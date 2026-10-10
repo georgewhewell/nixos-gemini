@@ -12,9 +12,12 @@ Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible in the listed one-slice cases, with up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
-Trials 52–57 qualify earlier modules. Trial 62 reruns all 683 listed pictures
+Trials 52–62 qualify earlier modules. Trial 67 reruns all 683 listed pictures
 on the current module, including full-width cached POCs and POC types 1/2.
-Trial 61 separately qualifies the original 64x64 Baseline multislice packets. Trial 41 checks 106 exact pictures including HD, resolution changes
+Trial 66 separately qualifies 104 exact pictures, including 54 compressed
+multislice pictures at SD and 1080p and the original 64x64 Baseline packets.
+Multislice lists, weights, QP and deblocking must match across a picture.
+Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -290,7 +293,50 @@ A new parser-window diagnostic and independent picture comparisons are needed
 before accepting the new error-word combination or qualifying Main/High
 compressed multislice generally.
 
+Trial 64 samples the completed bit-14/zero-message parser window while keeping
+acceptance unchanged. All 13 pipelines run; 91 exported pictures match every
+sample. High CABAC at SD and 1080p, and the Main B stream, each reproduce a
+completed rejected picture with aligned parser word 1 and intact stop/guards.
+The five other compressed profiles pass 35 pictures; the three partial streams
+export seven correct prefix pictures. Missing pictures remain unqualified.
+The [pinned public GPL helper](https://github.com/DroidThug/android_kernel_leeco_MT6795/blob/3c1166fd1c809473bde680bf1f7ebdd07f395104/drivers/misc/mediatek/vdec/hal/vdec_hal_if_h264.c#L2262)
+reads the current message but classifies the error accumulator, independently
+of message equality, and checks the byte-aligned window for a sole CABAC trailer
+flag. Trial 64 verifies that diagnostic precondition on Gemini. All 57 media
+checks, normal unload, full RTC/system supervision, recovery and the strict
+board audit pass; the overall media diagnostic still fails as expected.
 
+Trial 65 tests the corrected accumulator-based trailer classifier. All 104
+exported pictures match, including all 54 compressed multislice pictures and
+the malformed-CABAC stream's correct initial I picture. The malformed second
+picture retains explicit bit-8 EIO and no trailer classification. Its observer
+still applies the old equal-error-word predicate, so the completed High 1080p
+pipeline and overall observer are marked failed despite correct pixels and
+status. That harness failure remains archived; a fresh repeat with the corrected
+predicate is required. All 57 media checks, normal unload, full RTC/system
+checks, accepted recovery and the strict board audit pass.
+
+Trial 66 repeats the same corrected module with the corrected observer and
+passes all 104 exact comparisons. All eight compressed streams complete: SD
+Baseline, Main, Main B, weighted Main and High CABAC/CAVLC with two or four
+slices, plus Main/High 1080p with four slices. The 54 compressed pictures include
+the previously rejected CABAC cases. The native/original multislice suite adds
+49 pictures; malformed CABAC exports its one correct I picture then reports
+explicit EIO for bit 8, with no trailer classification. The complete run uses
+334 requests and 106 fetch/picture commands. All 57 media checks, normal unload,
+full RTC/system checks, recovery and the strict board audit pass. Changing
+per-slice lists, weights, QP or deblocking remains unsupported; the wider
+one-slice feature regression on this corrected module requires a separate run.
+
+Trial 67 completes that regression on the exact trial-66 module: all 683
+pictures match over 684 fetch/picture commands, including the intentional
+timeout. All 62 dynamic streams, sixteen-reference and long-term cases,
+POC boundaries and types 1/2, B/direct motion, weighting, High matrices,
+HD MM21/I420, the clocked Main sample and concurrent contexts pass. All 57
+media checks, normal unload, the command-free encoder resource probe, full
+RTC/system checks, accepted recovery and the strict board audit pass. The
+accepted boot has taint zero, no temporary media modules, no failed services
+and no kernel fault patterns. The encoder frame contract remains unfinished.
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
@@ -497,8 +543,9 @@ export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
 `../mt6797-vdec/make-baseline-fixture.py` reproduces the changing-gradient x264
 fixtures and records their software-decoded references, commands, hashes and
 public header trace. It verifies the selected Baseline/Main/High profile,
-entropy/scaling/weighting mode, reference count, one slice per picture and
-deblocking mode. The default remains Baseline CAVLC with one reference and
+entropy/scaling/weighting mode, reference count, requested slices per picture
+and deblocking mode. `--slices` defaults to one and accepts up to sixteen,
+bounded by the coded macroblock rows. The default remains Baseline CAVLC with one reference and
 unweighted prediction. It reproduces the original 128x96 stream
 and reference byte for byte with the pinned FFmpeg build.
 

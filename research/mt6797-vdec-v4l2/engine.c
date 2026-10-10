@@ -877,19 +877,26 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	 * trailer check. A completed picture may report this alone when the
 	 * byte-aligned parser window is already at a zero word/start code.
 	 * Verify that condition; retain both raw error words for diagnostics.
+	 * The error accumulator retains the trailer flag independently of the
+	 * current message. The public classifier does not require their equality;
+	 * Gemini's completed multislice cases expose a zero current message.
+	 * Admit only these known messages with the sole accumulated trailer bit
+	 * and a verified window, full picture completion and final macroblock.
 	 * Other errors, incomplete pictures and failed DMA guards stay fatal.
 	 */
 	if (!ret && (status->state & BIT(31)) && cabac && status->error == BIT(14) &&
-	    status->message == BIT(14) &&
+	    (status->message == BIT(14) || !status->message) &&
 	    status->mbx == header.width_mbs - 1 &&
 	    status->mby == header.height_mbs - 1) {
+		status->cabac_tail_checked = true;
 		status->tail_bit_offset = (readl(avc + 0x84) >> 16) & 0x3f;
 		remaining = (-status->tail_bit_offset) & 7;
 		if (remaining)
 			readl(avc + remaining * 4);
 		status->tail_word = readl(avc);
-		status->cabac_tail_valid = !status->tail_word ||
+		status->cabac_tail_window_valid = !status->tail_word ||
 			status->tail_word == 1 || (status->tail_word >> 8) == 1;
+		status->cabac_tail_valid = status->cabac_tail_window_valid;
 	}
 	if (!ret && (!(status->state & BIT(31)) ||
 		     ((status->error || status->message) && !status->cabac_tail_valid) ||
