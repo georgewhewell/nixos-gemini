@@ -7,14 +7,16 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
-The current tested module decodes the listed progressive Baseline/Main I/P
-fixtures through 640x480 using one slice and one short-term reference. Trial 39
-checks 122 pictures, five resolution/profile transitions, visible-height I420
-conversion and two concurrent streams; every sample matches independent
-software references. All 57 default media checks, normal unload, RTC/system
-checks and strict accepted-system recovery pass. Trial 38's separate RTC miss
-remains recorded. Hardware encoding, broader codec features, interrupt
-completion and production integration remain unfinished.
+The current module decodes the listed progressive Baseline/Main I/P fixtures
+through 1920x1088 coded / 1920x1080 visible, using one slice and one short-term
+reference. Trial 41 checks 106 exact pictures, including 720p and 1080p,
+five resolution/profile segments and visible-height I420 conversion. All 57
+default media checks and normal unload pass. Its cached private DMA buffers
+use explicit CPU/device ownership and picture storage is allocated only for
+valid decoding requests. Trial 39 separately checks two concurrent SD streams.
+Hardware encoding, broader codec features, interrupt completion and production
+integration remain unfinished. All RTC/system checks and strict accepted-system recovery pass. Trial 38's
+RTC miss and trial 40's failed unlimited-open check remain recorded.
 
 The first module builds against the 7.1.3 candidate kernel with strict modpost
 and genuine exported-symbol metadata from that kernel and its media modules.
@@ -63,8 +65,8 @@ streams qualified in trial 37 below, one slice,
 I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
 Main/CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The current HD candidate admits coded widths 64..1920 and heights 64..1088
-in steps of 16; media fixture qualification extends through 640x480 in trials 38/39.
+`V4L2_PIX_FMT_MM21`. The current driver admits coded widths 64..1920 and heights 64..1088
+in steps of 16; trial 41 checks the explicitly listed HD and SD fixtures.
 Negotiated MM21 storage height is padded to 32 rows; prediction uses the coded
 height, and cached references must match it. Trial 30 passes all 18 original
 request pictures at 64x64, 64x80 and 320x240 plus 18 pictures through seven
@@ -84,8 +86,10 @@ uses a bounded workqueue poll because actual interrupt delivery is unqualified.
 It does not implement an encoder.
 
 Userspace queue storage is allocated by videobuf2-vmalloc. Hardware reads and
-writes only independent coherent DMA allocations, with private input padding,
-working buffers, picture buffers and trailing guards. Before copying pixels
+writes only independent private DMA allocations, with input padding, working
+buffers, picture buffers and trailing guards. The current buffers are cached:
+the worker synchronizes them for the device before the first fetch, then for
+the CPU only after a proven hardware stop. Before copying pixels
 into capture buffers, the worker requires picture completion, break/reset
 acknowledgements and unchanged guards/reference storage. Baseline requires zero
 error/message words. The experimental Main trailer classification below retains
@@ -180,7 +184,12 @@ the eager per-file HD allocations. Large uncached guard scans/copies also add
 130–235 ms to native jobs, so real-time playback is unqualified. A staged fix
 allocates private pictures only after a valid request and to its actual storage
 geometry, and uses the public Linux cached DMA API with explicit ownership.
-That lifecycle/coherence change awaits hardware qualification.
+The lifecycle/coherence candidate is now the current source, awaiting hardware
+qualification. Picture allocations are deferred until a validated job and
+sized to its negotiated storage. Linux non-coherent DMA pages use explicit
+bidirectional synchronization before the first fetch and after a proven stop;
+CPU guard/reference checks then run on the returned ownership. A fatal stop
+keeps device ownership and pinned allocations until reboot.
 
 Trial 33 tests enabled deblocking at 64x80, 128x96 and 320x240, plus the original
 long chain. Its 73 successful pictures match independent software references.
@@ -234,6 +243,25 @@ context's first rejection, so pre-DMA failures cannot be hidden by later
 missing references. The fixture
 generator's `--deblocking` and `--entropy cabac` options generate separately
 verified x264 references; their use makes no hardware encoder claim.
+
+Trial 40 expands the bounded input to 1 MiB plus a 128 KiB guard, motion
+storage to 512 KiB plus its guard, and picture capacity to 3 MiB plus its guard.
+All 66 compared pictures match, including Baseline/Main at 1280x720,
+Main 1920x1080 in 1088-row storage, Baseline 1920x1088 and visible-height
+I420 output. One of 57 default media checks fails: opening many unused file
+contexts exhausts eagerly allocated private picture storage. Normal unload
+and all RTC/system/recovery checks pass; the API failure remains archived.
+
+Trial 41 uses Linux's noncoherent DMA API with explicit ownership transfers.
+Opening a file allocates no private picture DMA; valid decoding allocates two
+pictures sized to the actual geometry, with 64 KiB rounding and at least
+128 KiB of trailing guard. Geometry changes invalidate retained timestamps
+before reallocating storage. Every input, work, picture and retained-reference
+check remains in place. A failed hardware stop retains device ownership,
+power and allocations until reboot. All 106 positive pictures match, the
+malformed-input and stale-reference checks pass, and all 57 media checks pass,
+including unlimited opens. The final sampled Main 1080p engine work is about
+17 ms, measured before capture copying; sustained playback is unqualified.
 
 The encoder, interrupt completion, general codec features beyond this scope,
 system suspend and untested stream configurations remain unqualified. These experimental

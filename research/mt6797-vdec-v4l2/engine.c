@@ -39,6 +39,7 @@ struct private_buffer {
 	u8 *cpu;
 	dma_addr_t dma;
 	size_t bytes;
+	bool device_owned;
 };
 
 struct mt6797_engine {
@@ -102,11 +103,12 @@ static int allocate_buffer(struct mt6797_engine *engine, struct private_buffer *
 			   size_t bytes)
 {
 	buf->bytes = bytes;
-	buf->cpu = dma_alloc_coherent(engine->dev, buf->bytes, &buf->dma, GFP_KERNEL);
+	buf->device_owned = false;
+	buf->cpu = dma_alloc_noncoherent(engine->dev, buf->bytes, &buf->dma, DMA_BIDIRECTIONAL, GFP_KERNEL);
 	if (!buf->cpu)
 		return -ENOMEM;
 	if (!IS_ALIGNED(buf->dma, 2048) || buf->dma + buf->bytes - 1 > DMA_BIT_MASK(28)) {
-		dma_free_coherent(engine->dev, buf->bytes, buf->cpu, buf->dma);
+		dma_free_noncoherent(engine->dev, buf->bytes, buf->cpu, buf->dma, DMA_BIDIRECTIONAL);
 		buf->cpu = NULL;
 		return -ERANGE;
 	}
@@ -117,7 +119,7 @@ static int allocate_buffer(struct mt6797_engine *engine, struct private_buffer *
 static void release_buffer(struct mt6797_engine *engine, struct private_buffer *buf)
 {
 	if (buf->cpu)
-		dma_free_coherent(engine->dev, buf->bytes, buf->cpu, buf->dma);
+		dma_free_noncoherent(engine->dev, buf->bytes, buf->cpu, buf->dma, DMA_BIDIRECTIONAL);
 	buf->cpu = NULL;
 }
 
@@ -222,27 +224,16 @@ fail:
 struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine *engine)
 {
 	struct mt6797_decode_context *ctx;
-	unsigned int i;
-	int ret;
 
 	if (engine->fenced)
 		return ERR_PTR(-EIO);
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return ERR_PTR(-ENOMEM);
+	/* Queries and unused opens need no private picture DMA allocations. */
 	ctx->engine = engine;
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		ret = allocate_buffer(engine, &ctx->pictures[i], PICTURE_ALLOC_SIZE);
-		if (ret)
-			goto fail;
-	}
 	list_add_tail(&ctx->list, &engine->contexts);
 	return ctx;
-fail:
-	while (i)
-		release_buffer(engine, &ctx->pictures[--i]);
-	kfree(ctx);
-	return ERR_PTR(ret);
 }
 
 void mt6797_decode_context_reset(struct mt6797_decode_context *ctx)
@@ -411,6 +402,73 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	return -ENOENT;
 }
 
+/* Every buffer starts CPU-owned. Only the serialized worker gives it to
+ * hardware, and returns ownership after a proven stop. Fatal fencing retains
+ * device ownership and the allocations until reboot.
+ */
+static void buffers_to_device(struct mt6797_decode_context *ctx)
+{
+	struct mt6797_engine *engine = ctx->engine;
+	unsigned int i;
+
+	for (i = 0; i < MEMORY_COUNT; i++) {
+		struct private_buffer *buf = &engine->memory[i];
+		dma_sync_single_for_device(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
+		buf->device_owned = true;
+	}
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+		struct private_buffer *buf = &ctx->pictures[i];
+		dma_sync_single_for_device(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
+		buf->device_owned = true;
+	}
+}
+
+static void buffers_to_cpu(struct mt6797_decode_context *ctx)
+{
+	struct mt6797_engine *engine = ctx->engine;
+	unsigned int i;
+
+	for (i = 0; i < MEMORY_COUNT; i++) {
+		struct private_buffer *buf = &engine->memory[i];
+		if (buf->device_owned) {
+			dma_sync_single_for_cpu(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
+			buf->device_owned = false;
+		}
+	}
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+		struct private_buffer *buf = &ctx->pictures[i];
+		if (buf->device_owned) {
+			dma_sync_single_for_cpu(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
+			buf->device_owned = false;
+		}
+	}
+}
+
+static int prepare_pictures(struct mt6797_decode_context *ctx, size_t luma_size)
+{
+	size_t bytes = ALIGN(luma_size * 3 / 2, SZ_64K) + GUARD_SIZE;
+	unsigned int i;
+	int ret;
+
+	if (bytes > PICTURE_ALLOC_SIZE)
+		return -EOVERFLOW;
+	if (ctx->pictures[0].cpu && ctx->pictures[1].cpu && ctx->pictures[0].bytes == bytes)
+		return 0;
+	/* A resized allocation cannot retain timestamps for its old storage. */
+	mt6797_decode_context_reset(ctx);
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
+		release_buffer(ctx->engine, &ctx->pictures[i]);
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+		ret = allocate_buffer(ctx->engine, &ctx->pictures[i], bytes);
+		if (ret) {
+			while (i)
+				release_buffer(ctx->engine, &ctx->pictures[--i]);
+			return ret;
+		}
+	}
+	return 0;
+}
+
 /* Frontend calls are serialized by the mem2mem scheduler. All hardware DMA
  * addresses below belong to private allocations created before any command.
  */
@@ -454,6 +512,9 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		if (ret)
 			return ret;
 	}
+	ret = prepare_pictures(ctx, luma_size);
+	if (ret)
+		return ret;
 	picture = &ctx->pictures[output];
 	/* Overwriting storage invalidates its previous timestamp even if this
 	 * attempt fails before a replacement picture can be retained.
@@ -539,6 +600,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	write_word(1, avc + 0x28c);
 	write_word(BIT(8), vld + 0x108);
 	write_word(0, vld + 0x108);
+	buffers_to_device(ctx);
 	dma_wmb();
 	dma_started = true;
 	status->fetched = true;
@@ -687,6 +749,7 @@ cleanup:
 		dev_err(engine->dev, "decoder stop failed; private DMA/power retained until reboot\n");
 		return -EIO;
 	}
+	buffers_to_cpu(ctx);
 	dma_rmb();
 	status->guards_unchanged = !memcmp(input->cpu, job->nal, job->bytes) &&
 		!memcmp(input->cpu + job->bytes, ending, ending_bytes) &&
