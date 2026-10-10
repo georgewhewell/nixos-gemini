@@ -12,8 +12,8 @@
 struct mt6797_engine;
 struct mt6797_decode_context;
 
-/* Hardware boundary: progressive 8-bit 4:2:0, one I/P slice and one
- * short-term reference. This is original code, not firmware.
+/* Hardware boundary: progressive 8-bit 4:2:0, one I/P slice and up to16
+ * short-term references. This is original code, not firmware.
  */
 struct mt6797_decode_job {
 	struct v4l2_ctrl_h264_sps sps;
@@ -36,6 +36,8 @@ struct mt6797_decode_status {
 	u32 tail_bit_offset, tail_word;
 	u32 weight_start, weight_end, weight_before, weight_after, weight_state;
 	u32 weight_before_word, weight_after_word, weight_start_mask, weight_end_mask;
+	u32 reference_count, reference_mask, snapshot_mask, picture_slot;
+	u32 reference_guard_count, registers_saved;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;

@@ -20,3 +20,7 @@ cp "$1/include/uapi/linux/v4l2-controls.h" "$test_dir/include/linux/"
   -I "$test_dir/include" "$source_dir/mt6797-h264-controls.c" \
   "$source_dir/test-mt6797-h264-weights.c" -o "$test_dir/test-weights"
 "$test_dir/test-weights"
+"${CC:-cc}" -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined \
+  -I "$test_dir/include" "$source_dir/mt6797-h264-controls.c" \
+  "$source_dir/test-mt6797-h264-references.c" -o "$test_dir/test-references"
+"$test_dir/test-references"

@@ -9,6 +9,18 @@ The [experimental V4L2 Request driver](../mt6797-vdec-v4l2/README.md) now
 qualifies listed Baseline/Main/High I/P streams through 1080p. Trial 47 checks
 169 exact pictures, including High 8x8 transforms and custom scaling matrices,
 all 57 media checks, normal unload and strict RTC/system recovery.
+Trial 50 extends the current driver to up to 16 short-term references in SD
+fixtures and three at 1080p: 271 pictures match exactly, including original
+reference-selection mosaics, reordered lists, weighted prediction and repeated
+weighted entries. All 57 media checks and full RTC/system/recovery/audit pass.
+The control translator includes atomic reference planning and a bounded
+weighted-P header reader; ASan/UBSan covers every reference count and 256
+weighted headers. Independent FFmpeg traces check 68 real weighted headers.
+`make-multi-reference-fixture.py` builds original 2..16-reference mosaics with
+optional reordering or signed weighting. All 45 variants match independently
+calculated pixels and software decoding; the three sixteen-reference variants
+are hardware-qualified in trial 50. B pictures and hardware encoding remain
+unfinished.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.

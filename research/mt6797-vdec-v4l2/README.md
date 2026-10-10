@@ -8,8 +8,9 @@ qualification evidence are tracked in [the interface ledger](../mt6797-video-int
 This development has not used a formally separated clean-room team.
 
 The current module decodes the listed progressive Baseline/Main/High I/P fixtures
-through 1920x1088 coded / 1920x1080 visible, using one slice and one short-term
-reference. Trial 41 checks 106 exact pictures including HD, resolution changes
+through 1920x1088 coded / 1920x1080 visible, using one slice and up to 16
+short-term references in SD fixtures, or three in the listed HD fixtures.
+Trial 50 qualifies the current module as described below. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
 check 97 exact pictures, including two 32-picture 1080p samples at 25 fps:
 native MM21 and four-thread I420 conversion each render all 32 with valid
@@ -66,12 +67,41 @@ strict accepted-system recovery and the final board audit pass. The accepted
 boot is healthy with taint zero and no temporary media modules. Weighted
 sustained or clocked throughput remains unqualified.
 
+Trial 50 qualifies multiple short-term references with 271 exact decoded
+pictures over 272 picture commands, including the intentional timeout. Three
+original 64x64 mosaics select every one of 16 distinct references: default
+ordering, explicit reordering, and signed per-entry luma/chroma weighting. Their
+expected samples are calculated independently and checked against FFmpeg.
+x264 chains cover three-reference Baseline, sixteen-reference Main/CABAC and
+three-reference weighted High with custom scaling. The latter uses five
+logical list entries for three distinct pictures, exercising repeated entries
+with separate weights. Three-reference 1080p output matches in native MM21 and
+I420. The one-reference weighted, High matrix-transition and clocked Main
+1080p regressions also pass. A missing third reference and inconsistent second
+reference metadata fail before DMA; capture storage stays untouched and the
+next valid request still uses the retained reference. All 57 media checks,
+concurrent contexts, normal unload, RTC/system checks, accepted recovery and
+the final board audit pass. Sixteen-reference HD throughput remains unqualified.
+
+The private cache has 17 possible picture slots, allocated only when a real
+request needs another output. Planning validates all active DPB timestamps,
+geometry, frame numbers and picture-order counts before allocating or powering
+the hardware. Output never overlaps an active reference. Repeated logical list
+entries may share a private picture. Every retained cached picture, including
+its guard, is copied before DMA and compared after a proven stop. The ordered
+worker owns the shared bounded snapshot and 128-entry register save area;
+the latter avoids enlarging the kernel stack as reference tables grow. The
+qualified sixteen-entry weighted sequence saves and restores 122 registers.
+Single-reference streams retain the two-picture allocation path.
+
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
 or DMA ownership transfer. It handles emulation-prevention bytes, signed and
 inferred default weights, POC variants and bounded reference-list/marking
-syntax. Host ASan/UBSan checks cover 64 independently constructed headers;
-36 real P headers match independent FFmpeg syntax traces. A weighted request
+syntax. Host ASan/UBSan checks cover 256 independently constructed weighted headers
+with 1, 2, 4 and 16 entries, and atomic reference plans for every count from
+1 through 16. Sixty-eight real P headers match independent FFmpeg syntax traces,
+including repeated weighted entries and the original sixteen-entry table. A weighted request
 with a mismatched luma offset fails before fetch or reconstruction and leaves
 the whole capture allocation untouched. Table operations use bounded polling
 and the existing break/reset and DMA fencing path.
@@ -119,8 +149,10 @@ the preserved results. The raw reporting failure is retained with the trial. Sup
 checks, accepted recovery and the strict kernel-journal audit also pass.
 
 Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC,
-the High-profile streams in trial 47 and weighted P streams in trial 49 above, one slice,
-I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
+the High-profile streams in trial 47, weighted P streams in trial 49 and
+multiple-reference streams in trial 50 above: one slice, I/P pictures, up to
+16 short-term references at SD and three in the listed HD fixtures, with
+enabled or disabled deblocking.
 CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
 `V4L2_PIX_FMT_MM21`. The current driver admits coded widths 64..1920 and heights 64..1088
@@ -177,7 +209,7 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 128 96 export
 
-# Optional timeout, stale references, invalid scaling and mismatched weights:
+# Optional timeout, stale references, invalid scaling/weights/reference metadata:
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 64 64 export faults
@@ -199,7 +231,22 @@ luma/chroma sample with independent FFmpeg decoding. Copy its
 `weighted64-p.nal` into the 64x64 fixture directory for the optional fault
 test. `make-baseline-fixture.py --weighted-pred --fade` creates Main/High
 x264 clips with actual luma/chroma weighting; combine it with `--entropy`,
-`--transform-8x8` and `--scaling` for the separately qualified combinations.
+`--transform-8x8`, `--scaling` and `--refs` for the separately qualified
+combinations.
+
+`make-multi-reference-fixture.py` constructs distinct original I_PCM references
+and a P picture whose macroblocks select every reference. It accepts 2..16
+references and optional `--reorder` or `--weighted`; all 45 count/mode variants
+match independently calculated samples and FFmpeg. Trial 50 hardware-tests
+the three sixteen-reference variants. For the optional native fault test,
+copy plain `final-p.nal` outputs with 16 and 2 references into the existing
+64x64 fixture directory as `multi16-p.nal` and `multi2-p.nal`, respectively.
+
+```sh
+python3 research/mt6797-vdec/make-multi-reference-fixture.py \
+  --out /path/to/multi16 --ffmpeg /path/to/ffmpeg --refs 16
+# Add --reorder or --weighted for the other original qualification streams.
+```
 
 The cross-build recipe in `gstreamer-userspace.nix` accepts `buildPkgs` and
 `targetPkgs`, so it does not depend on this workspace path. With the repository's
@@ -230,8 +277,10 @@ export GST_PLUGIN_SCANNER="$GST_PACKAGE/helpers/gst-plugin-scanner"
 
 `../mt6797-vdec/make-baseline-fixture.py` reproduces the changing-gradient x264
 fixtures and records their software-decoded references, commands, hashes and
-public header trace. It verifies the selected Baseline CAVLC or Main CABAC profile, one reference,
-unweighted prediction, one slice per picture and the selected deblocking mode. It reproduces the original 128x96 stream
+public header trace. It verifies the selected Baseline/Main/High profile,
+entropy/scaling/weighting mode, reference count, one slice per picture and
+deblocking mode. The default remains Baseline CAVLC with one reference and
+unweighted prediction. It reproduces the original 128x96 stream
 and reference byte for byte with the pinned FFmpeg build.
 
 Trial 31 adds cached macroblock/pipeline progress, elapsed time and the engine

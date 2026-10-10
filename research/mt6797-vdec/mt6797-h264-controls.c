@@ -347,7 +347,7 @@ int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
 	struct weight_reader reader = { .nal = nal, .bytes = bytes };
 	const struct v4l2_h264_weight_factors *factors;
 	__u32 begin, value, iterations;
-	unsigned int component;
+	unsigned int component, reference;
 	int ret;
 
 	if (!sps || !pps || !slice || !decode || !weights || !nal || !output || bytes < 4)
@@ -358,8 +358,8 @@ int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
 	if (slice->slice_type != V4L2_H264_SLICE_TYPE_P ||
 	    !(pps->flags & V4L2_H264_PPS_FLAG_WEIGHTED_PRED) ||
 	    (decode->flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
-	    slice->num_ref_idx_l0_active_minus1 || pps->num_ref_idx_l0_default_active_minus1 ||
-	    sps->max_num_ref_frames > 1 || sps->profile_idc == 66 || pps->weighted_bipred_idc)
+	    slice->num_ref_idx_l1_active_minus1 ||
+	    sps->profile_idc == 66 || pps->weighted_bipred_idc)
 		return -EOPNOTSUPP;
 	if (weights->luma_log2_weight_denom > 7 || weights->chroma_log2_weight_denom > 7)
 		return -ERANGE;
@@ -391,6 +391,9 @@ int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
 	weight_expect(&reader, reader.position - begin, decode->pic_order_cnt_bit_size);
 	if (weight_bits(&reader, 1))
 		weight_expect(&reader, weight_ue(&reader), slice->num_ref_idx_l0_active_minus1);
+	else
+		weight_expect(&reader, slice->num_ref_idx_l0_active_minus1,
+			      pps->num_ref_idx_l0_default_active_minus1);
 	/* Reference selection is supplied by the stateless ref_pic_list0 and
 	 * resolved separately to private storage. Parse list-modification syntax
 	 * only to locate the following table, with a finite operation bound.
@@ -415,23 +418,26 @@ int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
 		return ret;
 	weight_expect(&reader, weight_ue(&reader), weights->luma_log2_weight_denom);
 	weight_expect(&reader, weight_ue(&reader), weights->chroma_log2_weight_denom);
-	if (weight_bits(&reader, 1)) {
-		weight_factor(&reader, factors->luma_weight[0]);
-		weight_factor(&reader, factors->luma_offset[0]);
-	} else {
-		weight_expect(&reader, factors->luma_weight[0], 1U << weights->luma_log2_weight_denom);
-		weight_expect(&reader, factors->luma_offset[0], 0);
-	}
-	if (weight_bits(&reader, 1)) {
-		for (component = 0; component < 2; component++) {
-			weight_factor(&reader, factors->chroma_weight[0][component]);
-			weight_factor(&reader, factors->chroma_offset[0][component]);
+	for (reference = 0; reference <= slice->num_ref_idx_l0_active_minus1; reference++) {
+		if (weight_bits(&reader, 1)) {
+			weight_factor(&reader, factors->luma_weight[reference]);
+			weight_factor(&reader, factors->luma_offset[reference]);
+		} else {
+			weight_expect(&reader, factors->luma_weight[reference],
+				      1U << weights->luma_log2_weight_denom);
+			weight_expect(&reader, factors->luma_offset[reference], 0);
 		}
-	} else {
-		for (component = 0; component < 2; component++) {
-			weight_expect(&reader, factors->chroma_weight[0][component],
-				      1U << weights->chroma_log2_weight_denom);
-			weight_expect(&reader, factors->chroma_offset[0][component], 0);
+		if (weight_bits(&reader, 1)) {
+			for (component = 0; component < 2; component++) {
+				weight_factor(&reader, factors->chroma_weight[reference][component]);
+				weight_factor(&reader, factors->chroma_offset[reference][component]);
+			}
+		} else {
+			for (component = 0; component < 2; component++) {
+				weight_expect(&reader, factors->chroma_weight[reference][component],
+					      1U << weights->chroma_log2_weight_denom);
+				weight_expect(&reader, factors->chroma_offset[reference][component], 0);
+			}
 		}
 	}
 	range.end = reader.position;
@@ -475,5 +481,94 @@ int mt6797_h264_weight_range(const struct v4l2_ctrl_h264_sps *sps,
 	if (reader.error)
 		return reader.error;
 	*output = range;
+	return 0;
+}
+
+int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
+			      const struct v4l2_ctrl_h264_slice_params *slice,
+			      const struct v4l2_ctrl_h264_decode_params *decode,
+			      const struct mt6797_h264_cached_picture cache[MT6797_H264_PICTURE_SLOTS],
+			      __u64 timestamp, struct mt6797_h264_reference_plan *output)
+{
+	struct mt6797_h264_reference_plan plan = { 0 };
+	__u8 mapping[V4L2_H264_NUM_DPB_ENTRIES];
+	unsigned int dpb, slot, active = 0, pass;
+	int found = -1;
+
+	if (!sps || !slice || !decode || !cache || !output ||
+	    sps->max_num_ref_frames > V4L2_H264_NUM_DPB_ENTRIES)
+		return -EINVAL;
+	if (slice->slice_type != V4L2_H264_SLICE_TYPE_I &&
+	    slice->slice_type != V4L2_H264_SLICE_TYPE_P)
+		return -EOPNOTSUPP;
+	if (slice->slice_type == V4L2_H264_SLICE_TYPE_P &&
+	    (slice->num_ref_idx_l0_active_minus1 >= V4L2_H264_NUM_DPB_ENTRIES ||
+	     slice->num_ref_idx_l1_active_minus1))
+		return -EOPNOTSUPP;
+	if ((decode->flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) &&
+	    slice->slice_type != V4L2_H264_SLICE_TYPE_I)
+		return -EINVAL;
+	for (dpb = 0; dpb < V4L2_H264_NUM_DPB_ENTRIES; dpb++) {
+		const struct v4l2_h264_dpb_entry *entry = &decode->dpb[dpb];
+		struct mt6797_h264_p_reference_words ignored;
+		int ret;
+
+		mapping[dpb] = MT6797_H264_PICTURE_SLOTS;
+		if ((decode->flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
+		    !(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_ACTIVE))
+			continue;
+		if (entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM)
+			return -EOPNOTSUPP;
+		ret = mt6797_h264_p_reference_words(entry, 0, &ignored);
+		if (ret)
+			return ret;
+		if (++active > sps->max_num_ref_frames)
+			return -EINVAL;
+		for (slot = 0; slot < MT6797_H264_PICTURE_SLOTS; slot++)
+			if (cache[slot].valid && cache[slot].allocated &&
+			    cache[slot].timestamp == entry->reference_ts)
+				break;
+		if (slot == MT6797_H264_PICTURE_SLOTS)
+			return -ENOENT;
+		if ((plan.protected_mask & (1U << slot)) ||
+		    cache[slot].frame_number != entry->frame_num ||
+		    cache[slot].width != ((__u32)sps->pic_width_in_mbs_minus1 + 1) * 16 ||
+		    cache[slot].height != ((__u32)sps->pic_height_in_map_units_minus1 + 1) * 16 ||
+		    cache[slot].top_poc != entry->top_field_order_cnt ||
+		    cache[slot].bottom_poc != entry->bottom_field_order_cnt ||
+		    (decode->nal_ref_idc && timestamp == entry->reference_ts))
+			return -EINVAL;
+		mapping[dpb] = slot;
+		plan.protected_mask |= 1U << slot;
+	}
+	if (slice->slice_type == V4L2_H264_SLICE_TYPE_P) {
+		plan.count = slice->num_ref_idx_l0_active_minus1 + 1;
+		for (slot = 0; slot < plan.count; slot++) {
+			dpb = slice->ref_pic_list0[slot].index;
+			if (dpb >= V4L2_H264_NUM_DPB_ENTRIES ||
+			    slice->ref_pic_list0[slot].fields != V4L2_H264_FRAME_REF)
+				return -EINVAL;
+			if (mapping[dpb] == MT6797_H264_PICTURE_SLOTS)
+				return -ENOENT;
+			plan.list0[slot] = mapping[dpb];
+		}
+	}
+	/* Reuse unprotected allocated storage before allocating another slot.
+	 * This preserves the two-buffer path for single-reference streams.
+	 */
+	for (pass = 0; pass < 2 && found < 0; pass++)
+		for (slot = 0; slot < MT6797_H264_PICTURE_SLOTS; slot++)
+			if (!(plan.protected_mask & (1U << slot)) &&
+			    !!cache[slot].allocated == !pass) {
+				found = slot;
+				break;
+			}
+	if (found < 0)
+		return -ENOSPC;
+	plan.output = found;
+	for (slot = 0; slot < MT6797_H264_PICTURE_SLOTS; slot++)
+		if (slot != plan.output && cache[slot].valid && cache[slot].allocated)
+			plan.snapshot_mask |= 1U << slot;
+	*output = plan;
 	return 0;
 }

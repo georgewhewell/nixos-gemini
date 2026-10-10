@@ -41,6 +41,30 @@ int mt6797_h264_slice_words(const struct v4l2_ctrl_h264_sps *sps,
 			   struct mt6797_h264_slice_words *output);
 
 #define MT6797_H264_SCALING_WORDS 56
+#define MT6797_H264_PICTURE_SLOTS (V4L2_H264_NUM_DPB_ENTRIES + 1)
+
+struct mt6797_h264_cached_picture {
+	__u64 timestamp;
+	__s32 top_poc, bottom_poc;
+	__u16 frame_number, width, height;
+	__u8 allocated, valid;
+};
+
+struct mt6797_h264_reference_plan {
+	__u32 protected_mask, snapshot_mask;
+	__u8 output, count, list0[V4L2_H264_NUM_DPB_ENTRIES];
+};
+
+/* Resolve public active DPB entries to private metadata and choose an output
+ * outside every retained active reference. Repeated list entries are legal.
+ * No cache mutation, allocation, MMIO or DMA; output is atomic on rejection.
+ */
+int mt6797_h264_reference_plan(const struct v4l2_ctrl_h264_sps *sps,
+			      const struct v4l2_ctrl_h264_slice_params *slice,
+			      const struct v4l2_ctrl_h264_decode_params *decode,
+			      const struct mt6797_h264_cached_picture cache[MT6797_H264_PICTURE_SLOTS],
+			      __u64 timestamp, struct mt6797_h264_reference_plan *output);
+
 struct mt6797_h264_p_reference_words {
 	__u32 picture_number; /* AVC_VLD + 0xa8 + slot * 4 */
 	__u32 top;            /* AVC_MV + slot * 8 */
@@ -74,7 +98,7 @@ struct mt6797_h264_weight_range {
 	__u32 start_word, start_mask, end_word, end_mask;
 };
 
-/* Locate a one-reference progressive P prediction table and verify its
+/* Locate a progressive P prediction table with up to16 list entries and verify its
  * values and complete slice header against the public stateless controls.
  * Emulation-prevention bytes do not count as RBSP bits. No MMIO or DMA.
  * A rejected header leaves output unchanged.

@@ -42,6 +42,16 @@ struct private_buffer {
 	bool device_owned;
 };
 
+struct saved_register {
+	void __iomem *address;
+	u32 value;
+};
+
+struct register_save {
+	struct saved_register words[128];
+	unsigned int count;
+};
+
 struct mt6797_engine {
 	struct device *dev;
 	struct regmap *gcon;
@@ -49,6 +59,8 @@ struct mt6797_engine {
 	struct clk_bulk_data clocks[3];
 	struct private_buffer memory[MEMORY_COUNT];
 	u8 *reference_snapshot;
+	size_t snapshot_bytes;
+	struct register_save saved;
 	struct list_head contexts;
 	bool fenced;
 };
@@ -56,22 +68,8 @@ struct mt6797_engine {
 struct mt6797_decode_context {
 	struct mt6797_engine *engine;
 	struct list_head list;
-	struct private_buffer pictures[2];
-	u64 timestamps[2];
-	u16 frame_numbers[2];
-	u16 widths[2], heights[2];
-	s32 top_poc[2], bottom_poc[2];
-	bool valid[2];
-};
-
-struct saved_register {
-	void __iomem *address;
-	u32 value;
-};
-
-struct register_save {
-	struct saved_register words[64];
-	unsigned int count;
+	struct private_buffer pictures[MT6797_H264_PICTURE_SLOTS];
+	struct mt6797_h264_cached_picture cache[MT6797_H264_PICTURE_SLOTS];
 };
 
 static void write_word(u32 value, void __iomem *address)
@@ -82,7 +80,7 @@ static void write_word(u32 value, void __iomem *address)
 
 static void save_word(struct register_save *save, void __iomem *address, u32 value)
 {
-	/* The closed fixed-size programming sequence below uses fewer than 64.
+	/* The closed fixed-size programming sequence below uses fewer than 128.
 	 * No register write can escape the save area if that sequence is extended.
 	 */
 	if (WARN_ON_ONCE(save->count == ARRAY_SIZE(save->words)))
@@ -136,9 +134,10 @@ int mt6797_engine_suspend(struct mt6797_engine *engine)
 	return 0;
 }
 
-static void free_snapshot(void *snapshot)
+static void free_snapshot(void *data)
 {
-	kvfree(snapshot);
+	struct mt6797_engine *engine = data;
+	kvfree(engine->reference_snapshot);
 }
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
@@ -161,10 +160,7 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	if (!engine)
 		return ERR_PTR(-ENOMEM);
 	engine->dev = dev;
-	engine->reference_snapshot = kvmalloc(PICTURE_ALLOC_SIZE, GFP_KERNEL);
-	if (!engine->reference_snapshot)
-		return ERR_PTR(-ENOMEM);
-	ret = devm_add_action_or_reset(dev, free_snapshot, engine->reference_snapshot);
+	ret = devm_add_action_or_reset(dev, free_snapshot, engine);
 	if (ret)
 		return ERR_PTR(ret);
 	INIT_LIST_HEAD(&engine->contexts);
@@ -238,7 +234,9 @@ struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine 
 
 void mt6797_decode_context_reset(struct mt6797_decode_context *ctx)
 {
-	memset(ctx->valid, 0, sizeof(ctx->valid));
+	unsigned int i;
+	for (i = 0; i < ARRAY_SIZE(ctx->cache); i++)
+		ctx->cache[i].valid = false;
 }
 
 void mt6797_decode_context_destroy(struct mt6797_decode_context *ctx)
@@ -314,11 +312,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 			const struct mt6797_decode_job *job,
 			struct mt6797_h264_header_words *header,
 			struct mt6797_h264_slice_words *slice,
-			int *reference, unsigned int *output)
+			struct mt6797_h264_reference_plan *plan)
 {
-	const struct v4l2_h264_dpb_entry *entry;
-	unsigned int index, active = 0;
-	int retained = -1;
 	int ret;
 
 	if (!job->nal || job->bytes < 4 || job->bytes > MAX_NAL)
@@ -339,7 +334,7 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    job->height < 64 || job->height > MT6797_MAX_HEIGHT || job->height % 32 ||
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
 	    ALIGN(header->height_mbs * 16, 32) != job->height ||
-	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
+	    job->slice.first_mb_in_slice ||
 	    (job->sps.profile_idc != 100 &&
 	     (job->pps.flags & (V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
 			       V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT))) ||
@@ -350,59 +345,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    (job->nal[0] & 0x80) || ((job->nal[0] >> 5) & 3) != job->decode.nal_ref_idc ||
 	    ((job->nal[0] & 31) != ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ? 5 : 1)))
 		return -EOPNOTSUPP;
-	*reference = -1;
-	*output = 0;
-	if (!(job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC)) {
-		for (index = 0; index < V4L2_H264_NUM_DPB_ENTRIES; index++) {
-			unsigned int cached;
-			entry = &job->decode.dpb[index];
-			if (!(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_ACTIVE))
-				continue;
-			if (!(entry->flags & V4L2_H264_DPB_ENTRY_FLAG_VALID))
-				return -EINVAL;
-			if (++active > 1)
-				return -EOPNOTSUPP;
-			for (cached = 0; cached < ARRAY_SIZE(ctx->pictures); cached++)
-				if (ctx->valid[cached] && ctx->timestamps[cached] == entry->reference_ts) {
-					retained = cached;
-					break;
-				}
-			if (retained < 0)
-				return -ENOENT;
-			if (ctx->frame_numbers[retained] != entry->frame_num ||
-			    ctx->widths[retained] != header->width_mbs * 16 ||
-			    ctx->heights[retained] != header->height_mbs * 16 ||
-			    ctx->top_poc[retained] != entry->top_field_order_cnt ||
-			    ctx->bottom_poc[retained] != entry->bottom_field_order_cnt)
-				return -EINVAL;
-			if (job->decode.nal_ref_idc && job->timestamp == entry->reference_ts)
-				return -EINVAL;
-		}
-	}
-	if (job->slice.slice_type == V4L2_H264_SLICE_TYPE_I) {
-		if (retained >= 0)
-			*output = retained ^ 1;
-		return 0;
-	}
-	if (job->slice.num_ref_idx_l0_active_minus1 || job->pps.num_ref_idx_l0_default_active_minus1)
-		return -EOPNOTSUPP;
-	index = job->slice.ref_pic_list0[0].index;
-	if (index >= V4L2_H264_NUM_DPB_ENTRIES ||
-	    job->slice.ref_pic_list0[0].fields != V4L2_H264_FRAME_REF)
-		return -EINVAL;
-	entry = &job->decode.dpb[index];
-	if (entry->flags & V4L2_H264_DPB_ENTRY_FLAG_LONG_TERM)
-		return -EOPNOTSUPP;
-	for (index = 0; index < ARRAY_SIZE(ctx->pictures); index++) {
-		if (ctx->valid[index] && ctx->timestamps[index] == entry->reference_ts) {
-			if (job->timestamp == entry->reference_ts)
-				return -EINVAL;
-			*reference = index;
-			*output = index ^ 1;
-			return 0;
-		}
-	}
-	return -ENOENT;
+	return mt6797_h264_reference_plan(&job->sps, &job->slice, &job->decode,
+					 ctx->cache, job->timestamp, plan);
 }
 
 /* Every buffer starts CPU-owned. Only the serialized worker gives it to
@@ -421,6 +365,8 @@ static void buffers_to_device(struct mt6797_decode_context *ctx)
 	}
 	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
 		struct private_buffer *buf = &ctx->pictures[i];
+		if (!buf->cpu)
+			continue;
 		dma_sync_single_for_device(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
 		buf->device_owned = true;
 	}
@@ -447,34 +393,73 @@ static void buffers_to_cpu(struct mt6797_decode_context *ctx)
 	}
 }
 
-static int prepare_pictures(struct mt6797_decode_context *ctx, size_t luma_size)
+static int prepare_pictures(struct mt6797_decode_context *ctx, size_t luma_size,
+			    unsigned int output)
 {
 	size_t bytes = ALIGN(luma_size * 3 / 2, SZ_64K) + GUARD_SIZE;
 	unsigned int i;
 	int ret;
+	bool resize = false;
 
-	if (bytes > PICTURE_ALLOC_SIZE)
+	if (bytes > PICTURE_ALLOC_SIZE || output >= ARRAY_SIZE(ctx->pictures))
 		return -EOVERFLOW;
-	if (ctx->pictures[0].cpu && ctx->pictures[1].cpu && ctx->pictures[0].bytes == bytes)
-		return 0;
-	/* A resized allocation cannot retain timestamps for its old storage. */
-	mt6797_decode_context_reset(ctx);
 	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
-		release_buffer(ctx->engine, &ctx->pictures[i]);
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		ret = allocate_buffer(ctx->engine, &ctx->pictures[i], bytes);
-		if (ret) {
-			while (i)
-				release_buffer(ctx->engine, &ctx->pictures[--i]);
-			return ret;
+		if (ctx->pictures[i].cpu && ctx->pictures[i].bytes != bytes)
+			resize = true;
+	if (resize) {
+		mt6797_decode_context_reset(ctx);
+		for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+			release_buffer(ctx->engine, &ctx->pictures[i]);
+			ctx->cache[i].allocated = false;
 		}
+	}
+	/* Allocate only storage selected for a real output. Unused opens and
+	 * single-reference streams never allocate the full17-picture capacity.
+	 */
+	if (!ctx->pictures[output].cpu) {
+		ret = allocate_buffer(ctx->engine, &ctx->pictures[output], bytes);
+		if (ret)
+			return ret;
+		ctx->cache[output].allocated = true;
 	}
 	return 0;
 }
 
-/* Frontend calls are serialized by the mem2mem scheduler. All hardware DMA
- * addresses below belong to private allocations created before any command.
- */
+static int prepare_reference_snapshot(struct mt6797_decode_context *ctx,
+				       struct mt6797_h264_reference_plan *plan)
+{
+	struct mt6797_engine *engine = ctx->engine;
+	size_t bytes = 0;
+	unsigned int i;
+	u8 *snapshot;
+
+	/* A geometry resize may have invalidated the old plan's cached pictures. */
+	plan->snapshot_mask = 0;
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
+		if (i != plan->output && ctx->cache[i].valid && ctx->pictures[i].cpu) {
+			plan->snapshot_mask |= BIT(i);
+			bytes += ctx->pictures[i].bytes;
+		}
+	if (bytes > V4L2_H264_NUM_DPB_ENTRIES * PICTURE_ALLOC_SIZE)
+		return -EOVERFLOW;
+	if (bytes > engine->snapshot_bytes) {
+		snapshot = kvmalloc(bytes, GFP_KERNEL);
+		if (!snapshot)
+			return -ENOMEM;
+		kvfree(engine->reference_snapshot);
+		engine->reference_snapshot = snapshot;
+		engine->snapshot_bytes = bytes;
+	}
+	bytes = 0;
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
+		if (plan->snapshot_mask & BIT(i)) {
+			memcpy(engine->reference_snapshot + bytes, ctx->pictures[i].cpu,
+			       ctx->pictures[i].bytes);
+			bytes += ctx->pictures[i].bytes;
+		}
+	return 0;
+}
+
 int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
 			 const u8 **pixels, struct mt6797_decode_status *status)
@@ -486,18 +471,20 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct mt6797_engine *engine = ctx->engine;
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words slice;
-	struct mt6797_h264_p_reference_words ref_words;
+	struct mt6797_h264_p_reference_words ref_words[V4L2_H264_NUM_DPB_ENTRIES];
+	struct mt6797_h264_reference_plan plan;
 	struct mt6797_h264_weight_range weights = { 0 };
 	struct mt6797_h264_scaling_word scaling[MT6797_H264_SCALING_WORDS];
-	struct register_save saved = { 0 };
+	struct register_save *saved = &engine->saved;
 	void __iomem *misc = engine->banks[MISC], *vld = engine->banks[VLD];
 	void __iomem *top = engine->banks[TOP], *mc = engine->banks[MC];
 	void __iomem *avc = engine->banks[AVC], *mv = engine->banks[MV], *pp = engine->banks[PP];
 	struct private_buffer *input = &engine->memory[INPUT], *prediction = &engine->memory[PREDICTION];
 	struct private_buffer *picture;
 	u32 state, original_dcm, original_irq, original_break, original_gate;
-	unsigned int output, remaining, i, luma_size = job->width * job->height;
-	int reference, ret, stop_ret;
+	unsigned int remaining, i, luma_size = job->width * job->height;
+	int ret, stop_ret;
+	size_t snapshot_offset;
 	bool dma_started = false;
 
 	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= INPUT_DATA_SIZE);
@@ -505,7 +492,8 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	*pixels = NULL;
 	if (engine->fenced)
 		return -EIO;
-	ret = validate_job(ctx, job, &header, &slice, &reference, &output);
+	saved->count = 0;
+	ret = validate_job(ctx, job, &header, &slice, &plan);
 	if (ret)
 		return ret;
 	if (V4L2_H264_CTRL_PRED_WEIGHTS_REQUIRED(&job->pps, &job->slice)) {
@@ -527,23 +515,25 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		if (ret)
 			return ret;
 	}
-	if (reference >= 0) {
-		/* One logical hardware reference slot, independent of the private
-		 * cache allocation index. Full decoder reset precedes every job.
-		 */
-		ret = mt6797_h264_p_reference_words(&job->decode.dpb[job->slice.ref_pic_list0[0].index],
-						   0, &ref_words);
+	for (i = 0; i < plan.count; i++) {
+		ret = mt6797_h264_p_reference_words(&job->decode.dpb[job->slice.ref_pic_list0[i].index],
+						   i, &ref_words[i]);
 		if (ret)
 			return ret;
 	}
-	ret = prepare_pictures(ctx, luma_size);
+	ret = prepare_pictures(ctx, luma_size, plan.output);
 	if (ret)
 		return ret;
-	picture = &ctx->pictures[output];
-	/* Overwriting storage invalidates its previous timestamp even if this
-	 * attempt fails before a replacement picture can be retained.
-	 */
-	ctx->valid[output] = false;
+	ret = prepare_reference_snapshot(ctx, &plan);
+	if (ret)
+		return ret;
+	picture = &ctx->pictures[plan.output];
+	status->reference_count = plan.count;
+	status->reference_mask = plan.protected_mask;
+	status->snapshot_mask = plan.snapshot_mask;
+	status->picture_slot = plan.output;
+	/* An attempted overwrite invalidates the old timestamp even on failure. */
+	ctx->cache[plan.output].valid = false;
 	memset(input->cpu, 0xa5, input->bytes);
 	memcpy(input->cpu, job->nal, job->bytes);
 	memset(input->cpu + job->bytes, 0, INPUT_DATA_SIZE - job->bytes);
@@ -555,9 +545,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		memset(engine->memory[i].cpu + data_bytes, 0xd3, GUARD_SIZE);
 	}
 	memset(picture->cpu, 0xd3, picture->bytes);
-	if (reference >= 0)
-		memcpy(engine->reference_snapshot, ctx->pictures[reference].cpu,
-		       ctx->pictures[reference].bytes);
+
 	ret = pm_runtime_resume_and_get(engine->dev);
 	if (ret < 0)
 		return ret;
@@ -582,7 +570,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		ret = -EBUSY;
 		goto power;
 	}
-#define SAVE(address, value) save_word(&saved, (address), (value))
+#define SAVE(address, value) save_word(saved, (address), (value))
 	write_word(original_gate & ~BIT(0), misc + 0xf4);
 	ret = reset_core(engine);
 	if (ret)
@@ -724,12 +712,14 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	 */
 	if (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)
 		write_word(1, avc + 0x234);
-	if (reference >= 0) {
+	if (plan.count) {
 		SAVE(mc + 0x564, 0);
-		SAVE(mc + 0x3dc, lower_32_bits(ctx->pictures[reference].dma));
-		SAVE(avc + 0xa8, ref_words.picture_number);
-		SAVE(mv, ref_words.top);
-		SAVE(mv + 4, ref_words.bottom);
+		for (i = 0; i < plan.count; i++) {
+			SAVE(mc + 0x3dc + i * 4, lower_32_bits(ctx->pictures[plan.list0[i]].dma));
+			SAVE(avc + 0xa8 + i * 4, ref_words[i].picture_number);
+			SAVE(mv + i * 8, ref_words[i].top);
+			SAVE(mv + i * 8 + 4, ref_words[i].bottom);
+		}
 	}
 	SAVE(avc + 0x280, ~(u32)(BIT(14) | BIT(21)));
 	SAVE(avc + 0x2c8, readl(avc + 0x2c8) & ~BIT(5));
@@ -849,9 +839,21 @@ cleanup:
 		if (memchr_inv(engine->memory[i].cpu + engine->memory[i].bytes - GUARD_SIZE,
 				0xd3, GUARD_SIZE))
 			status->guards_unchanged = false;
-	if (reference >= 0 && memcmp(ctx->pictures[reference].cpu, engine->reference_snapshot,
-			      ctx->pictures[reference].bytes))
-		status->guards_unchanged = false;
+	snapshot_offset = 0;
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+		struct private_buffer *buf = &ctx->pictures[i];
+		if (!buf->cpu)
+			continue;
+		if (memchr_inv(buf->cpu + luma_size * 3 / 2, 0xd3,
+			       buf->bytes - luma_size * 3 / 2))
+			status->guards_unchanged = false;
+		if (plan.snapshot_mask & BIT(i)) {
+			if (memcmp(buf->cpu, engine->reference_snapshot + snapshot_offset, buf->bytes))
+				status->guards_unchanged = false;
+			snapshot_offset += buf->bytes;
+			status->reference_guard_count++;
+		}
+	}
 	if (!status->guards_unchanged) {
 		mt6797_decode_context_reset(ctx);
 		ret = -EIO;
@@ -861,7 +863,8 @@ cleanup:
 		write_word(state | 0x11, misc + 0xa4);
 		write_word((state | BIT(0)) & ~BIT(4), misc + 0xa4);
 	}
-	restore_words(&saved);
+	status->registers_saved = saved->count;
+	restore_words(saved);
 	write_word(original_break, misc + 0x100);
 	write_word(original_irq & ~BIT(4), misc + 0xa4);
 	stop_ret = regmap_update_bits(engine->gcon, 0x18, BIT(0), original_dcm & BIT(0));
@@ -877,13 +880,17 @@ power:
 	if (!ret) {
 		if (job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC)
 			mt6797_decode_context_reset(ctx);
-		ctx->timestamps[output] = job->timestamp;
-		ctx->frame_numbers[output] = job->decode.frame_num;
-		ctx->widths[output] = header.width_mbs * 16;
-		ctx->heights[output] = header.height_mbs * 16;
-		ctx->top_poc[output] = job->decode.top_field_order_cnt;
-		ctx->bottom_poc[output] = job->decode.bottom_field_order_cnt;
-		ctx->valid[output] = job->decode.nal_ref_idc != 0;
+		/* Timestamp reuse cannot leave two private pictures with one identity. */
+		for (i = 0; i < ARRAY_SIZE(ctx->cache); i++)
+			if (ctx->cache[i].timestamp == job->timestamp)
+				ctx->cache[i].valid = false;
+		ctx->cache[plan.output] = (struct mt6797_h264_cached_picture) {
+			.timestamp = job->timestamp, .frame_number = job->decode.frame_num,
+			.width = header.width_mbs * 16, .height = header.height_mbs * 16,
+			.top_poc = job->decode.top_field_order_cnt,
+			.bottom_poc = job->decode.bottom_field_order_cnt,
+			.allocated = true, .valid = job->decode.nal_ref_idc != 0,
+		};
 		*pixels = picture->cpu;
 	}
 	return ret;

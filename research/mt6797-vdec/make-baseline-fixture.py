@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--width', type=int, default=128)
     parser.add_argument('--height', type=int, default=96)
     parser.add_argument('--frames', type=int, default=8)
+    parser.add_argument('--refs', type=int, default=1, choices=range(1, 17),
+                        help='Number of short-term references for separate hardware qualification')
     parser.add_argument('--entropy', choices=('cavlc', 'cabac'), default='cavlc',
                         help='CABAC generates Main profile for separate hardware qualification')
     parser.add_argument('--deblocking', action='store_true',
@@ -72,7 +74,7 @@ def main():
     command = [args.ffmpeg, '-v', 'info', '-nostdin', '-y', '-f', 'rawvideo',
                '-pix_fmt', 'yuv420p', '-s', f'{w}x{h}', '-r', '25', '-i', str(source),
                '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', profile,
-               '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', '1',
+               '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', str(args.refs),
                '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high or args.weighted_pred else '') +
                f'no-deblock={0 if args.deblocking else 1}:'
                f'8x8dct={int(args.transform_8x8)}:weightp={2 if args.weighted_pred else 0}:repeat-headers=1:'
@@ -99,8 +101,8 @@ def main():
     for field, expected in [('profile_idc', 100 if high else 77 if cabac or args.weighted_pred else 66),
                             ('entropy_coding_mode_flag', int(cabac)),
                             ('weighted_pred_flag', int(args.weighted_pred)), ('weighted_bipred_idc', 0),
-                            ('num_ref_idx_l0_default_active_minus1', 0),
-                            ('max_num_ref_frames', 1),
+                            ('num_ref_idx_l0_default_active_minus1', args.refs - 1),
+                            ('max_num_ref_frames', args.refs),
                             ('frame_mbs_only_flag', 1),
                             ('pic_width_in_mbs_minus1', w // 16 - 1),
                             ('pic_height_in_map_units_minus1', (h + 15) // 16 - 1),
@@ -141,7 +143,7 @@ def main():
                     coded_height=(h+15)//16*16, storage_height=(h+31)//32*32,
                     deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
                     transform_8x8=args.transform_8x8, scaling=args.scaling,
-                    weighted_prediction=args.weighted_pred, fade=args.fade,
+                    weighted_prediction=args.weighted_pred, fade=args.fade, references=args.refs,
                     encoded_luma_weight_flags=weight_flags,
                     encoder_transform_usage=transform_usage,
                     encode_command=command, decode_command=decode_command,
