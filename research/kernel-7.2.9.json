@@ -1,0 +1,55 @@
+{
+  "result": "passed",
+  "hardware_tested": false,
+  "kernel_source_revision": "5fb8876d52f20cf79d8618c675d478633b052fc5",
+  "upstream_revision": "5fce161649b4d779d1b76d9fcd52dc77779774b8",
+  "kernel_store_path": "/nix/store/1z823cpiy176ypwjl9pfpc3a03690vg8-linux-gemini-7.2.9",
+  "kernel_config_sha256": "bf3f9283fa6e4b1c033f5747b374ef1766d34dfb4c2264e8d48f625c2f3b5270",
+  "module_symvers_sha256": "8bde2f76e34482704011cc94fee3861c2cd27f4726697971547ef24a7dd9a019",
+  "strict_modpost": true,
+  "all_required_kernel_host_checks_passed": true,
+  "source_sha256": {
+    "mt6797-vdec-v4l2/v4l2.c": "363c8b9b43c411d2545a930812c14ac0b7baed4034a90c44bb41c8fc1da84dcd",
+    "mt6797-vdec-v4l2/engine.c": "a59b6d3150e34280ec09ba4bc27fbbd20e6bf1ed1a65a4b5d34993e738713984",
+    "mt6797-vdec-v4l2/engine.h": "1fa9f1de6f094acf6ec277f29c7e9e1ea3fc9af3d358d9b940d5665e370c5c38",
+    "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+    "mt6797-vdec-v4l2/Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+    "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+    "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023",
+    "mt6797-venc/resource-probe.c": "187a1933db36f57693f0ccfc29494b110f10b28fe895aaa28eaa1397c9093689",
+    "mt6797-venc/Kbuild": "a68969d4f9be91c87198e0afde136f4be14633ca947a239d7518943dbc53c0bc"
+  },
+  "modules": {
+    "mt6797_vdec.ko": {
+      "sha256": "7d15c117be24d9e3726fc9cff9712e10c74b6bc656b26286700262d2842e2003",
+      "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64"
+    },
+    "mt6797_venc_resource_probe.ko": {
+      "sha256": "f44c2f14cd6b6063cfaa8b0523076974ca227d6dd45ba5033df1592b038e89e5",
+      "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64"
+    }
+  },
+  "kernel_version": "7.2.9",
+  "branch": "gemini-7.2.9",
+  "qualification": "software checks passed; hardware pending",
+  "board_commits_replayed": 854,
+  "merges_preserved": 11,
+  "baseline_hardware_trial": "handoff/kernel-7.2.9-20261010/trial-02",
+  "baseline_hardware_qualified": false,
+  "accepted_installed_kernel": "7.1.3",
+  "build_evidence": "handoff/kernel-7.2.9-20261010/kernel-build.log",
+  "external_module_evidence": "handoff/kernel-7.2.9-20261010/media-modules-build.log",
+  "kernel_manifest": [
+    "source-revision=5fb8876d52f20cf79d8618c675d478633b052fc5",
+    "kernel-release=7.2.9-gemini-da921x-lkro",
+    "dea43bf59aaf0224a2044a541d744ad6aed661bd1e740d9fb85bb0ca001637e1  Image",
+    "aaa9f179575117a5c9fe2a63e6b892241785c5424d1690260bf873f2de1f40ed  Image.gz",
+    "7e5651f8236200b46957fec4a670d88ea06bdd494751b1734e3311bd8eb895f3  base.dtb",
+    "bf3f9283fa6e4b1c033f5747b374ef1766d34dfb4c2264e8d48f625c2f3b5270  kernel.config",
+    "beef087138c24de662ccffc7aeed39cd13f21f22ffca40d31e9c8e0366c505a4  System.map",
+    "886505849254e58bf076aafef0ffc866af381519fd90dc3c320c43f05e17fa56  vmlinux",
+    "8bde2f76e34482704011cc94fee3861c2cd27f4726697971547ef24a7dd9a019  Module.symvers"
+  ],
+  "candidate_system": "/nix/store/1f1iv80g8xywd447ax2l4y3gbsh6hz1p-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+  "candidate_boot_sha256": "37d533cfd11ea2c68e85cfac87d7439e717a64ccee8b981dd257105fc7fdd2d7"
+}
