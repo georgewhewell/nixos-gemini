@@ -8,7 +8,7 @@ qualification evidence are tracked in [the interface ledger](../mt6797-video-int
 This development has not used a formally separated clean-room team.
 
 Development uses the same [Linux 7.2.9](../KERNEL_BASELINE.md) kernel as the
-normal GNOME image: maintained branch `gemini-7.2.9`, source `7eb0d527`.
+normal GNOME image: maintained branch `gemini-7.2.9`, source `a25cb83b`.
 The former media branch is merged and retired. This kernel enables the decoder
 resources and native VDEC clock provider; the experimental decoder driver is
 not installed in the normal image. Picture, error and lifetime results below
@@ -40,14 +40,25 @@ transient signal between samples.
 
 The [clock-vote contract](clock-vote-contract.json) identifies a conflict:
 the driver voted `VDEC_ACTIVE` (bit 4), which the public MT6797 ISR requires
-clear. The current candidate requests only the bus and engine clocks. It
-retains that ISR guard and all completion/stop criteria. This experiment is
-unqualified until independent delivery and pixel checks pass.
+clear. [Trial 89](irq-trial-89.json) requests only bus and engine clocks on the
+accepted GCC 15 kernel. It still observes `0x111` and zero delivered interrupts;
+removing the active vote alone did not resolve the failure. Stop, guards, normal
+unload, recovery and the independent terminal audit pass.
 Its [GCC 12 host build](irq-clock-build-20261010.json) matches the previously
 accepted kernel and has not been loaded. The [default-compiler build](../default-toolchain-20261010.json) now provides
 the GCC 15.3.0 kernel and a matching module with strict MODPOST and `W=1`.
-The kernel image is accepted in trial 87; the next IRQ trial must use that
-matching module.
+The current kernel image is accepted in trial 88. The
+[new matching module build](irq-clock-trace-build-20261011.json) uses GCC 15.3.0,
+the exact installed config and symbol table, strict MODPOST and `W=1` without
+warnings. It votes only the bus clock, matching the public MT6797 power-on
+sequence, and caches five powered clock snapshots around reset, DCM setup and
+submission. Sysfs reads only those cached words. This bus-only candidate retains
+the ISR guard and all completion/stop criteria. [Trial 90](irq-trial-90.json)
+observes `0x111` in all five phases, starting immediately after runtime power,
+and again times out with zero delivered interrupts. Removing the engine vote
+did not resolve the failure; its cause before the first snapshot is unknown.
+Stop, guards, normal unload, recovery and the independent terminal audit pass.
+IRQ completion remains unqualified.
 
 The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
 submitted command can accept a done event; a stale done bit or an event before

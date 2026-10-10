@@ -710,7 +710,7 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	fetch_commands = decoder->fetch_commands;
 	frame_commands = decoder->frame_commands;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x slice_count=%u collected=%u fetch_commands=%llu frame_commands=%llu cabac_tail_checked=%u cabac_tail_window_valid=%u irq_command=%llu irq_received_command=%llu irq_events=%u irq_unexpected=%u irq_status=%#x irq_controller_sampled=%u irq_masked_before=%d irq_pending_before=%d irq_active_before=%d irq_masked_after=%d irq_pending_after=%d irq_active_after=%d irq_complete=%#x irq_clock_result=%d irq_clock_guard=%#x\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x slice_count=%u collected=%u fetch_commands=%llu frame_commands=%llu cabac_tail_checked=%u cabac_tail_window_valid=%u irq_command=%llu irq_received_command=%llu irq_events=%u irq_unexpected=%u irq_status=%#x irq_controller_sampled=%u irq_masked_before=%d irq_pending_before=%d irq_active_before=%d irq_masked_after=%d irq_pending_after=%d irq_active_after=%d irq_complete=%#x irq_clock_result=%d irq_clock_guard=%#x irq_clock_trace_valid=%#x irq_clock_powered=%#x irq_clock_reset=%#x irq_clock_core_reset=%#x irq_clock_dcm_off=%#x irq_clock_submit=%#x\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
@@ -730,7 +730,13 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 		status.irq_unexpected, status.irq_status, status.irq_controller_sampled,
 		status.irq_masked_before, status.irq_pending_before, status.irq_active_before,
 		status.irq_masked_after, status.irq_pending_after, status.irq_active_after,
-		status.irq_complete, status.irq_clock_result, status.irq_clock_guard);
+		status.irq_complete, status.irq_clock_result, status.irq_clock_guard,
+		status.irq_clock_trace_valid,
+		status.irq_clock_trace[MT6797_CLOCK_POWERED],
+		status.irq_clock_trace[MT6797_CLOCK_RESET],
+		status.irq_clock_trace[MT6797_CLOCK_CORE_RESET],
+		status.irq_clock_trace[MT6797_CLOCK_DCM_OFF],
+		status.irq_clock_trace[MT6797_CLOCK_SUBMIT]);
 }
 static DEVICE_ATTR_RO(last_job);
 static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);

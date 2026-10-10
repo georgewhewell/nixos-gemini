@@ -60,7 +60,7 @@ struct mt6797_engine {
 	struct device *dev;
 	struct regmap *gcon;
 	void __iomem *banks[BANK_COUNT], *larb_mmu;
-	struct clk_bulk_data clocks[2];
+	struct clk_bulk_data clocks[1];
 	struct private_buffer memory[MEMORY_COUNT];
 	u8 *reference_snapshot;
 	size_t snapshot_bytes;
@@ -364,13 +364,12 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 			return ERR_CAST(engine->banks[i]);
 	}
 	engine->clocks[0].id = "bus";
-	/* VDEC_ACTIVE is not a clock vote needed by decoding. The public MT6797
-	 * clock manager enables bit 0, and its ISR requires bit 4 to be clear.
-	 * Voting the upstream "active" gate holds that bit set (trial 86).
-	 * Keep the real bus/engine votes and the IRQ clock guard; see
-	 * clock-vote-contract.json for the evidence and experiment scope.
+	/* The public MT6797 clock manager votes only CKEN (bit 0), apart from
+	 * the LARB handled by its own driver. Do not vote ACTIVE or CKEN_ENG.
+	 * Trial 89 retained 0x111 after removing ACTIVE alone. Keep the public
+	 * ISR guard and record powered setup transitions before submission.
+	 * This bus-only experiment remains unqualified until real IRQ delivery.
 	 */
-	engine->clocks[1].id = "engine";
 	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(engine->clocks), engine->clocks);
 	if (ret)
 		return ERR_PTR(ret);
@@ -698,6 +697,21 @@ static int prepare_reference_snapshot(struct mt6797_decode_context *ctx,
 	return 0;
 }
 
+/* Read-only, powered observations. A failed sample is absent in the valid
+ * mask; sysfs only exposes this cache and never accesses live hardware.
+ */
+static void snapshot_clock(struct mt6797_engine *engine,
+			   struct mt6797_decode_status *status,
+			   enum mt6797_clock_phase phase)
+{
+	u32 word;
+
+	if (!regmap_read(engine->gcon, 0, &word)) {
+		status->irq_clock_trace[phase] = word;
+		status->irq_clock_trace_valid |= BIT(phase);
+	}
+}
+
 int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
 			 const u8 **pixels, struct mt6797_decode_status *status)
@@ -816,6 +830,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = pm_runtime_resume_and_get(engine->dev);
 	if (ret < 0)
 		return ret;
+	snapshot_clock(engine, status, MT6797_CLOCK_POWERED);
 	if ((readl(engine->larb_mmu) & GENMASK(9, 0)) != GENMASK(9, 0)) {
 		ret = -EIO;
 		goto power;
@@ -823,6 +838,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = reset_whole_decoder(engine);
 	if (ret)
 		goto power;
+	snapshot_clock(engine, status, MT6797_CLOCK_RESET);
 	if ((readl(engine->larb_mmu) & GENMASK(9, 0)) != GENMASK(9, 0)) {
 		ret = -EIO;
 		goto power;
@@ -842,6 +858,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = reset_core(engine);
 	if (ret)
 		goto cleanup;
+	snapshot_clock(engine, status, MT6797_CLOCK_CORE_RESET);
 	write_word((original_irq | BIT(0)) & ~BIT(4), misc + 0xa4);
 	SAVE(misc + 0xc8, 0);
 	SAVE(misc + 0xcc, 0);
@@ -851,6 +868,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = regmap_update_bits(engine->gcon, 0x18, BIT(0), BIT(0));
 	if (ret)
 		goto cleanup;
+	snapshot_clock(engine, status, MT6797_CLOCK_DCM_OFF);
 	SAVE(misc + 0x84, 2);
 	write_word(0, vld + 0x108);
 	if (readl(vld + 0x2ec) & BIT(8)) {
@@ -1060,6 +1078,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	if (ret)
 		goto cleanup;
 	dma_wmb();
+	snapshot_clock(engine, status, MT6797_CLOCK_SUBMIT);
 	ret = submit_decode(engine, status);
 	if (ret)
 		goto cleanup;

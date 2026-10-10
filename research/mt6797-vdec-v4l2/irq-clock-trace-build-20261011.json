@@ -1,0 +1,37 @@
+{
+  "result": "built, hardware unqualified",
+  "build_exit_code": 0,
+  "hardware_tested": false,
+  "irq_delivery_qualified": false,
+  "kernel_revision": "a25cb83b405045f7a1d8b25aeba71036eb277206",
+  "kernel_package": "/nix/store/v41dw4787dlfr0v7yadb9mik7i2k4hgj-linux-gemini-7.2.9",
+  "kernel_config_sha256": "8d0c7a2e3d3e9ad16549d1846cb8abd60904f10a3bf63ac91080234b695df901",
+  "module_symvers_sha256": "1c226cc2ce3678d1f29d0549e498f4c15590c5b66c793ffa064ddf9f07e55aef",
+  "source_sha256": {
+    "mt6797-vdec-v4l2/v4l2.c": "9b349e28abffb033b17c0f1ddf5a56300fa46e07d39185736090f2f206d79275",
+    "mt6797-vdec-v4l2/engine.c": "26b2d8dc6996956985a277d96533efa0f1783cd54db57134ed8d0b1e5a0e53e4",
+    "mt6797-vdec-v4l2/engine.h": "32ad09415f2a8c0dc7999a02d95c413b5371f3b010f591b3ce30b7d7827d346c",
+    "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+    "mt6797-vdec-v4l2/Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+    "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+    "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023"
+  },
+  "module": {
+    "path": "/mnt/Home/src/nixos-gemini/handoff/media-module-clock-trace-20261011/module-input/mt6797-vdec-v4l2/mt6797_vdec.ko",
+    "sha256": "b35317548183ae4e5475e5380646cedcfa9c711cf29cbe5e20ca2420864f0bd2",
+    "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+    "machine": 183
+  },
+  "strict_modpost": true,
+  "compiler": "GCC 15.3.0",
+  "extra_compiler_warnings": "W=1; no compiler or MODPOST warnings",
+  "build_log": "/mnt/Home/src/nixos-gemini/handoff/media-module-clock-trace-20261011/module-build.log",
+  "build_script_sha256": "fc66cd54a17e8fca21ac2c9a158426e33a4316890371d3466d1cbb2b715218cb",
+  "purpose": "Vote CKEN only, matching public MT6797 power-on, and cache five read-only powered clock phases; no completion, IRQ guard or DMA stop changes",
+  "preceding_trial": "boot-test-89",
+  "artifact_sha256": {
+    "module-build-command.json": "214b245bb69d5f3e063627ba325c96dee82b0a5fc8f4c27762fa597b00774fa3",
+    "module-build.log": "aaa3826fa97613c932cc59d43b2cb1341c0756667eac278128487f898a4f879b",
+    "module-build-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+  }
+}

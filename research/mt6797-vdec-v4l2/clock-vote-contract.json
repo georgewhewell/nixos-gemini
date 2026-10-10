@@ -29,15 +29,8 @@
       ]
     }
   },
-  "hardware_observation": {
-    "record": "irq-trial-86.json",
-    "global_clock_word": "0x111",
-    "active_bit_set": true,
-    "irq_events": 0,
-    "irq_delta": 0
-  },
-  "inference": "The driver itself votes a bit the public ISR forbids. Removing that vote resolves the software conflict but is not proof of correct IRQ routing or completion.",
-  "candidate_change": "Request only the bus and engine clocks with the Linux bulk clock API; no direct global clock writes, no relaxed IRQ guard, no polling-success fallback, no change to DMA ownership or stop/fencing rules.",
+  "inference": "Removing both ACTIVE and engine votes did not change the word. It was already 0x111 immediately after runtime power. Reset, core reset and DCM setup did not change it; the cause before this first snapshot is not established.",
+  "candidate_change": "Request only the bus clock through the Linux bulk clock API; the LARB driver owns its own clock votes. Cache read-only GCON words after runtime power, subsystem reset, core reset, DCM setup and before submission. No direct global-clock writes, no relaxed IRQ guard, no polling-success fallback and no change to DMA ownership or stop/fencing rules.",
   "hardware_qualified": false,
   "required_checks": [
     "Clock word and IRQ-controller snapshots",
@@ -47,5 +40,45 @@
     "Safe DMA quiescence, guards and normal unload",
     "Supervised recovery and independent terminal audit"
   ],
-  "normal_image_contains_experimental_module": false
+  "normal_image_contains_experimental_module": false,
+  "hardware_observations": [
+    {
+      "record": "irq-trial-86.json",
+      "global_clock_word": "0x111",
+      "active_bit_set": true,
+      "irq_events": 0,
+      "irq_delta": 0
+    },
+    {
+      "record": "irq-trial-89.json",
+      "clock_votes": [
+        "bus",
+        "engine"
+      ],
+      "global_clock_word": "0x111",
+      "active_bit_set": true,
+      "irq_events": 0,
+      "irq_delta": 0
+    },
+    {
+      "record": "irq-trial-90.json",
+      "clock_votes": [
+        "bus"
+      ],
+      "global_clock_word": "0x111",
+      "powered_phases": {
+        "powered": "0x111",
+        "reset": "0x111",
+        "core_reset": "0x111",
+        "dcm_off": "0x111",
+        "submit": "0x111"
+      },
+      "active_bit_set": true,
+      "irq_events": 0,
+      "irq_delta": 0,
+      "safe_quiescence": true,
+      "independent_terminal_audit": "passed"
+    }
+  ],
+  "host_build_record": "irq-clock-trace-build-20261011.json"
 }
