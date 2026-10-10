@@ -643,3 +643,9 @@ starts. The default 64x80 stream and decoded reference remain byte-identical to
 the earlier fixture. Software fixtures cover Baseline, Main/CABAC, custom-scaling
 High CAVLC/CABAC, temporal/implicit B and weighted P streams; they make no hardware
 encoder claim. The hardware status of each fixture is recorded separately.
+
+Trial 63 additionally checks eight exact compressed 320x240 Baseline two-slice
+pictures. The first two custom-High 1080p four-slice pictures match; the third
+returns an error with a new CABAC error/message combination and is not exported
+or qualified. The remaining compressed cases are untested on hardware. The
+frontend notes retain the failed media/system result and clean accepted recovery.

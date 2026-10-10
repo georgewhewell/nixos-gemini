@@ -274,6 +274,23 @@ concurrent contexts and all 57 media checks pass. Normal unload, the command-fre
 encoder resource probe, every RTC/system check and the strict accepted-board audit
 pass. The extra Request buffering leaves this earlier single-slice scope intact.
 
+Trial 63 tests compressed multislice packets on the same module. All eight
+320x240 Baseline two-slice pictures match, as do the first two custom-scaling
+High 1080p four-slice pictures. The third High picture returns EIO with
+whole-picture DONE, final coordinates 119/67, intact guards and a proven stop,
+but raw error/message words `0x4000`/`0`. The existing CABAC tail condition
+requires both words to be `0x4000`, so its zero cached tail fields were never
+sampled. The third picture is not exported or pixel-qualified. The pipeline
+propagates the capture error, and the remaining six compressed streams are not
+run. All 57 media checks and normal unload pass; the overall media diagnostic
+fails. Its separate RTC delivery-before test records zero interrupts and fails
+the system profile. Accepted-system recovery and the strict board audit pass.
+The 59 exact exported pictures, both failures and untested scope remain recorded.
+A new parser-window diagnostic and independent picture comparisons are needed
+before accepting the new error-word combination or qualifying Main/High
+compressed multislice generally.
+
+
 
 The original bounded slice reader validates the prediction table and complete
 P header against Linux's stateless controls before any allocation, power vote
