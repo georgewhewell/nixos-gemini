@@ -14,6 +14,11 @@ configuration and generated `Module.symvers`, with strict MODPOST. The
 not been loaded on 7.2.9. The picture, error and lifetime results below qualify
 their recorded 7.1.3 builds. Exact build and platform evidence is in
 [`kernel-7.2.9.json`](../kernel-7.2.9.json).
+The separate kernel branch `gemini-video-7.2.9` carries the experimental
+decoder resources and built-in native VDEC clock provider. Its kernel, required
+host checks, decoder, encoder resource probe and idle-reset probe all build
+successfully. These artifacts remain untested on hardware; the normal kernel
+does not enable the experimental decoder node.
 
 The current module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
