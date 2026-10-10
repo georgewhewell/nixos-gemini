@@ -1,10 +1,8 @@
 --- a/meson.build
 +++ b/meson.build
-@@ -110,6 +110,7 @@
+@@ -110,4 +110,5 @@
  gidocgen_dep = dependency('gi-docgen', version: '>= 2021.1',
                            fallback: ['gi-docgen', 'dummy_dep'],
 +                          native: true,
                            required: get_option('gtk_doc') and get_option('introspection')
                        )
- 
-     subdir('doc')

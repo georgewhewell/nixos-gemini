@@ -172,6 +172,7 @@
     "tools/qualify-power-swap.py": "ce2929b3253a065cb1b788354f7268b95e992fd2d919a5b117b96c3d40ae2c79",
     "tools/qualify-mtkclient.py": "b1d188b3488116357c11fa97b426ea9531d21d8f248aaf14c8a304e2330656aa",
     "tools/qualify-fixed-swap.py": "74478f16baf203df05d878eb89cf1cc3b9497ab1e48692cc8b91b6d8ce5e9380",
-    "tools/qualify-uboot-recovery.py": "12f38b6a918c72e22e64486411a163c668154bc80fcba5a002e16323979c9307"
+    "tools/qualify-uboot-recovery.py": "12f38b6a918c72e22e64486411a163c668154bc80fcba5a002e16323979c9307",
+    "nix/patches/gupnp-av-native-docgen.patch": "f7c1f92d417a4716d6c26ee466f51c132f326496d34152b3bf022abd1e58a11d"
   }
 }
