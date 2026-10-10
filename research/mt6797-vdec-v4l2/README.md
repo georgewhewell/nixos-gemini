@@ -274,6 +274,18 @@ offline comparison. The strict eight-picture clock check fails and remains
 archived. All 57 media checks, normal unload and full RTC/system/recovery/audit
 pass. This result does not qualify real-time playback.
 
+Trial 43 qualifies a 32-picture Main 1080p native MM21 sample at 25 fps: all
+32 timestamps are valid, actual clock waits occur, the sink renders 32 and
+drops zero, and every sample matches. Queued one-thread I420 conversion emits
+27 of 32 pictures and fails the strict clock check. All 27 rendered pictures
+match in a separate timestamped comparison; five completed pictures are not
+exported. This trial checks 92 exact pictures including native fault/recovery,
+Baseline and concurrent-stream regressions. All 57 media checks and normal
+unload pass. These short samples do not qualify sustained playback or thermal
+behavior. The failed conversion result remains archived.
+
+All RTC/system checks and strict accepted-system recovery also pass.
+
 The encoder, interrupt completion, general codec features beyond this scope,
 system suspend and untested stream configurations remain unqualified. These experimental
 packages and source files do not enable the decoder in the accepted system.
