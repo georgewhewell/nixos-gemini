@@ -9,6 +9,7 @@
 #include <media/media-device.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 #include <media/v4l2-fh.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mem2mem.h>
@@ -43,6 +44,7 @@ struct decode_file {
 	atomic_t abort;
 	u32 sequence;
 	u16 width, height;
+	u32 colorspace, xfer_func, ycbcr_enc, quantization;
 };
 
 static struct decode_file *file_context(void *priv)
@@ -87,7 +89,8 @@ static int enumerate_size(struct file *file, void *priv, struct v4l2_frmsizeenum
 	return 0;
 }
 
-static int fill_format(struct v4l2_format *format, unsigned int width, unsigned int height)
+static int fill_format(struct v4l2_format *format, unsigned int width, unsigned int height,
+		       const struct decode_file *ctx)
 {
 	struct v4l2_pix_format_mplane *pix = &format->fmt.pix_mp;
 	bool output = output_queue(format->type);
@@ -97,6 +100,10 @@ static int fill_format(struct v4l2_format *format, unsigned int width, unsigned 
 	pix->width = width;
 	pix->height = height;
 	pix->field = V4L2_FIELD_NONE;
+	pix->colorspace = ctx->colorspace;
+	pix->xfer_func = ctx->xfer_func;
+	pix->ycbcr_enc = ctx->ycbcr_enc;
+	pix->quantization = ctx->quantization;
 	pix->pixelformat = output ? V4L2_PIX_FMT_H264_SLICE : V4L2_PIX_FMT_MM21;
 	pix->num_planes = output ? 1 : 2;
 	pix->plane_fmt[0].sizeimage = output ? INPUT_SIZE : width * height;
@@ -111,18 +118,31 @@ static int fill_format(struct v4l2_format *format, unsigned int width, unsigned 
 static int get_format(struct file *file, void *priv, struct v4l2_format *format)
 {
 	struct decode_file *ctx = file_context(file_to_v4l2_fh(file));
-	return fill_format(format, ctx->width, ctx->height);
+	return fill_format(format, ctx->width, ctx->height, ctx);
 }
 
 static int try_format(struct file *file, void *priv, struct v4l2_format *format)
 {
 	struct decode_file *ctx = file_context(file_to_v4l2_fh(file));
+	struct v4l2_pix_format_mplane requested = format->fmt.pix_mp;
 	unsigned int width = ctx->width, height = ctx->height;
+	int ret;
 	if (output_queue(format->type)) {
 		width = ALIGN(clamp(format->fmt.pix_mp.width, 64U, 320U), 16U);
 		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, 256U), 32U);
 	}
-	return fill_format(format, width, height);
+	ret = fill_format(format, width, height, ctx);
+	if (!ret && output_queue(format->type)) {
+		struct v4l2_pix_format_mplane *pix = &format->fmt.pix_mp;
+		pix->colorspace = requested.colorspace ? requested.colorspace : ctx->colorspace;
+		pix->xfer_func = requested.xfer_func ? requested.xfer_func :
+			V4L2_MAP_XFER_FUNC_DEFAULT(pix->colorspace);
+		pix->ycbcr_enc = requested.ycbcr_enc ? requested.ycbcr_enc :
+			V4L2_MAP_YCBCR_ENC_DEFAULT(pix->colorspace);
+		pix->quantization = requested.quantization ? requested.quantization :
+			V4L2_MAP_QUANTIZATION_DEFAULT(false, pix->colorspace, pix->ycbcr_enc);
+	}
+	return ret;
 }
 
 static int set_format(struct file *file, void *priv, struct v4l2_format *format)
@@ -139,6 +159,10 @@ static int set_format(struct file *file, void *priv, struct v4l2_format *format)
 	if (output_queue(format->type)) {
 		ctx->width = format->fmt.pix_mp.width;
 		ctx->height = format->fmt.pix_mp.height;
+		ctx->colorspace = format->fmt.pix_mp.colorspace;
+		ctx->xfer_func = format->fmt.pix_mp.xfer_func;
+		ctx->ycbcr_enc = format->fmt.pix_mp.ycbcr_enc;
+		ctx->quantization = format->fmt.pix_mp.quantization;
 		mt6797_decode_context_reset(ctx->context);
 	}
 	return 0;
@@ -362,6 +386,10 @@ static int open_decoder(struct file *file)
 		return -ENOMEM;
 	ctx->decoder = decoder;
 	ctx->width = ctx->height = 64;
+	ctx->colorspace = V4L2_COLORSPACE_REC709;
+	ctx->xfer_func = V4L2_XFER_FUNC_709;
+	ctx->ycbcr_enc = V4L2_YCBCR_ENC_709;
+	ctx->quantization = V4L2_QUANTIZATION_LIM_RANGE;
 	mutex_lock(&decoder->mutex);
 	ctx->context = mt6797_decode_context_create(decoder->engine);
 	if (IS_ERR(ctx->context)) {
@@ -369,7 +397,7 @@ static int open_decoder(struct file *file)
 		goto free;
 	}
 	v4l2_fh_init(&ctx->fh, &decoder->video);
-	v4l2_ctrl_handler_init(&ctx->controls, 7);
+	v4l2_ctrl_handler_init(&ctx->controls, 9);
 	config.id = V4L2_CID_STATELESS_H264_SPS;
 	ctx->sps = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	config.id = V4L2_CID_STATELESS_H264_PPS;
@@ -379,6 +407,11 @@ static int open_decoder(struct file *file)
 	config.id = V4L2_CID_STATELESS_H264_DECODE_PARAMS;
 	ctx->decode = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	config.id = V4L2_CID_STATELESS_H264_SCALING_MATRIX;
+	v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
+	/* Slice-based clients also submit weights for unweighted pictures.
+	 * Admission in engine.c rejects weighted PPS flags before hardware DMA.
+	 */
+	config.id = V4L2_CID_STATELESS_H264_PRED_WEIGHTS;
 	v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	v4l2_ctrl_new_std_menu(&ctx->controls, NULL, V4L2_CID_STATELESS_H264_DECODE_MODE,
 			       V4L2_STATELESS_H264_DECODE_MODE_SLICE_BASED, 0,
@@ -453,6 +486,8 @@ static const struct v4l2_ioctl_ops ioctls = {
 	.vidioc_prepare_buf = v4l2_m2m_ioctl_prepare_buf,
 	.vidioc_streamon = v4l2_m2m_ioctl_streamon,
 	.vidioc_streamoff = v4l2_m2m_ioctl_streamoff,
+	.vidioc_subscribe_event = v4l2_ctrl_subscribe_event,
+	.vidioc_unsubscribe_event = v4l2_event_unsubscribe,
 };
 
 static const struct media_device_ops request_ops = {
@@ -543,6 +578,8 @@ static int probe_decoder(struct platform_device *pdev)
 	decoder->media.dev = &pdev->dev;
 	decoder->media.ops = &request_ops;
 	strscpy(decoder->media.model, "MT6797 H.264 Request decoder", sizeof(decoder->media.model));
+	snprintf(decoder->media.bus_info, sizeof(decoder->media.bus_info), "platform:%s",
+		 dev_name(&pdev->dev));
 	decoder->v4l2.mdev = &decoder->media;
 	ret = v4l2_device_register(&pdev->dev, &decoder->v4l2);
 	if (ret)

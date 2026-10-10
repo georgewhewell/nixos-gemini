@@ -28,18 +28,25 @@ queue mappings whose completed storage survives video-file close. At 64x96,
 intra pixels matched but inter pixels repeated row 63: the extension wrote
 width into the motion-compensation height word. That height is now corrected.
 Trial 27 unloaded normally and passed supervisor/recovery/journal checks.
+Trial 28 then passed 48 original I/P/motion pictures across 64x64/96/128,
+128x64/96/128 and 320x256. Every sample matches, error/message words stay zero,
+all bytes beyond each picture payload retain their guard value, and request,
+export/close, unload, supervisor and strict recovery checks pass. GStreamer
+discovers the decoder but its slice-mode weight control was absent; compliance
+also found missing media bus information/events and discarded colorimetry.
+The next build supplies that control for unweighted pictures, event callbacks,
+matching media bus information and retained output/capture colorimetry.
 
 Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
 I/P pictures, at most one short-term reference and disabled deblocking. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
 `V4L2_PIX_FMT_MM21`. The next build admits widths 64..320 in steps of 16 and
-heights 64..256 in steps of 32; larger inter pictures remain unqualified.
+heights 64..256 in steps of 32. Only the seven dimensions above have been tested.
 Its independent coherent allocations are 256 KiB each, with separate 128 KiB
 data and trailing guard regions. GStreamer's initial 320x240 probe can negotiate
-320x256; this does not establish GStreamer compatibility before a real pipeline
-passes. Queues
+320x256. Real GStreamer decoding is still pending. Queues
 use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
-buffer export is hardware tested at 64x64. Completion
+buffer export is hardware tested at the seven listed dimensions. Completion
 uses a bounded workqueue poll because actual interrupt delivery is unqualified.
 It does not implement an encoder.
 
