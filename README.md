@@ -5,7 +5,10 @@ The earlier 7.2.9 image passed supervised device boot/RTC/paging/Nix checks.
 Current development adds GNOME and RAM-only paging; those changes are not yet
 qualified on the device. The complete GNOME system, initramfs, boot bundle and
 EFI files have cross-built for ARM64; see the
-[build record](research/desktop-consolidation-20261010.json).
+[build record](research/desktop-consolidation-20261010.json) and
+[installed runtime check](research/gnome-cross-runtime-20261010.json).
+The latter checks 711 ELF files and 90 script interpreters, including Orca's
+runtime libraries and loaders, and catches native-host paths in installed tools.
 The accepted recovery remains 7.1.3 and now disables swap and disk resume from
 boot. Its [device qualification](research/ram-only-recovery-hardware-20261010.json)
 and independent audit pass. See the
@@ -41,6 +44,7 @@ nix build .#efiBootFiles   # Versioned systemd-boot entry, kernel, DTB and initr
 nix build .#uboot          # U-Boot with display, keyboard and EFI storage support
 nix build .#bootloader     # Flashable U-Boot image with the normal Linux fallback
 nix build .#mtkclient      # Open-source flashing tool, including RTC preservation
+nix build .#checks.x86_64-linux.gnome-cross-runtime # Installed ARM64 runtime paths
 ```
 
 The maintained Linux source is branch `gemini-7.2.9`, pinned by `flake.lock`.

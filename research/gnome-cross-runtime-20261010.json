@@ -1,0 +1,97 @@
+{
+  "scope": "Installed ARM64 desktop runtime paths and cross-built normal/media bundles; no device boot in this record",
+  "source_base_commit": "b95b3a2",
+  "source_sha256": {
+    "flake.nix": "e5b5b0abe6a44f6e0edc77bd414badbaa87cb5dffe561885db6f88cc907a4384",
+    "nix/cross-fixes.nix": "ebe0513fab5fffa3536421cd282952e9cead7b4e57fd64deb1d9701a79d83216",
+    "tools/check-gnome-cross-runtime.py": "526bad1415c040d03f29215363bc977ad572bc7d7797da7e09e87ceafe8279f2"
+  },
+  "fixes": [
+    "Use target Python in the installed GNOME Shell extension and test helper scripts.",
+    "Keep native Python/GTK available during Orca configuration; restore target GI paths and use target Python in its installed script."
+  ],
+  "runtime_check": {
+    "command": "nix build .#checks.x86_64-linux.gnome-cross-runtime",
+    "output": "/nix/store/4wfva51iz3kl4vawckaykjypyf63l0h7-gemini-gnome-cross-runtime-check",
+    "output_sha256": "05a9ea24780178dee42bc0038c11b310a337891d2f568bda390b1af655a2fca8",
+    "negative_check": {
+      "passed": false,
+      "foreign_elf_files": 53
+    },
+    "passed": true,
+    "elf_files": 711,
+    "script_interpreter_checks": 90,
+    "foreign_elf_files": 0,
+    "coverage": "Installed system bin executables, selected GNOME Shell/Orca executables and libraries, Orca compiled wrapper GI library paths and pixbuf loaders; not every transitive build-time dependency."
+  },
+  "qemu_cli_checks": {
+    "qemu": "/nix/store/glylmrad7ipgfi9jih2gqjnzzjgxqbwb-qemu-11.1.0/bin/qemu-aarch64",
+    "passed": true,
+    "results": [
+      {
+        "name": "gnome-shell-extension-tool",
+        "interpreter": "/nix/store/81jsmi7hxdbcikna1zxj49qnr856mcra-python3-aarch64-unknown-linux-gnu-3.14.7/bin/python3",
+        "returncode": 0,
+        "passed": true
+      },
+      {
+        "name": "gnome-shell-test-tool",
+        "interpreter": "/nix/store/81jsmi7hxdbcikna1zxj49qnr856mcra-python3-aarch64-unknown-linux-gnu-3.14.7/bin/python3",
+        "returncode": 0,
+        "passed": true
+      },
+      {
+        "name": "orca",
+        "interpreter": "/nix/store/81jsmi7hxdbcikna1zxj49qnr856mcra-python3-aarch64-unknown-linux-gnu-3.14.7/bin/python3",
+        "returncode": 0,
+        "passed": true
+      }
+    ],
+    "orca_environment": "Reconstructed from its compiled wrapper; host emulation sets GST_REGISTRY_FORK=no and a private registry.",
+    "limits": "CLI --help only; host lacks desktop display/font configuration. This does not qualify a GNOME session, accessibility interaction or real hardware."
+  },
+  "build": {
+    "terminal_exit_code": 0,
+    "normal_bundle": "/nix/store/jx60pm9ikzli24r15lmllpxyjhyqnb4l-gemini-mainline-nixos-bundle",
+    "normal_system": "/nix/store/a2svlq9f3dkmc7gkzi0ajiw535r51b3z-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "normal_kernel": "/nix/store/3vqh41viby5ffx12ayh452xp83f7w7lh-linux-gemini-7.2.9",
+    "gnome_shell": "/nix/store/avkq5b9a6bcgzghdq5qi7xc4qi9v7h6g-gnome-shell-aarch64-unknown-linux-gnu-50.4",
+    "orca": "/nix/store/nydqv66pq6ainyk9dja0rsjq591lpkkx-orca-50.2-aarch64-unknown-linux-gnu",
+    "media": {
+      "bundle": "/nix/store/2rasl51i3cq6zdyj1h2ak51na189hwp1-gemini-mainline-nixos-bundle",
+      "bundleDrv": "/nix/store/yzla3s7qpv5is90vyv36gmwvn34nx5wz-gemini-mainline-nixos-bundle.drv",
+      "dtb": "/nix/store/l6ylh78hpisj83qlr4a9hy5di279gx88-gemini-dtb",
+      "initramfs": "/nix/store/fpxhlpm67shz4xahj6zczim1hvpmc5cj-gemini-mainline-nixos-initramfs.cpio.gz",
+      "kernel": "/nix/store/gi6b7392qcv90d8x6nyq9knzim43b8w5-linux-gemini-7.2.9",
+      "toplevel": "/nix/store/w3dnlm0l0f9na21031pxrqbpkisxli40-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b"
+    }
+  },
+  "device_staging": {
+    "system": "/nix/store/w3dnlm0l0f9na21031pxrqbpkisxli40-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "registered_store": "local?root=/persist/nixos",
+    "gc_root": "/persist/nixos/nix/var/nix/gcroots/gemini-development-system",
+    "readonly_verification_exit_code": 0,
+    "boot_id": "1b808ff8-327b-46b1-aa0c-0d5882b95134",
+    "booted": false
+  },
+  "gnome_hardware_tested": false,
+  "zram_hardware_tested": false,
+  "decoder_irq_hardware_tested": false,
+  "raw_evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/media-irq-20261010",
+  "raw_evidence_sha256": {
+    "cross-runtime-before.json": "f0a18fb2a941f09c77c71f8f85b312424036c13defec0b2cbbb8b42cd73ef5b6",
+    "cross-runtime-final.json": "05a9ea24780178dee42bc0038c11b310a337891d2f568bda390b1af655a2fca8",
+    "cross-qemu-cli-result.json": "d690529777b8bbf949ba69a2b16b868e6a2192c60f4290b868442303fc32c9ac",
+    "runtime-fixed-final-build-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17",
+    "runtime-fixed-final-build.log": "c6192f2628fa5ca17f5bc83458463d147fb014cbeccc2f19715d5efc0ca18e2e",
+    "media-bundle-fixed-eval-07.json": "a9279157c6db197618f002956a38ee4759c3fd39298110f127347cdaa1e09614",
+    "emulate-orca-cli.py": "79dd18f4b9bb5e8e3cb32826c1cab7950dd140c390a92802c1180ec67b1a33f1",
+    "qemu-orca.stdout": "770d71fb10ab7473d61980d71f05c3ac31d2c7ba8641f15edc024f2a8dcdacf8",
+    "qemu-orca.stderr": "97b87291d67ec7e4548250bcf50d8d9395dfdf86878973fa81fdc2b790efa0d7",
+    "copy-fixed-system.log": "58306f4ab5b0edac1c207baf79fb6b25bd955c2d02e159926a54326547229d93",
+    "staged-system-readonly-verification.sh": "7cbba5a1f21913acd330168b5f017ad09609049c35244f7494ab6ae6dc47b66e",
+    "staged-system-readonly-verification.stdout": "b007b9c772f4f2e2977a302486756a94ec7a986fa976d1fffa10db117ea45dfa",
+    "staged-system-readonly-verification.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staged-system-readonly-verification-exit.json": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+  }
+}

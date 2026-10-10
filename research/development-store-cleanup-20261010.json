@@ -1,0 +1,56 @@
+{
+  "scope": "Remove only reviewed obsolete kernel/system closures from the board registered Nix store; keep source, host copies and historical trial evidence",
+  "result": "passed",
+  "removed_store_paths": 1485,
+  "removed_list_sha256": "8077f5e96a383354f4214a0ec473526cb42bdc633ffb438ec4b584679e8108e5",
+  "admission": {
+    "all_removed_paths_unrooted": true,
+    "all_removed_paths_valid_on_host": true,
+    "incoming_system_overlap": false,
+    "protected_outputs_overlap": false,
+    "accepted_recovery_and_storage_identity_unchanged": true,
+    "protected_files_and_11_retained_nix_outputs_unchanged": true,
+    "p22_transaction_and_writer_locks_held": true
+  },
+  "deletion": {
+    "store": "local?root=/persist/nixos",
+    "operation": "nix-store --delete with the reviewed list; Nix enforces referrer and root checks",
+    "nix_reported_freed_mib": 5669.28,
+    "filesystem_before_used_kib": 8610112,
+    "filesystem_after_used_kib": 2239744,
+    "filesystem_freed_kib": 6370368,
+    "filesystem_before_source": "SSH df output captured in this task before cleanup",
+    "free_after_kib": 8587232
+  },
+  "accepted_recovery": {
+    "boot_id": "1b808ff8-327b-46b1-aa0c-0d5882b95134",
+    "system": "/nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade",
+    "boot_sha256": "baf52554aed5c21e79aa24685547409d7b74eb05de28ecedfa94e6186a8489de",
+    "paging_policy": "none",
+    "zswap": "N",
+    "resume": "0:0",
+    "p34_stat_before": "      27        0     2072     1126        0        0        0        0        0      648     1126        0        0        0        0        0        0",
+    "p34_stat_after": "      27        0     2072     1126        0        0        0        0        0      648     1126        0        0        0        0        0        0"
+  },
+  "new_media_system_staged": "/nix/store/w3dnlm0l0f9na21031pxrqbpkisxli40-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "free_after_staging_kib": 3046572,
+  "hardware_trial_performed": false,
+  "raw_evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/media-irq-20261010",
+  "raw_evidence_sha256": {
+    "cleanup-obsolete-kernels.py": "b7890647caf55f14b44657f603da1012713113fe5498ced89359c3c43d4575a9",
+    "obsolete-kernel-referrers.paths": "8077f5e96a383354f4214a0ec473526cb42bdc633ffb438ec4b584679e8108e5",
+    "host-missing-obsolete.paths": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "cleanup-live-admission.stdout": "5cca6881b6e4ef39f14d5b2913be38b8da4a0a081108e2b8c252581a338e35d9",
+    "system-closure.paths": "b1a8fefdc62bc49bc80bfa19238349dd6918dfd9cb6a0a6972f00a3ffe938265",
+    "delete-obsolete-generations.sh": "3132ea008edead0efba992b42518e281280f7e798c7e6fde2eb3c5477f2a915b",
+    "delete-obsolete-generations.stdout": "f227ca76a796b778db6809fde536bb6b024a3e27380dfd1787ba8456eaf666df",
+    "delete-obsolete-generations.stderr": "4f90b0794cbcdf2cb200a61efd60b14d8a08bd6f8c4bd0f79fb039d1a00eee38",
+    "before-store-cleanup/result.json": "09f13d538939c45d9669bc5208bedd01db84f27c26cc6108f86929e0696a4696",
+    "after-store-cleanup/result.json": "09f13d538939c45d9669bc5208bedd01db84f27c26cc6108f86929e0696a4696",
+    "before-store-cleanup/after-boot-files.json": "89067fe1f6e38b72cbc51af7819cae9a97c6c2722b6841baf60c445326588aca",
+    "after-store-cleanup/after-boot-files.json": "89067fe1f6e38b72cbc51af7819cae9a97c6c2722b6841baf60c445326588aca",
+    "store-cleanup-result.json": "67c57251b4be5a3035193feb0353a8fec42d0295c30189e80b317f86ca7fc2da",
+    "cleanup-free-space.stdout": "47d155d4c957656b75e7af7bccf9917035806035066203a73ea5b9487ba1f521",
+    "staged-system-readonly-verification.stdout": "b007b9c772f4f2e2977a302486756a94ec7a986fa976d1fffa10db117ea45dfa"
+  }
+}

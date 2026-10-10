@@ -112,6 +112,14 @@
       '';
       desktop = gemini.userspace.desktopProtocolCheck;
       keyboard = gemini.userspace.desktopKeyboardProtocolCheck;
+      gnome-cross-runtime = gemini.buildPkgs.runCommand "gemini-gnome-cross-runtime-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3];
+      } ''
+        python3 ${./tools/check-gnome-cross-runtime.py} \
+          --system ${gemini.system.config.system.build.toplevel} \
+          --shell ${gemini.system.pkgs.gnome-shell} \
+          --orca ${gemini.system.pkgs.orca} --out "$out"
+      '';
       ssh = gemini.buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
         pam=${gemini.buildPkgs.writeText "gemini-sshd-pam" gemini.system.config.security.pam.services.sshd.text}
         grep -Eq '^account required /nix/store/[^ ]+/lib/security/pam_unix\.so( |$)' "$pam"

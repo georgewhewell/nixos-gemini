@@ -21,6 +21,42 @@ final: prev: {
     depsBuildBuild = (old.depsBuildBuild or []) ++ [final.pkgsBuildBuild.pkg-config];
     nativeBuildInputs = (old.nativeBuildInputs or []) ++ [final.buildPackages.glib];
   });
+  gnome-shell = prev.gnome-shell.overrideAttrs (old:
+    prev.lib.optionalAttrs (!prev.stdenv.buildPlatform.canExecute prev.stdenv.hostPlatform) {
+      # Fixup finds Meson's native Python first. The installed extension tool
+      # and test tool run on the device and only import the standard library.
+      postFixup = (old.postFixup or "") + ''
+        for tool in gnome-shell-extension-tool gnome-shell-test-tool; do
+          substituteInPlace "$out/bin/.$tool-wrapped" \
+            --replace-fail '#!${final.buildPackages.python3}/bin/python3' \
+            '#!${final.python3}/bin/python3'
+        done
+      '';
+    });
+  orca = prev.orca.overrideAttrs (old:
+    let nativePython = final.buildPackages.python3.withPackages (p: [p.pygobject3]);
+    in
+    prev.lib.optionalAttrs (!prev.stdenv.buildPlatform.canExecute prev.stdenv.hostPlatform) {
+      # Native Gtk is needed by Meson's GI import. Its typelibs and loaders
+      # must not precede the target libraries in the installed Python wrapper.
+      strictDeps = true;
+      preConfigure = ''
+        geminiTargetTypelibPath="''${GI_TYPELIB_PATH:-}"
+        export PATH="${nativePython}/bin:$PATH"
+      '' + (old.preConfigure or "") + ''
+        export GI_TYPELIB_PATH="${prev.lib.makeSearchPathOutput "lib" "lib/girepository-1.0" (with final.buildPackages; [
+          gtk3 glib gdk-pixbuf at-spi2-core pango harfbuzz gobject-introspection
+        ])}"
+      '';
+      postConfigure = (old.postConfigure or "") + ''
+        export GI_TYPELIB_PATH="$geminiTargetTypelibPath"
+      '';
+      postFixup = (old.postFixup or "") + ''
+        substituteInPlace "$out/bin/.orca-wrapped" \
+          --replace-fail '#!${nativePython}/bin/python3' \
+          '#!${final.python3}/bin/python3'
+      '';
+    });
   gnome-browser-connector = prev.gnome-browser-connector.overrideAttrs (old: {
     # Meson's configure-time gi import must use native Python extension
     # modules; pythonPath still supplies target pygobject at runtime.

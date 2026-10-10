@@ -9,7 +9,7 @@ Linux 7.2.9 with GNOME and LZ4 zram. These are separate, deliberate roles.
 | Recovery, protected storage, watchdog and native RTC | Working on the accepted recovery | [Trial 76 and independent audit](ram-only-recovery-hardware-20261010.json). Both image writes/readbacks, distinct boots, RTC startup/UTC/alarms, persistent Nix build and final audit pass. No further baseline trial is needed for this image. |
 | Flash-safe recovery paging | Working: no swap | Swap is disabled from boot, zswap is off, disk resume is unset, generated masks are present, and p34 receives zero writes. This temporary kernel has no zram. |
 | Linux 7.2.9 platform port | Earlier port qualified; current zram change built | [Kernel record](KERNEL_BASELINE.md). The current RAM-only kernel needs its first device qualification. Old disk-backed paging results do not qualify zram. |
-| GNOME/GDM and normal zram policy | ARM64 cross-build complete | [Build record](desktop-consolidation-20261010.json). System, initramfs, bundle and EFI files build; 65 inspected desktop ELF files are ARM64. Desktop and zram have not been qualified on the device. |
+| GNOME/GDM and normal zram policy | ARM64 build and inspected runtime paths pass | [Runtime record](gnome-cross-runtime-20261010.json): 711 ELF files and 90 script checks, zero foreign ELF files; three helper CLI checks pass under QEMU. Normal and media bundles build. Desktop and zram need their first device qualification. |
 | Experimental H.264 decoder | Recorded polling implementation works for tested cases | [Decoder evidence](mt6797-vdec-v4l2/README.md), particularly trials 66–67. Progressive 8-bit I/P/B, Baseline/Main/High and tested multi-slice cases have exact pixel comparisons on their recorded 7.1.3 build. Production IRQ completion, shared hardware surfaces and the rebased module remain open. |
 | Decoder IRQ completion | Host candidate built | [IRQ build](mt6797-vdec-v4l2/irq-build-20261010.json). Strict ARM64 MODPOST and `W=1` pass. Actual delivered done IRQs are unqualified. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
@@ -40,6 +40,12 @@ The supported build is `nix build` / `nixosConfigurations.gemini`, composed by
 and U-Boot keep their own source repositories; extra source worktrees serve
 preserved diagnostics or the experimental media branch. New features belong
 in the maintained default build.
+
+[Board store cleanup](development-store-cleanup-20261010.json) removed 1,485
+unrooted obsolete kernel/system paths, all preserved on the host, freeing
+6.1 GiB of filesystem space. Accepted recovery, protected files, retained Nix
+outputs and boot entries are unchanged. The current media system is staged
+and rooted in the normal store; it has not been booted.
 
 The former 966-line chronological status log is preserved in
 [history](history/HARDWARE_STATUS-20261010-before-consolidation.md). Its dated
