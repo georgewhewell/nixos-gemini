@@ -173,7 +173,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		   const u8 *nal, size_t bytes, int predicted, int patterned,
 		   int expect_error, unsigned int timestamp, unsigned int sequence)
 {
-	u8 input[65408];
+	u8 input[130944];
 	if (fixture_directory) {
 		const char *fixture = !strcmp(name, "missing-reference") ? "pcm64-p" :
 			!strcmp(name, "motion-reference") ? "pcm64" : name;
@@ -191,7 +191,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		nal = input;
 	}
 	struct v4l2_ctrl_h264_sps sps = {
-		.profile_idc = 66, .level_idc = 10, .constraint_set_flags = 3,
+		.profile_idc = 66, .level_idc = width * height / 256 <= 99 ? 10 : 11, .constraint_set_flags = 3,
 		.chroma_format_idc = 1, .max_num_ref_frames = 1,
 		.pic_width_in_mbs_minus1 = width / 16 - 1, .pic_height_in_map_units_minus1 = height / 16 - 1,
 		.flags = V4L2_H264_SPS_FLAG_FRAME_MBS_ONLY | V4L2_H264_SPS_FLAG_DIRECT_8X8_INFERENCE,
@@ -287,7 +287,7 @@ int main(int argc, char **argv)
 		fixture_directory = argv[5];
 		width = strtoul(argv[6], NULL, 10);
 		height = strtoul(argv[7], NULL, 10);
-		if ((width != 64 && width != 128) || height < 64 || height > 128 || height % 32 ||
+		if (width < 64 || width > 320 || width % 16 || height < 64 || height > 256 || height % 32 ||
 		    (strcmp(argv[8], "mmap") && strcmp(argv[8], "export"))) {
 			fprintf(stderr, "Invalid test geometry or mapping mode\n"); return 2;
 		}

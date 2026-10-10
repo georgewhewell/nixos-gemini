@@ -22,15 +22,24 @@ fixtures, with zero decoder error/message words. Request completion and reuse,
 capture metadata, six open/stream/close contexts, missing-reference rejection
 before DMA and normal module unload passed. The supervisor's RTC/system checks,
 accepted recovery and strict kernel-journal audit also passed. These results
-apply to the archived trial-26 module, not arbitrary H.264 streams.
+apply to the archived trial-26 module, not arbitrary H.264 streams. Trial 27
+also passed twelve 64x64 frames including explicit motion, MMAP and exported
+queue mappings whose completed storage survives video-file close. At 64x96,
+intra pixels matched but inter pixels repeated row 63: the extension wrote
+width into the motion-compensation height word. That height is now corrected.
+Trial 27 unloaded normally and passed supervisor/recovery/journal checks.
 
 Current admission is progressive 8-bit 4:2:0 Baseline, one slice,
 I/P pictures, at most one short-term reference and disabled deblocking. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
-`V4L2_PIX_FMT_MM21`. The next build admits widths 64/128 and heights 64/96/128;
-only the previous fixed-64x64 build has hardware qualification so far. Queues
+`V4L2_PIX_FMT_MM21`. The next build admits widths 64..320 in steps of 16 and
+heights 64..256 in steps of 32; larger inter pictures remain unqualified.
+Its independent coherent allocations are 256 KiB each, with separate 128 KiB
+data and trailing guard regions. GStreamer's initial 320x240 probe can negotiate
+320x256; this does not establish GStreamer compatibility before a real pipeline
+passes. Queues
 use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
-buffer export is not yet hardware tested. Completion
+buffer export is hardware tested at 64x64. Completion
 uses a bounded workqueue poll because actual interrupt delivery is unqualified.
 It does not implement an encoder.
 

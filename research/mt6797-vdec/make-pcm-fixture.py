@@ -72,15 +72,15 @@ def main():
     parser.add_argument('--height', type=int, default=64)
     args = parser.parse_args()
     width, height = args.width, args.height
-    if width not in (64, 128) or height not in (64, 96, 128):
-        parser.error('Fixture geometry must be width 64/128 and height 64/96/128')
+    if width < 64 or width > 320 or width % 16 or height < 64 or height > 256 or height % 32:
+        parser.error('Fixture geometry must be width 64..320 in steps of 16 and height 64..256 in steps of 32')
     mb_width, mb_height = width // 16, height // 16
     if args.p_motion and not args.p_skip:
         parser.error('--p-motion requires --p-skip')
     sps = Bits()
     sps.put(66, 8)  # Baseline
     sps.put(0xc0, 8)  # Constraint sets 0 and 1
-    sps.put(10, 8)
+    sps.put(10 if mb_width * mb_height <= 99 else 11, 8)
     for value in (0, 0, 0, 0, 1):  # SPS id, frame/POC sizes, one reference
         sps.ue(value)
     sps.put(0)  # No gaps
@@ -116,7 +116,7 @@ def main():
     picture.ue(1)  # Deblocking disabled
     header_bits = 8 + len(picture.bits)  # From NAL header, excluding start code
     y = bytes(16 + (x + 2 * row) % 220 for row in range(height) for x in range(width))
-    u = bytes(64 + x + row for row in range(height // 2) for x in range(width // 2))
+    u = bytes(64 + (x + row) % 192 for row in range(height // 2) for x in range(width // 2))
     v = bytes(128 + (x + 2 * row) % 128 for row in range(height // 2) for x in range(width // 2))
     for mb_y in range(height // 16):
         for mb_x in range(width // 16):

@@ -15,7 +15,7 @@
 #include <media/videobuf2-vmalloc.h>
 #include "engine.h"
 
-#define INPUT_SIZE (SZ_64K - 128)
+#define INPUT_SIZE (SZ_128K - 128)
 
 struct decoder {
 	struct device *dev;
@@ -78,12 +78,12 @@ static int enumerate_format(struct file *file, void *priv, struct v4l2_fmtdesc *
 
 static int enumerate_size(struct file *file, void *priv, struct v4l2_frmsizeenum *size)
 {
-	if (size->index >= 6 || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
+	if (size->index >= 17 * 7 || (size->pixel_format != V4L2_PIX_FMT_H264_SLICE &&
 			    size->pixel_format != V4L2_PIX_FMT_MM21))
 		return -EINVAL;
 	size->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	size->discrete.width = size->index < 3 ? 64 : 128;
-	size->discrete.height = 64 + 32 * (size->index % 3);
+	size->discrete.width = 64 + 16 * (size->index / 7);
+	size->discrete.height = 64 + 32 * (size->index % 7);
 	return 0;
 }
 
@@ -119,8 +119,8 @@ static int try_format(struct file *file, void *priv, struct v4l2_format *format)
 	struct decode_file *ctx = file_context(file_to_v4l2_fh(file));
 	unsigned int width = ctx->width, height = ctx->height;
 	if (output_queue(format->type)) {
-		width = format->fmt.pix_mp.width <= 64 ? 64 : 128;
-		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, 128U), 32U);
+		width = ALIGN(clamp(format->fmt.pix_mp.width, 64U, 320U), 16U);
+		height = ALIGN(clamp(format->fmt.pix_mp.height, 64U, 256U), 32U);
 	}
 	return fill_format(format, width, height);
 }

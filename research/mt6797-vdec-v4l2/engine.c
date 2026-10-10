@@ -21,7 +21,7 @@
 #include "engine.h"
 #include "../mt6797-vdec/mt6797-h264-controls.h"
 
-#define DATA_SIZE SZ_64K
+#define DATA_SIZE SZ_128K
 #define ALLOC_SIZE (2 * DATA_SIZE)
 #define MAX_NAL (DATA_SIZE - 128)
 
@@ -320,8 +320,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	if (ret)
 		return ret;
 	if (job->sps.profile_idc != 66 ||
-	    (job->width != 64 && job->width != 128) ||
-	    job->height < 64 || job->height > 128 || job->height % 32 ||
+	    job->width < 64 || job->width > 320 || job->width % 16 ||
+	    job->height < 64 || job->height > 256 || job->height % 32 ||
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
 	    job->pps.flags & (V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE |
@@ -550,7 +550,11 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	SAVE(mc + 0x90, 4);
 	SAVE(mc + 0x768, (readl(mc + 0x768) & ~GENMASK(2, 0)) | 4);
 	SAVE(mc + 0x208, job->width);
-	SAVE(mc + 0x20c, job->width);
+	/* Public related-core definitions identify separate unrestricted-motion
+	 * picture width/height words. A width written as height clips references
+	 * below row 63 in the independently observed 64x96 inter-picture test.
+	 */
+	SAVE(mc + 0x20c, job->height);
 	SAVE(mc + 0x220, 1);
 	SAVE(mc + 0x224, lower_32_bits(picture->dma) >> 9);
 	SAVE(mc + 0x228, lower_32_bits(picture->dma + luma_size) >> 8);
@@ -604,7 +608,8 @@ cleanup:
 		!memchr_inv(input->cpu + job->bytes + sizeof(ending), 0,
 			    DATA_SIZE - job->bytes - sizeof(ending)) &&
 		!memchr_inv(input->cpu + DATA_SIZE, 0xa5, DATA_SIZE) &&
-		!memchr_inv(picture->cpu + DATA_SIZE, 0xd3, DATA_SIZE);
+		!memchr_inv(picture->cpu + luma_size * 3 / 2, 0xd3,
+			    ALLOC_SIZE - luma_size * 3 / 2);
 	for (i = PREDICTION; i < MEMORY_COUNT; i++)
 		if (memchr_inv(engine->memory[i].cpu + DATA_SIZE, 0xd3, DATA_SIZE))
 			status->guards_unchanged = false;
