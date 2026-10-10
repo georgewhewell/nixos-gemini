@@ -7,6 +7,14 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
+New development targets [Linux 7.2.9](../KERNEL_BASELINE.md). The current
+decoder and encoder resource modules compile against that kernel's matching
+configuration and generated `Module.symvers`, with strict MODPOST. The
+7.2.9 platform boot/RTC/paging/Nix profile passes, but these media modules have
+not been loaded on 7.2.9. The picture, error and lifetime results below qualify
+their recorded 7.1.3 builds. Exact build and platform evidence is in
+[`kernel-7.2.9.json`](../kernel-7.2.9.json).
+
 The current module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible in the listed one-slice cases, with up to 16
