@@ -1,7 +1,6 @@
-# Minimal NixOS stage 2 for the mainline MT6797 kernel.  Stage 1 supplies a
-# tmpfs root, a read-only SquashFS /nix/store, and p29 read-only at /gemian.
-# Recovery disables journal replay. The normal storage and boot modules add
-# persistent storage and enable the journal for boot-file installation.
+# NixOS stage 2 for the maintained MT6797 kernel. Stage 1 mounts persistent
+# home and the registered Nix store; the boot volume stays read-only until
+# the boot installer runs. Historical recovery uses its own frozen module.
 {
   config,
   pkgs,
@@ -17,36 +16,11 @@
       message = "geminiLeaseSelfAcceptToken must be a versioned 64-hex baseline capability";
     }
   ];
-  nixpkgs.overlays = [
-    (final: prev: {
-      util-linux = prev.util-linux.override {
-        nlsSupport = false;
-        ncursesSupport = false;
-        systemdSupport = false;
-        translateManpages = false;
-      };
-      # Use the same minimal libsystemd as PID 1. This supplies D-Bus socket
-      # activation and readiness notification without adding full systemd.
-      dbus = prev.dbus.override {
-        enableSystemd = true;
-        systemdMinimal = config.systemd.package;
-      };
-      # NixOS 23.05's swraid module references these paths even though this
-      # system has no software RAID and the initramfs is supplied separately.
-      mdadm = prev.runCommand "mdadm-disabled" {} ''
-        mkdir -p $out/sbin
-        cp ${final.writeShellScript "mdadm-disabled" "exit 1"} $out/sbin/mdadm
-        ln -s mdadm $out/sbin/mdmon
-      '';
-    })
-  ];
-
   # LK supplies the Android-v0 container; the custom stage 1 supplies the
   # kernel, DTB, and initramfs.
   boot.kernel.enable = false;
   boot.initrd.enable = false;
   boot.hardwareScan = false;
-  boot.bootspec.enable = false;
   boot.loader.grub.enable = false;
   boot.loader.generic-extlinux-compatible.enable = false;
   system.boot.loader.kernelFile = "Image.gz-dtb";
@@ -127,18 +101,6 @@
   };
   services.getty.autologinUser = "root";
 
-  # NixOS 23.05's generated unit set expects logind and its PAM helper.  Keep
-  # those small pieces plus a socket-activated D-Bus daemon, while omitting the rest
-  # of the full systemd feature set.
-  systemd.package = pkgs.systemdMinimal.override {
-    bashInteractive = pkgs.bash;
-    withLogind = true;
-    withPam = true;
-    withKexectools = false;
-    withTimesyncd = true;
-  };
-  # The maintained kernel and paging policy use the cgroup v2 memory controller.
-  systemd.enableUnifiedCgroupHierarchy = true;
   # Stock LK prepends the vendor kernel's "slub_max_order=0 slub_debug=OFZPU".
   # Later arguments win: no SLUB debugging and the default maximum order.
   boot.kernelParams = [ "slub_debug=-" "slub_max_order=3" ];
@@ -366,44 +328,28 @@
   };
 
   security.audit.enable = false;
-  security.polkit.enable = false;
   security.sudo.enable = false;
-  services.nscd.enable = false;
   services.logrotate.enable = false;
-  services.udisks2.enable = false;
   services.lvm.enable = false;
   services.timesyncd.enable = true;
   services.journald.extraConfig = "Storage=volatile";
   services.resolved.enable = false;
-  systemd.packages = lib.mkForce [pkgs.dbus];
+  systemd.packages = [pkgs.dbus];
   systemd.sockets.dbus.wantedBy = ["sockets.target"];
   boot.enableContainers = false;
   programs.command-not-found.enable = false;
   programs.less.enable = lib.mkForce false;
   programs.nano.syntaxHighlight = false;
-  environment.noXlibs = true;
   documentation.enable = false;
   documentation.man.enable = false;
   documentation.nixos.enable = false;
   # Nix itself is enabled by storage.nix (writable store on p32).
   system.disableInstallerTools = true;
-  xdg.icons.enable = false;
-  xdg.mime.enable = false;
-  xdg.sounds.enable = false;
-  fonts.fontconfig.enable = false;
-  i18n.defaultLocale = "C";
-  i18n.supportedLocales = lib.mkForce [];
-  i18n.glibcLocales = pkgs.runCommand "empty-locale-archive" {} ''
-    mkdir -p $out/lib/locale
-    touch $out/lib/locale/locale-archive
-  '';
-  system.nssModules = lib.mkForce [];
-  environment.defaultPackages = lib.mkForce [];
-  # Keep the runtime small, but retain the tools needed to diagnose this
-  # bring-up without building another single-purpose image. The selected
-  # systemd package is already in the closure for PID 1; adding it here merely
-  # exposes systemctl/journalctl through the system profile.
-  environment.systemPackages = lib.mkForce ([
+  fonts.fontconfig.enable = true;
+  i18n.defaultLocale = "en_US.UTF-8";
+  environment.defaultPackages = [];
+  # Diagnostic tools are ordinary additions to the shared system profile.
+  environment.systemPackages = [
     pkgs.busybox
     pkgs.btop
     config.systemd.package
@@ -428,9 +374,9 @@
     pkgs.evtest
   ]
   # bluetoothctl, btmgmt, btmon and the hci tools when Bluetooth is enabled.
-  ++ lib.optional config.hardware.bluetooth.enable config.hardware.bluetooth.package);
+  ++ lib.optional config.hardware.bluetooth.enable config.hardware.bluetooth.package;
   environment.binsh = "${pkgs.bash}/bin/sh";
-  environment.shells = lib.mkForce ["${pkgs.busybox}/bin/ash"];
+  environment.shells = ["${pkgs.busybox}/bin/ash"];
 
   system.stateVersion = "23.05";
 }

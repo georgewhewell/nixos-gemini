@@ -19,6 +19,20 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
+    def test_gnome_health_requires_gdm_and_a_verified_session(self):
+        r = m.configure()
+        original = r.qualify.SNAPSHOT
+        selected = r.qualify.desktop_snapshot(original, 'gnome')
+        self.assertIn('systemctl is-active display-manager gemini-gnome-qualify ', selected)
+        self.assertNotIn('systemctl is-active gemini-desktop ', selected)
+        self.assertIn('unattended_recovery=healthy', selected)
+        self.assertIn('boot_sha256=', selected)
+        self.assertEqual(r.qualify.desktop_snapshot(selected, 'gnome'), selected)
+        self.assertEqual(r.CANDIDATE_DESKTOP, 'gnome')
+        self.assertEqual(r.PAGING_POLICY, 'zram')
+        with self.assertRaises(RuntimeError):
+            r.qualify.desktop_snapshot(original.replace('systemctl is-active ', ':'), 'gnome')
+
     def test_native_startup_evidence_survives_parking_and_rejects_failed_boot(self):
         boot = '6b06926a-a9ab-4367-beec-c95a952bf376'
         proof = ('cpu8_start=requested\n'
@@ -191,8 +205,10 @@ class Profile(unittest.TestCase):
             names=('BUNDLE','KERNEL','SYSTEM','STORE_SHA','STORE_SIZE','BOOT_SHA','NOTES_SHA')
             original={key:getattr(m.p,key) for key in names}
             try:
-                with mock.patch.object(m.p.f.q.r.power_kernel,'notes_sha',return_value='b'*64):
+                with mock.patch.object(m.p.f.q.r.power_kernel,'notes_sha',return_value='b'*64), \
+                        mock.patch.object(m.zram, 'probe_identity') as paging_identity:
                     m.artifacts(root)
+                    paging_identity.assert_called_once_with(m.p)
                     self.assertEqual(m.p.BUNDLE,root)
                     self.assertEqual(m.p.STORE_SHA,sha)
                     self.assertEqual(m.p.store_profile(m.p.f.q.r.efi_linux).bundle,root)

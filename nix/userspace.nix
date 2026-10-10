@@ -50,6 +50,10 @@
         --input-header ${inputHeader} \
         --output reference.h
       cmp reference.h ${./keyboard/reference.h}
+      python3 ${./keyboard/test-registry.py} \
+        ${buildPkgs.libxkbcommon}/lib \
+        ${desktopKeyboard.data}/share/X11/xkb \
+        ${./keyboard/reference.h}
       python3 ${./keyboard/test-weston.py} \
         ${desktopHostUserspace.weston}/bin/weston \
         ${desktopHostKeyboard.check}/bin/gemini-desktop-keyboard-check \

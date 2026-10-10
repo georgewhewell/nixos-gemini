@@ -1,5 +1,0 @@
-# Explicit full-NixOS MT6351 FGADC component.  Its DT overlay carries the
-# reviewed calibration and initialization opt-in; this fragment adds no
-# capacity, charger, OTG, or interrupt policy.
-CONFIG_POWER_SUPPLY=y
-CONFIG_BATTERY_MT6351_FGADC=y

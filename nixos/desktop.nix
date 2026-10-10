@@ -113,7 +113,7 @@ in {
     hashedPassword = "!";
     home = "/home/gemini";
     createHome = true;
-    shell = "${pkgs.busybox}/bin/ash";
+    shell = lib.mkDefault "${pkgs.busybox}/bin/ash";
     extraGroups = ["video" "render" "audio"];
   };
   users.groups.render = {};

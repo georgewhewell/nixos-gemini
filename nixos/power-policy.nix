@@ -1,4 +1,4 @@
-# Lid, suspend and hibernation policy (handoff/power-policy.md).
+# Lid and suspend policy. Normal paging is RAM-only; hibernation is disabled.
 #
 # - Lid closed: Weston forces the internal DSI output off at once (patched
 #   libweston, nix/desktop-userspace.nix); the panel, its backlight and the
@@ -9,9 +9,7 @@
 #   on the lid behind a "handle-lid-switch" inhibitor; on this board the
 #   daemon starts with multi-user.target (~300 s), after logind's 2 min
 #   holdoff, and a closed lid suspended the device mid-qualification.
-# - Sleep is s2idle ("freeze"), the only state PSCI v0.2 offers here.  With
-#   hibernation enabled the lid action is suspend-then-hibernate: an RTC alarm
-#   after HibernateDelaySec wakes the system, which then hibernates.
+# - Sleep is s2idle ("freeze"), the only state PSCI v0.2 offers here.
 # - Opening the lid wakes the system (gpio-keys wakeup-source, lid-open edge
 #   only).  The power key and the RTC alarm are the other wake sources.
 # - No sleep while a USB host is attached to the MTU3 gadget (the recovery
@@ -26,13 +24,6 @@
   ...
 }: let
   cfg = config.gemini.powerPolicy;
-  hib = cfg.hibernation;
-
-
-  sleepAction =
-    if hib.enable
-    then "SuspendThenHibernate"
-    else "Suspend";
 
   sleepInhibit = pkgs.stdenv.mkDerivation {
     pname = "gemini-sleep-inhibit";
@@ -66,62 +57,25 @@ in {
         UDC whose attached host blocks sleep (the MTU3 left-port gadget).
       '';
     };
-    hibernation = {
-      enable = lib.mkEnableOption ''
-        suspend-then-hibernate on the lid.  The image goes to the p34 swap
-        partition (nixos/storage.nix), which Stage 1 always checks for an
-        image before the first eMMC mount.  Enable only after the power-off
-        and A72 hotplug checks in handoff/power-policy.md'';
-      delay = lib.mkOption {
-        type = lib.types.str;
-        default = "24h";
-        description = "HibernateDelaySec= for suspend-then-hibernate.";
-      };
-    };
   };
 
   config = {
-    assertions = [
-      {
-        assertion = !hib.enable || config.gemini.storage.enable;
-        message = "gemini.powerPolicy.hibernation needs gemini.storage (the p34 swap partition)";
-      }
-    ];
-
-    # suspend-then-hibernate needs systemd v254's battery handling: v253
-    # treats "no battery with a readable capacity" as a low battery and
-    # hibernates at once.  The MT6351 fuel gauge reports no capacity.
-    nixpkgs.overlays = [
-      (final: prev: {
-        systemdMinimal = prev.systemdMinimal.overrideAttrs (old: {
-          patches = (old.patches or []) ++ [
-            ../patches/systemd/0001-sleep-config-do-not-treat-an-unreadable-or-absent-ba.patch
-          ];
-        });
-      })
-    ];
-
     services.logind = {
-      lidSwitch = "ignore";
-      lidSwitchExternalPower = "ignore";
-      # "Docked" means an external display or dock; the Gemini has neither.
-      lidSwitchDocked = "ignore";
-      extraConfig = ''
-        # gemini-sleep-inhibit owns the lid; see the header comment.
-        HoldoffTimeoutSec=2min
-      '';
+      settings.Login = {
+        HandleLidSwitch = "ignore";
+        HandleLidSwitchExternalPower = "ignore";
+        HandleLidSwitchDocked = "ignore";
+        HoldoffTimeoutSec = "2min";
+      };
     };
 
-    systemd.sleep.extraConfig = ''
-      AllowSuspend=yes
-      AllowHibernation=${lib.boolToString hib.enable}
-      AllowSuspendThenHibernate=${lib.boolToString hib.enable}
-      AllowHybridSleep=no
-      SuspendState=freeze
-      # arm64 has no platform hibernation mode.
-      HibernateMode=shutdown
-      HibernateDelaySec=${hib.delay}
-    '';
+    systemd.sleep.settings.Sleep = {
+      AllowSuspend = true;
+      AllowHibernation = false;
+      AllowSuspendThenHibernate = false;
+      AllowHybridSleep = false;
+      SuspendState = "freeze";
+    };
 
 
     systemd.services.gemini-sleep-inhibit = {
@@ -136,7 +90,7 @@ in {
           "--lid-grace"
           (toString cfg.lidSuspendDelaySec)
           "--sleep-action"
-          sleepAction
+          "Suspend"
           "--udc"
           cfg.usbDeviceController
           "--accepted-file"

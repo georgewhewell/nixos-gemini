@@ -24,7 +24,11 @@ they do not qualify a rebased kernel. Historical reproduction packages retain
 their original version pins. Uncommitted allocator diagnostics in the original
 kernel checkout are preserved separately and are not part of this build.
 
-The current port source is `5fb8876d52f20cf79d8618c675d478633b052fc5`.
+The hardware-qualified port source is `5fb8876d52f20cf79d8618c675d478633b052fc5`.
+Current development pins `6a338355fefbc5ec31baee53f7ad22ca9098111c`, which
+enables built-in LZ4 zram and disables both zswap and zram writeback. The new
+configuration has built successfully, but has not been boot-qualified. The
+older paging evidence exercised eMMC-backed swap and does not qualify zram.
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the
@@ -96,7 +100,10 @@ Its [Mesa 26.2.2 polygon-list patch](https://github.com/cjdell/gemini-nixos/blob
 is a useful public lead for Mali-T880 geometry corruption: it maps the tiler
 polygon list for CPU access and clears the entire list before reuse. Our current
 Mesa package does not carry that patch. This observation has not been reproduced
-or qualified on our board, and no code has been imported from that project.
+or qualified on our board, and no code has been imported from that project. Its GNOME keyboard registry
+work also highlighted the need to register our existing layout in the XKB XML
+registry. Our independent implementation resolves `gemini+us` through
+libxkbregistry and matches all 416 captured key combinations in the host check.
 
 The completed platform trial and strict recovery audit are recorded in
 [`kernel-7.2.9.json`](kernel-7.2.9.json), including exact source, configuration,

@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=5fb8876d52f20cf79d8618c675d478633b052fc5";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=6a338355fefbc5ec31baee53f7ad22ca9098111c&shallow=1";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -113,8 +113,22 @@
       desktop = gemini.userspace.desktopProtocolCheck;
       keyboard = gemini.userspace.desktopKeyboardProtocolCheck;
       ssh = gemini.buildPkgs.runCommand "mainline-sshd-pam-session-check" {} ''
-        grep -Fqx 'session required pam_unix.so' ${gemini.system.config.environment.etc."pam.d/sshd".source}
-        ! grep -Fq 'pam_systemd.so' ${gemini.system.config.environment.etc."pam.d/sshd".source}
+        pam=${gemini.buildPkgs.writeText "gemini-sshd-pam" gemini.system.config.security.pam.services.sshd.text}
+        grep -Eq '^account required /nix/store/[^ ]+/lib/security/pam_unix\.so( |$)' "$pam"
+        grep -Eq '^session required /nix/store/[^ ]+/lib/security/pam_unix\.so( |$)' "$pam"
+        grep -Eq '^session optional /nix/store/[^ ]+/lib/security/pam_systemd\.so( |$)' "$pam"
+        touch "$out"
+      '';
+      zram = gemini.buildPkgs.runCommand "gemini-zram-policy-check" {
+        nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.stdenv.cc];
+      } ''
+        mkdir tools
+        cp ${./tools/qualify-zram.py} tools/qualify-zram.py
+        cp ${./tools/qualify-swap-io.py} tools/qualify-swap-io.py
+        cp ${./tools/test-zram-paging.py} tools/test-zram-paging.py
+        python3 tools/test-zram-paging.py
+        cc -std=gnu11 -O2 -Wall -Wextra -Werror ${./nix/gemini-zram-probe.c} -o probe
+        ./probe --self-test
         touch "$out"
       '';
     };

@@ -75,8 +75,9 @@ class Startup(unittest.TestCase):
         self.assertIn('ConditionPathExists=/run/gemini-rtc-startup-'+BOOT+'/allow-save',script)
         with self.assertRaises(ValueError): s.policy('shell; text')
 
-    def test_only_implemented_diagnostics_are_available(self):
-        for args in (dict(pm_test='devices'),dict(cycle=True)):
+    def test_diagnostics_remain_mutually_exclusive(self):
+        for args in (dict(watchdog=True, pm_test='devices'), dict(watchdog=True, cycle=True),
+                     dict(pm_test='devices', cycle=True), dict(pm_test='not-a-stage')):
             with self.assertRaises(ValueError): m.configure(**args)
 
     def test_watchdog_runs_after_startup_and_clock_checks_without_alarm_sequence(self):
@@ -98,7 +99,7 @@ class Startup(unittest.TestCase):
                     mock.patch.object(m.rtc,'install',side_effect=wrap('alarms')), \
                     mock.patch.object(m.p.watchdog_expiry,'trigger',side_effect=lambda *a:events.append('watchdog')):
                 self.assertEqual(m.configure(watchdog=watchdog).candidate_return([],{},Path('/trial'),'profile'),{'boot_id':BOOT})
-                base.assert_called_once_with()
+                base.assert_called_once_with(False, None, False)
             self.assertEqual(events,['health','usb','startup','clock','watchdog' if watchdog else 'alarms'])
             self.assertEqual(runner.watchdog_expiry_requested,watchdog)
 

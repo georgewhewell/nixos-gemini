@@ -1,26 +1,7 @@
 { buildPkgs, armPkgs }:
 let
-  # Keep the same Mesa revision and Panfrost renderer, but do not transfer
-  # unrelated GPU/Vulkan/software drivers into the bounded RAM test boot.
-  mesa = (armPkgs.mesa.override {
-    galliumDrivers = [ "panfrost" ];
-    vulkanDrivers = [];
-    vulkanLayers = [];
-    eglPlatforms = [];
-    withValgrind = false;
-  }).overrideAttrs (old: {
-    # nixpkgs enables optional Meson features globally; these two require
-    # X11 and must be explicitly disabled for the headless EGL test.
-    mesonFlags = old.mesonFlags ++ [
-      "-Dauto_features=auto" "-Dxlib-lease=disabled" "-Dglx=disabled"
-      "-Dgallium-va=disabled" "-Dteflon=false"
-    ];
-    # Mesa's multi-output package still declares this output when no D3D12
-    # frontend is selected. Publish an empty output, not a missing path.
-    postInstall = old.postInstall + ''
-      mkdir -p "$spirv2dxil"
-    '';
-  });
+  # The smoke test, Weston qualification and GNOME share one Mesa build.
+  mesa = import ./mesa.nix {pkgs = armPkgs;};
   smoke = armPkgs.stdenv.mkDerivation {
     pname = "gemini-gpu-render-smoke";
     version = "1";

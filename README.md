@@ -1,11 +1,19 @@
 # NixOS on the Planet Computers Gemini PDA
 
 This branch packages Linux 7.2.9 and NixOS for the MT6797X Gemini.
-The 7.2.9 port passes the kernel build, host checks and supervised device
-boot/RTC/paging/Nix checks. The accepted installed baseline remains 7.1.3. See the
+The earlier 7.2.9 image passed supervised device boot/RTC/paging/Nix checks.
+Current development adds GNOME and RAM-only paging; those changes are not yet
+qualified on the device. The installed baseline remains 7.1.3. See the
 [kernel baseline](research/KERNEL_BASELINE.md) for source and media API details.
 The default build includes EFI boot support, a persistent Nix daemon,
-desktop keyboard layout, zswap writeback, watchdog and MT6351 RTC fixes.
+GNOME Wayland desktop, Gemini keyboard layout, RAM-only zram swap, watchdog
+and MT6351 RTC fixes.
+The normal configuration enables no eMMC or SD swap and no zram writeback
+device. Earlier qualified images used zswap backed by the eMMC p34 partition;
+that historical policy is being replaced, and its old paging results do not
+qualify the new RAM-only policy. The running board currently has physical swap
+disabled and its swap unit masked in RAM. This mitigation lasts until reboot;
+the installed old image has not been replaced.
 Hardware enablement is still in progress; see [hardware status](research/HARDWARE_STATUS.md).
 Camera and vibrator are outside the owner's completion scope.
 
@@ -60,17 +68,20 @@ build. Historical experiments and the vendor 3.18 system are available under
 recorded images and layouts. Use the matching historical revision when
 reproducing an old trial; new features belong in the default system.
 
-The existing device can test the normal bundle with automatic M69 recovery:
+Normal boot trials use the durable supervisor and an accepted recovery image:
 
 ```sh
 python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s) --execute
 ```
 
 Omit `--execute` for a read-only preflight, using a fresh output directory.
-The command checks RTC startup/alarms, paging, an ordinary Nix build and retained
-data before returning to recovery. It records negotiated USB link speed at both
-the gadget and its host interface in `usb-link.json`. It uses this device's fixed-swap layout and
-existing host USB/SSH setup. Copy the system closure into the installed Nix
+The command checks RTC startup/alarms, RAM-only zram paging, an ordinary Nix
+build and retained data before returning to recovery. It refuses recovery
+baselines that enable physical swap. The currently installed 7.1.3 recovery
+image must be migrated before these trials can resume. It records negotiated USB link speed at both
+the gadget and its host interface in `usb-link.json`. The existing p34 partition
+is preserved but remains unused; tests reject eMMC or SD swap. Trials retain
+the existing host USB/SSH setup. Copy the system closure into the installed Nix
 store before testing. From recovery, that store is accessible to Nix as
 `local?root=/persist/nixos`; its database and files are separate from recovery's
 overlay. Historical image trials still accept `--reclaim-cache`.
@@ -102,8 +113,9 @@ the ext4 journal enabled throughout. Recovery retains its original `noload`
 mount and cannot run this installer. `gemini-boot-install --system SYSTEM
 --check` verifies an installed default without writes. These generation changes
 have passed host builds/tests; the device migration is being tested.
-The latest device trial recovered automatically after an allocator panic;
-normal generation installation is not yet verified on hardware.
+The earlier installation trials include automatic recovery after an allocator
+panic. Subsequent boot and update results describe their exact recorded images;
+they do not qualify the new GNOME or RAM-only paging configuration.
 
 To exercise installation during the supervised boot test, add
 `--install-efi /path/to/efiBootFiles`. For normal generations the runner invokes
@@ -132,7 +144,8 @@ mtkclient now ends idle USB scans before the outer transfer
 deadline, preserving time for a late-arriving device to finish.
 
 Working paths include the Weston/Panfrost desktop, touch, ten CPUs, Wi-Fi,
-audio, USB host/gadget, eMMC, persistent home/Nix storage and fixed 5 GiB swap.
+audio, USB host/gadget, eMMC and persistent home/Nix storage. The unused 5 GiB
+p34 partition remains on disk; the normal configuration does not activate it.
 Native RTC startup, UTC write/read, awake alarms and hardware watchdog recovery
 pass. Display scanout still bypasses IOMMU translation. USB is currently
 configured and observed at USB2 speeds.

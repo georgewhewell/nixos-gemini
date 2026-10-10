@@ -1,16 +1,7 @@
 { pkgs, ... }:
 {
-  # wpa_supplicant 2.10 omits NL80211_ATTR_SOCKET_OWNER from CONNECT unless the
-  # driver offers control-port RX, so the kernel refuses SAE external
-  # authentication for mt6797-wifi. Backport the 2.11 behaviour; WPA2-PSK
-  # connects never use the connect handle and are unchanged.
-  nixpkgs.overlays = [
-    (final: prev: {
-      wpa_supplicant = prev.wpa_supplicant.overrideAttrs (old: {
-        patches = (old.patches or []) ++ [../patches/wpa_supplicant-2.10-sae-connect-owner.patch];
-      });
-    })
-  ];
+  # Current wpa_supplicant includes the SAE connect-owner fix; the old
+  # 2.10 backport belongs only to the frozen recovery package set.
 
   # Type=simple becomes active while the worker waits for acceptance. An
   # After=baseline-self-accept edge would cycle with its boot-health check.

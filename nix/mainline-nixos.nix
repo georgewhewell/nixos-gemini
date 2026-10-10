@@ -15,7 +15,7 @@
   kernelLeaseSelfAcceptToken ? null,
   stage2BaselineAcceptScript ? null,
   leaseSelfAcceptToken ? null,
-  # The registered store and home live on p32; p34 provides swap/resume.
+  # The registered store and home live on p32; swap is RAM-only zram.
   persistentStorage,
 }:
 assert builtins.isInt watchdogLeaseSeconds;
@@ -41,38 +41,6 @@ let
   # indentation from interpolated text, so it is written at its final
   # column.
   storageFunctions = ''
-    hibernate_resume() {
-      # Runs before any filesystem on the eMMC is mounted.  Writing the
-      # p34 "swap" device number to /sys/power/resume makes the kernel look
-      # for a hibernation signature.  With a valid image it restores the
-      # saved system and never returns; otherwise p34 is only read and boot
-      # continues.  The watchdog lease is already running; the restored
-      # kernel restarts the watchdog in its restore_noirq phase.
-      node=/sys/class/block/''${emmc_device##*/}p34
-      if ! grep -Fqx 'PARTNAME=swap' "$node/uevent" 2>/dev/null; then
-        log "hibernate-resume=skipped reason=no-p34-swap"
-        return 0
-      fi
-      devno=$(cat "$node/dev")
-      # mtu3 refuses to quiesce while the USB gadget is attached to a host,
-      # which aborts the jump into the image (-EBUSY). Detach only when the
-      # swap header carries the swsusp signature, and reattach if we return.
-      udc=/sys/class/udc/11271000.usb/soft_connect
-      sig=$(dd if="''${emmc_device}p34" bs=1 skip=4086 count=10 2>/dev/null | tr -d '\000')
-      detached=no
-      if [ "$sig" = S1SUSPEND ] && [ -w "$udc" ]; then
-        printf disconnect > "$udc" && detached=yes
-        sleep 1
-      fi
-      log "hibernate-resume=checking device=''${emmc_device}p34 devno=$devno signature=''${sig:-none} gadget_detached=$detached"
-      if printf '%s\n' "$devno" > /sys/power/resume; then
-        log "hibernate-resume=no-image"
-      else
-        log "hibernate-resume=write-failed devno=$devno"
-      fi
-      [ "$detached" = no ] || printf connect > "$udc" || true
-    }
-
     mount_persistent_storage() {
       node=/sys/class/block/''${emmc_device##*/}p32
       data=''${emmc_device}p32
@@ -438,7 +406,6 @@ let
     [ -n "$emmc_device" ] || fail "p29-missing"
     p29="''${emmc_device}p29"
     [ -b "$p29" ] || fail "p29-missing"
-    hibernate_resume
     mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian \
       || fail "p29-mount"
     mounted=$(awk '$2 == "/mnt/gemian" { print $1 ":" $3 ":" $4; exit }' /proc/mounts)
@@ -533,14 +500,13 @@ let
       ! grep -Fq 'display_gate=/sys/devices/platform/14000000.syscon/activate_drm' root/init
     ''}
     cp "$e2fsprogs/bin/e2fsck" "$e2fsprogs/bin/dumpe2fs" root/bin/
-    # Resume runs before the first eMMC mount; the persistent store is
-    # mounted before selecting the generation and running switch_root.
-    resume_line=$(grep -n -Fx 'hibernate_resume' root/init | tail -n 1 | cut -d: -f1)
+    # The persistent store is mounted before selecting the generation.
+    # No flash resume or swap setup belongs in the normal initramfs.
+    ! grep -Fq /sys/power/resume root/init
     mount_line=$(grep -n -F 'mount -t ext4 -o ${bootMountOptions} "$p29" /mnt/gemian' root/init | tail -n 1 | cut -d: -f1)
     persist_line=$(grep -n -Fx 'mount_persistent_storage' root/init | tail -n 1 | cut -d: -f1)
     switch_line=$(grep -n -F 'exec switch_root' root/init | tail -n 1 | cut -d: -f1)
-    test -n "$resume_line" && test -n "$mount_line" && test -n "$persist_line"
-    test "$resume_line" -lt "$mount_line"
+    test -n "$mount_line" && test -n "$persist_line"
     test "$persist_line" -lt "$switch_line"
     bash -n root/init
     bash -n root/bin/usb-host-net root/bin/usb-host-net-udhcpc \
@@ -632,7 +598,7 @@ let
       }"
       echo "store-provision=disabled"
       echo "power-observe-preflight=BQ2589x sysfs+dmesg, no charger writes; watchdog lease unchanged"
-      echo "persistent-storage=p32 ${persistentStorage.dataLabel} for /home and registered /nix; p34 swap"
+      echo "persistent-storage=p32 ${persistentStorage.dataLabel} for /home and registered /nix; RAM-only zram swap"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \
         ${serviceabilityDtb}/gemini.dtb \

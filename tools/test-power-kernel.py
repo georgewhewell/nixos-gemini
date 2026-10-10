@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Reject old-kernel evidence and unsafe power-policy/owner state."""
 import importlib.util
+import os
 from pathlib import Path
 import unittest
 
+# The handoff fixtures below describe the direct-boot M69 image.
+os.environ['GEMINI_ACCEPTED_BASELINE'] = str(Path(__file__).resolve().parents[1]/'research/baselines/m69.json')
 spec = importlib.util.spec_from_file_location('recovery', Path(__file__).with_name('qualify-uboot-recovery.py'))
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)

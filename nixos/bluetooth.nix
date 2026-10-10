@@ -1,34 +1,7 @@
 # MT6797 CONSYS Bluetooth over the aggregate's full-STP channel 0 (M41).
 { lib, pkgs, geminiConnectivityKernel, ... }:
 let
-  # nixpkgs 23.05 wraps bluez's Python D-Bus test scripts with dbus-python and
-  # pygobject3. Their cross build needs gobject-introspection under qemu and a
-  # build-platform dbus that fails to link here. bluetoothd, bluetoothctl,
-  # btmgmt and the deprecated hci tools use none of them, so skip the wrap.
-  # libical's GObject introspection likewise needs qemu to cross-build, and
-  # bluez only links its C library.
-  bluez = (pkgs.bluez.override {
-    libical = pkgs.libical.override {withIntrospection = false;};
-  }).overrideAttrs (old: {
-    buildInputs = lib.remove pkgs.python3 old.buildInputs;
-    nativeBuildInputs =
-      lib.filter (p: !(lib.hasPrefix "wrap-python" (p.name or ""))) old.nativeBuildInputs;
-    postInstall = ''
-      mkdir -p $test
-      mkdir $out/sbin
-      ln -s ../libexec/bluetooth/bluetoothd $out/sbin/bluetoothd
-      ln -s ../libexec/bluetooth/obexd $out/sbin/obexd
-      mkdir $out/etc/bluetooth
-      ln -s /etc/bluetooth/main.conf $out/etc/bluetooth/main.conf
-      ln -s /etc/bluetooth/input.conf $out/etc/bluetooth/input.conf
-      ln -s /etc/bluetooth/network.conf $out/etc/bluetooth/network.conf
-      for files in `find tools/ -type f -perm -755`; do
-        filename=$(basename $files)
-        install -Dm755 tools/$filename $out/bin/$filename
-      done
-      install -Dm755 attrib/gatttool $out/bin/gatttool
-    '';
-  });
+  bluez = pkgs.bluez;
   tools = pkgs.lib.makeBinPath [pkgs.coreutils pkgs.gnugrep pkgs.gnused pkgs.kmod pkgs.util-linux bluez];
   start = pkgs.writeShellScript "gemini-bluetooth-start" ''
     set -eu

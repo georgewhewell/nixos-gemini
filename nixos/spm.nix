@@ -25,6 +25,6 @@ let
     echo 'spm=loaded-9-of-9-pcm-images'
   '';
 in {
-  # mainline-configuration.nix forces the system package list; it adds this.
+  # The shared system profile exposes this diagnostic helper.
   system.build.geminiSpmLoad = load;
 }

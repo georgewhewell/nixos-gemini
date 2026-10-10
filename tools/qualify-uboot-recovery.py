@@ -365,7 +365,8 @@ def snapshot(ssh):
 def candidate_snapshot(ssh, before, profile):
     if profile not in LINUX_PROFILES:
         raise ValueError('Candidate Linux checks require a pinned Linux handoff profile')
-    result = dict(line.split('=', 1) for line in qualify.run(ssh + [qualify.SNAPSHOT]).splitlines())
+    script = qualify.desktop_snapshot(qualify.SNAPSHOT, globals().get('CANDIDATE_DESKTOP'))
+    result = dict(line.split('=', 1) for line in qualify.run(ssh + [script]).splitlines())
     expected = dict(before, boot_sha256=PROFILES[profile][1],
                     system=candidate_system(before, profile))
     qualify.verify_return(expected, result)
@@ -635,13 +636,22 @@ def keep_candidate(directory, profile, before, middle, ssh, owner_unit, net_unit
     kept = candidate_snapshot(ssh, before, profile)
     if kept['boot_id'] != middle['boot_id']:
         raise RuntimeError('Candidate rebooted while the supervisor stood down')
+    if globals().get('PAGING_POLICY') == 'zram':
+        qualify.run(ssh + ['test ! -e /sys/module/zswap'])
+        shrinker = 'absent'
+    else:
+        shrinker = qualify.run(ssh + ['cat /sys/module/zswap/parameters/shrinker_enabled']).strip()
     baseline = dict(name=directory.name, image=str(Path(image).resolve(strict=True)), boot_sha256=sha,
                     system=kept['system'], store=qualify.run(ssh + ['test -f /nix/store/.gemini-system && echo m69-overlay || echo normal']).strip(),
-                    zswap_shrinker=qualify.run(ssh + ['cat /sys/module/zswap/parameters/shrinker_enabled']).strip(),
+                    zswap_shrinker=shrinker,
                     boot='uboot-efi' if handoff_tree(ssh).get(HANDOFF_MARKER) == b'efi\0'.hex() else 'direct',
                     rtc_epoch='native' if abs(int(qualify.run(ssh + ['cat /sys/class/rtc/rtc0/since_epoch']).strip())
                                               - time.time()) <= 10 else 'm69-legacy',
                     previous=BASELINE['name'])
+    if globals().get('PAGING_POLICY') == 'zram':
+        baseline['paging_policy'] = 'zram'
+    if globals().get('CANDIDATE_DESKTOP'):
+        baseline['desktop'] = CANDIDATE_DESKTOP
     if qualify.accepted_digest(Path(baseline['image'])) != sha:
         raise RuntimeError('Kept image differs from the qualified candidate')
     qualify.save(directory, 'promoted-baseline.json', baseline)

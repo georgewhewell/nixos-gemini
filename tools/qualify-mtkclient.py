@@ -57,8 +57,20 @@ def run(argv, **kwargs):
                           timeout=25, **kwargs).stdout
 
 
+def desktop_snapshot(script, desktop=None):
+    if (desktop or BASELINE.get('desktop')) == 'gnome':
+        old = 'systemctl is-active gemini-desktop gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
+        new = 'systemctl is-active display-manager gemini-gnome-qualify gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
+        if script.count(new) == 1 and old not in script:
+            return script
+        if script.count(old) != 1:
+            raise RuntimeError('Desktop health guard changed; review the GNOME adapter')
+        script = script.replace(old, new)
+    return script
+
+
 def snapshot(ssh):
-    result = dict(line.split('=', 1) for line in run(ssh + [SNAPSHOT]).splitlines())
+    result = dict(line.split('=', 1) for line in run(ssh + [desktop_snapshot(SNAPSHOT)]).splitlines())
     if (result.get('boot_sha256') != ACCEPTED_BOOT or
             result.get('system') != ACCEPTED_SYSTEM or result.get('healthy') != 'yes'):
         raise RuntimeError('Gemini is not on the healthy accepted baseline ('+BASELINE['name']+')')

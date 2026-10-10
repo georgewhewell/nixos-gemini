@@ -32,7 +32,7 @@
     source = linux-gemini;
   };
   dtb = import ./dtb.nix {inherit buildPkgs kernel;};
-  system = nixpkgs-old.lib.nixosSystem {
+  system = nixpkgs.lib.nixosSystem {
     system = buildSystem;
     modules = [
       ../nixos/mainline-configuration.nix
@@ -46,6 +46,7 @@
       ../nixos/storage.nix
       ../nixos/boot.nix
       ../nixos/desktop.nix
+      ../nixos/gnome.nix
       ../nixos/m39.nix
       ../nixos/spm.nix
       ../nixos/core-parking.nix
@@ -77,10 +78,10 @@
           inherit (desktopKeyboard) data check;
           protocolCheck = desktopKeyboardProtocolCheck;
         };
-        systemd.packages = lib.mkOverride 40 [pkgs.dbus config.nix.package];
-        gemini.powerPolicy.hibernation.enable = lib.mkForce false;
+        systemd.packages = [config.nix.package];
       })
       {
+        nixpkgs.overlays = [ (import ./cross-fixes.nix) ];
         nixpkgs.hostPlatform = targetSystem;
         nixpkgs.buildPlatform = buildSystem;
       }
@@ -106,12 +107,7 @@
     kernelLeaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
     stage2BaselineAcceptScript = system.config.systemd.services.gemini-baseline-self-accept.script;
     leaseSelfAcceptToken = mainlineNixosLeaseSelfAcceptToken;
-    persistentStorage = let
-      storage = system.config.gemini.storage;
-    in
-      if storage.enable
-      then {inherit (storage) dataLabel;}
-      else null;
+    persistentStorage = {inherit (system.config.gemini.storage) dataLabel;};
   };
 
   image = import ./mainline-nixos.nix imageArgs;

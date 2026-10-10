@@ -58,6 +58,8 @@ test "$(readlink -f /dev/disk/by-partuuid/{PARTUUID})" = /dev/mmcblk0p34
                      'test -z "$(systemctl --failed --no-legend --plain)"'):
             base = base.replace(line, ':')
         base = base.replace("printf 'healthy=yes\\n'", "printf 'healthy=unchecked\\n'")
+    if healthy:
+        base = q.r.qualify.desktop_snapshot(base)
     return base + f'''
 test "$(cat /sys/class/block/mmcblk0p32/start)" = 89372672
 test "$(cat /sys/class/block/mmcblk0p33/start)" = 122109919

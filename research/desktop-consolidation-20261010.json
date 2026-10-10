@@ -1,0 +1,177 @@
+{
+  "scope": "Current normal-system GNOME, RAM-only paging and consolidation; hardware qualification pending",
+  "kernel_source": "6a338355fefbc5ec31baee53f7ad22ca9098111c",
+  "kernel_build": "/nix/store/3vqh41viby5ffx12ayh452xp83f7w7lh-linux-gemini-7.2.9",
+  "configuration": {
+    "build": "x86_64-linux",
+    "failedAssertions": [],
+    "gdm": true,
+    "gnome": true,
+    "sleep": {
+      "AllowHibernation": false,
+      "AllowHybridSleep": false,
+      "AllowSuspend": true,
+      "AllowSuspendThenHibernate": false,
+      "SuspendState": "freeze"
+    },
+    "swap": [],
+    "target": "aarch64-linux",
+    "zram": {
+      "algorithm": "lz4",
+      "enable": true,
+      "memoryPercent": 50,
+      "writebackDevice": null
+    }
+  },
+  "host_checks": {
+    "ssh": "/nix/store/nb73g9dqq7a5jv4xm7cc2sd7mwzcpzjm-mainline-sshd-pam-session-check",
+    "desktop": "/nix/store/af59fprn6w7f5xksz8l3qyhhhg9s9vxg-gemini-desktop-protocol-check",
+    "storage": "/nix/store/wmr00n0139z0dvxfi3rqh7mkfm6v2x3v-gemini-storage-check",
+    "boot-install": "/nix/store/2ij2yjwgy378k8yd76y9gaxw1s8axcig-gemini-boot-install-check",
+    "zram": "/nix/store/inh4q8c6v1nb5nhcc40cajn7z87z800x-gemini-zram-policy-check",
+    "keyboard": "/nix/store/78rclgv5lnx4zscq664rpyppgaf8xvw2-gemini-desktop-keyboard-protocol-check"
+  },
+  "host_tool_checks": [
+    {
+      "test": "test-power-swap.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-power-kernel.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-rtc-startup.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-rtc-recovery.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-rtc-calendar.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-rtc-alarm.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-pm-stages.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-boot-runner.py",
+      "returncode": 0
+    },
+    {
+      "test": "test-zram-paging.py",
+      "returncode": 0
+    }
+  ],
+  "zram_probe": {
+    "executable": "/nix/store/z88p53a98h1gp006z8y8w669ywy7gcq7-gemini-zram-probe-static-aarch64-unknown-linux-musl-1/bin/gemini-zram-probe",
+    "sha256": "49531b44f3d464ecb519bfb1ff90ef8338f28019b026d46ba4fbae1cabc240b7",
+    "machine": 183,
+    "static": true,
+    "program_header_types": [
+      1,
+      1,
+      1685382481,
+      1685382482
+    ],
+    "emulated_self_test": {
+      "returncode": 0,
+      "stdout": "pattern self-test passed\n",
+      "stderr": ""
+    },
+    "hardware_paging_tested": false
+  },
+  "gnome_cross_build_complete": false,
+  "gnome_hardware_tested": false,
+  "zram_hardware_tested": false,
+  "live_mitigation": {
+    "command": "set -eu\ntest \"$(cat /proc/sys/kernel/random/boot_id)\" = 214b3268-b481-4ccb-a693-260b114b1e9b\ntest \"$(readlink /run/current-system)\" = /nix/store/s70p4dvjnwza4djnqnmq2fimh8kfsj10-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade\ntest \"$(wc -l < /proc/swaps)\" -eq 1\ntest \"$(cat /sys/module/zswap/parameters/enabled)\" = N\nunit=$(systemd-escape --path --suffix=swap /dev/disk/by-partuuid/5e0f3a1c-9b2d-4c8e-a7f6-2d1b0c9e8a71)\nsystemctl mask --runtime \"$unit\" dev-mmcblk0p34.swap\ntest \"$(readlink /run/systemd/system/\"$unit\")\" = /dev/null\ntest \"$(readlink /run/systemd/system/dev-mmcblk0p34.swap)\" = /dev/null\nsystemctl show \"$unit\" -p LoadState -p ActiveState\ncat /proc/swaps\ncat /sys/module/zswap/parameters/enabled /sys/module/zswap/parameters/shrinker_enabled\ncat /proc/sys/kernel/random/boot_id\n",
+    "returncode": 0,
+    "stdout": "LoadState=masked\nActiveState=inactive\nFilename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\nN\nN\n214b3268-b481-4ccb-a693-260b114b1e9b\n",
+    "stderr": "Unit dev-mmcblk0p34.swap does not exist, proceeding anyway.\nCreated symlink /run/systemd/system/dev-disk-by\\x2dpartuuid-5e0f3a1c\\x2d9b2d\\x2d4c8e\\x2da7f6\\x2d2d1b0c9e8a71.swap -> /dev/null.\nCreated symlink /run/systemd/system/dev-mmcblk0p34.swap -> /dev/null.\n",
+    "persistent": false,
+    "note": "Masks and swapoff protect this boot only; the installed old image remains unchanged."
+  },
+  "normal_boot_trials": "Refuse the installed flash-backed recovery baseline before reboot or flash",
+  "frozen_recovery_drv": "/nix/store/03jkfssxm1vw2njc12hlb1dcfhv8i3x2-gemini-mainline-nixos-bundle.drv",
+  "frozen_recovery_unchanged": true,
+  "clean_merged_worktrees_removed": 68,
+  "cleanup_evidence": "/mnt/Home/src/nixos-gemini/handoff/desktop-consolidation-20261010/worktree-cleanup-result.json",
+  "cleanup_evidence_sha256": "dfeccf4794e06df7850f6be2ea7bb7afc96a8d3b3c0dd623cb819a221bf81458",
+  "retired_files": [
+    "nix/mainline-a72-integration.fragment",
+    "nix/mainline-camera.fragment",
+    "nix/mainline-cellular-integration.fragment",
+    "nix/mainline-connectivity-m0.fragment",
+    "nix/mainline-connectivity-modules.fragment",
+    "nix/mainline-consys-g2b.fragment",
+    "nix/mainline-consys-g2c-patch.fragment",
+    "nix/mainline-consys-g2d-postpatch.fragment",
+    "nix/mainline-consys-identity.fragment",
+    "nix/mainline-cpufreq.fragment",
+    "nix/mainline-debug.fragment",
+    "nix/mainline-desktop.fragment",
+    "nix/mainline-device-activation.fragment",
+    "nix/mainline-efi-kernel.nix",
+    "nix/mainline-efi.fragment",
+    "nix/mainline-fgadc-activation.fragment",
+    "nix/mainline-gpu-fixed-opp.fragment",
+    "nix/mainline-gpu-owner.fragment",
+    "nix/mainline-gpu-staged.fragment",
+    "nix/mainline-haptics.fragment",
+    "nix/mainline-input-observe.fragment",
+    "nix/mainline-media.fragment",
+    "nix/mainline-nix-kernel.nix",
+    "nix/mainline-nix.fragment",
+    "nix/mainline-platform-smoke.fragment",
+    "nix/mainline-power-kernel.nix",
+    "nix/mainline-power-observe.fragment",
+    "nix/mainline-reworked-consys.fragment",
+    "nix/mainline-rtc-calendar-kernel.nix",
+    "nix/mainline-rtc-kernel.nix",
+    "nix/mainline-rtc-power-key.fragment",
+    "nix/mainline-sensors.fragment",
+    "nix/mainline-spm.fragment",
+    "nix/mainline-suspend-guard-kernel.nix",
+    "nix/mainline-swap-kernel.nix",
+    "nix/mainline-swap.fragment",
+    "nix/mainline-thermal-hall-observe.fragment",
+    "nix/mainline-touchscreen-activation.fragment",
+    "nix/mainline-unattended-recovery.fragment",
+    "nix/mainline-usb11-host.fragment",
+    "nix/mainline.nix",
+    "nix/squashfs.nix",
+    "nixos/configuration.nix"
+  ],
+  "source_sha256": {
+    "flake.nix": "3248eb2bc03104e4fb8ef5a50e0f66bf6e7f63cd7229e210b8b86696f97ba2cb",
+    "flake.lock": "0f01221f881bb31e5cf0502e4a8fdf072bffeb1c5b106ae7a07824411ae99cfe",
+    "nix/gemini.nix": "1ded7f177b39d1c69fa7f9c1745fef7e32bde9a1c9cd278adfb3c1b3d51efee4",
+    "nix/kernel.nix": "f16cac28ef9f0c623e56c2c0742a6f54397abbb89f5974d7b852f255ca40a222",
+    "nix/gemini-zram-probe.c": "07c8db0ea58cfc074b23b6635fe3743d329994807aaf67da3fb99aa10013a19f",
+    "nix/zram-probe.nix": "83b93157fdc41024b2dc409badc905ae2a7bdd6ef722f7e021510ad116023245",
+    "nix/cross-fixes.nix": "2fd28084e4b2bb9bba6d63e3fb633dedc9a5b73fb5b1455969b24a42b89ff6d3",
+    "nix/desktop-keyboard.nix": "caac70f0168b3bf4ebcb5360a51bbbe0b2dd1a3f6caff99f727d110e8d07b0b7",
+    "nix/mesa.nix": "5215471874a15ef03e4e046e658faf832dfe67ee66f23bbbe35713f397aa8b20",
+    "nix/mainline-nixos.nix": "b85aab55c427d4ec088b24aa12acf6322126164dca0fe2d26de3a38700dc53e5",
+    "nix/keyboard/test-registry.py": "7cb2178a04f51cb05f170bd72f2deedf72887f3ef9dba904396c531432f53eda",
+    "nixos/mainline-configuration.nix": "58d137bb00a3785f83af25c0a8996d6cc8468c25d84045c1901a22c86afb0e38",
+    "nixos/gnome.nix": "b61e489ad4f976928f4ef4eade646f7bb1cc072773189fc4e41383e9be5e3f7d",
+    "nixos/storage.nix": "3d4d07e90d38848852873d6743a2b54e8bc0c2c50248b86e7559fa027ff2b7c5",
+    "nixos/power-policy.nix": "3ab7dfe76864eefe71aa5991d6f0a702282a84e485616bf5eeb5b65c60461325",
+    "nixos/bluetooth.nix": "3f51e96a0778602bc2e0cdd9b2dff05e20468b5c90a9c13768b4b04faa0842db",
+    "nixos/wifi-autoconnect.nix": "2f504cf52160485d34ca7422aa129dfbc33cf366baf5492a2ddef1886cf2fb7d",
+    "tools/test-boot.py": "41a2d54d35168d189d14f9d508970570730a4ab55555ca73081a22dd01a34b4c",
+    "tools/qualify-zram.py": "b2dcb36e963d0ebcac00249212a1928c0e12be8101b3d4cbda3da011abcc5255",
+    "tools/qualify-power-swap.py": "ce2929b3253a065cb1b788354f7268b95e992fd2d919a5b117b96c3d40ae2c79",
+    "tools/qualify-mtkclient.py": "b1d188b3488116357c11fa97b426ea9531d21d8f248aaf14c8a304e2330656aa",
+    "tools/qualify-fixed-swap.py": "74478f16baf203df05d878eb89cf1cc3b9497ab1e48692cc8b91b6d8ce5e9380",
+    "tools/qualify-uboot-recovery.py": "12f38b6a918c72e22e64486411a163c668154bc80fcba5a002e16323979c9307"
+  }
+}

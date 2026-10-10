@@ -81,11 +81,11 @@ in {
   # M39 adds a KEY_POWER input device and CONFIG_SUSPEND.  logind's default
   # would power off on a key press, so keep the keys inert.  The lid (SW_LID)
   # policy lives in power-policy.nix.
-  services.logind.extraConfig = ''
-    HandlePowerKey=ignore
-    HandlePowerKeyLongPress=ignore
-    HandleSuspendKey=ignore
-    HandleHibernateKey=ignore
-    IdleAction=ignore
-  '';
+  services.logind.settings.Login = {
+    HandlePowerKey = "ignore";
+    HandlePowerKeyLongPress = "ignore";
+    HandleSuspendKey = "ignore";
+    HandleHibernateKey = "ignore";
+    IdleAction = "ignore";
+  };
 }

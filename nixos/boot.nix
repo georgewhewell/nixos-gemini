@@ -11,11 +11,11 @@
     '';
   };
 in {
-  environment.systemPackages = lib.mkForce [tools];
+  environment.systemPackages = [tools];
   system.build.geminiBootTools = tools;
   system.build.installBootLoader = "${tools}/bin/gemini-boot-install --system";
   system.boot.loader.id = "gemini";
-  system.extraSystemBuilderCmds = ''
+  system.systemBuilderCommands = ''
     ln -s ${geminiBootKernel}/Image "$out/kernel"
     ln -s ${geminiBootInitrd} "$out/initrd"
     ln -s ${geminiBootDtb}/gemini.dtb "$out/gemini.dtb"

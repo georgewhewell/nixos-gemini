@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Boot a normal Nix bundle, check it, then restore the known M69 recovery image.
+"""Boot a normal Nix bundle, check it, then restore the accepted recovery image.
 
 Read-only preflight unless --execute is given. The durable boot-only supervisor
-owns both flashes. RTC startup, UTC, alarms, paging and ordinary Nix builds are
+owns both flashes. RTC startup, UTC, alarms, RAM-only paging and ordinary Nix builds are
 checked; --watchdog-expiry substitutes keepalive loss for the alarm sequence.
 --bootloader and --efi-files exercise an already installed boot-manager entry.
+Both the candidate and recovery must use RAM-only zram; old flash-backed
+recovery images are rejected before any reboot or flash.
 """
 from contextlib import ExitStack
 import fcntl
@@ -22,6 +24,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('boot_recovery', ROOT/'tools/qualify-power-swap.py')
 p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
+zram = p.f.q.module('zram_paging', ROOT/'tools/qualify-zram.py')
+zram.install(p)
 rtc = p.f.q.module('rtc_alarms', ROOT/'tools/qualify-rtc-alarm.py')
 calendar = p.f.q.module('rtc_calendar', ROOT/'tools/qualify-rtc-calendar.py')
 cache = p.f.q.module('store_cache', ROOT/'tools/qualify-store-cache.py')
@@ -38,7 +42,8 @@ p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES = tuple('tools/'+name for name in (
     'test-boot.py', 'qualify-rtc-alarm.py', 'qualify-rtc-calendar.py',
     'qualify-store-cache.py', 'qualify-rtc-stage1-rescue.py', 'qualify-rtc-startup.py')) + (
-        'nix/gemini-boot-install.py', 'nix/gemini-efi-publish.sh')
+        'nix/gemini-boot-install.py', 'nix/gemini-efi-publish.sh',
+        'tools/qualify-zram.py', 'nix/gemini-zram-probe.c', 'nix/zram-probe.nix')
 base_configure, base_preflight, base_finish = p.configure, p.preflight, p.finish
 
 
@@ -87,6 +92,7 @@ def artifacts(bundle, reclaim_cache=None, install_efi=None, bootloader=None, efi
     p.STORE_SHA, p.STORE_SIZE = sha, size
     p.BOOT_SHA = cache.digest(bundle/'boot-padded-p22.img')
     p.NOTES_SHA = p.f.q.r.power_kernel.notes_sha(kernel)
+    zram.probe_identity(p)
     p.RECLAIM_CACHE = reclaim_cache.resolve(strict=True) if reclaim_cache else None
     EFI_FILES, EFI_MANIFEST, BOOTLOADER = None, None, None
     INSTALL_EFI = bool(install_efi)
@@ -264,6 +270,7 @@ def configure(watchdog=False, pm_test=None, cycle=False):
     # PM/USB stages wrap the candidate innermost, so they run after its health
     # checks; each later RTC check compares suspend counters in its own window.
     runner = base_configure(False, pm_test, cycle)
+    runner.CANDIDATE_DESKTOP = 'gnome'
     runner.backend.MTK = runner.backend.MTK_RTC
     if BOOTLOADER is not None:
         runner.PROFILES[p.PROFILE] = (BOOTLOADER/'boot-padded-p22.img', p.BOOT_SHA)

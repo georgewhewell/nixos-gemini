@@ -29,6 +29,7 @@ usb_cycle = f.q.module('usb_cycle', ROOT/'tools/qualify-usb-cycle.py')
 PROFILE = 'power-swap'
 ENTRYPOINT = Path(__file__).resolve()
 EXTRA_EXECUTED_SOURCES = ()
+PAGING_POLICY = 'zswap'
 BUNDLE = Path('/nix/store/mb5adwsfnri1jswcxhs6vl23hnj3jy5m-gemini-mainline-nixos-bundle')
 KERNEL = Path('/nix/store/b26xkc1n67c1xiz90fnzqg17w5dhvff3-gemini-mainline-power-swap-kernel-7.1.3')
 SYSTEM = '/nix/store/7vg1vqfn8v19px9k8bhcyi4yvndpszzb-nixos-system-gemini-mainline-nixos-23.05.20240103.70bdade'
@@ -40,6 +41,18 @@ FLASHINFO_SHA = 'c869d0319177b87fdf2415015905d1321670c5d2863d1c43eb18831e2c2742e
 STORAGE = dict(gpt_sha256=f.GEOMETRY['swap'][0], backup_gpt_sha256=f.GEOMETRY['swap'][1],
     swap_header_sha256=f.GEOMETRY['swap'][2], p30_sha256=f.q.r.P30_SHA,
     p31_sha256=f.q.r.P31_SHA, flashinfo_sha256=FLASHINFO_SHA)
+
+
+def baseline_paging(r, directory, state):
+    """Historical profiles retain their original flash-backed policy."""
+    f.swap_evidence(directory, state)
+    if (r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() !=
+            r.qualify.BASELINE['zswap_shrinker']):
+        raise RuntimeError('Baseline recovery zswap policy differs')
+
+
+def probe_identity():
+    return paging.PROBE_SHA
 
 
 def storage_identity(state):
@@ -139,6 +152,7 @@ def configure(watchdog=False, pm_test=None, cycle=False):
         setattr(r, name, getattr(r, name) + (PROFILE,))
     r.power_kernel = SimpleNamespace(SYSTEM=SYSTEM, KERNEL=KERNEL,
                                     store_profile=store_profile, evidence=evidence)
+    r.PAGING_POLICY = PAGING_POLICY
     r.qualify.SNAPSHOT = f.script('swap')
     original_snapshot = r.qualify.snapshot
     original_return = r.qualify.verify_return
@@ -181,9 +195,7 @@ def preflight(r, directory, execute):
         before = json.loads((directory/'before.json').read_text())
         current = f.snapshot('swap')
         if current != dict(before, layout='swap'): raise RuntimeError('Device changed during extended preflight')
-        if (r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() !=
-                r.qualify.BASELINE['zswap_shrinker']):
-            raise RuntimeError('Baseline recovery zswap policy differs')
+        baseline_paging(r, directory, current)
         old = directory/'before-all-data'; old.mkdir(mode=0o700)
         retained_all(old, current, directory)
         if r.pm_test_last_stage or r.usb_cycle_requested:
@@ -210,8 +222,8 @@ def preflight(r, directory, execute):
             hashes[name] = hashlib.sha256(raw).hexdigest()
         (directory/'storage-snapshot.sh').write_text(r.qualify.SNAPSHOT)
         plan.update(execute=execute, storage_layout='fixed-swap', storage_identity=STORAGE,
-            all_executed_sources_sha256=hashes, default_zswap_shrinker=True,
-            paging_probe_sha256=paging.PROBE_SHA, runtime_policy_writes=False,
+            all_executed_sources_sha256=hashes, default_zswap_shrinker=PAGING_POLICY == 'zswap',
+            paging_policy=PAGING_POLICY, paging_probe_sha256=probe_identity(), runtime_policy_writes=False,
             watchdog_expiry_requested=r.watchdog_expiry_requested, pm_test_last_stage=r.pm_test_last_stage,
             usb_cycle_requested=r.usb_cycle_requested)
         plan['observe_seconds'] = r.OBSERVE_SECONDS
@@ -273,10 +285,7 @@ def finish(r, directory, before, error=None):
         r.qualify.check_host_idle(); after = f.snapshot('swap')
         audit = directory/'final-audit'; audit.mkdir(mode=0o700)
         outputs = retained_all(audit, after, directory)
-        f.swap_evidence(audit, after); paging.watchdog(audit, after, 'watchdog')
-        if (r.qualify.run(f.q.SSH+['cat /sys/module/zswap/parameters/shrinker_enabled']).strip() !=
-                r.qualify.BASELINE['zswap_shrinker']):
-            raise RuntimeError('Recovered baseline no longer has its original zswap policy')
+        baseline_paging(r, audit, after); paging.watchdog(audit, after, 'watchdog')
         if (directory/'nix-candidate.json').exists():
             latest = json.loads((directory/'nix-candidate.json').read_text())
             r.persistent_nix.verify_retained(f.q.SSH, after['boot_id'], audit, r.qualify,
@@ -326,6 +335,8 @@ def finish(r, directory, before, error=None):
             fixed_swap_preserved=True, default_policy_paging_qualified=passed,
             recovered_boot_id=after['boot_id'], ordinary_outputs_retained=outputs,
             source_hashes_match=True, no_writer=True)
+        if PAGING_POLICY == 'zram':
+            result.update(paging_policy='zram', ram_only_paging_qualified=passed)
         if error is not None: result['error'] = str(error)
         r.qualify.save(directory, 'result.json', result)
         r.qualify.save(directory, 'final-idle-check.json', dict(healthy_boot=after['boot_id'],
