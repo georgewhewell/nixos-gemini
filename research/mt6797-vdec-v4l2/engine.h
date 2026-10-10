@@ -42,6 +42,8 @@ struct mt6797_decode_status {
 	s32 current_poc, reference_min_poc, reference_max_poc;
 	u32 current_poc_word;
 	u32 slice_count;
+	u32 irq_events, irq_unexpected, irq_status;
+	u64 irq_command, irq_received_command;
 	u64 elapsed_us;
 	int engine_result;
 	int break_result, reset_result;

@@ -4,11 +4,15 @@
  * Private bounce buffers isolate userspace queues from unproven DMA stop.
  */
 #include <linux/clk.h>
+#include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/iommu.h>
+#include <linux/interrupt.h>
 #include <linux/iopoll.h>
+#include <linux/irq.h>
+#include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
@@ -17,6 +21,7 @@
 #include <linux/regmap.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 #include <linux/unaligned.h>
 #include "engine.h"
 #include "../mt6797-vdec/mt6797-h264-controls.h"
@@ -62,6 +67,16 @@ struct mt6797_engine {
 	struct register_save saved;
 	struct mt6797_h264_p_reference_words refs[2][V4L2_H264_NUM_DPB_ENTRIES];
 	struct list_head contexts;
+	/* The ordered frontend owns command setup; the hard IRQ owns one event.
+	 * Mask each delivery immediately, including unexpected ones. No handler
+	 * can outlive the disable/synchronize boundary before reset or power-off.
+	 */
+	int irq;
+	spinlock_t irq_lock;
+	struct completion irq_done;
+	bool irq_enabled, irq_armed, irq_started;
+	u64 irq_command, irq_received_command;
+	u32 irq_events, irq_unexpected, irq_status;
 	bool fenced;
 };
 
@@ -76,6 +91,143 @@ static void write_word(u32 value, void __iomem *address)
 {
 	writel(value, address);
 	mb();
+}
+
+/* Public MT6797 dec_isr and upstream mtk_vcodec_dec_irq_handler both use
+ * this two-write sequence. The second write must use a fresh live word.
+ * Register provenance and the unresolved delivery proof are in irq-contract.json.
+ */
+static void acknowledge_irq(struct mt6797_engine *engine)
+{
+	void __iomem *word = engine->banks[MISC] + 0xa4;
+
+	write_word(readl(word) | 0x11, word);
+	write_word(readl(word) & ~BIT(4), word);
+}
+
+static irqreturn_t decoder_irq(int irq, void *data)
+{
+	struct mt6797_engine *engine = data;
+	unsigned long flags;
+	u32 gate = BIT(4), status = 0;
+	bool mask, valid;
+	int ret = -EIO;
+
+	/* The syscon's MMIO regmap uses its IRQ-safe spinlock. Never touch the
+	 * decoder bank if the public clock guard says it is unavailable.
+	 */
+	spin_lock_irqsave(&engine->irq_lock, flags);
+	if (engine->irq_enabled)
+		ret = regmap_read(engine->gcon, 0, &gate);
+	if (!ret && !(gate & BIT(4))) {
+		status = readl(engine->banks[MISC] + 0xa4);
+		if (status & BIT(16))
+			acknowledge_irq(engine);
+	}
+	valid = !ret && !(gate & BIT(4)) && (status & BIT(16)) &&
+		engine->irq_armed && engine->irq_started && !engine->irq_events;
+	engine->irq_events++;
+	engine->irq_status = status;
+	if (valid)
+		engine->irq_received_command = engine->irq_command;
+	else
+		engine->irq_unexpected++;
+	mask = engine->irq_enabled;
+	engine->irq_enabled = false;
+	engine->irq_armed = false;
+	engine->irq_started = false;
+	spin_unlock_irqrestore(&engine->irq_lock, flags);
+	/* A dedicated line with an unexpected event is a failed command too.
+	 * Masking on the first delivery bounds a level-triggered IRQ storm.
+	 */
+	if (mask)
+		disable_irq_nosync(irq);
+	complete(&engine->irq_done);
+	return IRQ_HANDLED;
+}
+
+static void disarm_irq(struct mt6797_engine *engine)
+{
+	unsigned long flags;
+	bool enabled;
+
+	spin_lock_irqsave(&engine->irq_lock, flags);
+	enabled = engine->irq_enabled;
+	engine->irq_enabled = false;
+	engine->irq_armed = false;
+	engine->irq_started = false;
+	spin_unlock_irqrestore(&engine->irq_lock, flags);
+	if (enabled)
+		disable_irq(engine->irq);
+	else
+		/* The handler may have masked the line but still be executing. */
+		synchronize_irq(engine->irq);
+}
+
+static int arm_irq(struct mt6797_engine *engine)
+{
+	unsigned long flags;
+
+	/* A stale hardware done bit must never satisfy a new command. */
+	if (readl(engine->banks[MISC] + 0xa4) & BIT(16))
+		return -EBUSY;
+	reinit_completion(&engine->irq_done);
+	spin_lock_irqsave(&engine->irq_lock, flags);
+	engine->irq_events = 0;
+	engine->irq_unexpected = 0;
+	engine->irq_status = 0;
+	engine->irq_received_command = 0;
+	if (!++engine->irq_command)
+		engine->irq_command++;
+	engine->irq_armed = true;
+	engine->irq_started = false;
+	engine->irq_enabled = true;
+	spin_unlock_irqrestore(&engine->irq_lock, flags);
+	enable_irq(engine->irq);
+	return 0;
+}
+
+static int submit_decode(struct mt6797_engine *engine,
+			 struct mt6797_decode_status *status)
+{
+	unsigned long flags;
+	int ret = arm_irq(engine);
+
+	if (ret)
+		return ret;
+	status->irq_command = engine->irq_command;
+	spin_lock_irqsave(&engine->irq_lock, flags);
+	/* An interrupt delivered between unmask and hardware start belongs to
+	 * no submitted command. Do not start DMA after that unexpected event.
+	 * The handler takes this same lock before inspecting hardware state.
+	 */
+	if (!engine->irq_enabled || engine->irq_events) {
+		ret = -EIO;
+	} else {
+		engine->irq_started = true;
+		status->submitted = true;
+		write_word(1, engine->banks[AVC] + 0x238);
+	}
+	spin_unlock_irqrestore(&engine->irq_lock, flags);
+	return ret;
+}
+
+static int wait_decode_irq(struct mt6797_engine *engine)
+{
+	ktime_t deadline = ktime_add_ms(ktime_get(), 1000);
+
+	do {
+		/* Fatal CABAC alignment can stall without a completion interrupt.
+		 * Keep this bounded error check; picture-complete polling alone
+		 * deliberately cannot make an IRQ command successful.
+		 */
+		if (readl(engine->banks[AVC] + 0x284) & BIT(8))
+			return -EIO;
+		if (wait_for_completion_timeout(&engine->irq_done,
+						msecs_to_jiffies(1)))
+			return 0;
+	} while (ktime_before(ktime_get(), deadline));
+	return -ETIMEDOUT;
 }
 
 static void save_word(struct register_save *save, void __iomem *address, u32 value)
@@ -130,6 +282,7 @@ int mt6797_engine_suspend(struct mt6797_engine *engine)
 {
 	if (engine->fenced)
 		return -EBUSY;
+	disarm_irq(engine);
 	clk_bulk_disable_unprepare(ARRAY_SIZE(engine->clocks), engine->clocks);
 	return 0;
 }
@@ -138,6 +291,13 @@ static void free_snapshot(void *data)
 {
 	struct mt6797_engine *engine = data;
 	kvfree(engine->reference_snapshot);
+}
+
+static void clear_irq_flags(void *data)
+{
+	struct mt6797_engine *engine = data;
+
+	irq_clear_status_flags(engine->irq, IRQ_DISABLE_UNLAZY);
 }
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
@@ -164,6 +324,8 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 	if (ret)
 		return ERR_PTR(ret);
 	INIT_LIST_HEAD(&engine->contexts);
+	spin_lock_init(&engine->irq_lock);
+	init_completion(&engine->irq_done);
 	engine->gcon = syscon_regmap_lookup_by_compatible("mediatek,mt6797-vdecsys");
 	if (IS_ERR(engine->gcon))
 		return ERR_CAST(engine->gcon);
@@ -209,6 +371,22 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 		if (ret)
 			goto fail;
 	}
+	engine->irq = platform_get_irq(pdev, 0);
+	if (engine->irq < 0) {
+		ret = engine->irq;
+		goto fail;
+	}
+	ret = devm_request_irq(dev, engine->irq, decoder_irq, IRQF_NO_AUTOEN,
+			      dev_name(dev), engine);
+	if (ret)
+		goto fail;
+	/* disable_irq_nosync must mask the GIC immediately, even on a flow
+	 * handler that would otherwise defer masking until another delivery.
+	 */
+	irq_set_status_flags(engine->irq, IRQ_DISABLE_UNLAZY);
+	ret = devm_add_action_or_reset(dev, clear_irq_flags, engine);
+	if (ret)
+		goto fail;
 	pm_runtime_enable(dev);
 	return engine;
 fail:
@@ -258,6 +436,7 @@ void mt6797_engine_destroy(struct mt6797_engine *engine)
 	unsigned int i;
 	if (WARN_ON(engine->fenced || !list_empty(&engine->contexts)))
 		return;
+	disarm_irq(engine);
 	pm_runtime_disable(engine->dev);
 	for (i = 0; i < MEMORY_COUNT; i++)
 		release_buffer(engine, &engine->memory[i]);
@@ -850,15 +1029,21 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	if (ret)
 		goto cleanup;
 	dma_wmb();
-	status->submitted = true;
-	write_word(1, avc + 0x238);
-	/* CABAC alignment is an explicit fatal syntax error. It can stall before
-	 * picture completion; stop it promptly instead of racing userspace's
-	 * one-second request deadline. The trailer flag is classified below.
-	 */
-	ret = readl_poll_timeout(avc + 0x278, status->state,
-				 (status->state & BIT(31)) || (readl(avc + 0x284) & BIT(8)),
-				 100, 1000000);
+	ret = submit_decode(engine, status);
+	if (ret)
+		goto cleanup;
+	ret = wait_decode_irq(engine);
+	disarm_irq(engine);
+	status->irq_command = engine->irq_command;
+	status->irq_received_command = engine->irq_received_command;
+	status->irq_events = engine->irq_events;
+	status->irq_unexpected = engine->irq_unexpected;
+	status->irq_status = engine->irq_status;
+	if (!ret && (status->irq_events != 1 || status->irq_unexpected ||
+		     status->irq_received_command != status->irq_command ||
+		     !(status->irq_status & BIT(16))))
+		ret = -EIO;
+	status->state = readl(avc + 0x278);
 	status->irq = readl(misc + 0xa4);
 	status->error = readl(avc + 0x284);
 	status->message = readl(avc + 0x270);
@@ -904,6 +1089,16 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		     status->mby != header.height_mbs - 1))
 		ret = -EIO;
 cleanup:
+	/* Even a fatal stop failure must leave the IRQ line masked and every
+	 * handler retired before retaining private DMA/power for recovery.
+	 */
+	disarm_irq(engine);
+	if (status->irq_command) {
+		status->irq_received_command = engine->irq_received_command;
+		status->irq_events = engine->irq_events;
+		status->irq_unexpected = engine->irq_unexpected;
+		status->irq_status = engine->irq_status;
+	}
 	if (dma_started) {
 		write_word(original_break | BIT(0), misc + 0x100);
 		status->break_result = readl_poll_timeout(misc + 0x104, state,
@@ -950,11 +1145,8 @@ cleanup:
 		mt6797_decode_context_reset(ctx);
 		ret = -EIO;
 	}
-	if (status->submitted) {
-		state = readl(misc + 0xa4);
-		write_word(state | 0x11, misc + 0xa4);
-		write_word((state | BIT(0)) & ~BIT(4), misc + 0xa4);
-	}
+	if (status->submitted)
+		acknowledge_irq(engine);
 	status->registers_saved = saved->count;
 	restore_words(saved);
 	write_word(original_break, misc + 0x100);

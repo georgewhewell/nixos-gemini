@@ -710,7 +710,7 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 	fetch_commands = decoder->fetch_commands;
 	frame_commands = decoder->frame_commands;
 	spin_unlock_irqrestore(&decoder->status_lock, flags);
-	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x slice_count=%u collected=%u fetch_commands=%llu frame_commands=%llu cabac_tail_checked=%u cabac_tail_window_valid=%u\n",
+	return sysfs_emit(buf, "jobs=%llu failures=%llu result=%d fetched=%u submitted=%u state=%#x error=%#x message=%#x irq=%#x break=%d reset=%d quiesced=%u guards=%u engine_result=%d elapsed_us=%llu nal_bytes=%u header_bits=%u mbx=%u mby=%u stall=%#x read_pointer=%#x fetch_status=%#x top_status=%#x pred_config=%#x pred_mode=%#x tail_bit_offset=%u tail_word=%#x cabac_tail_valid=%u weight_start=%u weight_end=%u weight_before=%u weight_after=%u weight_state=%#x weight_before_word=%#x weight_after_word=%#x weight_start_mask=%#x weight_end_mask=%#x reference_count=%u reference_mask=%#x snapshot_mask=%#x picture_slot=%u reference_guard_count=%u registers_saved=%u reference_count1=%u motion_bytes=%u motion_guard_count=%u long_term_mask=%#x current_poc=%d reference_min_poc=%d reference_max_poc=%d current_poc_word=%#x slice_count=%u collected=%u fetch_commands=%llu frame_commands=%llu cabac_tail_checked=%u cabac_tail_window_valid=%u irq_command=%llu irq_received_command=%llu irq_events=%u irq_unexpected=%u irq_status=%#x\n",
 		jobs, failures, result, status.fetched, status.submitted, status.state, status.error,
 		status.message, status.irq, status.break_result, status.reset_result,
 		status.quiesced, status.guards_unchanged, status.engine_result, status.elapsed_us,
@@ -725,7 +725,9 @@ static ssize_t last_job_show(struct device *dev, struct device_attribute *attr, 
 		status.reference_guard_count, status.registers_saved, status.reference_count1,
 		status.motion_bytes, status.motion_guard_count, status.long_term_mask,
 		status.current_poc, status.reference_min_poc, status.reference_max_poc, status.current_poc_word, status.slice_count, status.collected,
-		fetch_commands, frame_commands, status.cabac_tail_checked, status.cabac_tail_window_valid);
+		fetch_commands, frame_commands, status.cabac_tail_checked, status.cabac_tail_window_valid,
+		status.irq_command, status.irq_received_command, status.irq_events,
+		status.irq_unexpected, status.irq_status);
 }
 static DEVICE_ATTR_RO(last_job);
 static DEVICE_ATTR(last_engine_failure, 0444, last_job_show, NULL);

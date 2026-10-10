@@ -35,6 +35,11 @@ media modules build with strict MODPOST, matching configuration and release
 string. This is a host build result; none of these new modules has been loaded
 on the device. Their identities are recorded in
 [`desktop-consolidation-20261010.json`](desktop-consolidation-20261010.json).
+The subsequent [decoder IRQ candidate](mt6797-vdec-v4l2/irq-build-20261010.json)
+also passes ARM64 compilation with `W=1` and strict MODPOST against that media
+kernel. It requires a delivered done event before accepting a picture, and
+synchronizes the handler before reset or power release. This candidate has
+not been loaded; previous polling results do not qualify IRQ delivery.
 The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
 clock ownership and native CPU hotplug code. Board followups adapt the renamed
 CNP capability, add the codec's required `#sound-dai-cells`, and expand the

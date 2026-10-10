@@ -25,16 +25,31 @@ The current RAM-only 7.2.9 kernel and matching module build identities are in
 The [IRQ contract](irq-contract.json) records the public MT6797 acknowledge
 sequence and upstream Linux APIs. A recorded successful polling snapshot has
 the picture-complete bit set without the IRQ done bit; it does not establish
-interrupt delivery. IRQ handling still requires implementation and independent
-delivery, acknowledge, lifetime and pixel checks on hardware.
+interrupt delivery. The current source adds an IRQ completion candidate; its
+[host build](irq-build-20261010.json) passes ARM64 compilation with `W=1` and
+strict MODPOST against the matching RAM-only media kernel. It has not been
+loaded or qualified on hardware. Independent delivery, acknowledge, lifetime
+and pixel checks remain required before using it in normal development.
 
-The current module decodes the listed progressive H.264 Baseline I/P and
+The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
+submitted command can accept a done event; a stale done bit or an event before
+hardware start fails the command. The handler records the raw status and
+command identity, performs the public live-read acknowledge sequence, and
+masks the line after its first delivery. Reset, restore and power release wait
+for every handler to retire. Picture-complete polling alone cannot satisfy a
+successful decode. A bounded error check still detects fatal CABAC stalls,
+and all prior private-DMA stop, guard and fencing checks remain in place.
+Cached job diagnostics include `irq_command`, `irq_received_command`,
+`irq_events`, `irq_unexpected` and `irq_status`; these fields are evidence to
+check during a future supervised trial, not a present IRQ qualification.
+
+The previously qualified polling module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible in the listed one-slice cases, with up to 16
 references in SD fixtures, including long-term references in original 64x64
 fixtures, or three short-term references in the listed HD fixtures.
 Trials 52–62 qualify earlier modules. Trial 67 reruns all 683 listed pictures
-on the current module, including full-width cached POCs and POC types 1/2.
+on that polling build, including full-width cached POCs and POC types 1/2.
 Trial 66 separately qualifies 104 exact pictures, including 54 compressed
 multislice pictures at SD and 1080p and the original 64x64 Baseline packets.
 Multislice lists, weights, QP and deblocking must match across a picture.
@@ -441,8 +456,8 @@ to 640 KiB, with 512 KiB capacity and a 128 KiB guard; it checks all bytes after
 the actual picture payload. Scratch allocations remain 256 KiB. GStreamer's initial 320x240 probe can negotiate
 320x256. Real GStreamer decoding is qualified for the explicitly listed archived streams. Queues
 use MMAP allocation and can export their CPU storage through `VIDIOC_EXPBUF`;
-buffer export is hardware tested at the seven listed dimensions. Completion
-uses a bounded workqueue poll because actual interrupt delivery is unqualified.
+buffer export is hardware tested at the seven listed dimensions. Those qualified
+builds use a bounded workqueue poll; actual interrupt delivery remains unqualified.
 It does not implement an encoder.
 
 Userspace queue storage is allocated by videobuf2-vmalloc. Hardware reads and
