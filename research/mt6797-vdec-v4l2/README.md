@@ -20,6 +20,14 @@ host checks, decoder, encoder resource probe and idle-reset probe all build
 successfully. These artifacts remain untested on hardware; the normal kernel
 does not enable the experimental decoder node.
 
+The current RAM-only 7.2.9 kernel and matching module build identities are in
+[`desktop-consolidation-20261010.json`](../desktop-consolidation-20261010.json).
+The [IRQ contract](irq-contract.json) records the public MT6797 acknowledge
+sequence and upstream Linux APIs. A recorded successful polling snapshot has
+the picture-complete bit set without the IRQ done bit; it does not establish
+interrupt delivery. IRQ handling still requires implementation and independent
+delivery, acknowledge, lifetime and pixel checks on hardware.
+
 The current module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures
 through 1920x1088 coded / 1920x1080 visible in the listed one-slice cases, with up to 16

@@ -1,0 +1,62 @@
+{
+  "scope": "Published IRQ interface and existing measured polling snapshot; no new IRQ hardware qualification or driver implementation",
+  "checked_date": "2026-10-10",
+  "target_kernel_revision": "c22f516a93aee65f2a6a6741d5e7e9873d56c852",
+  "spi": 240,
+  "trigger": "level low",
+  "public_mt6797_resource_glue": {
+    "url": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/videocodec/mt6797/videocodec_kernel_driver.c",
+    "sha256": "43b368561f152d56afd648fa681d106d77001a6de00ce725c9384173db6662cd",
+    "license": "GPL-2.0, explicit file header",
+    "function": "dec_isr",
+    "clock_guard": {
+      "bank": "VDEC_GCON",
+      "offset": 0,
+      "inactive_mask": 16
+    },
+    "status": {
+      "bank": "MISC",
+      "offset": 164,
+      "done_mask": 65536
+    },
+    "ack_sequence": [
+      "read live MISC 0xa4, write value | 0x11",
+      "read live MISC 0xa4 again, write value & ~0x10"
+    ]
+  },
+  "upstream_irq_contract_sources": {
+    "drivers/media/platform/mediatek/vcodec/decoder/mtk_vcodec_dec_drv.c": "7927f7a67e53ad30cfdec0459cd72249e0db676e4ddd039023c9b136b886a7ff",
+    "drivers/media/platform/mediatek/vcodec/decoder/mtk_vcodec_dec_hw.h": "b3445ee3bd5829eca8a323a6ba454bc054ae2bbee180b10f0bf606f25c5c5348",
+    "drivers/media/platform/mediatek/vcodec/decoder/mtk_vcodec_dec.h": "642ac879c2bed22dc2eec2a7fedf8affff36db6fabc4ede203c9a74a8bf53d84",
+    "include/linux/interrupt.h": "f75c0a916391a51c9572f27c8ea56bc1fae06919b2c204a2d335b841842022d4",
+    "include/linux/completion.h": "db5aac6634fbb92542486d273d93861dfd29061043d461ae494cfa2b2e9f4e4b"
+  },
+  "measured_polling_sample": {
+    "trial": "trial66",
+    "profile": "multislice-compressed-high-1080-four",
+    "passed": true,
+    "state": 2147483649,
+    "irq": 12289,
+    "error": 16384,
+    "message": 0,
+    "quiesced": 1,
+    "guards": 1,
+    "state_picture_complete": true,
+    "irq_done_bit_observed": false,
+    "inference": "This successful polling snapshot does not establish IRQ delivery. It does not identify why the IRQ done bit was clear."
+  },
+  "implementation_requirements": [
+    "Claim the DT IRQ with IRQF_NO_AUTOEN; leave it disabled during probe and whenever clocks are unavailable.",
+    "Synchronize and disable IRQ handling before reset/restore/power release; retain existing private-DMA stop proof and fencing.",
+    "Attribute delivery to the currently armed hardware command and reject stale or unexpected events.",
+    "Require a real completion event for successful normal decode; record event count and the raw pre-ack status.",
+    "Retain bounded detection of fatal CABAC syntax stalls; they need not produce a successful done IRQ.",
+    "Re-read the live acknowledge word between the two writes, preserving unrelated state.",
+    "Bound unexpected or repeated IRQ deliveries after acknowledge and mask the line on a storm. A sticky status bit alone is not proof that the GIC line remains asserted.",
+    "Preserve exact pixel comparisons, malformed-input rejection, concurrent contexts, stop/guards, unload and supervised recovery."
+  ],
+  "hardware_irq_delivery_qualified": false,
+  "irq_driver_implemented": false,
+  "encoder_implemented": false,
+  "proprietary_source_or_binary_examined": false
+}
