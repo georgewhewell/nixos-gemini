@@ -43,6 +43,10 @@ struct mt6797_decode_status {
 	u32 current_poc_word;
 	u32 slice_count;
 	u32 irq_events, irq_unexpected, irq_status;
+	u32 irq_complete, irq_clock_guard;
+	int irq_clock_result;
+	int irq_masked_before, irq_pending_before, irq_active_before;
+	int irq_masked_after, irq_pending_after, irq_active_after;
 	u64 irq_command, irq_received_command;
 	u64 elapsed_us;
 	int engine_result;
@@ -50,6 +54,7 @@ struct mt6797_decode_status {
 	bool fetched, submitted, quiesced, guards_unchanged;
 	bool cabac_tail_checked, cabac_tail_window_valid, cabac_tail_valid;
 	bool collected;
+	bool irq_controller_sampled;
 };
 
 struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev);

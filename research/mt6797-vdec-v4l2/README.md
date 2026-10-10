@@ -7,29 +7,30 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
-New development targets [Linux 7.2.9](../KERNEL_BASELINE.md). The current
-decoder and encoder resource modules compile against that kernel's matching
-configuration and generated `Module.symvers`, with strict MODPOST. The
-7.2.9 platform boot/RTC/paging/Nix profile passes, but these media modules have
-not been loaded on 7.2.9. The picture, error and lifetime results below qualify
-their recorded 7.1.3 builds. Exact build and platform evidence is in
-[`kernel-7.2.9.json`](../kernel-7.2.9.json).
-The separate kernel branch `gemini-video-7.2.9` carries the experimental
-decoder resources and built-in native VDEC clock provider. Its kernel, required
-host checks, decoder, encoder resource probe and idle-reset probe all build
-successfully. These artifacts remain untested on hardware; the normal kernel
-does not enable the experimental decoder node.
+Development uses the same [Linux 7.2.9](../KERNEL_BASELINE.md) kernel as the
+normal GNOME image: maintained branch `gemini-7.2.9`, source `7eb0d527`.
+The former media branch is merged and retired. This kernel enables the decoder
+resources and native VDEC clock provider; the experimental decoder driver is
+not installed in the normal image. Picture, error and lifetime results below
+qualify their recorded polling builds, rather than the new IRQ backend.
 
 The current RAM-only 7.2.9 kernel and matching module build identities are in
 [`desktop-consolidation-20261010.json`](../desktop-consolidation-20261010.json).
 The [IRQ contract](irq-contract.json) records the public MT6797 acknowledge
 sequence and upstream Linux APIs. A recorded successful polling snapshot has
 the picture-complete bit set without the IRQ done bit; it does not establish
-interrupt delivery. The current source adds an IRQ completion candidate; its
-[host build](irq-build-20261010.json) passes ARM64 compilation with `W=1` and
-strict MODPOST against the matching RAM-only media kernel. It has not been
-loaded or qualified on hardware. Independent delivery, acknowledge, lifetime
-and pixel checks remain required before using it in normal development.
+interrupt delivery. [Trial 82](irq-trial-82.json) loaded the IRQ candidate on
+the maintained kernel. Its first 64x64 I_PCM command reached picture-complete
+state but timed out without an interrupt: all ten possible CPU counters stayed
+zero, and no frame was exported or compared. DMA stop, guards and normal unload
+passed; supervised recovery and the independent terminal audit returned a
+healthy GNOME system. IRQ completion remains unqualified.
+
+The [next diagnostic build](irq-controller-build-20261010.json) passes strict
+ARM64 MODPOST and `W=1` without warnings. It caches masked, pending and active
+controller state through Linux's `irq_get_irqchip_state`, together with the
+read-only AVC completion and clock status. It does not change the completion
+criteria or hardware programming and has not been loaded on the board.
 
 The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
 submitted command can accept a done event; a stale done bit or an event before
@@ -40,8 +41,9 @@ for every handler to retire. Picture-complete polling alone cannot satisfy a
 successful decode. A bounded error check still detects fatal CABAC stalls,
 and all prior private-DMA stop, guard and fencing checks remain in place.
 Cached job diagnostics include `irq_command`, `irq_received_command`,
-`irq_events`, `irq_unexpected` and `irq_status`; these fields are evidence to
-check during a future supervised trial, not a present IRQ qualification.
+`irq_events`, `irq_unexpected` and `irq_status`; trial 82 records their failed
+delivery result. Independent delivery, acknowledge, lifetime and pixel checks
+remain required before using this backend in normal development.
 
 The previously qualified polling module decodes the listed progressive H.264 Baseline I/P and
 Main/High I/P/B fixtures

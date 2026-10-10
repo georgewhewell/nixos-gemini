@@ -187,6 +187,26 @@ static int arm_irq(struct mt6797_engine *engine)
 	return 0;
 }
 
+static int irq_controller_state(struct mt6797_engine *engine,
+				enum irqchip_irq_state which)
+{
+	bool value = false;
+	int ret = irq_get_irqchip_state(engine->irq, which, &value);
+
+	/* The generic IRQ API walks through MT_SYSIRQ to the parent GIC.
+	 * Preserve unsupported/error results instead of reporting a false bit.
+	 */
+	return ret ? ret : value;
+}
+
+static void irq_controller_snapshot(struct mt6797_engine *engine,
+				    int *masked, int *pending, int *active)
+{
+	*masked = irq_controller_state(engine, IRQCHIP_STATE_MASKED);
+	*pending = irq_controller_state(engine, IRQCHIP_STATE_PENDING);
+	*active = irq_controller_state(engine, IRQCHIP_STATE_ACTIVE);
+}
+
 static int submit_decode(struct mt6797_engine *engine,
 			 struct mt6797_decode_status *status)
 {
@@ -196,6 +216,9 @@ static int submit_decode(struct mt6797_engine *engine,
 	if (ret)
 		return ret;
 	status->irq_command = engine->irq_command;
+	irq_controller_snapshot(engine, &status->irq_masked_before,
+				&status->irq_pending_before, &status->irq_active_before);
+	status->irq_controller_sampled = true;
 	spin_lock_irqsave(&engine->irq_lock, flags);
 	/* An interrupt delivered between unmask and hardware start belongs to
 	 * no submitted command. Do not start DMA after that unexpected event.
@@ -701,6 +724,9 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 
 	static_assert(ALIGN(MAX_NAL + sizeof(eos), 128) + 128 <= INPUT_DATA_SIZE);
 	memset(status, 0, sizeof(*status));
+	status->irq_clock_result = -ENODATA;
+	status->irq_masked_before = status->irq_pending_before = status->irq_active_before = -ENODATA;
+	status->irq_masked_after = status->irq_pending_after = status->irq_active_after = -ENODATA;
 	status->current_poc = job->decode.top_field_order_cnt;
 	*pixels = NULL;
 	if (engine->fenced)
@@ -1033,6 +1059,14 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	if (ret)
 		goto cleanup;
 	ret = wait_decode_irq(engine);
+	/* Sample the controller before disarm masks the line. These are cached
+	 * observations only; no pending bit or register is written by this probe.
+	 * Full AVC completion (0x274) and picture state (0x278) are distinct.
+	 */
+	irq_controller_snapshot(engine, &status->irq_masked_after,
+				&status->irq_pending_after, &status->irq_active_after);
+	status->irq_complete = readl(avc + 0x274);
+	status->irq_clock_result = regmap_read(engine->gcon, 0, &status->irq_clock_guard);
 	disarm_irq(engine);
 	status->irq_command = engine->irq_command;
 	status->irq_received_command = engine->irq_received_command;
