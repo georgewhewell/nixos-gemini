@@ -1,7 +1,6 @@
 # The normal Gemini system: one maintained kernel and one module composition.
 {
   nixpkgs,
-  nixpkgs-old,
   linux-gemini,
   ixoo-kernel,
   u-boot-gemini,
@@ -13,8 +12,8 @@
     system = buildSystem;
     config.allowUnfree = true;
   };
-  oldPkgs = import nixpkgs-old {system = buildSystem;};
   crossPkgs = buildPkgs.pkgsCross.aarch64-multiplatform;
+  kernelCompiler = crossPkgs.stdenv.cc;
   mainlineNixosLeaseSelfAcceptToken = "gemini-baseline-lease-v1-4e8e71c5b0c2aa1543c6fb079cc22964d0a7e25b942cb350f7a1e3d69b8c4052";
   userspace = import ./userspace.nix {inherit buildPkgs crossPkgs; ubootSource = u-boot-gemini;};
   inherit
@@ -28,7 +27,8 @@
   spmFirmware = import ./spm-firmware.nix {inherit buildPkgs;};
   cellularFsRegister = import ./cellular-helper.nix {inherit buildPkgs crossPkgs linux-gemini;};
   kernel = import ./kernel.nix {
-    inherit buildPkgs oldPkgs spmFirmware;
+    inherit buildPkgs spmFirmware;
+    compiler = kernelCompiler;
     source = linux-gemini;
   };
   dtb = import ./dtb.nix {inherit buildPkgs kernel;};
@@ -128,6 +128,6 @@
   };
 
 in {
-  inherit buildPkgs crossPkgs system kernel dtb image efiBootFiles uboot bootloader userspace;
+  inherit buildPkgs crossPkgs kernelCompiler system kernel dtb image efiBootFiles uboot bootloader userspace;
   mtkclient = import ./mtkclient-rtc.nix {inherit buildPkgs;};
 }

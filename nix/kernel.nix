@@ -1,11 +1,9 @@
 {
   buildPkgs,
-  oldPkgs,
+  compiler,
   source,
   spmFirmware,
-}: let
-  gcc = oldPkgs.pkgsCross.aarch64-multiplatform.buildPackages.gcc12;
-in
+}:
   buildPkgs.stdenv.mkDerivation {
     pname = "linux-gemini";
     version = "7.2.9";
@@ -26,8 +24,9 @@ in
         python3
         rsync
       ])
-      ++ [gcc];
+      ++ [compiler];
     depsBuildBuild = [buildPkgs.stdenv.cc];
+    passthru = {inherit compiler;};
 
     KBUILD_BUILD_TIMESTAMP = "2026-07-04 00:00:00 UTC";
     KBUILD_BUILD_VERSION = "1";

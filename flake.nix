@@ -173,7 +173,7 @@
         openssl
         perl
         elfutils
-        pkgsCross.aarch64-multiplatform.stdenv.cc
+        gemini.kernelCompiler
       ];
       shellHook = ''
         export ARCH=arm64

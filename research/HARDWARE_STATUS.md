@@ -3,17 +3,16 @@
 The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
 bottom dock, NetworkManager, ModemManager, IPv6 and RAM-only zram in
 [accepted-baseline.json](accepted-baseline.json).
-[Trial 85](networkmanager-image-20261010.json) passed and was kept on the device; the
-independent terminal audit passed. [Decoder trial 86](mt6797-vdec-v4l2/irq-trial-86.json)
-subsequently restored the same accepted image; its independently audited healthy boot is
-`918f2954-92dd-44b4-8ee6-504bea182e59`. The no-swap 7.1.3 fallback is preserved
+[Trial 87](default-toolchain-20261010.json) installed the GCC 15.3.0 / binutils
+2.46 build and passed the independent terminal audit. Its healthy boot is
+`eff3eca4-bb13-41c6-b37f-46e1932b4e23`. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 
 | Area | Current conclusion | Evidence and remaining work |
 | --- | --- | --- |
-| Protected storage, watchdog and native RTC | Working on the installed system | [Trial 85 and independent audit](networkmanager-image-20261010.json). Exact image/readback identity, native RTC startup/UTC/awake alarms, ordinary Nix build, retained data and terminal audit pass. The kept image was not rebooted after its explicit clock write. |
+| Protected storage, watchdog and native RTC | Working on the installed system | [Trial 87 and independent audit](default-toolchain-20261010.json). Exact image/readback identity, native RTC startup/UTC/awake alarms, ordinary Nix build, retained data and terminal audit pass. The kept image was not rebooted after its explicit clock write. |
 | Flash-safe paging | Working: RAM-only zram | Trial 85 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
-| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Source `7eb0d52` includes decoder resources, built-in IPv6 and zram. Earlier feature results remain scoped to their recorded inputs. |
+| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Source `7eb0d52` includes decoder resources, built-in IPv6 and zram. Kernel and development shell use the current locked Nixpkgs default compiler (GCC 15.3.0). Earlier feature results remain scoped to their recorded inputs. |
 | GNOME/GDM, HiDPI, dock and IPv6 | Working for the recorded checks | [Desktop proof](desktop-ui-20261010.json) confirms local Wayland, active 200% scaling and an enabled fixed bottom dock with no extension errors. IPv6 ping and SSH over USB passed on the same kernel/configuration; external IPv6 routing is untested. |
 | NetworkManager and ModemManager | Running; wired DHCP and modem discovery verified | [Manager proof](networkmanager-image-20261010.json). Both cross-built daemons and the shared supplicant run, with one imported Wi-Fi profile. USB recovery stays unmanaged; boot no longer requires the wired lab IP. Wi-Fi association and cellular data remain unqualified. |
 | Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units are explicit diagnostics. Trial 85 reaches graphical startup in 95.983 seconds, including 50.932 seconds in kernel/initramfs. The old Wi-Fi worker and dhcpcd are retired from the default image. |

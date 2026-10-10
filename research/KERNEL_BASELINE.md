@@ -8,6 +8,18 @@ when designing drivers, and verify the APIs against the pinned stable source.
 Update the stable base regularly; keep the pin reproducible rather than fetching
 a moving branch during a build.
 
+The normal kernel and development shell share the default ARM64 compiler
+from the locked current Nixpkgs input. This evaluates to GCC 15.3.0 on the
+current lock; there is no separate GCC version pin. The former GCC 12.2.0
+selection was inherited from the original board packaging, without a
+documented GCC 15 incompatibility. [Trial 87](default-toolchain-20261010.json)
+passed the full build, required kernel host checks, ARM64 desktop/manager runtime
+audit, supervised hardware acceptance and independent terminal audit. Its GCC
+15.3.0 / binutils 2.46 image is installed. The decoder module also builds with
+strict MODPOST and `W=1` against this exact kernel; its IRQ hardware test remains
+pending. [Trial 85](networkmanager-image-20261010.json) preserves the earlier
+GCC 12 image evidence.
+
 The 7.2.9 port is in branch `gemini-7.2.9`, with the full upstream ancestry,
 854 replayed board commits and the original 11 merges. The normal kernel,
 DTB and modules build successfully, and every required kernel host check passes.
@@ -29,8 +41,9 @@ disabled. The temporary `gemini-video-7.2.9` branch was merged, then deleted
 locally and remotely. Its earlier source snapshot remains detached for
 reproducing recorded build evidence; it is not a development branch.
 
-[Trial 81](desktop-ui-20261010.json) qualifies the current GNOME/zram image and
-keeps it installed after a passing independent audit. Local Wayland, HiDPI and
+[Trial 87](default-toolchain-20261010.json) qualifies the current GCC 15-built
+GNOME/zram image and keeps it installed after a passing independent audit.
+[Trial 81](desktop-ui-20261010.json) retains the earlier UI evidence. Local Wayland, HiDPI and
 the dock pass; IPv6 ping passed on this configuration in trial 80.
 The seven explicit hardware test units did not start during normal boot.
 RTC startup, UTC and awake alarm delivery/cancellation/rearming, actual zram
@@ -40,7 +53,9 @@ The [consolidated build record](consolidated-kernel-gnome-ipv6-20261010.json)
 records the decoder IRQ module rebuilt against this kernel's exact configuration
 and symbol table, with `W=1` and strict MODPOST. It requires a delivered done
 event before accepting a picture and synchronizes before reset or power release.
-This module has not been loaded; earlier polling results do not qualify IRQ delivery.
+[Trial 86](mt6797-vdec-v4l2/irq-trial-86.json) loaded its controller diagnostic
+successor and observed no delivered IRQ. Earlier polling results do not qualify
+IRQ delivery. The next module must match the default-compiler kernel exactly.
 
 The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) and its immutable
 [host](ram-only-recovery-20261010.json) and [hardware](ram-only-recovery-hardware-20261010.json)

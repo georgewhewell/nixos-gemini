@@ -44,8 +44,10 @@ clear. The current candidate requests only the bus and engine clocks. It
 retains that ISR guard and all completion/stop criteria. This experiment is
 unqualified until independent delivery and pixel checks pass.
 Its [GCC 12 host build](irq-clock-build-20261010.json) matches the previously
-accepted kernel and has not been loaded. The next hardware trial follows the
-requested switch of the kernel and module to the default compiler.
+accepted kernel and has not been loaded. The [default-compiler build](../default-toolchain-20261010.json) now provides
+the GCC 15.3.0 kernel and a matching module with strict MODPOST and `W=1`.
+The kernel image is accepted in trial 87; the next IRQ trial must use that
+matching module.
 
 The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
 submitted command can accept a done event; a stale done bit or an event before
