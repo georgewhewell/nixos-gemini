@@ -4,7 +4,10 @@
 Uses the existing boot/storage recovery owner. Bluetooth checks are read-only;
 the network check requests one bounded diagnostic scan without changing a
 profile or connection. Audio checks inspect the active onboard route. A failed
-check prevents candidate promotion. Normal boot runs none of these diagnostics.
+check prevents candidate promotion. RTC alarm/calendar qualification belongs to
+test-boot.py; this focused deployment retains its writer, storage and recovery
+checks without repeating the established RTC tests. Normal boot runs none of
+these diagnostics.
 """
 import hashlib
 import importlib.util
@@ -127,11 +130,15 @@ echo BLUETOOTH_DESKTOP_PASS
     return result
 
 
-base_configure = p.configure
+base_configure = boot.base_configure
+p.preflight = boot.base_preflight
+p.finish = boot.base_finish
 
 
 def configure(*args, **kwargs):
     runner = base_configure(*args, **kwargs)
+    runner.CANDIDATE_DESKTOP = 'gnome'
+    runner.backend.MTK = runner.backend.MTK_RTC
     candidate = runner.candidate_return
 
     def qualified(ssh, before, directory, profile):
@@ -162,6 +169,7 @@ def configure(*args, **kwargs):
             kernel=str(p.KERNEL), checks=results,
             connection_actions_performed=False, audible_playback_performed=False,
             pairing_profiles_qualified=False, physical_audio_orientation_qualified=False,
+            rtc_alarm_calendar_diagnostics_run=False,
         ))
         print('PASS: GNOME Bluetooth, directed network scan and onboard audio mapping integration', flush=True)
         return state

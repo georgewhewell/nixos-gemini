@@ -71,10 +71,24 @@ def unit_executable(unit):
     if executable.name in ('wpa_supplicant', '.wpa_supplicant-wrapped'):
         return executable
     # NixOS uses a unit start script that execs the package binary.
-    matches = re.findall(r'\bexec\s+(/nix/store/[^\s;]+/(?:bin|sbin)/(?:wpa_supplicant|\.wpa_supplicant-wrapped))(?=\s|$)',
-                         executable.read_text())
+    matches = re.findall(r'^exec\s+((?:/nix/store/[^\s;]+/(?:bin|sbin)/)?(?:wpa_supplicant|\.wpa_supplicant-wrapped))(?=\s|$)',
+                         executable.read_text(), re.M)
     require(len(matches) == 1, 'supplicant_unit_binary_not_unique')
-    return Path(matches[0]).resolve(strict=True)
+    binary = Path(matches[0])
+    if binary.is_absolute():
+        return binary.resolve(strict=True)
+    # NixOS 26.11 uses `exec wpa_supplicant $args`. Resolve that exact
+    # command with the running unit's PATH, in shell search order.
+    environment = dict(item.split(b'=', 1) for item in
+                       Path('/proc', str(unit_pid(unit)), 'environ').read_bytes().split(b'\0')
+                       if b'=' in item)
+    require(b'PATH' in environment, 'supplicant_unit_path_missing')
+    for entry in environment[b'PATH'].decode().split(':'):
+        require(entry.startswith('/'), 'supplicant_unit_path_not_absolute')
+        candidate = Path(entry) / binary
+        if candidate.is_file():
+            return candidate.resolve(strict=True)
+    raise CheckError('supplicant_unit_binary_missing')
 
 def scanning():
     value = prop(WPA, supplicant, WPI, 'Scanning')

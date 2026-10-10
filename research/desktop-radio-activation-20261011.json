@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-11",
+  "candidate_91": {
+    "boot_id": "ca430f25-3355-4496-954c-83f37c0f2b4a",
+    "system": "/nix/store/wvzcrli6vwc2d9y9aysl92vin8xa5z5z-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "gnome_rfkill_radio_inputs": "passed",
+    "network_scan_check": "failed before scan request: unit script uses a bare exec command",
+    "candidate_kept": false,
+    "independent_recovery_audit": "passed",
+    "recovered_boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
+    "wifi_association_driver_failures_observed": true
+  },
+  "bluetooth_discovery_on_restored_88": {
+    "boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
+    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "bounded_discovery_seconds": 16,
+    "wifi_netdev_present": true,
+    "before": {
+      "device_objects": 0,
+      "rssi_objects": 0,
+      "paired_objects": 0
+    },
+    "after": {
+      "device_objects": 13,
+      "rssi_objects": 13,
+      "paired_objects": 0
+    },
+    "discovering_samples": 16,
+    "final_discovering": false,
+    "hci_commands": {
+      "LE Set Random Address": 2,
+      "LE Set Scan Parameters": 1,
+      "LE Set Scan Enable": 4,
+      "Inquiry": 1,
+      "LE Set Scan Paramet..": 1
+    },
+    "hci_events": {
+      "Command Complete": 8,
+      "LE Meta Event": 84,
+      "Command Status": 1,
+      "Inquiry Complete": 1
+    },
+    "hci_statuses": {
+      "00": 16
+    },
+    "bluez_discovery_started": true,
+    "bluez_discovery_failure_codes": [],
+    "radio_power_or_pairing_actions": 0,
+    "owner": "bounded diagnostic bluetoothctl client",
+    "gnome_discovery_qualified": false,
+    "wifi_association_qualified": false
+  },
+  "wifi_activation_failure": {
+    "boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
+    "supplicant_version": "2.11",
+    "source_tar_sha256": "912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a",
+    "locked_nixpkgs_source_matches_public_tar": true,
+    "nl80211_connect_errno": -95,
+    "request": {
+      "wpa_version": 2,
+      "group_cipher": "000fac04",
+      "pairwise_cipher": "000fac04",
+      "allowed_akms": [
+        "000fac02",
+        "000fac06"
+      ],
+      "station_rsn_akm": "000fac02",
+      "station_rsn_capabilities": 140,
+      "ie_ids": [
+        48,
+        127,
+        59
+      ],
+      "auth_type": 0
+    },
+    "cause": "Driver required exactly one allowed AKM; cfg80211 and current wpa_supplicant supply an allowed list with a separate single station RSN selection.",
+    "fix_kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
+    "fix": "Admit supported allowed-AKM lists and retain the station RSN selection, requiring membership; preserve CCMP/PMF/SAE policy and reject unsupported or absent selections.",
+    "host_before_actual_callback": "failed as expected with two supported AKMs",
+    "host_after_actual_callback": "passed with GCC15 ASan/UBSan, including reversed allowed-list order, SHA256/SAE selections and missing/unsupported lists",
+    "manual_connection_actions": 0,
+    "hardware_fix_qualified": false,
+    "association_and_data_qualified": false
+  },
+  "verification_fix": {
+    "bare_nixos_unit_command_resolved_through_running_unit_path": true,
+    "offline_cases": 14,
+    "result": "passed"
+  },
+  "next_candidate": "pending build and supervised focused deployment",
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/radio-activation-discovery-20261011"
+}
