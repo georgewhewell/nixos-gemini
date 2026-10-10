@@ -179,7 +179,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 			!strcmp(name, "fault-pskip") || !strcmp(name, "fault-stale") ||
 			!strcmp(name, "fault-retained") ? "pcm64-p" :
 			!strcmp(name, "motion-reference") || !strcmp(name, "fault-pcm") ||
-			!strcmp(name, "fault-truncated") ? "pcm64" : name;
+			!strcmp(name, "fault-truncated") || !strcmp(name, "fault-scaling") ? "pcm64" : name;
 		char path[1024];
 		if (snprintf(path, sizeof(path), "%s/%s.nal", fixture_directory, fixture) >= (int)sizeof(path)) {
 			fprintf(stderr, "Fixture path too long\n"); exit(1);
@@ -239,9 +239,18 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		params.dpb[0].frame_num = params.dpb[0].pic_num = 1;
 		params.dpb[0].top_field_order_cnt = params.dpb[0].bottom_field_order_cnt = 2;
 	}
+	struct v4l2_ctrl_h264_scaling_matrix scaling;
+	memset(&scaling, 16, sizeof(scaling));
+	if (!strcmp(name, "fault-scaling")) {
+		sps.profile_idc = 100;
+		sps.constraint_set_flags = 0;
+		pps.flags |= V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT;
+		scaling.scaling_list_8x8[1][63] = 0;
+	}
 	struct v4l2_ext_control values[] = {
 		{ .id = V4L2_CID_STATELESS_H264_SPS, .size = sizeof(sps), .ptr = &sps },
 		{ .id = V4L2_CID_STATELESS_H264_PPS, .size = sizeof(pps), .ptr = &pps },
+		{ .id = V4L2_CID_STATELESS_H264_SCALING_MATRIX, .size = sizeof(scaling), .ptr = &scaling },
 		{ .id = V4L2_CID_STATELESS_H264_SLICE_PARAMS, .size = sizeof(slice), .ptr = &slice },
 		{ .id = V4L2_CID_STATELESS_H264_DECODE_PARAMS, .size = sizeof(params), .ptr = &params },
 	};
@@ -265,6 +274,14 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
 	int bad = dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
+	if (!strcmp(name, "fault-scaling")) {
+		for (unsigned int plane = 0; plane < 2; plane++)
+			for (size_t byte = 0; byte < stream->capture[plane].bytes; byte++)
+				if (((u8 *)stream->capture[plane].address)[byte] != 0x79) {
+					fprintf(stderr, "Rejected scaling request changed capture storage\n"); exit(1);
+				}
+	}
+
 	bad |= dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
 	struct pollfd pollfd = { .fd = request, .events = POLLPRI };
 	if (poll(&pollfd, 1, 1000) != 1 || !(pollfd.revents & POLLPRI)) {
@@ -347,6 +364,7 @@ int main(int argc, char **argv)
 		decode(&stream, argv[3], "fault-truncated", pcm64_nal, sizeof(pcm64_nal), 0, 0, 1, 3, 2);
 		decode(&stream, argv[3], "fault-stale", pskip64_nal, sizeof(pskip64_nal), 1, 0, 1, 4, 3);
 		decode(&stream, argv[3], "fault-retained", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 5, 4);
+		decode(&stream, argv[3], "fault-scaling", pcm64_nal, sizeof(pcm64_nal), 0, 0, 1, 6, 5);
 		close_stream(&stream);
 	}
 	puts("{\"public_api_test_passed\":true}");

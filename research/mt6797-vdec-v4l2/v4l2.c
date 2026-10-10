@@ -42,7 +42,7 @@ struct decode_file {
 	struct v4l2_ctrl_handler controls;
 	struct mt6797_decode_context *context;
 	struct mt6797_decode_job job;
-	struct v4l2_ctrl *sps, *pps, *slice, *decode;
+	struct v4l2_ctrl *sps, *pps, *slice, *decode, *scaling;
 	atomic_t abort;
 	bool failure_recorded;
 	u32 sequence;
@@ -323,6 +323,7 @@ static void decode_work(struct work_struct *work)
 		mutex_lock(ctx->controls.lock);
 		ctx->job.sps = *ctx->sps->p_cur.p_h264_sps;
 		ctx->job.pps = *ctx->pps->p_cur.p_h264_pps;
+		ctx->job.scaling = *ctx->scaling->p_cur.p_h264_scaling_matrix;
 		ctx->job.slice = *ctx->slice->p_cur.p_h264_slice_params;
 		ctx->job.decode = *ctx->decode->p_cur.p_h264_decode_params;
 		ctx->job.width = ctx->width;
@@ -429,7 +430,7 @@ static int open_decoder(struct file *file)
 	config.id = V4L2_CID_STATELESS_H264_DECODE_PARAMS;
 	ctx->decode = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	config.id = V4L2_CID_STATELESS_H264_SCALING_MATRIX;
-	v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
+	ctx->scaling = v4l2_ctrl_new_custom(&ctx->controls, &config, NULL);
 	/* Slice-based clients also submit weights for unweighted pictures.
 	 * Admission in engine.c rejects weighted PPS flags before hardware DMA.
 	 */

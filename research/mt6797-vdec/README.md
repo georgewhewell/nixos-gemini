@@ -5,6 +5,10 @@ kernel diagnostics and independently verified H.264 fixtures. Fixed 64x64 PCM, g
 frames complete with exact pixel comparisons and zero hardware errors when
 the private FIFO producer has a valid ending.
 A production decoder or video device is not yet qualified. Encoding is not implemented.
+The [experimental V4L2 Request driver](../mt6797-vdec-v4l2/README.md) now
+qualifies listed Baseline/Main/High I/P streams through 1080p. Trial 47 checks
+169 exact pictures, including High 8x8 transforms and custom scaling matrices,
+all 57 media checks, normal unload and strict RTC/system recovery.
 
 The decoder target is the Linux V4L2 stateless Request API, initially progressive
 8-bit 4:2:0 H.264. GStreamer `v4l2codecs` is the userspace integration target.

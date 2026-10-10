@@ -24,10 +24,15 @@ def main():
                         help='CABAC generates Main profile for separate hardware qualification')
     parser.add_argument('--deblocking', action='store_true',
                         help='Generate a deblocked stream for separate hardware qualification')
+    parser.add_argument('--transform-8x8', action='store_true',
+                        help='Generate High profile with actual adaptive 8x8 transform use')
+    parser.add_argument('--scaling', choices=('flat', 'jvt', 'custom'), default='flat',
+                        help='High-profile quantization matrices for separate qualification')
     args = parser.parse_args()
     w, h, count = args.width, args.height, args.frames
     cabac = args.entropy == 'cabac'
-    profile = 'main' if cabac else 'baseline'
+    high = args.transform_8x8 or args.scaling != 'flat'
+    profile = 'high' if high else 'main' if cabac else 'baseline'
     if not (64 <= w <= 1920 and 64 <= h <= 1088 and not w % 16 and not h % 2
             and 2 <= count <= 32):
         parser.error('Use width64..1920 in steps16, even height64..1088 and2..32frames')
@@ -43,16 +48,33 @@ def main():
     source, stream, reference = [args.out / name for name in
                                  ('original.yuv', 'stream.h264', 'reference.yuv')]
     source.write_bytes(original)
+    matrix_params = ''
+    if args.scaling == 'jvt':
+        matrix_params = ':cqm=jvt'
+    elif args.scaling == 'custom':
+        # Distinct, nonuniform raster-order lists expose list selection,
+        # coefficient byte order and scan-order errors in a hardware port.
+        lists = {name: [8 + (i * 3 + row * 5 + seed) % 24
+                        for row in range(size) for i in range(size)]
+                 for name, size, seed in [('cqm4iy', 4, 1), ('cqm4ic', 4, 4),
+                                         ('cqm4py', 4, 7), ('cqm4pc', 4, 10),
+                                         ('cqm8i', 8, 13), ('cqm8p', 8, 16)]}
+        matrix_params = ''.join(':' + name + '=' + ','.join(map(str, values))
+                                for name, values in lists.items())
+        (args.out / 'custom-matrices.json').write_text(json.dumps(lists, indent=2) + '\n')
     command = [args.ffmpeg, '-v', 'info', '-nostdin', '-y', '-f', 'rawvideo',
                '-pix_fmt', 'yuv420p', '-s', f'{w}x{h}', '-r', '25', '-i', str(source),
                '-frames:v', str(count), '-c:v', 'libx264', '-profile:v', profile,
                '-preset', 'fast', '-qp', '24', '-bf', '0', '-refs', '1',
-               '-x264-params', ('cabac=1:' if cabac else '') +
+               '-x264-params', ('cabac=1:' if cabac else 'cabac=0:' if high else '') +
                f'no-deblock={0 if args.deblocking else 1}:'
-               '8x8dct=0:weightp=0:repeat-headers=1:'
-               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}', str(stream)]
+               f'8x8dct={int(args.transform_8x8)}:weightp=0:repeat-headers=1:'
+               f'threads=1:scenecut=0:keyint={count}:min-keyint={count}' + matrix_params,
+               str(stream)]
     encode = subprocess.run(command, check=True, capture_output=True)
     (args.out / 'encode-stderr.txt').write_bytes(encode.stderr)
+    if b'Error parsing option' in encode.stderr:
+        raise RuntimeError('Fixture encoder rejected an option')
     decode_command = [args.ffmpeg, '-v', 'error', '-nostdin', '-y', '-f', 'h264',
                       '-i', str(stream), '-pix_fmt', 'yuv420p', '-f', 'rawvideo',
                       str(reference)]
@@ -67,7 +89,7 @@ def main():
     trace = subprocess.run(trace_command, check=True, capture_output=True)
     (args.out / 'public-syntax-trace.txt').write_bytes(trace.stderr)
     syntax = trace.stderr.decode()
-    for field, expected in [('profile_idc', 77 if cabac else 66),
+    for field, expected in [('profile_idc', 100 if high else 77 if cabac else 66),
                             ('entropy_coding_mode_flag', int(cabac)),
                             ('weighted_pred_flag', 0), ('weighted_bipred_idc', 0),
                             ('num_ref_idx_l0_default_active_minus1', 0),
@@ -80,6 +102,18 @@ def main():
         values = re.findall(r'\b' + field + r'\s+\S+\s+=\s+(\d+)', syntax)
         if not values or any(int(v) != expected for v in values):
             raise RuntimeError(f'Unexpected public syntax {field}: {values}')
+    if high:
+        transforms = re.findall(r'\btransform_8x8_mode_flag\s+\S+\s+=\s+(\d+)', syntax)
+        if not transforms or any(int(v) != int(args.transform_8x8) for v in transforms):
+            raise RuntimeError(f'Unexpected 8x8 transform syntax: {transforms}')
+        present = re.findall(r'\b(?:seq|pic)_scaling_matrix_present_flag\s+\S+\s+=\s+(\d+)', syntax)
+        if not present or (any(int(v) for v in present) != (args.scaling != 'flat')):
+            raise RuntimeError(f'Unexpected scaling matrix syntax: {present}')
+    transform_usage = re.findall(r'8x8 transform intra:([\d.]+)% inter:([\d.]+)%',
+                                encode.stderr.decode())
+    if args.transform_8x8 and (not transform_usage or
+                              not any(float(v) > 0 for pair in transform_usage for v in pair)):
+        raise RuntimeError('Encoder did not report actual 8x8 transform use')
     if h % 16:
         crop = re.findall(r'\bframe_crop_bottom_offset\s+\S+\s+=\s+(\d+)', syntax)
         if not crop or any(int(v) != (16 - h % 16) // 2 for v in crop):
@@ -96,6 +130,8 @@ def main():
                     software_decode_verified=True, hardware_tested=False,
                     coded_height=(h+15)//16*16, storage_height=(h+31)//32*32,
                     deblocking=args.deblocking, entropy_coding=args.entropy, profile=profile,
+                    transform_8x8=args.transform_8x8, scaling=args.scaling,
+                    encoder_transform_usage=transform_usage,
                     encode_command=command, decode_command=decode_command,
                     public_syntax_checked=True,
                     hashes={n: hashlib.sha256((args.out / n).read_bytes()).hexdigest()

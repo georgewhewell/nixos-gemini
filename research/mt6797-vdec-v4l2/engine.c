@@ -330,7 +330,8 @@ static int validate_job(struct mt6797_decode_context *ctx,
 				    &job->decode, job->bytes, slice);
 	if (ret)
 		return ret;
-	if ((job->sps.profile_idc != 66 && job->sps.profile_idc != 77) ||
+	if ((job->sps.profile_idc != 66 && job->sps.profile_idc != 77 &&
+	     job->sps.profile_idc != 100) ||
 	    (job->sps.profile_idc == 66 &&
 	     (job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE)) ||
 	    job->width < 64 || job->width > MT6797_MAX_WIDTH || job->width % 16 ||
@@ -338,8 +339,10 @@ static int validate_job(struct mt6797_decode_context *ctx,
 	    header->width_mbs * 16 != job->width || header->height_mbs * 16 < 64 ||
 	    ALIGN(header->height_mbs * 16, 32) != job->height ||
 	    job->sps.max_num_ref_frames > 1 || job->slice.first_mb_in_slice ||
-	    job->pps.flags & (V4L2_H264_PPS_FLAG_WEIGHTED_PRED | V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
-		V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT) ||
+	    job->pps.flags & V4L2_H264_PPS_FLAG_WEIGHTED_PRED ||
+	    (job->sps.profile_idc != 100 &&
+	     (job->pps.flags & (V4L2_H264_PPS_FLAG_TRANSFORM_8X8_MODE |
+			       V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT))) ||
 	    job->pps.weighted_bipred_idc || job->slice.slice_type == V4L2_H264_SLICE_TYPE_B ||
 	    (!!(job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_PFRAME) !=
 	     (job->slice.slice_type == V4L2_H264_SLICE_TYPE_P)) ||
@@ -484,6 +487,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	struct mt6797_h264_header_words header;
 	struct mt6797_h264_slice_words slice;
 	struct mt6797_h264_p_reference_words ref_words;
+	struct mt6797_h264_scaling_word scaling[MT6797_H264_SCALING_WORDS];
 	struct register_save saved = { 0 };
 	void __iomem *misc = engine->banks[MISC], *vld = engine->banks[VLD];
 	void __iomem *top = engine->banks[TOP], *mc = engine->banks[MC];
@@ -503,6 +507,14 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	ret = validate_job(ctx, job, &header, &slice, &reference, &output);
 	if (ret)
 		return ret;
+	/* All consumed coefficients must be valid before allocating picture
+	 * storage, taking a power vote or transferring private DMA ownership.
+	 */
+	if (job->pps.flags & V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT) {
+		ret = mt6797_h264_scaling_words(&job->scaling, scaling);
+		if (ret)
+			return ret;
+	}
 	if (reference >= 0) {
 		/* One logical hardware reference slot, independent of the private
 		 * cache allocation index. Full decoder reset precedes every job.
@@ -626,6 +638,23 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 		goto cleanup;
 	SAVE(avc + 0xa0, 1U << (job->sps.log2_max_frame_num_minus4 + 4));
 	SAVE(avc + 0xa4, job->decode.frame_num);
+	/* The related public GPL common-VLD interface consumes raster coefficients
+	 * in eight SRAM lists: six 4x4 and two luma 8x8. The PPS word below
+	 * selects these lists; when absent the core uses flat scaling.
+	 */
+	if (job->pps.flags & V4L2_H264_PPS_FLAG_SCALING_MATRIX_PRESENT)
+		for (i = 0; i < ARRAY_SIZE(scaling); i++) {
+			write_word(0x200 + scaling[i].location, vld + 0x260);
+			write_word(scaling[i].coefficients, vld + 0x264);
+			write_word(0x100 + scaling[i].location, vld + 0x260);
+			/* The public SRAM dump reads the selected word at 0x264.
+			 * A failed round-trip must not start picture reconstruction.
+			 */
+			if (readl(vld + 0x264) != scaling[i].coefficients) {
+				ret = -EIO;
+				goto cleanup;
+			}
+		}
 	SAVE(avc + 0x88, header.sps);
 	SAVE(avc + 0x90, header.pps);
 	SAVE(avc + 0x94, header.reference_counts);

@@ -7,7 +7,7 @@ firmware or proprietary codec library is loaded. Register provenance and
 qualification evidence are tracked in [the interface ledger](../mt6797-video-interface.json).
 This development has not used a formally separated clean-room team.
 
-The current module decodes the listed progressive Baseline/Main I/P fixtures
+The current module decodes the listed progressive Baseline/Main/High I/P fixtures
 through 1920x1088 coded / 1920x1080 visible, using one slice and one short-term
 reference. Trial 41 checks 106 exact pictures including HD, resolution changes
 and visible-height I420 output; all 57 default media checks pass. Trials 44/45
@@ -21,6 +21,28 @@ The source uses cached private DMA with explicit ownership and lazy geometry
 allocation. Prior RTC/open-allocation/conversion failures remain recorded.
 Hardware encoding, broader codec features, interrupt completion, sustained
 playback/thermal qualification and production integration remain unfinished.
+
+Trial 46 adds High-profile fixtures with actual 8x8 transform use. Flat scaling
+passes in CABAC and CAVLC, but custom and JVT scaling fail pixel comparisons:
+81 pictures match and 32 do not. The candidate incorrectly addressed scaling
+SRAM through the AVC-specific bank. The public helper selects the common VLD
+bank instead. Both completion and intact DMA guards were insufficient to detect
+this pixel error; independent software comparison remains required. Normal
+unload, all 57 media checks, RTC/system checks and strict recovery/audit pass.
+The first custom fixture also has ignored x264 8x8 option names; its nonuniform
+4x4 lists, raw warnings and failed output remain recorded. The corrected
+generator uses `cqm8i`/`cqm8p` and rejects encoder option errors. A separate
+candidate corrects the bank and requires exact scaling SRAM readback before
+picture reconstruction. Trial 47 qualifies that correction with 169 exact
+pictures over 170 hardware commands, including the intentional timeout.
+High fixtures cover CABAC/CAVLC, actual 8x8 transforms, flat/JVT/nonuniform
+matrices, 4x4-only custom scaling, and 32 pictures with changing matrix settings
+inside one stream. Custom-matrix 1080p output matches in native MM21 and I420.
+A zero final consumed coefficient is rejected before any hardware fetch or
+decode command; capture storage remains untouched. Concurrent contexts, all
+57 default media checks, normal unload, all RTC/system checks and strict
+accepted recovery/audit pass. The Main 32-picture 1080p clocked regression
+also passes. High-profile sustained or clocked throughput remains unqualified.
 
 The first module builds against the 7.1.3 candidate kernel with strict modpost
 and genuine exported-symbol metadata from that kernel and its media modules.
@@ -64,10 +86,10 @@ metadata shadowed module metadata; its report is reconstructed offline from
 the preserved results. The raw reporting failure is retained with the trial. Supervisor RTC/system
 checks, accepted recovery and the strict kernel-journal audit also pass.
 
-Hardware-tested scope is progressive 8-bit 4:2:0 Baseline and the Main/CABAC
-streams qualified in trial 37 below, one slice,
+Hardware-tested scope is progressive 8-bit 4:2:0 Baseline, Main/CABAC
+and the High-profile streams qualified in trial 47 above, one slice,
 I/P pictures, at most one short-term reference, with enabled or disabled deblocking.
-Main/CABAC retains the specifically checked trailer flag described below. Input
+CABAC retains the specifically checked trailer flag described below. Input
 is `V4L2_PIX_FMT_H264_SLICE` with no start code; capture is two-plane native
 `V4L2_PIX_FMT_MM21`. The current driver admits coded widths 64..1920 and heights 64..1088
 in steps of 16; trial 41 checks the explicitly listed HD and SD fixtures.
@@ -96,7 +118,7 @@ the worker synchronizes them for the device before the first fetch, then for
 the CPU only after a proven hardware stop. Before copying pixels
 into capture buffers, the worker requires picture completion, break/reset
 acknowledgements and unchanged guards/reference storage. Baseline requires zero
-error/message words. The experimental Main trailer classification below retains
+error/message words. The experimental CABAC trailer classification below retains
 raw flags and admits only its specifically checked completion condition. It resolves references by the input timestamp and checks picture
 metadata against the per-file cache. Stream-off and close wait for the worker.
 An unproven hardware stop retains private DMA allocations, clocks, runtime
@@ -123,7 +145,7 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 128 96 export
 
-# Optional bounded timeout, stale timestamp and retained-reference recovery:
+# Optional timeout, stale reference, retained-reference recovery and invalid scaling:
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 64 64 export faults

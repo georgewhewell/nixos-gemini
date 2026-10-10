@@ -12,12 +12,13 @@
 struct mt6797_engine;
 struct mt6797_decode_context;
 
-/* Initial hardware boundary: progressive Baseline/Main, one slice and one
- * short-term reference, bounded small pictures. This is original code, not firmware.
+/* Hardware boundary: progressive 8-bit 4:2:0, one I/P slice and one
+ * short-term reference. This is original code, not firmware.
  */
 struct mt6797_decode_job {
 	struct v4l2_ctrl_h264_sps sps;
 	struct v4l2_ctrl_h264_pps pps;
+	struct v4l2_ctrl_h264_scaling_matrix scaling;
 	struct v4l2_ctrl_h264_slice_params slice;
 	struct v4l2_ctrl_h264_decode_params decode;
 	const u8 *nal;

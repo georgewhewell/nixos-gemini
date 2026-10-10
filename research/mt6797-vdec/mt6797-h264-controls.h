@@ -63,7 +63,7 @@ struct mt6797_h264_scaling_word {
 
 /* Six 4x4 and two luma 8x8 matrices for 4:2:0, in Linux raster order.
  * For each word the candidate VLD SRAM protocol is:
- * write 0x260 = 0x200 + location; write 0x264 = coefficients;
+ * Common VLD bank: write 0x260 = 0x200 + location; write 0x264 = coefficients;
  * write 0x260 = 0x100 + location. Hardware execution remains separate.
  */
 int mt6797_h264_scaling_words(const struct v4l2_ctrl_h264_scaling_matrix *matrix,
