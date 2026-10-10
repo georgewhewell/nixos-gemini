@@ -79,3 +79,14 @@ Trial 67 repeats the same command-free probe while checking the corrected
 decoder module. Released power votes, normal unload, full RTC/system checks
 and the strict accepted-board recovery audit pass. No encoder DMA, frame
 command or encoded picture is qualified.
+
+The separate [`idle-reset/probe.c`](idle-reset/probe.c) diagnostic now builds
+against Linux 7.2.9 with matching generated symbols and strict MODPOST.
+It has not been loaded on hardware. It attempts three bounded idle pause/reset
+cycles using the public GPL reset/IRQ glue, records attempted and completed
+cycles separately, and verifies restoration of the original control words.
+If it cannot restore controls after writing them, it retains module, clock and
+power ownership until the supervised reboot. It programs no frame addresses,
+picture state or encode command. A successful idle reset would still leave
+active DMA stop, IRQ delivery and encoded output unqualified. Build provenance
+is in [`idle-reset/build.json`](idle-reset/build.json).
