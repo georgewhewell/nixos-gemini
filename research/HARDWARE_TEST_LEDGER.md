@@ -1468,3 +1468,25 @@ recovery and final source/no-writer checks pass; the accepted board is healthy
 and untainted at `64af6f66-356e-4451-971e-b738014b4974`. Twelve frame submissions
 have no successful pixel comparison. A configuration-only control, DMA28
 comparison and post-idle working-memory snapshots are prepared for diagnosis.
+
+Private frame trial `handoff/boot-test-video-frame-17` runs one configuration-only
+control and three PCM submissions across DMA30/DMA28 and wrapper paths. The
+control has no frame command and leaves all working regions zero, MB coordinates
+zero and output unchanged. All command runs time out with output unchanged;
+28 MV byte flags at offsets `13+16*n` become `0x02`. Extended-wrapper DMA30 and
+DMA28 working snapshots are byte-identical, SHA256
+`00812ab56c85061aabc0b8f7dfe0df644f293d3961a7df470ff335ec8dbfc50b`.
+Their prediction data changes, while both wrapper buffers remain zero.
+The MV pattern and public SUM6 counter are consistent with seven parsed
+macroblocks and downstream backpressure. This is an inference, not completed
+macroblock, output-layout or frame qualification. Fifteen actual frame commands
+have zero pixel comparisons; the separate control does not count as a frame.
+Input, guards, idle/unload and full system/RTC/recovery checks pass. The accepted
+board is healthy and untainted at `d02b3e24-2e84-4ee6-9fd4-328735edd792`.
+
+The next diagnostic prepares the public H.264 PP selector at MC `0x268` and
+direct-MC output from the public disabled-deblocking branch. A separate optional
+whole-VDEC reset uses published GCON `0x10` bit 0 before all DMA, rejects a reset
+already held, releases it even on assertion/read failure, and requires unchanged
+clock/SMI/reset readback. It neither writes framework clocks nor the supplier MMU
+mask. These variants are compiled but have not yet run on hardware.

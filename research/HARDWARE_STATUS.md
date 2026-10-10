@@ -66,7 +66,13 @@ zero successful comparisons. MV working memory changes, and prediction changes
 with the wrapper extension; these flags include setup/reset activity. Guards,
 idle/unload and full system/RTC/recovery pass. The next probe records pipeline
 status and CPU working-memory snapshots after idle, with a configuration-only
-control and a smaller DMA aperture to check a truncated address field. A
+control and a smaller DMA aperture to check a truncated address field. Trial 17
+leaves working memory zero without the frame command, but produces 28 MV flags
+after submission. DMA30/DMA28 working snapshots are identical, while every
+output byte remains unchanged. Counter/record data is consistent with seven
+parsed macroblocks and downstream backpressure; no completed frame is inferred.
+Fifteen frame commands have zero successful pixel comparisons. System/RTC/
+recovery and the final accepted-board audit pass. A
 27-byte patterned compressed intra reference passes all 6,144 samples against
 FFmpeg; it has not run on hardware. Hardware video decoding and encoding remain
 unqualified. The target is

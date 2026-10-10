@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Direct H.264 input DMA qualification on a real MT6797 codec DT device.
- * Private known-input and single I_PCM frame diagnostics; no V4L2 device.
+ * Private known-input and original H.264 intra-frame diagnostics; no V4L2 device.
  */
 #include <linux/clk.h>
 #include <linux/delay.h>
@@ -28,6 +28,7 @@
 #define PDN_MODULE 0xcc
 #define AUTO_PDN_CONTROL 0xec
 #define GLOBAL_DCM_CONTROL 0x18
+#define GLOBAL_RESET_CONTROL 0x10
 #define IRQ_CONTROL 0xa4
 #define BREAK_CONTROL 0x100
 #define BREAK_STATUS 0x104
@@ -77,9 +78,18 @@ MODULE_PARM_DESC(frame_wrapper_bypass, "Diagnose the small-picture wrapper exten
 static bool frame_config_only;
 module_param(frame_config_only, bool, 0444);
 MODULE_PARM_DESC(frame_config_only, "Configure and observe the private frame without submitting its decode command");
+static bool frame_h264_pp;
+module_param(frame_h264_pp, bool, 0444);
+MODULE_PARM_DESC(frame_h264_pp, "Explicitly select the public H.264 post-processing mode at MC 0x268 before submission");
+static bool frame_mc_output;
+module_param(frame_mc_output, bool, 0444);
+MODULE_PARM_DESC(frame_mc_output, "Diagnose direct MC output using the public disabled-deblocking branch; only the deblocking-disabled fixture is admitted");
 static unsigned int dma_bits = TEST_DMA_BITS;
 module_param(dma_bits, uint, 0444);
 MODULE_PARM_DESC(dma_bits, "Private diagnostic DMA aperture, 28..30 bits; smaller apertures test truncated address fields");
+static bool subsystem_reset;
+module_param(subsystem_reset, bool, 0444);
+MODULE_PARM_DESC(subsystem_reset, "Pulse the documented whole-VDEC active-low reset before any input DMA; clocks must remain unchanged");
 static bool nonposted = true;
 module_param(nonposted, bool, 0444);
 MODULE_PARM_DESC(nonposted, "Use non-posted codec register mappings, matching the public MT6797 userspace resource mapping");
@@ -139,6 +149,8 @@ struct fifo_probe {
 	u32 irq_original;
 	u32 async_original, async_after_fetch, common_reset_original;
 	u32 caller_controls[2], global_before[2];
+	u32 subsystem_after[3], subsystem_smi_before;
+	int subsystem_reset_result;
 	u32 caller_gate_after_fetch;
 	unsigned long clock_rate;
 	int result, reset_result, break_result;
@@ -151,7 +163,7 @@ struct fifo_probe {
 	unsigned int frame_saved_count;
 	u32 frame_state, frame_irq, frame_error, frame_message, frame_mbx, frame_mby;
 	u32 frame_input_first, frame_input_data;
-	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[16];
+	u32 frame_setup[16], frame_status[8], frame_clock_status[6], frame_pipeline[17];
 	bool frame_work_changed[4]; /* prediction, MV, VLD wrapper, PP wrapper */
 	bool frame_work_before[4];
 	int frame_result;
@@ -184,6 +196,50 @@ static void write_reg(u32 value, void __iomem *address)
 	mb();
 }
 
+static int reset_subsystem(struct fifo_probe *p)
+{
+	u32 state;
+	int ret, release_ret;
+
+	/* MT6797 Register Table Part 2, 4.7: GCON 0x10 bit 0 is active-low
+	 * whole-VDEC reset, distinct from the VLD soft/barrel resets. This
+	 * private device is the only enabled decoder consumer in the candidate.
+	 * Do not take over a reset already held, or write any framework clocks.
+	 */
+	if (!(p->global_before[1] & BIT(0)))
+		return -EBUSY;
+	ret = regmap_read(p->gcon, 0x8, &p->subsystem_smi_before);
+	if (ret)
+		return ret;
+	ret = regmap_update_bits(p->gcon, GLOBAL_RESET_CONTROL, BIT(0), 0);
+	if (!ret) {
+		ret = regmap_read(p->gcon, GLOBAL_RESET_CONTROL, &state);
+		if (!ret && (state & BIT(0)))
+			ret = -EIO;
+		udelay(2);
+	}
+	/* Release even when assertion/readback failed. No DMA command exists. */
+	release_ret = regmap_update_bits(p->gcon, GLOBAL_RESET_CONTROL, BIT(0), BIT(0));
+	if (!ret)
+		ret = release_ret;
+	release_ret = regmap_read(p->gcon, GLOBAL_RESET_CONTROL, &p->subsystem_after[2]);
+	if (!ret)
+		ret = release_ret;
+	if (ret)
+		return ret;
+	ret = regmap_read(p->gcon, 0, &p->subsystem_after[0]);
+	if (ret)
+		return ret;
+	ret = regmap_read(p->gcon, 0x8, &p->subsystem_after[1]);
+	if (ret)
+		return ret;
+	if (p->subsystem_after[2] != p->global_before[1] ||
+	    p->subsystem_after[0] != p->global_before[0] ||
+	    p->subsystem_after[1] != p->subsystem_smi_before)
+		return -EIO;
+	return 0;
+}
+
 static int reset_input(struct fifo_probe *p)
 {
 	u32 state;
@@ -191,7 +247,7 @@ static int reset_input(struct fifo_probe *p)
 
 	/* Bits 0/8 follow the public MT8173 newer-core reset interface.
 	 * Reset stays asserted until outstanding input processing is idle.
-	 * This test never enables MC/PP frame DMA.
+ * This reset helper issues no frame command.
 	 */
 	write_reg(RESET_CORE, p->vld + VLD_SOFT_RESET);
 	readl(p->vld + VLD_SOFT_RESET);
@@ -460,14 +516,16 @@ static int test_frame(struct fifo_probe *p)
 	frame_reg(p, p->mc + 0x768, (readl(p->mc + 0x768) & ~GENMASK(2, 0)) | 4);
 	frame_reg(p, p->mc + 0x208, 64);
 	frame_reg(p, p->mc + 0x20c, 64);
-	frame_reg(p, p->mc + 0x220, 1);
+	frame_reg(p, p->mc + 0x220, frame_mc_output ? 0 : 1);
 	frame_reg(p, p->mc + 0x224, lower_32_bits(p->frame_dma[0]) >> 9);
 	frame_reg(p, p->mc + 0x228, lower_32_bits(p->frame_dma[0] + 4096) >> 8);
 	frame_reg(p, p->mc + 0x22c, 4);
-	frame_reg(p, p->mc + 0x238, 3);
-	frame_reg(p, p->mc + 0x250, 1);
+	frame_reg(p, p->mc + 0x238, frame_mc_output ? 0 : 3);
+	frame_reg(p, p->mc + 0x250, frame_mc_output ? 0 : 1);
 	frame_reg(p, p->mc + 0x260, 3);
 	frame_reg(p, p->mc + 0x264, 3);
+	if (frame_h264_pp)
+		frame_reg(p, p->mc + 0x268, 1); /* public RW_MC_PP_MODE: H264_MODE */
 	frame_reg(p, p->mc + 0x560, lower_32_bits(p->frame_dma[0]));
 	frame_reg(p, p->mc + 0x55c, 4096);
 	frame_reg(p, p->mc + 0x980, 4);
@@ -551,6 +609,7 @@ static int test_frame(struct fifo_probe *p)
 	p->frame_pipeline[13] = readl(p->top + 0x54);
 	p->frame_pipeline[14] = readl(p->vld + 0xfc);
 	p->frame_pipeline[15] = readl(p->vld + 0xec);
+	p->frame_pipeline[16] = readl(p->mc + 0x268);
 	return ret;
 }
 
@@ -569,7 +628,7 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		"\"pipeline\":{\"mc_status\":%u,\"mb_intra\":%u,\"cbp\":%u,\"frame_dct\":%u,"
 		"\"mv_valid\":%u,\"pp_enable\":%u,\"post_writeback\":%u,\"opbuf\":%u,"
 		"\"ddr0\":%u,\"ddr1\":%u,\"ddr3\":%u,\"mc_mode\":%u,\"pp_wrapper_control\":%u,"
-		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u}}\n",
+		"\"cycle_enable\":%u,\"dram_read_ptr\":%u,\"sram_pointers\":%u,\"pp_mode\":%u}}\n",
 		p->frame_setup[0], p->frame_setup[1], p->frame_setup[2], p->frame_setup[3],
 		p->frame_setup[4], p->frame_setup[5], p->frame_setup[6], p->frame_setup[7],
 		p->frame_setup[8], p->frame_setup[9], p->frame_setup[10], p->frame_setup[11],
@@ -581,7 +640,8 @@ static ssize_t frame_registers_show(struct device *dev, struct device_attribute 
 		p->frame_pipeline[0], p->frame_pipeline[1], p->frame_pipeline[2], p->frame_pipeline[3],
 		p->frame_pipeline[4], p->frame_pipeline[5], p->frame_pipeline[6], p->frame_pipeline[7],
 		p->frame_pipeline[8], p->frame_pipeline[9], p->frame_pipeline[10], p->frame_pipeline[11],
-		p->frame_pipeline[12], p->frame_pipeline[13], p->frame_pipeline[14], p->frame_pipeline[15]);
+		p->frame_pipeline[12], p->frame_pipeline[13], p->frame_pipeline[14], p->frame_pipeline[15],
+		p->frame_pipeline[16]);
 }
 static DEVICE_ATTR_RO(frame_registers);
 
@@ -590,6 +650,7 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 	struct fifo_probe *p = dev_get_drvdata(dev);
 	return sysfs_emit(buf,
 		"{\"requested\":%s,\"flat\":%s,\"pattern\":%s,\"error_bypass\":%s,\"wrapper_bypass\":%s,\"config_only\":%s,"
+		"\"h264_pp\":%s,\"mc_output\":%s,"
 		"\"decode_started\":%s,\"done\":%s,\"result\":%d,"
 		"\"guards_unchanged\":%s,\"snapshot_ready\":%s,\"state\":%u,"
 		"\"irq\":%u,\"error\":%u,\"message\":%u,\"mbx\":%u,\"mby\":%u,"
@@ -602,6 +663,8 @@ static ssize_t frame_result_show(struct device *dev, struct device_attribute *at
 		frame_pattern ? "true" : "false",
 		frame_error_bypass ? "true" : "false", frame_wrapper_bypass ? "true" : "false",
 		frame_config_only ? "true" : "false",
+		frame_h264_pp ? "true" : "false",
+		frame_mc_output ? "true" : "false",
 		p->decode_started ? "true" : "false",
 		p->frame_done ? "true" : "false", p->frame_result,
 		p->frame_guards_unchanged ? "true" : "false", p->snapshot_ready ? "true" : "false",
@@ -644,6 +707,8 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 	struct fifo_probe *p = dev_get_drvdata(dev);
 	return sysfs_emit(buf,
 		"{\"schema\":1,\"dma_mask_bits\":%u,\"all_clocks\":%s,"
+		"\"subsystem_reset\":%s,\"subsystem_reset_result\":%d,"
+		"\"subsystem_after\":{\"clock\":%u,\"smi_clock\":%u,\"reset\":%u},"
 		"\"nonposted\":%s,"
 		"\"common_reset\":%s,\"async_write\":%s,"
 		"\"clear_caller_gate\":%s,\"caller_gate_after_fetch\":%u,"
@@ -670,6 +735,8 @@ static ssize_t result_show(struct device *dev, struct device_attribute *attr, ch
 		"\"pdn_module\":%u,\"auto_pdn\":%u,\"write_ptr\":%u,"
 		"\"avc_control\":%u,\"sram\":%u,\"irq\":%u}}\n",
 		dma_bits, all_clocks ? "true" : "false",
+		subsystem_reset ? "true" : "false", p->subsystem_reset_result,
+		p->subsystem_after[0], p->subsystem_after[1], p->subsystem_after[2],
 		nonposted ? "true" : "false",
 		common_reset ? "true" : "false", async_write ? "true" : "false",
 		clear_caller_gate ? "true" : "false", p->caller_gate_after_fetch,
@@ -757,9 +824,11 @@ static int fifo_probe(struct platform_device *pdev)
 		return -ENODEV;
 	if (fetch && hold_resources)
 		return -EINVAL;
+	if (subsystem_reset && !fetch)
+		return -EINVAL;
 	if (frame && (!fetch || !clear_caller_gate || hold_resources))
 		return -EINVAL;
-	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only)) ||
+	if ((!frame && (frame_flat || frame_pattern || frame_error_bypass || frame_wrapper_bypass || frame_config_only || frame_h264_pp || frame_mc_output)) ||
 	    (frame_flat && frame_pattern))
 		return -EINVAL;
 	if (dma_bits < 28 || dma_bits > TEST_DMA_BITS)
@@ -856,6 +925,17 @@ static int fifo_probe(struct platform_device *pdev)
 	ret = regmap_read(p->gcon, GLOBAL_DCM_CONTROL, &p->dcm_original);
 	if (ret)
 		goto put_pm;
+	if (subsystem_reset) {
+		p->subsystem_reset_result = reset_subsystem(p);
+		if (p->subsystem_reset_result) {
+			ret = p->subsystem_reset_result;
+			goto put_pm;
+		}
+		/* Refresh the read-only MMU observation after the reset. The supplier
+		 * owns it, and test_input() still refuses DMA unless all ports match.
+		 */
+		p->larb_mmu = readl(p->larb_mmu_reg);
+	}
 	if (!fetch) {
 		p->quiesced = true; /* This invocation never enables DMA. */
 		if (hold_resources) {

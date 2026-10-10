@@ -213,6 +213,16 @@ prediction-end word; the default remains 30 and only 28..30 are admitted.
 `frame_work` contains four CPU snapshots in prediction/MV/VLD-wrapper/PP-wrapper
 order, each 64 KiB, captured only after documented stop and idle reset.
 Cached pipeline words read public status/configuration registers only.
+Trial 17's command-free control leaves working memory zero; actual commands
+produce 28 MV flags. Extended-wrapper DMA30/DMA28 snapshots are identical.
+No output pixels or complete frame result were produced. The MV pattern and
+bit counter are consistent with seven parsed macroblocks; this is an inference.
+`frame_h264_pp=1` writes the public H.264 PP selector at MC `0x268`.
+`frame_mc_output=1` selects direct MC output via the public disabled-deblocking
+branch; every current fixture has deblocking disabled. `subsystem_reset=1`
+pulses the documented whole-decoder active-low reset before any DMA command.
+It requires unchanged clock/SMI/reset readback and does not write clock gates
+or the supplier's MMU mask. These three variants are not hardware qualified.
 These experiments are not production controls.
 
 `make-pcm-fixture.py` constructs a 64x64 Baseline IDR frame with sixteen I_PCM
