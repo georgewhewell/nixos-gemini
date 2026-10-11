@@ -1,0 +1,34 @@
+From: Gemini maintainers
+Subject: [PATCH] panfrost: use image plane extents for image attribute bounds
+
+Emulated MTK tiled imports retain their logical pipe_resource dimensions,
+while their backing pan_image is a linear array of tiles. After the detiler
+reinterprets that array as RGBA8, the logical width is not the image width.
+Using it for attribute bounds clips valid image loads: an 80-pixel luma
+plane becomes a 20-wide descriptor for a 128-wide tile array.
+
+Derive the image bounds from the selected backing plane, matching its
+layout and the sampled texture descriptors. Keep the logical dimensions
+for API queries and detile dispatch geometry.
+
+--- a/src/gallium/drivers/panfrost/pan_cmdstream.c
++++ b/src/gallium/drivers/panfrost/pan_cmdstream.c
+@@ -2196,8 +2196,16 @@
+                                             .tiled_or_linear.surface_stride_B
+                                        : rsrc->plane.layout.array_stride_B;
+ 
+-         cfg.s_dimension = u_minify(rsrc->base.width0, level);
+-         cfg.t_dimension = u_minify(rsrc->base.height0, level);
++         const struct pan_image_props *props = &rsrc->image.props;
++         unsigned plane_idx = pan_resource_plane_index(rsrc);
++         /* Emulated resources can have a backing extent different from the
++          * logical pipe_resource dimensions. Bounds must match the image. */
++         cfg.s_dimension = u_minify(util_format_get_plane_width(
++                                      props->format, plane_idx,
++                                      props->extent_px.width), level);
++         cfg.t_dimension = u_minify(util_format_get_plane_height(
++                                      props->format, plane_idx,
++                                      props->extent_px.height), level);
+          cfg.r_dimension =
+             is_3d ? u_minify(rsrc->image.props.extent_px.depth, level)
+                   : (image->u.tex.last_layer - image->u.tex.first_layer + 1);

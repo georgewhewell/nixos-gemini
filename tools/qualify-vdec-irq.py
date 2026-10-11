@@ -86,6 +86,28 @@ def check_gpu_launcher(helper, elf, interpreter):
     check_arm64_elf(interpreter, executable=True)
 
 
+def canonical_gpu_mesa():
+    # Use the normal GPU owner and locked Nixpkgs, without evaluating an image
+    # or accepting a hand-selected store path from build metadata.
+    expression = ('let inputs = (builtins.getFlake '+json.dumps(str(REPO))+').inputs; '
+                  'pkgs = import inputs.nixpkgs { system = "x86_64-linux"; config.allowUnfree = true; }; '
+                  'gpu = import ('+json.dumps(str(REPO))+' + "/nix/gpu-userspace.nix") '
+                  '{ buildPkgs = pkgs; armPkgs = pkgs.pkgsCross.aarch64-multiplatform; }; '
+                  'in gpu.mesa.outPath')
+    return subprocess.check_output(['nix', 'eval', '--impure', '--raw', '--no-write-lock-file',
+                                    '--expr', expression], cwd=REPO, text=True, timeout=60).strip()
+
+
+def check_gpu_mesa(gpu_build, expected_mesa, direct_references):
+    required = {'flake.lock', 'nix/mesa.nix', 'nix/panfrost-image-extents.patch',
+                'nix/test-panfrost-image-extents.py', 'nix/gpu-render-smoke.c',
+                'nix/gpu-userspace.nix', 'nix/test-gpu-pixel-check.py'}
+    if gpu_build.get('mesa') != expected_mesa or expected_mesa not in direct_references:
+        raise RuntimeError('GPU helper does not directly use the canonical locked Mesa')
+    if not required <= gpu_build.get('source_sha256', {}).keys():
+        raise RuntimeError('GPU helper omits required Mesa/build source identities')
+
+
 def buffers_qualified(reports, cached, start, finish, returncode, safe, statuses):
     expected = dict(native_buffers_test_passed=True,
                     scope='native-buffers', width=80, height=64,
@@ -275,8 +297,11 @@ def main():
         interpreter = Path(gpu_build['interpreter']['path']).resolve(strict=True)
         assert sha(interpreter) == gpu_build['interpreter']['sha256']
         check_gpu_launcher(helper, elf, interpreter)
-        assert gpu_build['mesa'] == '/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1'
-        assert {'nix/gpu-render-smoke.c', 'nix/gpu-userspace.nix', 'nix/test-gpu-pixel-check.py'} <= gpu_build['source_sha256'].keys()
+        expected_mesa = canonical_gpu_mesa()
+        package = str(helper.parent.parent)
+        path_info = json.loads(subprocess.check_output(['nix', 'path-info', '--json', package],
+                                                      text=True, timeout=15))
+        check_gpu_mesa(gpu_build, expected_mesa, path_info[package]['references'])
         for name, expected in gpu_build['source_sha256'].items():
             assert sha(REPO/name) == expected, name
     deadline = time.monotonic()+900

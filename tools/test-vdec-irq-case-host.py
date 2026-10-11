@@ -178,6 +178,28 @@ def check_qualification(path):
         else:
             raise AssertionError('Retained host-shell GPU launcher admitted')
     print('Actual GPU launcher admission: ARM64 program/interpreter accepted; absent/host/relocatable/endian/truncated dependencies and foreign shebangs rejected: PASS')
+    expected_mesa = '/nix/store/'+'1'*32+'-mesa-aarch64-unknown-linux-gnu'
+    old_mesa = '/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1'
+    sources = {'flake.lock', 'nix/mesa.nix', 'nix/panfrost-image-extents.patch',
+               'nix/test-panfrost-image-extents.py', 'nix/gpu-render-smoke.c',
+               'nix/gpu-userspace.nix', 'nix/test-gpu-pixel-check.py'}
+    gpu_build = dict(mesa=expected_mesa, source_sha256={name: '0'*64 for name in sources})
+    module.check_gpu_mesa(gpu_build, expected_mesa, [expected_mesa, '/nix/store/unrelated'])
+    rejected = [(dict(gpu_build, mesa=old_mesa), [expected_mesa]),
+                (dict(gpu_build, mesa=old_mesa), [old_mesa]),
+                (gpu_build, []), (gpu_build, [old_mesa]),
+                (dict(mesa=expected_mesa), [expected_mesa])]
+    for name in sources:
+        changed = copy.deepcopy(gpu_build); del changed['source_sha256'][name]
+        rejected.append((changed, [expected_mesa]))
+    for changed, references in rejected:
+        try:
+            module.check_gpu_mesa(changed, expected_mesa, references)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('Foreign Mesa, absent direct reference or source identity admitted')
+    print('Actual Mesa admission: canonical result/direct reference accepted; old path, missing direct reference and all required source omissions rejected: PASS')
     with tempfile.TemporaryDirectory(prefix='vdec-kernel-revision-') as tmp:
         kernel = Path(tmp)
         revision = '01222a4b2074555955a85715587bebf0933fb0eb'

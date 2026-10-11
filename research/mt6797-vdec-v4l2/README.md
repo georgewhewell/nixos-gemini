@@ -213,8 +213,11 @@ The package and parent release gate now pass their actual host regressions.
 buffer and records seven GPU job interrupts, but fails the unchanged pixel check
 at `(0,5)`: red 160 instead of 254. Mesa's Midgard image descriptor uses logical
 dimensions where this import requires its flattened backing extent. That bound
-first rejects the luma load for row 5. Fix the descriptor in Mesa, qualify all
-pixels with the same fixture, then return to decoder IRQ completion and decoded
+first rejects the luma load for row 5. The [Mesa owner patch](../../nix/panfrost-image-extents.patch)
+uses the backing plane extents; its build-time regression runs the actual
+descriptor emitter and generated packers for Midgard and Bifrost. Restoring the
+old bounds fails at row 5. Qualify all pixels with the same fixture, then return
+to decoder IRQ completion and decoded
 surface imports. Both trials restored the accepted image and passed independent
 terminal audits; synthetic rendering remains unqualified.
 
