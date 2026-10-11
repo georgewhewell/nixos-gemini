@@ -34,17 +34,16 @@ def definition(configuration, prefix, name):
 
 
 def validate(configuration, ucm, previous=None):
-    names = ("gemini_speakers", "gemini_headphones", "gemini_playback_ucm")
+    names = ("gemini_speakers", "gemini_headphones")
     for device in ("Speaker", "Headphones"):
         section = definition(ucm, 'SectionDevice.', '"' + device + '"')
-        assert section.count('PlaybackPCM "gemini_playback_ucm"') == 1, device
+        assert section.count('PlaybackPCM "hw:mt6797mt6351,0"') == 1, device
         assert 'PlaybackChannels 2' in section, device
         assert 'PlaybackChannelPos' not in section, device
-    for name in ("gemini_speakers_stereo", "gemini_headphones_stereo", "gemini_playback_ucm"):
+    for name in ("gemini_speakers_stereo", "gemini_headphones_stereo"):
         route = definition(configuration, 'pcm.', name)
         assert 'type route' in route and 'channels 2' in route, name
         assert re.findall(r'ttable\.([0-9]+)\.([0-9]+)\s+([0-9.]+)', route) == [('0', '1', '1'), ('1', '0', '1')], name
-    assert '"hw:CARD=mt6797mt6351,DEV=0"' in definition(configuration, 'pcm.', 'gemini_playback_ucm')
     if previous is not None:
         for name in ('gemini_mic_routes', 'gemini_mic', 'gemini_headset_mic_routes',
                      'gemini_headset_mic', 'gemini_headset_mic_ucm'):
@@ -64,10 +63,8 @@ def main():
     names += ('default',)
     parts = [definition(configuration, 'pcm.', name) for name in
              ('gemini_speakers', 'gemini_speakers_stereo', 'gemini_headphones',
-              'gemini_headphones_stereo', 'gemini_playback_ucm', '!default')]
+              'gemini_headphones_stereo', '!default')]
     source = '\n'.join(parts)
-    assert source.count('"hw:CARD=mt6797mt6351,DEV=0"') == 1
-    source = source.replace('"hw:CARD=mt6797mt6351,DEV=0"', '"fixture_sink"')
     source += '\npcm.gemini_speakers_routes { type plug slave.pcm "fixture_sink" }\n'
     source += 'pcm.gemini_headphones_routes { type plug slave.pcm "fixture_sink" }\n'
     # A full number of aplay periods avoids its zero padding at EOF.

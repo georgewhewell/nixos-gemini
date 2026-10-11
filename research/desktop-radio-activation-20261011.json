@@ -88,6 +88,28 @@
     "offline_cases": 14,
     "result": "passed"
   },
-  "next_candidate": "pending build and supervised focused deployment",
-  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/radio-activation-discovery-20261011"
+  "next_candidate": "93: audio transport correction, same compiled 690c7c5 kernel; trace remaining connection admission on this image.",
+  "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/radio-activation-discovery-20261011",
+  "candidate_92": {
+    "boot_id": "1d8a51fe-3f4e-4d49-8bad-fc8120f8ba1e",
+    "system": "/nix/store/1516k650fdgabqk172jr1ps1g9pkrnsp-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
+    "gnome_rfkill_radio_inputs": "passed",
+    "directed_wildcard_nm_scan": "passed",
+    "scan_duration_seconds": 13.527,
+    "scan_requests": 1,
+    "scan_failed_events": 0,
+    "hif_faults": 0,
+    "hif_restarts": 0,
+    "audio_effective_path": "failed: no onboard sink present with the custom UCM playback PCM",
+    "candidate_kept": false,
+    "independent_recovery_audit": "passed",
+    "recovered_boot_id": "f20f96e2-bac2-492a-aa29-90afd4e2a31b",
+    "rtc_alarm_calendar_diagnostics_run": false,
+    "wifi_association_driver_failures_still_observed": 8,
+    "association_qualified": false,
+    "data_qualified": false,
+    "manual_connection_actions": 0
+  },
+  "audio_followup": "Restore the native UCM hardware PCM used by ACP and map the onboard playback node physical channels to FR/FL through WirePlumber. Plain ALSA playback retains its independently tested route swap; capture and other cards stay unchanged."
 }

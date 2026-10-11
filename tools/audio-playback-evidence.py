@@ -37,16 +37,16 @@ def inspect():
                           channels=int(props.get('audio.channels', 0)),
                           position=position, channel_maps=maps,
                           profile=props.get('device.profile.name')))
+    print(json.dumps(dict(schema=1, sinks=sinks), sort_keys=True), flush=True)
     if not sinks:
         raise RuntimeError('No onboard playback sink is present')
     for sink in sinks:
-        if (sink['pcm'] != 'gemini_playback_ucm' or sink['channels'] != 2
-                or sink['position'] != ['FL', 'FR']
+        if (sink['pcm'] != 'hw:mt6797mt6351,0' or sink['channels'] != 2
+                or sink['position'] != ['FR', 'FL']
                 or not sink['channel_maps']
-                or any(mapping != ['FL', 'FR'] for mapping in sink['channel_maps'])
+                or any(mapping != ['FR', 'FL'] for mapping in sink['channel_maps'])
                 or sink['profile'] not in ('HiFi: Speaker: sink', 'HiFi: Headphones: sink')):
             raise RuntimeError('Onboard playback path or logical channel map differs')
-    print(json.dumps(dict(schema=1, sinks=sinks), sort_keys=True))
 
 
 def audio_evidence(runner, ssh, state, directory, system):
@@ -81,7 +81,7 @@ env XDG_RUNTIME_DIR=/run/user/$uid DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/
                   audible_playback_performed=False,
                   capture_and_other_devices_modified=False)
     runner.qualify.save(out, 'result.json', record)
-    print('PASS: onboard PipeWire sink uses the corrected PCM with logical FL/FR; physical orientation pending', flush=True)
+    print('PASS: onboard PipeWire sink uses the native PCM with physical FR/FL mapping; audible orientation pending', flush=True)
 
 
 if __name__ == '__main__':

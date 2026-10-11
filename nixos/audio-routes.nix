@@ -13,7 +13,8 @@ let
   ];
   # The fixed machine card exposes Playback_1 at 0 and Capture_1 at 3.
   # UCM owns the route controls; plain ALSA applications use preserving
-  # control hooks. Both use the board's playback channel correction below.
+  # control hooks. PipeWire applies the same physical channel correction
+  # through its node map while plain ALSA uses the route PCM below.
   headphonePath = [
     { name = "DAC In Mux"; value = "Normal Path"; idle = "Normal Path"; }
   ] ++ playbackInterconnects ++ [
@@ -170,7 +171,7 @@ let
       ConflictingDevice [ "Headphones" ]
       Value {
         PlaybackPriority 200
-        PlaybackPCM "gemini_playback_ucm"
+        PlaybackPCM "hw:mt6797mt6351,0"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"
         PlaybackVolume "name='Headphone Volume'"
@@ -189,7 +190,7 @@ let
         PlaybackPriority 300
         JackControl "Headphone Jack"
         JackHWMute "Speaker"
-        PlaybackPCM "gemini_playback_ucm"
+        PlaybackPCM "hw:mt6797mt6351,0"
         PlaybackChannels 2
         PlaybackMixerElem "Headphone"
         PlaybackVolume "name='Headphone Volume'"
@@ -239,6 +240,21 @@ let
     UCM
   '';
 in {
+  # Keep UCM on the native hardware PCM that ACP can probe. Its physical
+  # order is right then left; PipeWire's channel mixer maps ordinary FL/FR
+  # client streams to these positions. Capture and other cards are separate.
+  services.pipewire.wireplumber.extraConfig."51-gemini-playback-channels" = {
+    "monitor.alsa.rules" = [{
+      matches = [{
+        "media.class" = "Audio/Sink";
+        "api.alsa.path" = "hw:mt6797mt6351,0";
+      }];
+      actions.update-props = {
+        "audio.position" = ["FR" "FL"];
+        "api.alsa.use-chmap" = false;
+      };
+    }];
+  };
   system.build.geminiAudioDigitalRoutes = digitalRoutes;
   system.build.geminiAudioUcm = ucm;
   environment.variables.ALSA_CONFIG_UCM2 = "${ucm}/share/alsa/ucm2";
@@ -250,7 +266,6 @@ in {
     # ASoC power follows the selected stream. No GPIO is written by userspace.
     ${hookedPlaybackPcm "gemini_speakers" speakers}
     ${hookedPlaybackPcm "gemini_headphones" headphones}
-    ${playbackPcm "gemini_playback_ucm" "hw:CARD=mt6797mt6351,DEV=0"}
     ${hookedPcm "gemini_mic" 3 microphone}
     ${controlHooks "gemini_headset_mic" 3 headsetMicrophone}
     ${headsetMonoPcm "gemini_headset_mic" "gemini_headset_mic_routes"}
