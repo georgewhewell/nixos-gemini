@@ -160,7 +160,7 @@
         "critical_runtime_arm64_verified": true,
         "whole_closure_arm64_verified": false
       },
-      "status": "Source-integrated and cross-built normal-image candidate;117 and118 rejected by healthy-boot gate",
+      "status": "Source-integrated and cross-built normal-image candidate;117\u2013119 rejected by healthy-boot gate",
       "source_integrated": true,
       "normal_candidate117": {
         "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
@@ -244,6 +244,25 @@
             "sha256": "e0d914b7a407d465f80ddc7c927dd3c84e32a11a8de7ad6adb4bcadda4e8cff4"
           }
         }
+      },
+      "normal_candidate119": {
+        "kernel_revision": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
+        "packaging_revision": "e7aeff79d75673ad84449a1a5c0e6f3b0dcc9375",
+        "build_actual_exit": 0,
+        "trial_actual_exit": 1,
+        "independent_rollback_audit_actual_exit": 0,
+        "installed": false,
+        "restored_baseline": "boot-test-116",
+        "candidate_lk_metadata_or_at_observed": false,
+        "watchdog_cause_established": false,
+        "failed_unit": "gemini-cellular.service",
+        "exec_main_status": 1,
+        "native_failure_reason_established": false,
+        "proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
+          "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
+        },
+        "scope": "Unchanged118 kernel/eSIM packages with startup cleanup. Exact candidate returns to SSH; cellular startup fails exit1, blocking acceptance and desktop dependencies. Audited rollback restores116. Native failure stage remains uncaptured; no candidate GNOME or subscriber operations."
       }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",
@@ -413,7 +432,7 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "Capture the failing health unit/step on the next changed-image trial; guarded rollback journal enumeration returned no candidate boot. Install and observe configured policy and raw LK metadata, then qualify readiness and watchdog separately. Trials117/118 produced no candidate metadata or AT observer result.",
+      "remaining": "119 identifies terminal cellular startup failure (exit1); capture native helper stage/runtime-policy/first-fatal scalars inside the existing trial owner before rollback, then fix the native cause. Qualify readiness and watchdog separately once healthy. No candidate metadata or AT observer result exists for117\u2013119.",
       "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
       "actual_production_host_exit": 0,
       "strict_arm64_actual_exit": 0,
@@ -476,12 +495,12 @@
       "sha256": "7db0b59e3ce15560374f6018f06ce9ff81f679b681962cbd495a6e80272e3879"
     },
     "latest_recovery": {
-      "trial": "boot-test-118",
-      "boot_id": "ce9abbea-148c-4646-8ad7-3d50bd7bcddd",
+      "trial": "boot-test-119",
+      "boot_id": "ec0730d2-4c80-4705-98bf-53c8c93bc2bd",
       "independent_audit_actual_exit": 0,
       "proof": {
-        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
-        "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
+        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
+        "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
       }
     }
   },

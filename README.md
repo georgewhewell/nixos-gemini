@@ -22,8 +22,10 @@ now signals HUP/ERR and disappears on that failure. Linux owns all six SIM pins
 through the protected modem cold-start transaction. SIM/eSIM, cellular data,
 SMS delivery and voice require further native driver bring-up. The generic AT
 lpa-gtk/lpac packages are source-integrated and cross-built, but remain uninstalled:
-Images117 and118 failed their healthy-boot gates and restored116 with independent
-audits. Candidate118 includes native configured-policy selection, standard
+Images117–119 failed their healthy-boot gates and restored116 with independent
+audits. Trial119 identifies cellular startup exiting1 and blocking desktop
+dependencies; the native failure reason remains under investigation.
+Candidate118 includes native configured-policy selection, standard
 active-seat access to typed WWAN AT ports and checked lpac error handling. Its
 normal ARM64 build and target imports pass; eUICC access and provisioning remain
 unqualified.
@@ -40,7 +42,8 @@ Normal boot initializes devices and opens GNOME. GPU render, audio, Wi-Fi scan,
 Weston and RTC qualification run explicitly when their behavior changes.
 Further [source cleanup](research/normal-startup-20261010.json) removes automatic
 GNOME session verification, D-Bus/input inventories and charger preflight from
-startup. Host checks and the normal ARM64 build pass; installation is pending.
+startup. Host checks and the normal ARM64 build pass; trial119 was rejected by
+the cellular startup failure, so installation is pending.
 Measured graphical boot is about 95 seconds, including 51 seconds in the kernel
 and initramfs. Paging uses RAM only: no eMMC/SD swap, zswap, zram writeback or
 hibernation. The preserved [7.1.3 fallback](research/baselines/boot-test-76.json)

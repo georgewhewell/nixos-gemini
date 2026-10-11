@@ -138,7 +138,7 @@
     "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/independent-audit-114/result.json"
   },
   "remaining_diagnostic_retirement_20261011": {
-    "status": "Source-integrated, host-validated and normal ARM64 build passes; not installed",
+    "status": "Source-integrated, host-validated and normal ARM64 build passes;119 cellular startup failed, audited rollback restored116",
     "explicit_units": [
       "gemini-gnome-qualify.service",
       "gemini-manager-bus-check.service",
@@ -175,6 +175,19 @@
     "normal_image_proof": {
       "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/normal-build/candidate.json",
       "sha256": "14e95a0183d6946802cb9427cf04dd736ff98b223cf0b758ca608434f33e9636"
+    },
+    "installation_trial": {
+      "trial": "boot-test-119",
+      "actual_exit": 1,
+      "independent_rollback_audit_actual_exit": 0,
+      "installed": false,
+      "failed_unit": "gemini-cellular.service",
+      "exec_main_status": 1,
+      "native_failure_reason_established": false,
+      "proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
+        "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
+      }
     }
   }
 }
