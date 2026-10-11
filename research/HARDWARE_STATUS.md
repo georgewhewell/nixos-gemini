@@ -62,15 +62,16 @@ coexistence qualification; passing power cycles do not prove a fix.
 Desktop/CLI performance needs residual parking and native governor/workqueue
 CPU cost attributed and responsiveness qualified during use. A bounded image-113
 trace records 245 IRQ lookups and 245 of 287 decimal-formatting calls for unused
-IRQ fields per procfs sample. Avoid that work in its native owner while preserving
-standard text, seeking and CPU freshness; traced durations include observer cost.
-Image 113 completes
-standard eMMC high-speed qualification. The native MSDC owner must bound reset/FIFO
-polls and prove DMA inactivity before completion, unmapping or descriptor reuse;
-failed quiescence must retain ownership and reject new requests. Shared CQHCI
-recovery currently completes slots despite stop failures, so its lifetime contract
-must be corrected too. No such hardware fault has been observed. Finish sustained
-storage qualification. Qualify
+IRQ fields per procfs sample. The native proc/seq fix preserves standard text,
+seeking and fresh CPU counters while avoiding that unused tail. Its actual-source
+ASan/UBSan checks and strict ARM64 objects pass; combined installation and a bounded
+post-audit observation remain pending. Traced durations include observer cost.
+Image 113 completes standard eMMC high-speed qualification. The next native MSDC
+and shared CQHCI revision bounds reset/FIFO/STOP polls and retains mappings,
+requests and descriptors until checked DMA inactivity. Actual-source regressions,
+compiled old-source controls and strict ARM64 objects pass; combined deployment
+remains pending. No such hardware fault has been observed. Physical isolation,
+generic CQE error propagation and sustained storage qualification remain open. Qualify
 native PMU counters before measured A53/A72 scheduling capacities,
 and a proper deep-idle owner. Cellular watchdog/SIM/speech and
 media completion remain open as recorded above.

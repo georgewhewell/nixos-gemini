@@ -120,5 +120,36 @@
     "independent_audit_exit": 0,
     "sms_delivery_qualified": false,
     "voice_operation_qualified": false
+  },
+  "esim": {
+    "status": "Native modem/eUICC access and GUI integration incomplete",
+    "public_board_contract": "Planet Gemini user guide identifies physical SIM as slot 1 and eSIM as slot 2.",
+    "gui_candidate": {
+      "project": "lpa-gtk",
+      "reviewed_commit": "35e272af38405ef1e138d89bce7acb5ac8e305fb",
+      "current_backends": [
+        "MBIM",
+        "QMI",
+        "QMI_QRTR"
+      ],
+      "at_backend_present": false,
+      "installed": false
+    },
+    "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
+    "remaining": [
+      "Fix native fatal AT port lifetime so disconnects wake userspace through standard WWAN removal; qualify the actual path.",
+      "Restore public declarative SIM pad ownership at the native modem owner after checking the board mode and pin configuration contract.",
+      "Establish stable modem operation and public slot-2/eUICC APDU routing; AT commands do not themselves establish target-slot selection.",
+      "Fix lpac unbounded/HUP-only wait handling and establish long eUICC operation response behavior before enabling provisioning.",
+      "Add generic AT support to lpa-gtk with standard discovery, exclusive port ownership, cancellation and actionable errors; no automatic slot/profile mutation during discovery."
+    ],
+    "board_observation": "A bounded accepted-113 read exited 1 before pad snapshots; identity, taint and host-idle guards passed, locks released. It establishes neither pad state nor SIM absence; no repeated probe.",
+    "sources": [
+      "https://support.planetcom.co.uk/download/GeminiPDAUserGuide.pdf",
+      "https://codeberg.org/lucaweiss/lpa-gtk",
+      "https://github.com/estkme-group/lpac/blob/main/docs/backends/at.md",
+      "https://github.com/linux-mobile-broadband/ModemManager/blob/main/introspection/org.freedesktop.ModemManager1.Sim.xml"
+    ],
+    "provisioning_or_subscriber_changes_performed": false
   }
 }

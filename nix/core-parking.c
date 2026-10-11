@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 #include <linux/input.h>
+#include <limits.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -387,81 +388,210 @@ static void apply(int want, enum reason why, const struct sample *x)
 		k = count_online_managed(NULL);
 }
 
-static FILE *stat_file;
+static int stat_fd = -1, loadavg_fd = -1;
 
 static void close_stat(void)
 {
-	if (stat_file)
-		fclose(stat_file);
-	stat_file = NULL;
+	if (stat_fd >= 0)
+		close(stat_fd);
+	if (loadavg_fd >= 0)
+		close(loadavg_fd);
+	stat_fd = loadavg_fd = -1;
+}
+
+/* Keep each proc seq allocation, but seek to zero for a fresh report. Read
+ * only through a real text delimiter; short reads never establish completeness.
+ */
+static bool read_until(int *fd, const char *name, char *buf, size_t size,
+		       const char *delimiter)
+{
+	char path[512];
+	size_t used = 0;
+
+	if (*fd < 0) {
+		int n = snprintf(path, sizeof(path), "%s/proc/%s", root, name);
+
+		if (n < 0 || (size_t)n >= sizeof(path))
+			return false;
+		*fd = open(path, O_RDONLY | O_CLOEXEC);
+		if (*fd < 0)
+			return false;
+	} else if (lseek(*fd, 0, SEEK_SET) < 0) {
+		return false;
+	}
+	while (used < size - 1) {
+		ssize_t n = read(*fd, buf + used, size - 1 - used);
+		char *end;
+
+		if (n < 0 && errno == EINTR)
+			continue;
+		if (n <= 0)
+			return false;
+		used += (size_t)n;
+		end = memmem(buf, used, delimiter, strlen(delimiter));
+		if (end) {
+			if (memchr(buf, '\0', (size_t)(end - buf)))
+				return false;
+			*end = '\0';
+			return true;
+		}
+		if (memchr(buf, '\0', used))
+			return false;
+	}
+	return false;
+}
+
+static void skip_space(const char **p)
+{
+	while (**p == ' ' || **p == '\t')
+		++*p;
+}
+
+static bool parse_u64(const char **p, uint64_t *value)
+{
+	uint64_t v = 0;
+
+	if (**p < '0' || **p > '9')
+		return false;
+	do {
+		unsigned digit = (unsigned)(**p - '0');
+
+		if (v > (UINT64_MAX - digit) / 10)
+			return false;
+		v = v * 10 + digit;
+		++*p;
+	} while (**p >= '0' && **p <= '9');
+	*value = v;
+	return true;
+}
+
+static bool parse_cpu_row(const char *p, int *cpu, uint64_t *busy,
+			  uint64_t *total)
+{
+	uint64_t v[10] = {0}, id;
+	unsigned fields = 0;
+
+	if (strlen(p) >= 512 || strncmp(p, "cpu", 3))
+		return false;
+	p += 3;
+	*cpu = -1;
+	if (*p >= '0' && *p <= '9') {
+		if (!parse_u64(&p, &id) || id >= MAX_CPUS)
+			return false;
+		*cpu = (int)id;
+	}
+	if (*p != ' ' && *p != '\t')
+		return false;
+	for (;;) {
+		skip_space(&p);
+		if (!*p)
+			break;
+		if (fields == 10 || !parse_u64(&p, &v[fields++]))
+			return false;
+		if (*p && *p != ' ' && *p != '\t')
+			return false;
+	}
+	if (fields < 4)
+		return false;
+	*total = 0;
+	for (unsigned i = 0; i < 8; i++) { /* guest is already in user */
+		if (v[i] > UINT64_MAX - *total)
+			return false;
+		*total += v[i];
+	}
+	*busy = *total - v[3] - v[4];
+	return true;
+}
+
+static bool parse_runnable(const char *p, int *nr)
+{
+	uint64_t count, threads, pid, integer;
+
+	for (unsigned i = 0; i < 3; i++) {
+		if (!parse_u64(&p, &integer) || *p++ != '.')
+			return false;
+		for (unsigned j = 0; j < 2; j++) {
+			if (*p < '0' || *p > '9')
+				return false;
+			p++;
+		}
+		if (*p != ' ' && *p != '\t')
+			return false;
+		skip_space(&p);
+	}
+	if (!parse_u64(&p, &count) || count > (uint64_t)INT_MAX + 1 ||
+	    *p++ != '/' || !parse_u64(&p, &threads) || threads > UINT32_MAX ||
+	    (*p != ' ' && *p != '\t'))
+		return false;
+	skip_space(&p);
+	if (!parse_u64(&p, &pid) || pid > UINT32_MAX)
+		return false;
+	skip_space(&p);
+	if (*p)
+		return false;
+	*nr = count ? (int)(count - 1) : 0;
+	return true;
 }
 
 static bool read_stat(struct sample *x)
 {
-	char path[512], line[512];
-	FILE *f;
-	int load = 0, cap = 0, nr = 0;
-	uint32_t online_mask = 0;
-
-	/* Keep the seq_file allocation, not its previous sample. Seeking to
-	 * zero discards the stdio buffer and regenerates the proc snapshot.
+	/* Every supported row fits the existing 512-byte bound, including all
+	 * ten u64 counters. The final intr tag proves the CPU section is complete.
 	 */
-	if (stat_file) {
-		if (fseeko(stat_file, 0, SEEK_SET)) {
-			close_stat();
-			return false;
-		}
-		clearerr(stat_file);
-	} else {
-		snprintf(path, sizeof(path), "%s/proc/stat", root);
-		stat_file = fopen(path, "re");
-		if (!stat_file)
-			return false;
-	}
-	f = stat_file;
-	while (fgets(line, sizeof(line), f)) {
-		unsigned long long v[10] = {0};
-		unsigned long long busy, total, db, dt;
-		int cpu, i;
+	char prefix[(MAX_CPUS + 1) * 512 + 6], loadavg[256];
+	uint64_t busy[MAX_CPUS] = {0}, total[MAX_CPUS] = {0};
+	struct sample next = {0};
+	char *row, *save = NULL;
+	size_t length;
+	int previous = -1, cpu;
+	uint64_t aggregate_busy, aggregate_total;
 
-		if (!strncmp(line, "procs_running ", 14)) {
-			nr = atoi(line + 14) - 1;
-			continue;
+	if (!read_until(&stat_fd, "stat", prefix, sizeof(prefix), "\nintr ") ||
+	    !read_until(&loadavg_fd, "loadavg", loadavg, sizeof(loadavg), "\n") ||
+	    !parse_runnable(loadavg, &next.nr))
+		goto fail;
+	length = strlen(prefix);
+	if (!length || prefix[0] == '\n' || prefix[length - 1] == '\n' ||
+	    strstr(prefix, "\n\n"))
+		goto fail;
+	row = strtok_r(prefix, "\n", &save);
+	if (!row || !parse_cpu_row(row, &cpu, &aggregate_busy, &aggregate_total) ||
+	    cpu != -1)
+		goto fail;
+	while ((row = strtok_r(NULL, "\n", &save))) {
+		uint64_t b, t;
+
+		if (!parse_cpu_row(row, &cpu, &b, &t) || cpu <= previous)
+			goto fail;
+		previous = cpu;
+		busy[cpu] = b;
+		total[cpu] = t;
+		next.cap++;
+		next.online_mask |= UINT32_C(1) << cpu;
+		if (prev_valid[cpu] && t > prev_total[cpu]) {
+			uint64_t db = b >= prev_busy[cpu] ? b - prev_busy[cpu] : 0;
+			uint64_t dt = t - prev_total[cpu];
+			__uint128_t percent = (__uint128_t)db * 100 / dt;
+
+			if (percent > (unsigned)(INT_MAX - next.load))
+				goto fail;
+			next.load += (int)percent;
 		}
-		if (strncmp(line, "cpu", 3) || line[3] < '0' || line[3] > '9')
+	}
+	if (!next.cap)
+		goto fail;
+	for (cpu = 0; cpu < MAX_CPUS; cpu++) {
+		if (!(next.online_mask & (UINT32_C(1) << cpu)))
 			continue;
-		if (sscanf(line + 3, "%d %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu",
-			   &cpu, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6],
-			   &v[7], &v[8], &v[9]) < 5)
-			continue;
-		if (cpu < 0 || cpu >= MAX_CPUS)
-			continue;
-		cap++;
-		online_mask |= UINT32_C(1) << cpu;
-		total = 0;
-		for (i = 0; i < 8; i++)	/* guest time is already in user */
-			total += v[i];
-		busy = total - v[3] - v[4];
-		if (prev_valid[cpu] && total > prev_total[cpu]) {
-			db = busy >= prev_busy[cpu] ? busy - prev_busy[cpu] : 0;
-			dt = total - prev_total[cpu];
-			load += (int)(db * 100 / dt);
-		}
-		prev_busy[cpu] = busy;
-		prev_total[cpu] = total;
+		prev_busy[cpu] = busy[cpu];
+		prev_total[cpu] = total[cpu];
 		prev_valid[cpu] = true;
 	}
-	if (ferror(f)) {
-		close_stat();
-		return false;
-	}
-	x->load = load;
-	x->cap = cap;
-	x->nr = nr < 0 ? 0 : nr;
-	x->online_mask = online_mask;
-	if (!cap)
-		close_stat();
-	return cap > 0;
+	*x = next;
+	return true;
+fail:
+	close_stat();
+	return false;
 }
 
 static bool file_exists(const char *name)

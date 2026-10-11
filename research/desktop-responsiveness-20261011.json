@@ -1142,7 +1142,7 @@
     "hardware_qualified": true,
     "installed": true,
     "storage_benchmark_performed": false,
-    "next": "Complete native reset/FIFO and DMA-stop recovery with verified inactivity before releasing request/mapping/descriptor ownership, including shared CQHCI recovery; then sustained storage qualification.",
+    "next": "Install the checked native recovery with the combined normal update, then sustained storage qualification; physical isolation and generic CQE error-return contracts remain separate owner work.",
     "evidence": {
       "focused": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/focused-result.json",
       "strict": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/strict-result.json",
@@ -1203,7 +1203,34 @@
         "required_contract": "Bound recovery, retain active DMA ownership and fault admission until inactivity is established; propagate recovery failure across HSQ/CQE and teardown. Clock votes and card reset do not prove controller quiescence.",
         "hardware_failure_observed": false
       }
-    ]
+    ],
+    "native_recovery": {
+      "kernel_commit": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
+      "status": "Source and host checks complete; combined normal build and supervised deployment pending",
+      "fix": "Bound reset/FIFO/STOP/idle polls; retain unsafe DMA mappings, requests, descriptors, binding and clock leases. CQHCI producer admission and disable share its existing lock; checked native inactivity precedes completion. One existing watchdog attempt, no background reset loop. Idle legacy zero-clock teardown drains work without STOP.",
+      "source_hashes": {
+        "drivers/mmc/host/mtk-sd.c": "9cd52afa230a9ddce6f34ce75c2337bc7784e8664be38f54ac4abefd64a907e8",
+        "drivers/mmc/host/cqhci-core.c": "ba389e8eeb7b9b80ac50e28cfc89181e73f701e2f3653e65fe544d5bdc6a6160",
+        "drivers/mmc/host/cqhci.h": "f12c65f8901e8c9c2d3377237d873daef8372bc940f49b494d89fd69ff0ac044",
+        "tools/gemini/test-msdc-clock-host.py": "5e6a6697241ab6e2bdc8f130856e5a53fc60d035d3dd07d3c95acde49dfa12a6"
+      },
+      "focused": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/recovery/focused-result.json",
+        "sha256": "e58ea68e669dcab02622276c816875b200af00646e58596aa3125b9da6e2e696",
+        "actual_exit": 0,
+        "old_source_and_race_controls_compile_then_fail": 4
+      },
+      "strict": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/recovery/strict-result.json",
+        "sha256": "4b69571002336085d302a498b8a6679681ff11afd5545f411b87687096b354d6",
+        "actual_exit": 0,
+        "flags": "W=1 KCFLAGS=-Werror",
+        "config_scope": "Baseline strict object tree; only GNSS_SERIAL/GNSS_MTK_SERIAL differ from installed 113, not MMC configuration"
+      },
+      "installed": false,
+      "hardware_fault_observed": false,
+      "limits": "No physical controller isolation fallback is described. Fatal unquiesced teardown retains its owner and may wait indefinitely while individual MMIO polls remain bounded. Generic void CQE recovery error propagation and sustained storage/fault qualification remain open."
+    }
   },
   "proc_stat_owner_113": {
     "native_owners": [
@@ -1228,8 +1255,41 @@
     "normal_policy_writes": false,
     "taint": 0,
     "limits": "Partial ring prefix excluded; instrumentation raises observer cost and durations are not untraced per-function CPU attribution. Online topology changes normally during observation. This establishes executed work, not a controlled speedup or UI qualification.",
-    "next": "Reduce unused IRQ-tail construction in the native proc/seq owner while preserving complete-file text, seeking, fresh per-online-CPU counters and runnable-count semantics; measure benefit without a private interface or policy/cadence change.",
+    "next": "After combined image audit, check IRQ-tail work in one isolated trace and compare passive daemon CPU over the same 30-second window; no UI speedup claim.",
     "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/result.json",
-    "analysis": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/summary.json"
+    "analysis": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/summary.json",
+    "native_fix": {
+      "kernel_commit": "15f4f8c1ccf65d9a65458d3b4b42508945cf8daa",
+      "status": "Source and host checks complete; combined normal build, deployment and post-audit observation pending",
+      "fix": "Preserve complete /proc/stat text using two seq records and an opt-in one-record reader. The parking daemon reads a bounded complete CPU prefix and standard loadavg, retaining descriptors but seeking for fresh counters. Failed samples leave prior counters unchanged.",
+      "policy_cadence_topology_changes": false,
+      "private_userspace_abi_added": false,
+      "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/native-prefix/result.json",
+      "proof_sha256": "0142bd210e716397df424edd191617e6fc73b076adb31605f7d904f6053eb322",
+      "source_hashes": {
+        "kernel": {
+          "fs/seq_file.c": "656d79634f43b4e5ce47460e1da6b8dd4fd81ee63bfb205c1fe35ca375eec82c",
+          "include/linux/seq_file.h": "42cd34bf3043b463da3a537040f7120808efe65276c75c8439f7311c14984389",
+          "fs/proc/stat.c": "09617dee45954eb4189a3f43cdfb39a2d6fbbc04fadcd2d212d47c3d8f8abf84",
+          "tools/gemini/test-proc-stat-host.py": "1f57e0a636dd505cc843af6aac4b352290a281235e3a111a66dfa677579ac124"
+        },
+        "consumer": {
+          "nix/core-parking.c": "4334a31e66d96c41e50eaf0905d7da3accc9a6d75734f952723a81b6082d8ca9",
+          "nix/test-core-parking-policy.c": "7b61e640e4f13e4d9eeeb63d3ef5dcf1b4782efaff4f9cc7b0d04d7e0bec92f2",
+          "nix/test-core-parking.py": "0c7ef543ed4795148ffef50af18536720da66625dd13d28f548af39e26b2de8c"
+        }
+      },
+      "checks": "Default GCC15 ASan/UBSan actual seq/stat paths, compiled old-source runtime negative, parser/policy/simulator, and strict ARM64 seq_file.o/stat.o with exact installed-113 config pass.",
+      "installed_113_baseline": {
+        "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/native-prefix/installed-113-baseline/post-install-read/exit.json",
+        "actual_exit": 0,
+        "seconds": 30.003380553,
+        "one_core_cpu_percent": 3.929513869,
+        "topology_transitions": 0
+      },
+      "installed": false,
+      "hardware_performance_qualified": false,
+      "remaining": "After combined image audit, check IRQ-tail work in one isolated trace and compare passive daemon CPU over the same 30-second window; no UI speedup claim."
+    }
   }
 }

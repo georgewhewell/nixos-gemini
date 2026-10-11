@@ -4,7 +4,7 @@
 Usage: test-core-parking.py PATH-TO-BINARY
 
 A fake root holds /sys/devices/system/cpu/cpuN/online, /proc/stat,
-/dev/input/event0 (a FIFO) and /run/gemini-core-parking.  A simulator thread
+/proc/loadavg, /dev/input/event0 (a FIFO) and /run/gemini-core-parking.  A simulator thread
 advances /proc/stat every 10 ms: each busy thread saturates one online CPU.
 """
 import os
@@ -40,6 +40,7 @@ class Sim:
         self.set_temp(45000)
         # Keep the inode stable, as procfs does across refreshed snapshots.
         self.stat_fd = os.open(f"{root}/proc/stat", os.O_RDWR | os.O_CREAT, 0o600)
+        self.loadavg_fd = os.open(f"{root}/proc/loadavg", os.O_RDWR | os.O_CREAT, 0o600)
         self.write_stat()
 
     def set_temp(self, mc):
@@ -75,13 +76,15 @@ class Sim:
             else:
                 c[1] += 1
             lines.append(f"cpu{cpu} {c[0]} 0 0 {c[1]} 0 0 0 0 0 0")
-        lines.append(f"procs_running {self.threads + 1}")
+        lines.append("intr 0")
         # Replace one fixed-size snapshot in one write, without a truncation
         # window or trailing CPU records when the online set shrinks.
         data = ("\n".join(lines) + "\n").encode()
         assert len(data) <= 4096
         data = data.ljust(4096, b"\n")
         assert os.pwrite(self.stat_fd, data, 0) == len(data)
+        loadavg = f"0.00 0.00 0.00 {self.threads + 1}/32 1\n".encode().ljust(128, b"\n")
+        assert os.pwrite(self.loadavg_fd, loadavg, 0) == len(loadavg)
 
     def run(self):
         while not self.stop:
@@ -209,6 +212,7 @@ def main():
             sim.stop = True
             t.join()
             os.close(sim.stat_fd)
+            os.close(sim.loadavg_fd)
             os.close(wfd)
             os.close(rfd)
     print("core-parking: pass")

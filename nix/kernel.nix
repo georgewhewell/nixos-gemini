@@ -93,7 +93,7 @@
         opp-of-sharing-cpus-host mt6797-spm-fw-host mt6351-fgadc-supplier-host \
         mt6351-fgadc-conversion-host gemini-battery-profile-host \
         mt6351-fgadc-model-host mt6351-fgadc-model-lifecycle-host \
-        gnss-rx-atomic gnss-provider-host mt6797-mmc0-pinctrl-host msdc-clock-host mtk-sysirq-write-host \
+        gnss-rx-atomic gnss-provider-host mt6797-mmc0-pinctrl-host msdc-clock-host proc-stat-host mtk-sysirq-write-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-station-host wifi-radio-tx-host \
         wifi-radio-worker-host wifi-radio-connect-host wifi-radio-scan-cancel-host wifi-scan-probe-host wifi-hif-recovery-host \
         regulator-exclusive-state dma-direct-sg-host media-clock-bounds drm-synchronous-bind cellular-integration cellular-first-fatal cellular-rx-rejected cellular-napi-mask \

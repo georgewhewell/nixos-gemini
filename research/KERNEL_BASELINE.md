@@ -76,9 +76,15 @@ high-speed mode requests 52 MHz and runs at 47,999,984 Hz on the unchanged 8-bit
 bus, versus 23,999,992 Hz in legacy mode. All 15 populated error counters stay zero
 before and after retained-storage checks and one ordinary Nix build. The supervised
 trial and independent terminal audit pass. No throughput benchmark or sustained
-storage qualification is claimed. Native reset/FIFO polling and DMA quiescence
-before completion, including shared CQHCI recovery, remain owner work; no such
-hardware failure has been observed. Image 112 retains the procfs
+storage qualification is claimed. The next source revision,
+`238590b6df6fb5afae1d11d9d0165e534ff8f18f`, bounds native reset/FIFO/STOP polling
+and retains DMA ownership through checked MSDC/CQHCI recovery. It also preserves
+complete procfs text while avoiding IRQ-tail construction for CPU-only readers.
+GCC15 ASan/UBSan actual-source regressions, compiled old-source controls and strict
+ARM64 objects pass; its combined normal build, deployment and performance
+observation are pending. No native MMC hardware failure has been observed.
+Physical controller isolation and generic CQE recovery error propagation remain
+owner work. Image 112 retains the procfs
 sample allocation and seeks for fresh counters. A controlled helper comparison
 attributes 23.7% less read CPU time to that change; the installed daemon still
 uses 3.86% of one core, mostly kernel time, with no topology transitions.
