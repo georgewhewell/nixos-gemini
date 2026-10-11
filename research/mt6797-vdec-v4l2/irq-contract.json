@@ -74,7 +74,7 @@
   },
   "native_polarity_acceptance_20261011": {
     "kernel_source_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
-    "installed_accepted_source_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+    "installed_accepted_source_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
     "owner": "drivers/irqchip/irq-mtk-sysirq.c",
     "owner_sha256": "05dd58a0dde28be9bb7b6f42985ec086aed2028bbc7eb6da9297d9219b475778",
     "change": "Complete the native INTPOL write by reading the same word under the existing raw lock. Compare only the requested IRQ polarity bit; mismatch unlocks, emits a rate-limited hwirq-only error and returns -EIO before GIC parent setup. BIT() avoids the signed bit-31 shift.",
@@ -110,10 +110,10 @@
       "independent_native_patch_review": "gnss_integration subagent; no material blocker"
     },
     "normal_kernel_build_complete": true,
-    "installed": false,
+    "installed": true,
     "hardware_polarity_qualified": false,
     "decoder_completion_qualified": false,
-    "remaining_work": "Perform supervised native hardware admission. Successful IRQ type setup would establish selected INTPOL readback acceptance only. The MISC done-bit assertion contract remains missing; this patch does not justify another decode command or guessed source-enable writes.",
+    "remaining_work": "Qualify the decoder SPI240 setup through a supervised exact-kernel module bind. Then use the existing request test with a truthful single-grey selector to observe one independently verified compressed grey picture under the current ACTIVE-clear CCF backend, which prior 7.2 IRQ trials did not submit. Retain real event, command attribution, pixels, stop/guards and terminal recovery; do not alias grey as PCM, accept a harness input error, or promote polling to IRQ completion. The exact source assertion contract and production decoder integration remain unfinished.",
     "normal_kernel_build": {
       "package": "/nix/store/m6qz9mw36h7da2gfi0rqhpya81nj0i4k-linux-gemini-7.2.9",
       "derivation": "/nix/store/jq0qc28r3a2r792di0cq1wi1w0h9cwx2-linux-gemini-7.2.9.drv",
@@ -125,12 +125,31 @@
       "native_object_compiled": true,
       "required_check_phase_complete": true,
       "native_regression_pass_in_build_log": true
+    },
+    "hardware_admission": {
+      "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-102",
+      "image_build": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/media-owner-read/image-102-build.json",
+      "writer_exit": 0,
+      "independent_audit_exit": 0,
+      "audit_result": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/media-owner-read/independent-audit-102/result.json",
+      "audit_sha256": "436f430a1c3f244e234482b9412727f3f9921bb674b0607f189e9910b5f44855",
+      "boot_id": "a8096181-224a-48b9-b9d7-8535d5719b55",
+      "source_hashes_match": true,
+      "no_live_writer": true,
+      "all_units_terminal": true,
+      "taint": 0,
+      "temporary_decoder_absent": true,
+      "normal_platform_boot_and_irq_users_qualified": true,
+      "decoder_spi240_request_qualified": false,
+      "decoder_frame_command_executed": false,
+      "rtc_alarm_calendar_diagnostics_run": false
     }
   },
   "irq_trial_scope_20261011": {
     "trials_82_86_89_90_97": "Each submitted only the first pcm64 picture; the harness exited on its failed capture metadata before compressed test commands.",
     "trial_23_variant_5": "Compressed grey64 I_16x16 DC was actually submitted in IRQ mode, with all6144 private samples correct, zero IRQs and -110. Retained frame.flat selects grey64_nal.",
     "polling_trials_66_67": "Exact retained engine reads MISC0xa4 after picture-complete polling and before stop, core reset or cleanup ACK. The sampled0x3001 is pre-cleanup but is not continuous source observation.",
-    "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase."
+    "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase.",
+    "next_changed_scope": "Historical compressed-grey IRQ failure23 had clock guard0x111, while ACTIVE-clear0x101 trial97 submitted onlyPCM. A correctly labelled independently submitted grey frame under the current owner is unmeasured. The current harness lacks that focused selector; prepare it before a bounded observation."
   }
 }

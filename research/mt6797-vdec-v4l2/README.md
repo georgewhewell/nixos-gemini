@@ -9,7 +9,7 @@ a formally separated clean-room team.
 
 Normal and media development share the maintained Linux 7.2.9 kernel and
 `gemini-7.2.9` branch. The [accepted image](../accepted-baseline.json) is image
-101, source `8b9fa390`. The normal system includes decoder resources and the
+102, source `354d3657`. The normal system includes decoder resources and the
 native VDEC clock provider; it does not enable this experimental module.
 The [kernel baseline](../KERNEL_BASELINE.md) records the maintained toolchain
 and interfaces. Historical modules must be used with their exact recorded
@@ -31,17 +31,21 @@ The remaining owner contract is the exact MT6797 condition that asserts MISC
 `0xa4` done bit 16 after AVC picture completion. The public
 [IRQ contract](irq-contract.json) establishes the clock guard, done check and
 live-read acknowledge sequence; it does not establish source enablement.
-Clock ownership alone did not fix completion. Preserve command attribution,
+Clock ownership alone did not fix the submitted PCM completion. Preserve command attribution,
 stale-event rejection, IRQ synchronization before reset/power release,
 bounded failure, private-DMA stop proof and fences. Picture-complete polling
-cannot qualify the IRQ backend. Resolve this contract before another hardware
-probe or production integration.
+cannot qualify the IRQ backend. Production integration requires this contract.
+Historical compressed-grey trial 23 used clock guard `0x111`; the current
+ACTIVE-clear `0x101` trial submitted only PCM. Prepare a correctly labelled
+single-grey selector in the existing request test before observing that
+unmeasured compressed case. Aliasing it as PCM or accepting a missing-input
+error would not qualify the observation.
 
-The next native kernel source, `354d3657`, also verifies SYSIRQ polarity write
+The installed native kernel source, `354d3657`, also verifies SYSIRQ polarity write
 acceptance before programming its GIC parent. Its actual-callback host regression
 passes GCC 15 sanitizers and rejects the old callback; the normal ARM64 kernel
-build and required checks pass. This change is not yet installed or
-hardware-qualified. SPI 240's INTPOL word 7 bit 16 is separate
+build, required checks and supervised platform admission pass. Decoder SPI 240
+has not yet been requested on this source. Its INTPOL word 7 bit 16 is separate
 from decoder MISC done bit 16; acceptance does not establish decoder completion.
 The existing [IRQ note](irq-contract.json) retains this boundary and next step.
 

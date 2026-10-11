@@ -578,12 +578,92 @@
           "nix/test-core-parking-policy.c": "116730aaa233287420aa5af26b43c19cecb0a4fcf69c7ff45bf81bbaa87ae59f"
         }
       },
-      "installed": false,
-      "accepted_image_unchanged": 101,
+      "installed": true,
+      "accepted_image_unchanged": false,
       "runtime_cpu_cost_and_ui_effect_qualified": false,
       "evidence": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/parking-online-snapshot-checks/result.json",
       "evidence_sha256": "4332e6582cdff13e5c47b566c5f5e10afda322ab38a6a7d009717a1671ddde95",
-      "next": "Include the checked component in the next focused image update, then compare its scalar CPU/transition cost during ordinary use. Do not repeat unchanged RTC/GPU/audio qualification."
+      "next": "Retain the consolidated sampling path and unchanged policy parameters. Continue native hotplug/demand attribution and PMU lifetime qualification before changing scheduler capacities; overall UI responsiveness remains unfinished.",
+      "installation": {
+        "accepted_image": "boot-test-102",
+        "kernel_source_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
+        "component": "/nix/store/ipdpyz7nnqwlnbhshszzl4wj6w36vlbg-gemini-core-parking-static-aarch64-unknown-linux-musl-1",
+        "writer_exit": 0,
+        "independent_audit_exit": 0,
+        "audit_result": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/media-owner-read/independent-audit-102/result.json"
+      },
+      "post_install_observation_102": {
+        "evidence": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/media-owner-read/performance-read-102.json",
+        "evidence_sha256": "a60fceed69b86f2279b94ff0363b83c42890397163ec564c4eb25c97ec05200f",
+        "exit_code": 0,
+        "duration_seconds": 30.348,
+        "same_observer_except_identity_guards": true,
+        "parking_cpu_percent_one_core": 4.053,
+        "prior_101_parking_cpu_percent_one_core": 6.244,
+        "udev_cpu_percent_one_core": 7.249,
+        "samples_online_masks": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        "prior_101_samples_online_masks": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            2
+          ]
+        ],
+        "memory_available_kib": [
+          2883684,
+          2892268
+        ],
+        "vm_deltas": {
+          "pgmajfault": 0,
+          "pswpin": 0,
+          "pswpout": 0,
+          "pgscan_kswapd": 0,
+          "pgsteal_kswapd": 0,
+          "oom_kill": 0
+        },
+        "logging_metadata": {
+          "entries": 15,
+          "priority_counts": {
+            "6": 15
+          },
+          "process_counts": {
+            "gemini-core-par": 10,
+            "systemd": 5
+          },
+          "query_returncode": 0
+        },
+        "hardware_taint": 0,
+        "interpretation": "Parking was observed at4.053% of one core versus6.244% in the prior101 observation. The online CPU sets and activity differed, so this is not a controlled performance comparison or a UI-responsiveness qualification. Udev and governor activity remain significant; no memory reclaim or swap I/O occurred during the window.",
+        "runtime_policy_writes": false,
+        "ui_responsiveness_qualified": false
+      }
     }
   }
 }

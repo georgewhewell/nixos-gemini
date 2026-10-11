@@ -12,12 +12,13 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 101, kernel
-source `8b9fa390ad32d61d2661b8719ae76a5fe6232abd`.
-Its [integration proof](gnss-integration-20261011.json) and independent
-terminal audit pass native GNSS registration and two bounded LNA power cycles,
-GNOME RFKILL visibility, directed NetworkManager scanning, RAM-only paging,
-retained storage and ordinary Nix builds. Onboard stereo mapping retains
+The [installed accepted image](accepted-baseline.json) is trial 102, kernel
+source `354d3657699458b144f838adbbd64f74bfa12f93`.
+Its focused deployment and independent terminal audit pass GNOME RFKILL
+visibility, directed NetworkManager scanning, RAM-only paging, retained storage
+and ordinary Nix builds, as recorded in the [native IRQ owner note](mt6797-vdec-v4l2/irq-contract.json).
+Native GNSS registration and two bounded LNA cycles retain the unchanged owner
+inputs and [image 101 proof](gnss-integration-20261011.json). Onboard stereo mapping retains
 unchanged-input trial 98 evidence. Normal
 NetworkManager association and traffic over wlan0 retain trial 95 evidence;
 Bluetooth discovery retains trial 94 evidence with unchanged radio inputs. Selecting another
@@ -26,11 +27,11 @@ RTC and GPU results retain their relevant unchanged-input evidence
 from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
 repeat RTC alarm/calendar diagnostics.
 
-The next source revision, `354d3657699458b144f838adbbd64f74bfa12f93`, verifies
-the native SYSIRQ polarity field before forwarding type setup to the GIC.
-Its normal ARM64 build and required actual-callback regression pass; it is not
-yet installed or hardware-qualified. The [media IRQ owner note](mt6797-vdec-v4l2/irq-contract.json)
-separates this acceptance check from the unresolved decoder completion source.
+The installed revision verifies the native SYSIRQ polarity field before
+forwarding type setup to the GIC. Its normal ARM64 build, required actual-callback
+regression and platform admission pass. Decoder SPI 240 has not yet been
+requested on this revision; its polarity and completion remain unqualified in
+the media IRQ owner note.
 
 This revision admits current supplicant userspace capability flags and station
 joins to cached passive-channel APs. Its real-callback tests use the kernel's native flag enums
@@ -67,6 +68,10 @@ shows parking and udev overhead; UI responsiveness remains unqualified in the
 [performance record](desktop-responsiveness-20261011.json). The native PMU
 candidate remains separate until its offline-CPU probe lifetime and hardware
 counters are qualified; scheduling capacity ratios must be measured.
+Image 102 also installs the checked topology sampling cleanup, removing repeated
+steady-state online sysfs reads. One bounded observation records parking at
+4.05% of one core versus 6.24% in image 101; differing activity and online CPU
+sets prevent treating that as a controlled comparison or a UI qualification.
 
 GNSS uses the existing CONSYS/STP owner and the standard Linux GNSS class.
 Normal module discovery and udev loading now work. Two power cycles receive
