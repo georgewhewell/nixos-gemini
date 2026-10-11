@@ -5,7 +5,7 @@
     # Stage 1 and gemini-mainline-usb own the static rescue address.
     unmanaged = ["interface-name:usb0"];
     wifi = {
-      macAddress = "preserve";
+      # Native station and active-probe MAC programming is still unfinished.
       scanRandMacAddress = false;
     };
     # The root filesystem is volatile; desktop-saved profiles must survive boot.
