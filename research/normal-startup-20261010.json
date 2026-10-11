@@ -138,7 +138,7 @@
     "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/independent-audit-114/result.json"
   },
   "remaining_diagnostic_retirement_20261011": {
-    "status": "Source-integrated and host-validated; not installed",
+    "status": "Source-integrated, host-validated and normal ARM64 build passes; not installed",
     "explicit_units": [
       "gemini-gnome-qualify.service",
       "gemini-manager-bus-check.service",
@@ -164,6 +164,17 @@
     "proof": {
       "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/result.json",
       "sha256": "a887458429fe73c80c43652c7e2bb32c314254e01c9c8f2ca943a4a1163ee71e"
+    },
+    "normal_build_actual_exit": 0,
+    "critical_cross_runtime": {
+      "passed": true,
+      "elf_files": 1448,
+      "scripts": 125,
+      "whole_transitive_closure_arm64_claimed": false
+    },
+    "normal_image_proof": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/normal-build/candidate.json",
+      "sha256": "14e95a0183d6946802cb9427cf04dd736ff98b223cf0b758ca608434f33e9636"
     }
   }
 }
