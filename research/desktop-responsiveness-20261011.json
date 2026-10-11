@@ -455,7 +455,7 @@
     "hardware_effect_and_subjective_responsiveness_qualified": false,
     "remaining_owner_work": [
       "Qualify changed parking decisions during ordinary use on the combined next image.",
-      "Native MMC0 pad electrical fields and drive encoding are incomplete; qualify the pad owner before enabling faster eMMC timing.",
+      "Qualify integrated native MMC0 electrical ownership on hardware; faster eMMC timing still requires its controller timing/tuning contract.",
       "DT lacks measured CPU capacity data for A53/A72 scheduling; no invented ratios.",
       "Native deep idle remains incomplete; current CPU_OFF parking is still needed for core power removal."
     ],
@@ -464,7 +464,29 @@
       "performance-read.json",
       "performance-inventory-read.json",
       "parking-demand-candidate/review-result.json",
-      "parking-demand-candidate/root-check/canonical-validation.json"
-    ]
+      "parking-demand-candidate/root-check/canonical-validation.json",
+      "mmc0-electrical-candidate/review-result.json",
+      "mmc0-electrical-candidate/canonical-validation.json"
+    ],
+    "mmc0_electrical_owner": {
+      "kernel_revision": "34d02667ae2f7d0f76f4d6b4cba7109fbaf40ca4",
+      "native_fields": [
+        "input enable",
+        "Schmitt trigger",
+        "drive strength",
+        "pull direction and resistance",
+        "TDSEL",
+        "RDSEL"
+      ],
+      "source": "pinned public GPL MT6797 MSDC source; native pinctrl field tables and board DT",
+      "drive_encoding": "GPIO114-125 use DRV_GRP4; 4 mA maps to public selector 1",
+      "canonical_host_asan_ubsan_exit": 0,
+      "strict_arm64_w1_werror_exit": 0,
+      "compiled_dtb_exit": 0,
+      "normal_combined_kernel_build_exit": 0,
+      "timing_cap_hz": 25000000,
+      "faster_timing_enabled": false,
+      "hardware_qualified": false
+    }
   }
 }

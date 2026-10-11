@@ -1,6 +1,6 @@
 {
   "trial": "boot-test-97",
-  "scope": "CCF-owned ACTIVE initialization on the exact accepted image96 kernel; clock guard passes but IRQ completion and pixels fail.",
+  "scope": "CCF-owned ACTIVE initialization on the exact accepted image96 kernel; clock guard passes but IRQ completion fails and no frame is exported.",
   "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
   "kernel_package": "/nix/store/hp3wjwpqipig72y48kd8w5hb7g6v6jv4-linux-gemini-7.2.9",
   "config_sha256": "63ace6d7889e6e1b3c6caac9cf55db8a90f03f06db067928d00ca3c10b334562",
@@ -42,7 +42,7 @@
     },
     "guard": 257,
     "active_bit_clear": true,
-    "inference": "Clearing the inherited ACTIVE gate changed 0x111 to 0x101, but did not produce a done IRQ or correct pixels."
+    "inference": "Clearing the inherited ACTIVE gate changed 0x111 to 0x101, but did not produce a done IRQ or successful frame export."
   },
   "command": {
     "jobs": 1,
@@ -100,9 +100,10 @@
     "passed": false,
     "different_samples": 6106,
     "actual_sha256": "9553ad1fd89be6864e3602fed4a76e66c74483bc9e805d859739e77589cea94e",
-    "expected_sha256": "ea52cfe0417144d2d620c0d7939a66a2d5248603e9d08a6247ee88fb02a482dd"
+    "expected_sha256": "ea52cfe0417144d2d620c0d7939a66a2d5248603e9d08a6247ee88fb02a482dd",
+    "untouched_capture_sentinel": true
   },
-  "pixel_scope": "Only the failed raw capture buffer was compared; 6106 of 6144 samples differ.",
+  "pixel_scope": "The capture buffer equals the untouched 6144-byte 0x79 test sentinel. Its 6106 mismatches measure unexported output, not decoder-private PCM quality.",
   "safe_quiescence": true,
   "unloaded": true,
   "module_unload_taint": 4096,

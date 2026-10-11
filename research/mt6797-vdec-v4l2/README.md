@@ -65,8 +65,9 @@ kernel using GCC 15.3.0, strict MODPOST and `W=1`. It owns bus/engine clocks
 and adopts/releases the inherited ACTIVE gate through CCF. All five powered
 snapshots change to `0x101`, satisfying the public ACTIVE-clear guard, but
 the first command still times out with zero interrupts across all ten CPUs.
-Its raw error buffer differs in 6106 of 6144 samples; no successful frame is
-exported. Stop, guards, unload, supervised return to image 96 and the independent
+Its capture buffer retains the test's `0x79` sentinel; the 6106 mismatches
+measure unexported output, not decoder-private PCM quality. No successful frame
+is exported. Stop, guards, unload, supervised return to image 96 and the independent
 terminal audit pass. Clock ownership alone does not resolve IRQ completion.
 The focused media boot wrapper does not run unchanged RTC/alarm diagnostics.
 
