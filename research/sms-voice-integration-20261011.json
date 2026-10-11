@@ -3,7 +3,6 @@
   "status": "Applications built and integrated; native cellular and voice bring-up incomplete",
   "configuration": "nixosConfigurations.gemini",
   "architecture": "aarch64-linux",
-  "kernel_commit": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
   "sources": [
     "nixos/gnome.nix",
     "nix/cross-fixes.nix",
@@ -88,7 +87,7 @@
     "public_vendor_contract": "GPL CCCI maps PCM RX/TX channels 4/5 to ccci_aud with user headers. Its kernel port neither decodes speech messages nor supplies a startup acknowledgement; missing channel handling alone does not establish the modem-watchdog cause."
   },
   "limitations": {
-    "native_transport_and_sim": "Accepted115 reaches READY, then its modem watchdog IRQ fires. Standard fatal AT hangup/removal is hardware qualified; ModemManager SIM-missing fallback does not establish physical card absence.",
+    "native_transport_and_sim": "Accepted116 reaches READY, then its modem watchdog IRQ fires. Standard fatal AT hangup/removal and Linux ownership of all six SIM pads are hardware qualified; ModemManager SIM-missing fallback does not establish physical card absence.",
     "sms_send_receive_qualified": false,
     "voice_control_audio_qualified": false,
     "calls_or_sms_sent_during_validation": false,
@@ -151,12 +150,11 @@
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
     "remaining": [
-      "Qualify native named SIM state selection on the next image; accepted115 still has inherited unclaimed pads.",
       "Resolve the native modem watchdog and establish eUICC APDU routing; standard AT availability alone does not establish SIM presence or a selected physical slot.",
       "Integrate the checked lpac transport repair and complete operation/session cancellation, deadline and long-response behavior before provisioning.",
       "Finish generic GUI AT discovery and operations through standard ModemManager/WWAN interfaces. Generic AT ModemManager lacks EID/type loaders, so empty-eUICC discovery needs standard chip-info; do not guess slot2."
     ],
-    "board_observation": "Accepted115 finite two-snapshot read passes identity/taint/native-node guards and confirms unchanged inherited six-pad numeric encoding. Both locks released and host idle; no pin selection, AT command or subscriber query. The earlier113 parser failure remains historical.",
+    "board_observation": "Accepted116 finite two-snapshot read passes exact identity, taint and native-node guards. All six pins are claimed by the protected cold owner, preserving accepted115 electrical encoding. Both locks released and host idle; observer sent no AT command or subscriber query. The earlier113 parser failure remains historical.",
     "sources": [
       "https://support.planetcom.co.uk/download/GeminiPDAUserGuide.pdf",
       "https://codeberg.org/lucaweiss/lpa-gtk",
@@ -191,20 +189,20 @@
       "installed": true,
       "modem_stability_or_euicc_access_qualified": false,
       "image_build_actual_exit": 0,
-      "image_build_proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/combined/build-exit.json",
-      "installed_baseline": "boot-test-115",
+      "image_build_proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/build-exit.json",
+      "installed_baseline": "boot-test-116",
       "hardware_hangup_qualified": true,
       "hardware_proof": {
-        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/combined/at-terminal/result.json",
-        "sha256": "eff61cee19dffe872aa102a5e7bc8ca754f1ddadabfef0403f4613a2b6d67e38"
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/at-terminal/result.json",
+        "sha256": "d89cb8e8690297f8771ec40985a9e314bd8394c2718bc99c6561143592567ca2"
       },
       "blocked_read_hardware_qualified": false,
       "at_commands_sent_during_observation": 0,
       "payload_bytes_read_during_observation": 0,
-      "installed_kernel_revision": "89c13acdc6c0891191be7847450ed8e199a76f10"
+      "installed_kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d"
     },
     "native_sim_electrical_maps": {
-      "status": "Installed native maps and inherited six-pad electrical encoding observed; declarative cold-owner state pending",
+      "status": "Installed native maps and six-pad electrical encoding observed under declared protected cold-owner selection",
       "kernel_revision": "4230863bd3d0e93eb3dbb9c54c86030b57827fc2",
       "pins": [
         126,
@@ -220,20 +218,24 @@
       "proof": "/mnt/Home/src/nixos-gemini/handoff/modem-sim-pinctrl-20261011/host-proof/result.json",
       "proof_sha256": "ca72ed326da61768d837857b8394663d8ea82391bad390f26eccfddb08d6d2c5",
       "installed": true,
-      "installed_baseline": "boot-test-115",
+      "installed_baseline": "boot-test-116",
       "hardware_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/sim-pads/result.json",
+        "sha256": "090489f031a2121eae570af22d9b786ab90730fd94ef842c2bb2b0b7b370afdf"
+      },
+      "inherited_state": "All six mode1/IES1/SMT1; CLK/RST output-direction and pulls disabled, SIO input-direction and pull-up R1/R0=1/0(code102); claimed by protected cold owner with numeric encoding preserved",
+      "original_initializer_qualified": false,
+      "linux_pad_ownership_qualified": true,
+      "physical_sim_or_euicc_qualified": false,
+      "inherited_hardware_proof": {
         "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/combined/sim-pads/result.json",
         "sha256": "2b6f9cd36ff59fe79a53773c9af87362b4e0e416be646c1b8a758206d507a1fb"
-      },
-      "inherited_state": "All six mode1/IES1/SMT1; CLK/RST output-direction and pulls disabled, SIO input-direction and pull-up R1/R0=1/0(code102); all unclaimed",
-      "original_initializer_qualified": false,
-      "linux_pad_ownership_qualified": false,
-      "physical_sim_or_euicc_qualified": false
+      }
     },
     "native_sim_pad_ownership": {
-      "status": "Implemented and target compiled; image/hardware selection pending",
+      "status": "Installed named SIM state; all six pad claims and preserved electrical encoding hardware qualified",
       "kernel_revision": "57a60aeb697c35bdb195e886b20f33640308e1ce",
-      "installed": false,
+      "installed": true,
       "scope": "Named sim-only pin state selected after protected cold preflight; standard DIR-only output-enable restores CLK/RST direction after Schmitt configuration, SIO uses observed R1/R0=1/0 encoding",
       "host_proof": {
         "path": "/mnt/Home/src/nixos-gemini/handoff/modem-sim-pinctrl-20261011/ownership/host-proof/result.json",
@@ -246,14 +248,19 @@
       "actual_host_exit": 0,
       "strict_arm64_actual_exit": 0,
       "binding_and_compiled_cold_owner_dt_validation_actual_exit": 0,
-      "linux_pad_ownership_hardware_qualified": false,
+      "linux_pad_ownership_hardware_qualified": true,
       "physical_sim_or_euicc_qualified": false,
-      "watchdog_causality_qualified": false
+      "watchdog_causality_qualified": false,
+      "installed_baseline": "boot-test-116",
+      "hardware_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/sim-pads/result.json",
+        "sha256": "090489f031a2121eae570af22d9b786ab90730fd94ef842c2bb2b0b7b370afdf"
+      }
     },
     "native_wwan_release": {
-      "status": "Implemented and target compiled; image pending",
+      "status": "Installed; actual core close/removal accounting qualified by sanitizer regressions",
       "kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d",
-      "installed": false,
+      "installed": true,
       "scope": "Keep removed-port open count at zero when old descriptors close; existing core lock serializes last-close/removal",
       "host_proof": {
         "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/wwan-release-owner/result.json",
@@ -265,7 +272,13 @@
       },
       "actual_host_exit": 0,
       "strict_arm64_actual_exit": 0,
-      "compiled_original_rejects_count_underflow": true
+      "compiled_original_rejects_count_underflow": true,
+      "installed_baseline": "boot-test-116",
+      "hardware_start_count_read": false,
+      "hardware_descriptor_termination_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/at-terminal/result.json",
+        "sha256": "d89cb8e8690297f8771ec40985a9e314bd8394c2718bc99c6561143592567ca2"
+      }
     }
   },
   "native_modem_runtime": {
@@ -280,31 +293,39 @@
     "installed": true,
     "watchdog_causality_qualified": false,
     "pbm_implemented": false,
-    "installed_baseline": "boot-test-115",
+    "installed_baseline": "boot-test-116",
     "modem_watchdog_irq_observed": true,
     "ready_at_first_fatal": 1,
     "fatal_proof": {
-      "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/combined/fatal-reason/result.json",
-      "sha256": "9375c6d98f262ec514712adf889f61f6cbd63308417516aadd76c14d9bbabb62"
+      "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/native-runtime/result.json",
+      "sha256": "cbd79a8f0b2d9e7867ead716f8353c225614c3fdd2ebb77f1e60c585231d5f2a"
     },
-    "dbm_hardware_bytes_read": false
+    "dbm_hardware_bytes_read": false,
+    "installed_kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d"
   },
   "current_native_installation": {
-    "baseline": "boot-test-115",
-    "kernel_revision": "89c13acdc6c0891191be7847450ed8e199a76f10",
-    "boot_id": "5163e871-632e-43e1-af79-89b88214ed7b",
-    "system": "/nix/store/kcrmhsglp15j5yxlngm1k00p2qi8mfmx-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "bundle": "/nix/store/6w3rlzz9zylpvzmp8010jj4q5nbx5xn2-gemini-mainline-nixos-bundle",
+    "baseline": "boot-test-116",
+    "kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d",
+    "boot_id": "a40cdbfc-9939-49f3-b6a6-db9e4a68e6a0",
+    "system": "/nix/store/xprjiskfw18r2facx4b9bjh9kmg6h08x-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "bundle": "/nix/store/yqz51wys1hk4ldlsm72pfvi73dgg1p06-gemini-mainline-nixos-bundle",
     "build_actual_exit": 0,
     "gnome_cross_runtime_elf_files": 1431,
     "gnome_cross_runtime_scripts": 124,
     "trial_actual_exit": 0,
     "independent_audit_actual_exit": 0,
     "audit": {
-      "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/combined/audit/result.json",
-      "sha256": "33d5c53fb3a4ad893de9dea8532f6b896fdd3dace835b3773f7d7e9f7e98cf08"
+      "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/audit/result.json",
+      "sha256": "10fd0335de4b75c64b6cbd74042f1f48f39fffd0a3fdbde6b9fcfd5b79af6368"
     },
     "no_writer": true,
-    "source_hashes_matched": 47
-  }
+    "source_hashes_matched": 47,
+    "image": "/nix/store/2qxyxwxjpdkg3rj5hsiiyyhlxxy9mznv-gemini-mainline-nixos-padded.img",
+    "boot_sha256": "b55164c25bd0e51c347b6962aae7b4d7d4dfb26bf66e83507c6a5639ed87081a",
+    "installation_seal": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/seal.json",
+      "sha256": "7db0b59e3ce15560374f6018f06ce9ff81f679b681962cbd495a6e80272e3879"
+    }
+  },
+  "application_build_kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77"
 }

@@ -1,7 +1,7 @@
 # Cellular modem (MD1, CCCI and CLDMA)
 
-Status: native MT6797 CCCI/CLDMA transport is installed in accepted image115
-(Linux revision `89c13acdc6c0891191be7847450ed8e199a76f10`). The modem completes
+Status: native MT6797 CCCI/CLDMA transport is installed in accepted image116
+(Linux revision `477538930f3d819c19a93bd27ad72f76b721979d`). The modem completes
 HS1/HS2 and reaches READY, then its watchdog fires. Cellular service, SIM/eUICC
 access, SMS delivery and voice calls remain unqualified.
 
@@ -12,11 +12,12 @@ GUI should use lpac's generic AT/APDU transport with ModemManager ownership;
 CCCI does not belong in the GUI.
 
 The installed driver removes a failed AT port and wakes existing descriptors
-with standard HUP/ERR; image115 hardware observation confirms that boundary.
+with standard HUP/ERR; image116 hardware observation confirms that boundary.
 The native SIM electrical maps and disabled-PBM DBM initialization are installed.
-The observed six SIM pads match the public board configuration but remain
-unclaimed by Linux in this accepted image. These repairs do not establish the
-watchdog cause or eUICC routing.
+The protected cold owner now selects the declared SIM state and claims all six
+pins, preserving the observed public board configuration. The WWAN core keeps
+removed-port open count at zero when old descriptors close. These repairs do not
+establish the watchdog cause or eUICC routing.
 
 The current implementation is in `drivers/net/wwan/mediatek/mtk_mt6797_ccci.c`,
 `mtk_ccci_common.c`, the native `drivers/soc/mediatek/mt6797-md1-*` owners and
@@ -24,8 +25,7 @@ The current implementation is in `drivers/net/wwan/mediatek/mtk_mt6797_ccci.c`,
 [Linux source tree](https://github.com/georgewhewell/linux-gemini/tree/gemini-7.2.9).
 Calls, Spacebar and callaudiod are already in the normal image.
 
-Remaining work: select the declared SIM pin state inside the protected cold
-transaction, resolve the modem watchdog, establish eUICC APDU routing, integrate
+Remaining work: resolve the modem watchdog, establish eUICC APDU routing, integrate
 and qualify the generic AT GUI/transport, and finish the modem speech-control and
 duplex audio lifetime. AT availability and ModemManager's SIM-missing fallback
 do not establish physical card absence or a selected SIM slot.

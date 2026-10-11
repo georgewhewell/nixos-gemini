@@ -4,7 +4,7 @@ The installed [accepted image](research/accepted-baseline.json) is Linux 7.2.9
 with GNOME Wayland, 200% display scaling, a fixed bottom dock, NetworkManager,
 ModemManager, Bluetooth, IPv6 and RAM-only LZ4 zram. GNOME Calls, Spacebar and
 callaudiod are installed; the call daemon and SMS receiver run normally.
-[Image 115](research/sms-voice-integration-20261011.json) passes retained-storage,
+[Image 116](research/sms-voice-integration-20261011.json) passes retained-storage,
 ordinary Nix builds, focused desktop checks and its independent terminal audit.
 Standard eMMC high-speed mode now runs at about 48 MHz, up from 24 MHz, with
 native clock verification, error attribution and checked recovery ownership.
@@ -18,7 +18,8 @@ Wi-Fi automatically associates and passes traffic through NetworkManager;
 selecting another SSID remains unqualified. Bluetooth is visible to GNOME and
 bounded discovery passes; pairing and profiles remain unqualified. The native
 modem reaches HS2, then fails with a watchdog interrupt. Its standard WWAN AT port
-now signals HUP/ERR and disappears on that failure. SIM/eSIM, cellular data,
+now signals HUP/ERR and disappears on that failure. Linux owns all six SIM pins
+through the protected modem cold-start transaction. SIM/eSIM, cellular data,
 SMS delivery and voice require further native driver bring-up. GNSS now exposes
 the standard Linux endpoint and passes two power lifetime cycles, but receives
 no data; receiver initialization and positioning remain unfinished. Native video
