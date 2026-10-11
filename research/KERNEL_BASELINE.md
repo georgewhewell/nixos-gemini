@@ -12,8 +12,8 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 114, kernel
-source `238590b6df6fb5afae1d11d9d0165e534ff8f18f`.
+The [installed accepted image](accepted-baseline.json) is trial 115, kernel
+source `89c13acdc6c0891191be7847450ed8e199a76f10`.
 Its focused deployment and independent terminal audit pass GNOME RFKILL
 visibility, directed NetworkManager scanning, native eMMC high-speed admission,
 RAM-only paging, retained storage and an ordinary Nix build.
@@ -65,6 +65,17 @@ frames delivered, with zero closed-port drops versus two in trial 98. The modem
 still fails at 106 seconds and ModemManager exposes no SIM object; corrected
 receive ownership is not a SIM/watchdog fix. The
 [modem record](desktop-radio-activation-20261011.json) preserves both results.
+
+Image 115 qualifies native fatal AT withdrawal through standard WWAN HUP/ERR
+and port removal, without sending AT commands or reading payload. It installs
+the bounded public disabled-PBM DBM initializer before the HS1 runtime reply;
+the modem still reaches READY and receives its watchdog interrupt. Native SIM
+electrical maps expose all six inherited pad settings, matching the public board
+configuration: mode 1, IES/Schmitt enabled, CLK/RST pulls disabled and SIO pull-up
+with R1/R0 encoding 1/0. Linux has not claimed those pads. The
+[cellular owner](sms-voice-integration-20261011.json) records the exact build,
+independent terminal audit, finite observations and remaining cold-state,
+modem-stability and eUICC access work. No SIM presence or provisioning is claimed.
 
 The combined image retains native MMC0 pad ownership and the current-demand
 check before CPU parking removes a core. Image 112's locked readbacks confirm all
