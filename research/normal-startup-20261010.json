@@ -188,6 +188,29 @@
         "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
         "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
       }
+    },
+    "failed_start_followup": {
+      "trial": "boot-test-120",
+      "image_unchanged_from": "boot-test-119",
+      "host_checks_actual_exit": 0,
+      "runner_cases": 39,
+      "mtkclient_cases": 16,
+      "original_owner_runtime_control_exit": 1,
+      "trial_actual_exit": 1,
+      "capture_actual_exit": 0,
+      "independent_audit_actual_exit": 0,
+      "early_existing_rescue_exercised": true,
+      "installed": false,
+      "failure_boundary": "Native md-wdt-irq after HS1 and before HS2; valid policy12",
+      "watchdog_cause_established": false,
+      "host_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/failed-start/final/result.json",
+        "sha256": "d32959bf989a9ff098237281693e690aad6f943c7c91b78256bb5ed3aa8800a2"
+      },
+      "trial_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-120/seal.json",
+        "sha256": "146768c7b0c7da124bcfa195e1290355c71d8bfd44d3901b86db105e91268b83"
+      }
     }
   }
 }

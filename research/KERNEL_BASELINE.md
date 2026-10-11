@@ -24,10 +24,11 @@ The bounded public disabled-PBM DBM initializer is installed before the validate
 HS1 runtime reply. The modem still reaches READY and receives its watchdog IRQ;
 SIM presence, eUICC APDUs, cellular data, SMS delivery and calls remain unqualified.
 CCCI framing and DMA remain kernel responsibilities. The generic AT lpa-gtk/lpac
-candidate is source-integrated and cross-built; images117 and118 passed target
-imports but failed their healthy-boot gates. Audited rollback restored116; no
-candidate LK metadata or AT observation was obtained, and no watchdog cause was
-established.
+candidate is source-integrated and cross-built; images117–119 failed their
+healthy-boot gates. Diagnostic trial120 reused119 with a changed host runner:
+valid LK policy12/load12/image12 was observed, followed by a modem watchdog
+interrupt after HS1 and before HS2. Audited rollback restored116. No candidate
+AT observation or watchdog cause was established.
 
 Candidate118 native source `deb62362ce75a4325cdecd04e9f70c875cceb9de` passes GCC15
 strict ARM64 compilation and the normal image build. Its MD1 policy defaults to
@@ -38,6 +39,15 @@ The GUI candidate includes the standard typed-WWAN-AT `uaccess` rule for the
 active local seat, retaining ModemManager ownership and authorization. Installation,
 eUICC access, provisioning and voice remain unqualified; exact proofs are in the
 [cellular owner](sms-voice-integration-20261011.json).
+
+The maintained source now pins `26d6aadf1023ffb227dceb8d507b99bd164156d1`.
+It fixes validation of unused LK support options when the override gate is
+disabled, preserving structural and enabled-invalid refusal. Actual C parser,
+policy and wire tests pass GCC15 ASan/UBSan; the native object passes strict
+ARM64 compilation. This branch is not exercised by120's valid enabled override;
+the correction is uninstalled and is not presented as a watchdog repair.
+Native MD3/C2K power, shared-memory and CCIF lifetime remain unimplemented.
+Their public contracts and unfinished work are in the existing cellular record.
 
 [Native MMC and performance evidence](desktop-responsiveness-20261011.json)
 records MMC0 pad/supply ownership, verified 47,999,984 Hz eMMC high-speed clock,

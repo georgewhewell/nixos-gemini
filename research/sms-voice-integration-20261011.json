@@ -262,7 +262,41 @@
           "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
           "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
         },
-        "scope": "Unchanged118 kernel/eSIM packages with startup cleanup. Exact candidate returns to SSH; cellular startup fails exit1, blocking acceptance and desktop dependencies. Audited rollback restores116. Native failure stage remains uncaptured; no candidate GNOME or subscriber operations."
+        "scope": "Unchanged118 kernel/eSIM packages with startup cleanup. Exact candidate returns to SSH; cellular startup fails exit1, blocking acceptance and desktop dependencies. Audited rollback restores116. Native failure stage remains uncaptured; no candidate GNOME or subscriber operations.",
+        "diagnostic_trial120": {
+          "trial_actual_exit": 1,
+          "capture_actual_exit": 0,
+          "independent_rollback_audit_actual_exit": 0,
+          "image_unchanged": true,
+          "installed": false,
+          "candidate_lk_metadata_observed": true,
+          "candidate_at_observer_run": false,
+          "failed_unit": "gemini-cellular.service",
+          "failure_boundary": "md-wdt-irq before HS2, ready=0; terminal_errno=-110",
+          "watchdog_cause_established": false,
+          "runtime_metadata": {
+            "available": true,
+            "capability_available": 1,
+            "capability_provenance": "lk_override",
+            "image_type": 12,
+            "lk_option_gate": 1,
+            "lk_option_gate_present": 1,
+            "load_type": 12,
+            "load_type_valid": 1,
+            "option_parse_errno": 0,
+            "schema": 1,
+            "support_option": 12,
+            "support_option_present": 1,
+            "valid": true
+          },
+          "selected_policy": 12,
+          "policy_source": "lk_override",
+          "proof": {
+            "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-120/seal.json",
+            "sha256": "146768c7b0c7da124bcfa195e1290355c71d8bfd44d3901b86db105e91268b83"
+          },
+          "scope": "Changed existing host owner captures failure once before prompt existing rescue; no target rebuild, subscriber operation, or unchanged RTC/SIM/AT qualification."
+        }
       }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",
@@ -432,7 +466,7 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "119 identifies terminal cellular startup failure (exit1); capture native helper stage/runtime-policy/first-fatal scalars inside the existing trial owner before rollback, then fix the native cause. Qualify readiness and watchdog separately once healthy. No candidate metadata or AT observer result exists for117\u2013119.",
+      "remaining": "120 observes valid LK policy12/load12/image12 and successful HS1 reply queueing, followed by md-wdt-irq before HS2 (ready0). Determine reply consumption and native FS/IPC progress before identifying the watchdog cause; finish the missing MD3/C2K ownership independently from policy selection. Standard AT/eUICC operations remain unqualified.",
       "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
       "actual_production_host_exit": 0,
       "strict_arm64_actual_exit": 0,
@@ -442,7 +476,7 @@
         "sha256": "17c569c5de6fbcab604ad0700d2407ccbd8692543206ae6180143a9d72a8ee1d"
       },
       "configured_policy_followup": {
-        "status": "Source-integrated, strict ARM64 compiled and normal cross-build passes;118 failed healthy boot and restored116",
+        "status": "Configured policy selection observed on120; candidate remains uninstalled after pre-HS2 watchdog failure and audited rollback",
         "kernel_revision": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
         "configured_policy": 12,
         "generic_default_policy": 0,
@@ -452,7 +486,7 @@
         "original_native_source_compiles_and_rejects_missing_default": true,
         "strict_arm64_actual_exit": 0,
         "installed": false,
-        "hardware_observed": false,
+        "hardware_observed": true,
         "watchdog_cause_established": false,
         "host_proof": {
           "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/configured-policy/result.json",
@@ -467,7 +501,56 @@
         "normal_trial_proof": {
           "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
           "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
+        },
+        "hardware_observation": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-120/seal.json",
+          "sha256": "146768c7b0c7da124bcfa195e1290355c71d8bfd44d3901b86db105e91268b83"
         }
+      },
+      "gated_optional_parser_repair": {
+        "status": "Source-integrated and strict ARM64 compiled; not installed",
+        "kernel_revision": "26d6aadf1023ffb227dceb8d507b99bd164156d1",
+        "scope": "Validate support option semantics only when a valid positive LK gate enables them. Preserve structural/malformed-gate/enabled-invalid refusal and valid raw diagnostics. Independent quality defect;120 uses a valid enabled override and does not exercise the corrected branch.",
+        "host_actual_exit": 0,
+        "original_compiled_runtime_controls": 24,
+        "strict_arm64_actual_exit": 0,
+        "normal_image_rebuild_run": false,
+        "installed": false,
+        "watchdog_cause_established": false,
+        "host_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/gated-optional/host-05.json",
+          "sha256": "8cbd4f6c0bd72f65bb490c87dfcc2db779ee77002916f7985ce3cb2aae5529dd"
+        },
+        "strict_arm64_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/gated-optional/strict-arm64/exit.json",
+          "sha256": "dd7dff28e7019ca0c193bbecf260b08bb1ef8075a89d84a8d5acf693474bfcee"
+        },
+        "kernel_derivation_eval_actual_exit": 0,
+        "kernel_derivation": "/nix/store/v1alk30l3j270za0r7pamv84x7i41shn-linux-gemini-7.2.9.drv",
+        "frozen_recovery_derivation_eval_actual_exit": 0,
+        "frozen_recovery_derivation": "/nix/store/03jkfssxm1vw2njc12hlb1dcfhv8i3x2-gemini-mainline-nixos-bundle.drv",
+        "other_flake_inputs_unchanged": true
+      },
+      "companion_modem_remaining": {
+        "status": "Native MD3/C2K lifecycle absent; watchdog causality unestablished",
+        "public_board_policy": {
+          "md1_support": 12,
+          "md3_support": 2,
+          "c2k_lte_mode": 2
+        },
+        "missing_native_owners": [
+          "Full validated LK AP\u2194MD1/MD1\u2194MD3/AP\u2194MD3 layout and MD3 image/header publication; current publication drops companion ranges.",
+          "Separate protected MD3 execution/quiescence/reset/power authority, native C2K domain, MPU regions9/8/16/17 and inherited MD3 remap/lock attestation.",
+          "Joint shared-memory/CCIF/PCCIF lifetime and bounded C2K power/wake/watchdog teardown; MD1 first-start memory initialization precedes MD3 ring initialization.",
+          "Owner-backed runtime feature4 (8 bytes) and feature12 (16 bytes), with independent resolved C2K mode; support cannot precede implementation."
+        ],
+        "sources": [
+          "https://github.com/gemian/gemini-linux-kernel-3.18/blob/8cfe6596a503612e3332d9c26e292a19525a7f07/arch/arm64/configs/aeon6797_6m_n_defconfig#L243",
+          "https://github.com/gemian/gemini-linux-kernel-3.18/blob/8cfe6596a503612e3332d9c26e292a19525a7f07/drivers/misc/mediatek/eccci/ccci_modem.c#L734",
+          "https://github.com/gemian/gemini-linux-kernel-3.18/blob/8cfe6596a503612e3332d9c26e292a19525a7f07/drivers/misc/mediatek/eccci/modem_ccif_c2k.c#L924",
+          "https://github.com/gemian/gemini-linux-kernel-3.18/blob/8cfe6596a503612e3332d9c26e292a19525a7f07/drivers/clk/mediatek/clk-mt6797-pg.c#L1662"
+        ],
+        "scope": "WM63 derives from MD1 RAT policy independently of MD3 status. Successful runtime build shows the actual query did not require currently unsupported features4/12. The missing owner is concrete unfinished work, not a proven explanation of120."
       }
     }
   },
@@ -495,12 +578,12 @@
       "sha256": "7db0b59e3ce15560374f6018f06ce9ff81f679b681962cbd495a6e80272e3879"
     },
     "latest_recovery": {
-      "trial": "boot-test-119",
-      "boot_id": "ec0730d2-4c80-4705-98bf-53c8c93bc2bd",
+      "trial": "boot-test-120",
+      "boot_id": "d5e94824-db7a-46f2-8db9-dc649cc0f9e8",
       "independent_audit_actual_exit": 0,
       "proof": {
-        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-119/seal.json",
-        "sha256": "adf9453eb52f4f954f76767529f649d7d48bf66c135d3af320c569100b9cc7e3"
+        "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/image-120/seal.json",
+        "sha256": "146768c7b0c7da124bcfa195e1290355c71d8bfd44d3901b86db105e91268b83"
       }
     }
   },

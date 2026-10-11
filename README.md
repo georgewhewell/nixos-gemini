@@ -24,7 +24,8 @@ SMS delivery and voice require further native driver bring-up. The generic AT
 lpa-gtk/lpac packages are source-integrated and cross-built, but remain uninstalled:
 Images117–119 failed their healthy-boot gates and restored116 with independent
 audits. Trial119 identifies cellular startup exiting1 and blocking desktop
-dependencies; the native failure reason remains under investigation.
+dependencies. Diagnostic120 observes valid LK policy12 and a modem watchdog
+interrupt after HS1, before HS2; its cause remains under investigation.
 Candidate118 includes native configured-policy selection, standard
 active-seat access to typed WWAN AT ports and checked lpac error handling. Its
 normal ARM64 build and target imports pass; eUICC access and provisioning remain

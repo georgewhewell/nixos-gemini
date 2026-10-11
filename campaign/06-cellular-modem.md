@@ -12,8 +12,9 @@ source-integrated lpa-gtk/lpac candidate uses generic AT/APDU transport and
 ModemManager ownership. It is cross-built but uninstalled: images117–119 failed
 healthy boot and restored116 with independent audits. Trial119 identifies
 cellular startup exiting1 before acceptance, blocking desktop dependencies.
-The native failure stage remains to be captured before rollback. No candidate
-LK metadata/AT observation or watchdog cause was established.
+Diagnostic120 captures valid LK policy12/load12/image12 and a modem watchdog
+interrupt after HS1, before HS2, then restores116 with an independent audit.
+No candidate AT observation or watchdog cause was established.
 
 The installed driver removes a failed AT port and wakes existing descriptors
 with standard HUP/ERR; image116 hardware observation confirms that boundary.
@@ -34,6 +35,14 @@ overrides, with strict ARM64 compilation passing. Only the Gemini build selects
 public policy12; it is separate from hardware capability and load/image type.
 Candidate118 adds standard active-seat `uaccess` for WWAN ports typed AT,
 using existing ModemManager authorization without an extra service or private ABI.
+Maintained source `26d6aadf` additionally fixes unused LK support-option validation;
+actual C tests and strict ARM64 compilation pass. It is uninstalled and does not
+change120's valid enabled override path.
+
+The public board also enables MD3/C2K. Its native power/reset, shared-memory,
+MPU/remap and CCIF lifetime are missing. Runtime support must come from those
+owners; the existing cellular record tracks the required implementation. This
+gap has not been established as the watchdog cause.
 
 Remaining work: qualify the normal installation and native policy selection,
 resolve the modem watchdog, establish eUICC APDU routing and safe generic AT
