@@ -12,8 +12,8 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 96, kernel
-source `ce9fec57add5607faa3eb9f9c31f69afd414de77`.
+The [installed accepted image](accepted-baseline.json) is trial 98, kernel
+source `04ecf8c9ed6f07db005ec88a748e69071203f47c`.
 Its [desktop proof](desktop-radio-activation-20261011.json) and independent
 terminal audit pass GNOME RFKILL visibility, directed NetworkManager scanning, effective onboard stereo
 mapping, RAM-only paging, retained storage and ordinary Nix builds. Normal
@@ -27,16 +27,20 @@ repeat RTC alarm/calendar diagnostics.
 This revision admits current supplicant userspace capability flags and station
 joins to cached passive-channel APs. Its real-callback tests use the kernel's native flag enums
 and are required by the normal kernel build. Native modem bring-up remains
-incomplete: a fresh boot reaches HS2, then receives a modem watchdog interrupt
-at 107 seconds before any SIM diagnostic. SIM/eSIM and cellular data are not
+incomplete: a fresh boot reaches HS2 and exchanges AT traffic, then receives a
+modem watchdog interrupt at 106 seconds. SIM/eSIM and cellular data are not
 qualified.
 
-The installed revision adds bounded public-ABI modem exception decoding and a
-hostless PCM pointer bounds fix. The normal GCC 15 kernel build, including the
-required exception-decoder checks with ASan/UBSan, and supervised image/audit
-checks pass. Its modem snapshot reports nine cores and is rejected by the
-public eight-core layout guard; no exception cause or cellular operation is
-qualified. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
+The installed revision acknowledges AP-side CLDMA RX IP_BUSY at the native IRQ
+owner and detaches old Wi-Fi connection admission before cfg80211 notifications.
+Actual-path regressions fail before each fix and pass afterwards with GCC 15
+ASan/UBSan; strict ARM64 builds, the normal build and supervised image/audit pass.
+Bounded exception decoding reads the independent PL prefix of the nine-core
+report while keeping its overview unqualified. It identifies an undefined-
+instruction offender and a cross-core exception, without establishing their
+cause. Two valid AT frames are dropped while the frontend is closed; bounded
+native receive ownership is the next supported correction. The watchdog remains
+unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
 native SIM, speech control and call-audio lifetime work remains open.
 
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
@@ -47,7 +51,7 @@ historical packages and their exact proofs are separate from current development
 The kernel exports its generated configuration and `Module.symvers` for strict
 external-module builds. Experimental media modules must be rebuilt against the
 exact installed kernel and toolchain. [Decoder trial 97](mt6797-vdec-v4l2/irq-trial-97.json)
-uses that exact installed build. CCF-owned ACTIVE initialization changes the
+uses the recorded image-96 build. CCF-owned ACTIVE initialization changes the
 clock word to `0x101`, but it still times out with zero delivered interrupts.
 Quiescence, guards, unload, supervised return to image 96 and terminal audit
 pass; no successful frame is exported. Media hardware completion, shared surfaces,

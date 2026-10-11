@@ -4,9 +4,9 @@ The installed [accepted image](research/accepted-baseline.json) is Linux 7.2.9
 with GNOME Wayland, 200% display scaling, a fixed bottom dock, NetworkManager,
 ModemManager, Bluetooth, IPv6 and RAM-only LZ4 zram. GNOME Calls, Spacebar and
 callaudiod are installed; the call daemon and SMS receiver run normally.
-[Image 96](research/desktop-radio-activation-20261011.json) passed installation,
+[Image 98](research/desktop-radio-activation-20261011.json) passed installation,
 changed desktop checks and its independent terminal audit. Its
-[application and cross-runtime checks](research/sms-voice-integration-20261011.json)
+[cross-runtime checks](research/desktop-radio-activation-20261011.json)
 passed 1,431 ARM64 ELF files and 124 scripts, including target Python/GI and the
 telephony applications.
 

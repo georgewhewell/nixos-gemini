@@ -1,0 +1,13 @@
+{
+  "name": "boot-test-96",
+  "image": "/nix/store/b6f9inpfa8rqi6jd24xivi9q1vp2af2f-gemini-mainline-nixos-padded.img",
+  "boot_sha256": "2a9485ea0ccfef3c50fc8e384649d5096f6aa5d967b883cc1bbc0be94f5458bd",
+  "system": "/nix/store/sdy4d4ryf9gqm84rg69v906n6ld93ydk-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "store": "normal",
+  "zswap_shrinker": "absent",
+  "boot": "direct",
+  "rtc_epoch": "native",
+  "previous": "boot-test-95",
+  "paging_policy": "zram",
+  "desktop": "gnome"
+}

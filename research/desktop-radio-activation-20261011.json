@@ -2,16 +2,16 @@
   "schema_version": 1,
   "date": "2026-10-11",
   "accepted": {
-    "boot_id": "11579f72-f9f4-4c86-988d-f5e8069a75f7",
-    "system": "/nix/store/sdy4d4ryf9gqm84rg69v906n6ld93ydk-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+    "boot_id": "a3a114d2-c299-4736-80a7-d3edefa1b75c",
+    "system": "/nix/store/nc6kj9y0fng96pjl89m81ij8xsbcdcly-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
     "candidate_kept": true,
     "independent_recovery_audit": "passed",
     "source_count": 47,
     "rtc_alarm_calendar_diagnostics_run": false,
     "gnome_radio_inputs": "passed",
     "directed_wildcard_nm_scan": "passed",
-    "scan_duration_seconds": 15.578,
+    "scan_duration_seconds": 15.571,
     "hif_faults": 0,
     "hif_restarts": 0,
     "effective_audio_hardware_mapping": "passed",
@@ -46,7 +46,7 @@
         }
       ]
     },
-    "trial": 96
+    "trial": 98
   },
   "bluetooth_discovery": {
     "result": "passed",
@@ -89,7 +89,7 @@
     "gnome_panel_visual_confirmation": false,
     "trial": 94,
     "boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
-    "reuse_reason": "Bluetooth transport, controller firmware and discovery inputs are unchanged in 96; desktop radio access checked on 96."
+    "reuse_reason": "Bluetooth transport, controller firmware and discovery inputs are unchanged in 98; desktop radio access checked on 98."
   },
   "wifi_activation": {
     "source_verified_against": [
@@ -140,6 +140,14 @@
       "ssid_or_credentials_collected": false,
       "preferred_network_selection_qualified": false,
       "data_exchange_passed": true
+    },
+    "native_teardown_fix": {
+      "kernel_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
+      "change": "Detach old connection admission before cfg80211 failure/disconnect notifications; old cleanup preserves immediate new admission",
+      "before_actual_worker_check": "failed as expected",
+      "after_actual_worker_check": "GCC15 ASan/UBSan passed",
+      "arm64_w1_werror_build_exit": 0,
+      "new_teardown_path_hardware_qualified": false
     }
   },
   "limits": [
@@ -154,25 +162,24 @@
     "92": "Custom UCM PCM removed the onboard sink; automatic recovery and audit passed.",
     "93": "Verifier confused logical client channels with hardware positions; automatic recovery and audit passed."
   },
-  "next": "Continue native transport/SIM and speech-control bring-up; desktop call/SMS apps are installed and running.",
+  "next": "Continue native closed-port AT receive, SIM and speech bring-up; retain completed checks and remove replaced implementations.",
   "cellular_transport": {
     "result": "failed",
-    "trial": 96,
-    "boot_id": "11579f72-f9f4-4c86-988d-f5e8069a75f7",
-    "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+    "trial": 98,
+    "boot_id": "a3a114d2-c299-4736-80a7-d3edefa1b75c",
+    "kernel_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
     "startup_hs2_completed": true,
     "failure_site": "md-wdt-irq",
-    "failure_uptime_seconds": 107.124905,
+    "failure_uptime_seconds": 106.133301,
     "terminal_error": -110,
-    "failure_before_sim_probe": true,
-    "at_port_after_failure": "Transport fenced; no standalone AT action on trial 96",
+    "at_port_after_failure": "Transport fenced; no standalone AT action on trial 98",
     "rejected_channels": [
       57,
       4
     ],
     "rejected_channels_cause_qualified": false,
     "sim_esim_data_sms_voice_qualified": false,
-    "next": "Resolve the unsupported nine-core exception overview against public GPL contracts and continue native modem initialization/control bring-up.",
+    "next": "Fix bounded native closed-port AT receive ownership; continue exception, SIM and speech bring-up without masking ModemManager failures.",
     "sim_initialization": {
       "failure_uptime_seconds": 101.007358,
       "sim_lock_status_retries": 7,
@@ -189,24 +196,30 @@
     "native_exception_report": {
       "overview": [
         {
-          "kernel_seconds": 107.119878,
-          "numeric_report": "CCCI_MD_EXCEPTION overview_valid=0 cores=9 ect=00000000 cs=00000000 md32=00000000"
+          "kernel_seconds": 106.125635,
+          "numeric_report": "CCCI_MD_EXCEPTION overview_valid=0 cores=9 pl_prefix_only=1 ect=00000000 cs=00000000 md32=00000000"
         }
       ],
       "pl": [
         {
-          "kernel_seconds": 107.121317,
-          "numeric_report": "CCCI_MD_EXCEPTION pl=0 offender=0 header_valid=0 type=0 content_valid=0 codes=00000000/00000000/00000000 assert_line=0"
+          "kernel_seconds": 106.127262,
+          "numeric_report": "CCCI_MD_EXCEPTION pl=0 offender=1 header_valid=1 core_id=2863311530 type=1 type_known=1 content_valid=1 codes=00000001/00484f7d/f01cf8df assert_line=0"
         },
         {
-          "kernel_seconds": 107.123111,
-          "numeric_report": "CCCI_MD_EXCEPTION pl=1 offender=0 header_valid=0 type=0 content_valid=0 codes=00000000/00000000/00000000 assert_line=0"
+          "kernel_seconds": 106.129422,
+          "numeric_report": "CCCI_MD_EXCEPTION pl=1 offender=0 header_valid=1 core_id=3149642683 type=33 type_known=1 content_valid=1 codes=00003100/00c506af/00000001 assert_line=0"
+        }
+      ],
+      "at_metadata": [
+        {
+          "kernel_seconds": 106.13158,
+          "numeric_report": "CCCI_AT_METADATA opens=2 closes=1 tx_submitted=36 q1_reclaimed=2406 rx_seen=56 rx_closed_drop=2 rx_delivered=54"
         }
       ],
       "first_fatal": [
         {
-          "kernel_seconds": 107.124905,
-          "numeric_report": "MT6797_CCCI_FIRST_FATAL site=md-wdt-irq ready=1 irqs=4832 first_tx=00000100/ff00ff00 first_rx=00000001/ff00ff00 last_tx=00007f02/ff00ff00 last_rx=00000000/ff00ff00 q0_submitted=1 reclaimed=1 head=1 tail=1 used=0 descriptor_valid=1 payload_valid=1 reply_finalized=1 runtime_len=636"
+          "kernel_seconds": 106.133301,
+          "numeric_report": "MT6797_CCCI_FIRST_FATAL site=md-wdt-irq ready=1 irqs=4836 first_tx=00000100/ff00ff00 first_rx=00000001/ff00ff00 last_tx=00007f02/ff00ff00 last_rx=00000000/ff00ff00 q0_submitted=1 reclaimed=1 head=1 tail=1 used=0 descriptor_valid=1 payload_valid=1 reply_finalized=1 runtime_len=636"
         }
       ]
     },
@@ -219,21 +232,89 @@
       "sim_slot_count": 0
     },
     "exception_cause_established": false,
-    "rejected_channels_trial": 95,
-    "sim_initialization_trial": 95
+    "sim_initialization_trial": 95,
+    "previous_trial_96": {
+      "trial": 96,
+      "boot_id": "11579f72-f9f4-4c86-988d-f5e8069a75f7",
+      "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+      "failure_uptime_seconds": 107.124905,
+      "failure_before_sim_probe": true
+    },
+    "rx_rejections": {
+      "total": 2,
+      "count": 2,
+      "entries": [
+        {
+          "sequence": 1,
+          "channel": 57,
+          "queue": 6,
+          "op_valid": 0,
+          "op": 0,
+          "bytes": 20,
+          "error": -95,
+          "message_valid": 0,
+          "message": 0
+        },
+        {
+          "sequence": 2,
+          "channel": 4,
+          "queue": 0,
+          "op_valid": 0,
+          "op": 0,
+          "bytes": 16,
+          "error": -95,
+          "message_valid": 0,
+          "message": 0
+        }
+      ]
+    },
+    "exception_interpretation": {
+      "overview_qualified": false,
+      "partial_pl_prefix_only": true,
+      "leading_offender_type": "MD_EX_PL_UNDEF",
+      "secondary_type": "MD_EX_CC_PCORE_EXCEPTION",
+      "core_id_mapping_established": false,
+      "exception_cause_established": false,
+      "public_source": {
+        "commit": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+        "header": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/eccci/mdee_dumper_v2.h",
+        "consumer": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c/drivers/misc/mediatek/eccci/mdee_dumper_v2.c"
+      }
+    },
+    "at_traffic": {
+      "tx_submitted": 36,
+      "rx_seen": 56,
+      "rx_closed_drop": 2,
+      "rx_delivered": 54,
+      "q1_reclaimed": 2406,
+      "q1_reclaims_include_fs_rpc": true,
+      "closed_port_data_loss_cause_of_watchdog_established": false
+    },
+    "no_control_system_rejections_observed": true
   },
   "cellular_development": {
-    "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+    "kernel_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
     "normal_kernel_build_exit": 0,
-    "kernel_package": "/nix/store/hp3wjwpqipig72y48kd8w5hb7g6v6jv4-linux-gemini-7.2.9",
+    "kernel_package": "/nix/store/l161zaz9njxikspnk4mvy6slvpx9d740-linux-gemini-7.2.9",
     "compiler": "GCC 15.3.0",
-    "exception_decoder": "Bounded public UMOLY numeric fields, one first-fatal snapshot",
-    "required_exception_host_checks": "ASan/UBSan passed",
+    "exception_decoder": "Bounded public UMOLY PL prefix; nine-core overview remains unqualified",
+    "required_exception_host_checks": "ASan/UBSan passed; RX rejection and NAPI IRQ checks required by normal build",
     "hostless_pcm_pointer_bounds_fix": true,
     "installed": true,
     "hardware_qualified": false,
     "exception_snapshot_observed": true,
     "normal_image_install_exit": 0,
-    "independent_terminal_audit_exit": 0
+    "independent_terminal_audit_exit": 0,
+    "cldma_rx_ip_busy_ack": true,
+    "watchdog_resolved": false
+  },
+  "cross_runtime": {
+    "result": "passed",
+    "system": "/nix/store/nc6kj9y0fng96pjl89m81ij8xsbcdcly-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "elf_files": 1431,
+    "script_files": 124,
+    "errors": 0,
+    "hardware_tested": false,
+    "proof": "/nix/store/c5jxhshk5k82cpgali5lc2fyi7y2bw7i-gemini-gnome-cross-runtime-check"
   }
 }
