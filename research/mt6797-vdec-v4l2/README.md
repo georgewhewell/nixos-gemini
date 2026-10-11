@@ -16,29 +16,35 @@ and interfaces. Historical modules must be used with their exact recorded
 kernel configuration and symbol table.
 
 The current IRQ backend has not completed a successful decode.
-[Trial 97](irq-trial-97.json) builds against the exact image-96 kernel with
-GCC 15.3.0, strict MODPOST and `W=1`. It owns bus/engine clocks and adopts and
-releases the inherited ACTIVE gate through CCF, rejecting another owner.
-Powered clock snapshots change from `0x111` to `0x101`, satisfying the public
-ACTIVE-clear guard, but the command times out with no interrupt across all ten
-CPUs. Capture retains its `0x79` test sentinel: those mismatches do not measure
-decoder-private pixels. Stop, guards, unload, supervised return to image 96
-and independent terminal audit pass. The undelivered interrupt predates the
-7.2 rebase: trial 23's compressed grey frame had correct private pixels with
-zero IRQs.
+[Trial 103](irq-trial-103.json) builds against the exact image-102 kernel with
+GCC 15.3.0, strict MODPOST and `W=1`. Native SPI 240 setup and polarity write
+acceptance pass. One original compressed grey picture reaches fetch and
+submission with ACTIVE clear (`0x101`); AVC reports picture completion, the
+last macroblock and zero syntax error. It nevertheless times out with no IRQ
+across all ten possible CPUs and MISC status `0x3001`. V4L2 correctly leaves
+capture at its `0x79` sentinel on failure; private pixels are not measured.
+Native stop, guards and unload pass, followed by supervised return to image
+102 and independent terminal audit with 54 matching source hashes and taint 0.
 
-The remaining owner contract is the exact MT6797 condition that asserts MISC
-`0xa4` done bit 16 after AVC picture completion. The public
-[IRQ contract](irq-contract.json) establishes the clock guard, done check and
+[Trial 97](irq-trial-97.json) previously measured the first PCM command under
+the same ACTIVE-clear ownership. The undelivered interrupt predates the 7.2
+rebase: trial 23's compressed grey frame had correct private pixels with zero
+IRQs under the older `0x111` clock guard. These are distinct input/owner scopes.
+
+The remaining owner contract is the exact MT6797 completion enable, latch,
+handshake and path to SPI 240 after AVC picture completion. Exact GPL resource
+glue pins the ISR status word to physical `0x160200a4`, matching this driver.
+The public [IRQ contract](irq-contract.json) establishes the clock guard, done check and
 live-read acknowledge sequence; it does not establish source enablement.
-Clock ownership alone did not fix the submitted PCM completion. Preserve command attribution,
+Clock ownership and accepted native polarity setup did not fix completion for
+either submitted input. The snapshots do not exclude a transient assertion
+or exhaust clock/routing causes. Preserve command attribution,
 stale-event rejection, IRQ synchronization before reset/power release,
 bounded failure, private-DMA stop proof and fences. Picture-complete polling
 cannot qualify the IRQ backend. Production integration requires this contract.
-Historical compressed-grey trial 23 used clock guard `0x111`; the current
-ACTIVE-clear `0x101` trial submitted only PCM. The existing request test now
-has `--single grey64` for that unmeasured compressed case. It uses the original
-20-byte I_16x16 DC fixture and its normal controls, then closes the stream.
+The existing request test has `--single grey64` for the focused case. It uses
+the original 20-byte I_16x16 DC fixture and its normal controls. On success it
+closes the stream and reports a scoped completion marker.
 The observer requires one command, real attributed delivery, every expected
 sample, the five powered clock snapshots, stop and guards. Aliasing grey as
 PCM or accepting a missing-input error cannot qualify the observation.
@@ -46,8 +52,8 @@ PCM or accepting a missing-input error cannot qualify the observation.
 The installed native kernel source, `354d3657`, also verifies SYSIRQ polarity write
 acceptance before programming its GIC parent. Its actual-callback host regression
 passes GCC 15 sanitizers and rejects the old callback; the normal ARM64 kernel
-build, required checks and supervised platform admission pass. Decoder SPI 240
-has not yet been requested on this source. Its INTPOL word 7 bit 16 is separate
+build, required checks and supervised platform admission pass. Trial 103
+accepts decoder SPI 240 setup on this source. Its INTPOL word 7 bit 16 is separate
 from decoder MISC done bit 16; acceptance does not establish decoder completion.
 The existing [IRQ note](irq-contract.json) retains this boundary and next step.
 

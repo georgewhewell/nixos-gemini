@@ -1,7 +1,7 @@
 {
-  "scope": "Published IRQ interface, recorded polling snapshot, and host-compiled IRQ candidate; hardware delivery unqualified",
-  "checked_date": "2026-10-10",
-  "target_kernel_revision": "c22f516a93aee65f2a6a6741d5e7e9873d56c852",
+  "scope": "Published IRQ interface and scoped native IRQ observations; hardware decode completion unqualified",
+  "checked_date": "2026-10-11",
+  "target_kernel_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
   "spi": 240,
   "trigger": "level low",
   "public_mt6797_resource_glue": {
@@ -113,7 +113,7 @@
     "installed": true,
     "hardware_polarity_qualified": false,
     "decoder_completion_qualified": false,
-    "remaining_work": "Qualify the decoder SPI240 setup through a supervised exact-kernel module bind. Then use the existing request test with a truthful single-grey selector to observe one independently verified compressed grey picture under the current ACTIVE-clear CCF backend, which prior 7.2 IRQ trials did not submit. Retain real event, command attribution, pixels, stop/guards and terminal recovery; do not alias grey as PCM, accept a harness input error, or promote polling to IRQ completion. The exact source assertion contract and production decoder integration remain unfinished.",
+    "remaining_work": "Establish the exact public MT6797 peripheral end-of-picture enable/latch/handshake and source-to-SPI240 contract now that physical status mapping is pinned. No documented extra step was established in the existing allowed GPL review. Keep decoder programming unchanged until such a contract is available; no guessed fields, firmware calls or repeated polling qualification. Native DMA-buf hardware surfaces, encoder frame submission and production/suspend integration also remain unfinished.",
     "normal_kernel_build": {
       "package": "/nix/store/m6qz9mw36h7da2gfi0rqhpya81nj0i4k-linux-gemini-7.2.9",
       "derivation": "/nix/store/jq0qc28r3a2r792di0cq1wi1w0h9cwx2-linux-gemini-7.2.9.drv",
@@ -143,6 +143,22 @@
       "decoder_spi240_request_qualified": false,
       "decoder_frame_command_executed": false,
       "rtc_alarm_calendar_diagnostics_run": false
+    },
+    "decoder_spi240_setup_and_polarity_write_accepted": true,
+    "hardware_polarity_scope": "Native requested-bit readback and successful GIC setup/bind are accepted in trial103; electrical assertion/routing and real decoder delivery remain unqualified.",
+    "latest_decoder_observation": {
+      "record": "irq-trial-103.json",
+      "input": "original compressed grey64; first and only command",
+      "native_spi240_setup_accepted": true,
+      "irq_events": 0,
+      "possible_cpu_irq_delta": 0,
+      "clock_submit": 257,
+      "clock_guard": 257,
+      "decoder_completion_qualified": false,
+      "writer_exit": 0,
+      "observer_exit": 1,
+      "independent_audit_exit": 0,
+      "restored_accepted_image": 102
     }
   },
   "irq_trial_scope_20261011": {
@@ -150,6 +166,6 @@
     "trial_23_variant_5": "Compressed grey64 I_16x16 DC was actually submitted in IRQ mode, with all6144 private samples correct, zero IRQs and -110. Retained frame.flat selects grey64_nal.",
     "polling_trials_66_67": "Exact retained engine reads MISC0xa4 after picture-complete polling and before stop, core reset or cleanup ACK. The sampled0x3001 is pre-cleanup but is not continuous source observation.",
     "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase.",
-    "next_changed_scope": "Historical compressed-grey IRQ failure23 had clock guard0x111, while ACTIVE-clear0x101 trial97 submitted onlyPCM. The existing request test now has a truthful --single grey64 selector using the original independently verified20-byte fixture and normal controls. The qualifier requires exactly that case, one command and attributed IRQ, all6144 samples, five powered clock snapshots, safe stop/guards and recovery. This changed hardware scope remains unmeasured."
+    "trial_103_completed_changed_scope": "The truthful --single grey64 selector submitted the original20-byte compressed input first and alone under ACTIVE-clear0x101 on exact accepted image102/K354. Native SPI240 setup was accepted, but AVC complete1/PIC80000001/MB3,3/error0 coexisted with -110/event0/all10-CPU delta0/MISC3001. Capture remained sentinel; private pixels unmeasured. Stop/guards/unload and supervised return102/independent terminal audit pass. This input/owner scope is now measured; repeating it unchanged cannot close the peripheral completion contract."
   }
 }

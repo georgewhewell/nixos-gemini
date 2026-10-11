@@ -1,0 +1,153 @@
+{
+  "scope": "One original compressed grey64 request under current ACTIVE-clear ownership and verified native polarity setup; decoder IRQ completion failed",
+  "date": "2026-10-11",
+  "normal_accepted_image": 102,
+  "kernel_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
+  "kernel_package": "/nix/store/m6qz9mw36h7da2gfi0rqhpya81nj0i4k-linux-gemini-7.2.9",
+  "kernel_config_sha256": "fe26f3e9e157465b4202718b6a45d720cba28a210447c8847263f2f9e1365c89",
+  "module_symvers_sha256": "5718dd7ca0f9171ba8e71904eb3edb2cc39b30d2a6300420d2ce55db3d7c4489",
+  "build": {
+    "module_build_record": "/mnt/Home/src/nixos-gemini/handoff/media-module-kernel102-20261011/active-module-build-result.json",
+    "record_sha256": "7e12354b575f57a3e3119433e87bc4bf7a1ea909df7baa94ee0da44f4bfa1930",
+    "actual_exit": 0,
+    "strict_modpost": true,
+    "w1": true,
+    "compiler": "GCC15.3.0",
+    "module_sha256": "a950b284a3f2c24e960660fa99681118fee4d4f3ccf6957de1d1fdf9cba93afd",
+    "request_test_sha256": "96a0df4fd46afac8aa926103429a95f5c2d94b8820bf6db495f7d3151c367380",
+    "request_static_arm64": true,
+    "request_actual_exit": 0,
+    "exact_kernel_headers_install_exit": 0
+  },
+  "input": {
+    "fixture": "Original software-verified grey64 I_16x16 DC",
+    "width": 64,
+    "height": 64,
+    "nal_bytes": 20,
+    "header_bits": 28,
+    "profile_idc": 66,
+    "level_idc": 10,
+    "constraint_flags": 3,
+    "chroma_format_idc": 1,
+    "slice_type": "I",
+    "qp_delta": 0,
+    "disable_deblocking_filter_idc": 1,
+    "nal_ref_idc": 3,
+    "IDR": true,
+    "frame_num": 0,
+    "POC": 0,
+    "references": 0,
+    "timestamp": 1,
+    "sequence": 0,
+    "request_count": 1,
+    "selector": "--single grey64",
+    "nal_sha256": "855a5ef2c41f93be0348d94136d49a78fba4c22829670cd2e6526ca09fc111e7",
+    "expected_yuv_sha256": "cb11e05cb5da949c0e0f5b5a7cb310df35a96a22c45d1ada70d950859fe697d1"
+  },
+  "observation": {
+    "result": -110,
+    "jobs": 1,
+    "fetch_commands": 1,
+    "frame_commands": 1,
+    "fetched": 1,
+    "submitted": 1,
+    "state": 2147483649,
+    "irq_complete": 1,
+    "irq": 12289,
+    "error": 0,
+    "message": 0,
+    "mbx": 3,
+    "mby": 3,
+    "irq_command": 1,
+    "irq_received_command": 0,
+    "irq_events": 0,
+    "irq_unexpected": 0,
+    "irq_status": 0,
+    "irq_clock_result": 0,
+    "irq_clock_trace_valid": 31,
+    "irq_clock_powered": 1,
+    "irq_clock_reset": 1,
+    "irq_clock_core_reset": 1,
+    "irq_clock_dcm_off": 257,
+    "irq_clock_submit": 257,
+    "irq_clock_guard": 257,
+    "break": 0,
+    "reset": 0,
+    "quiesced": 1,
+    "guards": 1
+  },
+  "irq_evidence": {
+    "counter": "sysfs-all-possible-cpus",
+    "possible_cpus": 10,
+    "delta": 0,
+    "native_spi240_setup_and_polarity_write_accepted": true,
+    "frame_completion_qualified": false
+  },
+  "pixel_scope": {
+    "public_capture_bytes": 6144,
+    "public_capture_values": [
+      121
+    ],
+    "expected_reference_values": [
+      128
+    ],
+    "private_decoder_pixels_observed": false,
+    "fact": "Public capture remained entirely its sentinel. Retained v4l2.c:466-472 copies private pixels only on engine success. Timeout suppresses that copy; mismatch does not establish invalid private pixels."
+  },
+  "physical_misc_contract": {
+    "physical_status_address": "0x160200a4",
+    "public_origin": "https://github.com/gemian/gemini-linux-kernel-3.18",
+    "public_revision": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+    "public_driver_sha256": "43b368561f152d56afd648fa681d106d77001a6de00ce725c9384173db6662cd",
+    "public_dt_sha256": "eaac86c8752ebd8ddf18b831eb3bc52a08f87475a213bb521650bf95dabb3e5e",
+    "public_driver_lines": {
+      "resource_map": [
+        2621,
+        2625
+      ],
+      "status_read": [
+        563,
+        567
+      ],
+      "ack": [
+        585,
+        586
+      ]
+    },
+    "public_dt_lines": [
+      3658,
+      3663
+    ],
+    "fact": "Exact MT6797 GPL glue maps resource0 of mediatek,mt6797-vdec at physical0x16020000, aliases MISC to that base, reads base+0xa4 and acknowledges MISC+41*4. Retained engine.c:349-382 validates/maps misc at0x16020000; current K DTS:1288-1298 supplies it. Abstract bank naming is not the unresolved question.",
+    "native_dt_sha256": "caf562a190ff25463121c9841ed31230692d41f4337de70ebf950b6d9d786620"
+  },
+  "terminal_recovery": {
+    "writer_actual_exit": 0,
+    "observer_actual_exit": 1,
+    "independent_audit_actual_exit": 0,
+    "restored_image": 102,
+    "restored_boot_id": "43f4d6fb-33a4-467a-ae89-f749d4583959",
+    "no_live_writer": true,
+    "all_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 54,
+    "final_taint": 0,
+    "temporary_decoder_absent": true,
+    "ordinary_outputs_retained": true,
+    "paging_policy": "zram",
+    "rtc_alarm_calendar_diagnostics_run": false
+  },
+  "proof": {
+    "directory": "/mnt/Home/src/nixos-gemini/handoff/boot-test-103",
+    "decoder_result_sha256": "c96af11826b5fdf50d2702e1429aaebca6683135d694d2b37756a4df35f06525",
+    "independent_review": "/mnt/Home/src/nixos-gemini/handoff/media-module-kernel102-20261011/trial103-review.json",
+    "review_sha256": "12b95dc48b4907f3d8823a789caf8fad57de8e43e6640adb915fc1e9102de87f",
+    "terminal_audit": "/mnt/Home/src/nixos-gemini/handoff/media-module-kernel102-20261011/independent-audit-103/result.json",
+    "terminal_audit_sha256": "a875e99b705493b6eb1ae0c32dcd10aec797c6ae63cd8a698b7ae5beffa3bdb7"
+  },
+  "remaining_native_owner_work": "Establish the exact public MT6797 peripheral end-of-picture enable/latch/handshake and source-to-SPI240 contract now that physical status mapping is pinned. No documented extra step was established in the existing allowed GPL review. Keep decoder programming unchanged until such a contract is available; no guessed fields, firmware calls or repeated polling qualification.",
+  "encoder_frame_backend_implemented": false,
+  "native_shared_hardware_surfaces_implemented": false,
+  "production_media_qualified": false
+}
