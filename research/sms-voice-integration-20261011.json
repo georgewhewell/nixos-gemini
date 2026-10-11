@@ -137,7 +137,7 @@
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
     "remaining": [
-      "Fix native fatal AT port lifetime so disconnects wake userspace through standard WWAN removal; qualify the actual path.",
+      "Qualify installed native fatal AT withdrawal through standard WWAN removal; the source fix and actual native/core regression are integrated.",
       "Restore public declarative SIM pad ownership at the native modem owner after checking the board mode and pin configuration contract.",
       "Establish stable modem operation and public slot-2/eUICC APDU routing; AT commands do not themselves establish target-slot selection.",
       "Integrate the checked lpac HUP/error/full-write repair and establish operation cancellation/deadline plus actual modem long-response behavior before enabling provisioning.",
@@ -163,6 +163,20 @@
       "installed": false,
       "scope": "Complete short writes, handle EINTR and terminate on closed/failed AT transport; preserve fragmented and readable final responses. No silent-operation deadline, slot or provision qualification."
     },
-    "native_design_review": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/review.json"
+    "native_design_review": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/review.json",
+    "native_at_terminal": {
+      "status": "Source integrated; image build and hardware observation pending",
+      "kernel_revision": "8cefe2f9fd6849f13ebe020b08a411e37abc4571",
+      "source_sha256": "2409054871d8abb2e0182ccb17c58d782e5e73d1f4f45854db480c41a61229fe",
+      "proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-lifetime/production-validation/seal.json",
+      "proof_sha256": "3fb64e7b029877ffdea6239b74bbbd6fda0d1a817d7e88c6ede3f75c1837aa3f",
+      "native_core_lifetime_regression_actual_exit": 0,
+      "original_compiles_and_fails_hangup_regression": true,
+      "existing_affected_fixtures_actual_exit": 0,
+      "strict_arm64_gcc15_build_actual_exit": 0,
+      "scope": "Standard WWAN removal wakes blocked RX/TX and exposes HUP/ERR; native RX/pointer lifetime and terminal work cancellation serialized. Original DMA STOP/retention contract unchanged.",
+      "installed": false,
+      "modem_stability_or_euicc_access_qualified": false
+    }
   }
 }
