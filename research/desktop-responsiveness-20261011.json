@@ -735,12 +735,45 @@
         {
           "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/system-copy-exit.json",
           "sha256": "b7737b03235ece6fc597d2de88eefaefb5e6e5a87b98e7772dd4be478b7f901f"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/boot-test-110-exit.json",
+          "sha256": "5cc319f54b05a38799195a491c303aa686eab7caccfdbbf1e8b8c07405cb7392"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/independent-audit-110/result.json",
+          "sha256": "9610872b21ed3c9819a94c4c348608bb5ab6e17359d6a4e4fb5a21b26bf24815"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/gate-host-result-2.json",
+          "sha256": "76d81cc1d0fc2827d1737fb9aef91380939a5b45dc4d31810b31deb67c5546cb"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/old-image-gate-runtime-2.json",
+          "sha256": "dbc0a5ab43c392d9f0b96f78441f5efe9d062db0cab12a65aef1a3fdfdd6bc02"
         }
       ],
       "installed": false,
       "hardware_effect_qualified": false,
       "ui_responsiveness_qualified": false,
-      "next": "Qualify a normal image through the common supervised desktop deployment: stable attached USB link, no recurring TypeC/USB-role change events, clean kernel and independent final audit. Then measure residual CPU cost before changing DVFS or parking parameters."
+      "next": "Qualify a normal image through the common supervised desktop deployment: stable attached USB link, no recurring TypeC/USB-role change events, clean kernel and independent final audit. Then measure residual CPU cost before changing DVFS or parking parameters.",
+      "deployment_check": {
+        "trial_110": "failed before observation: checker assumed Python on PATH; candidate was not accepted",
+        "writer_exit": 1,
+        "restored_baseline": "boot-test-102",
+        "independent_terminal_audit_exit": 0,
+        "correction": "Reuse the image importer interpreter lookup and native Type-C data_role/UDC configured state; the peripheral role provider intentionally hides its userspace role attribute.",
+        "corrected_actual_source_host_exit": 0,
+        "corrected_old_image_negative": {
+          "seconds": 6.001552,
+          "typec_change": 12,
+          "usb_role_change": 12,
+          "stable_connectors_and_identity": true,
+          "taint": 0,
+          "expected_rejection": true
+        },
+        "fixed_kernel_hardware_qualified": false
+      }
     }
   }
 }

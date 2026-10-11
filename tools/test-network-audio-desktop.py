@@ -82,7 +82,10 @@ def connector_state():
             port = matches[0]
             orientation = (port / 'orientation').read_text().strip()
             require(orientation in ('unknown', 'normal', 'reverse'), 'unexpected_orientation')
-            result[label] = {'orientation': orientation,
+            data_role = (port / 'data_role').read_text().strip()
+            require(data_role == ('[device]' if label == 'left' else '[host]'),
+                    'unexpected_data_role')
+            result[label] = {'orientation': orientation, 'data_role': data_role[1:-1],
                              'partner': port.with_name(port.name + '-partner').is_dir()}
     require(set(result) == {'left', 'right'} and len(ports) == 2, 'native_controllers_missing')
     roles = list(Path('/sys/class/usb_role').iterdir())
@@ -90,9 +93,12 @@ def connector_state():
     native = Path('/sys/bus/platform/devices/11271000.usb')
     require(native.resolve(strict=True) in roles[0].resolve(strict=True).parents and
             (native / 'driver').resolve(strict=True).name == 'mtu3', 'native_usb_role_missing')
-    result['usb_role'] = (roles[0] / 'role').read_text().strip()
+    udcs = [u for u in Path('/sys/class/udc').iterdir()
+            if native.resolve(strict=True) in u.resolve(strict=True).parents]
+    require(len(udcs) == 1, 'native_udc_not_unique')
+    result['usb_state'] = (udcs[0] / 'state').read_text().strip()
     require(result['left']['partner'] and result['left']['orientation'] != 'unknown' and
-            result['usb_role'] == 'device', 'usb_session_not_attached_device')
+            result['usb_state'] == 'configured', 'usb_session_not_configured')
     return result
 
 # Linux NETLINK_KOBJECT_UEVENT (15), multicast group 1; no udev properties persist.
@@ -165,7 +171,9 @@ def verify_usb_report(raw):
         valid &= type(record['taint']) is int and record['taint'] == 0
         valid &= record['counts'] == {s: {'change': 0, 'other': 0} for s in ('typec', 'usb_role')}
         valid &= all(type(n) is int for counts in record['counts'].values() for n in counts.values())
-        valid &= record['before'] == record['after'] and record['before']['usb_role'] == 'device'
+        valid &= record['before'] == record['after'] and record['before']['usb_state'] == 'configured'
+        valid &= all(record['before'][label]['data_role'] == role
+                     for label, role in (('left', 'device'), ('right', 'host')))
         valid &= (record['before']['left']['partner'] is True and
                   record['before']['left']['orientation'] in ('normal', 'reverse'))
     except (KeyError, TypeError, AttributeError):
@@ -179,9 +187,7 @@ def usb_evidence(runner, ssh, state, directory, system):
     out = Path(directory) / 'usb-typec'
     out.mkdir(mode=0o700)
     script = 'set -eu\n'
-    script += 'python=$(readlink -f "$(command -v python3)")\n'
-    script += 'case "$python" in /nix/store/*/bin/python3) ;; *) exit 1 ;; esac\n'
-    script += 'test -x "$python"\n'
+    script += network.PYTHON_INTERPRETER
     script += 'timeout --signal=TERM --kill-after=2 20 "$python" - ' + shlex.join(
         [state['boot_id'], system]) + " <<'GEMINI_USB_TYPEC_PY'\n"
     script += USB_REMOTE_CODE + '\nGEMINI_USB_TYPEC_PY\n'
@@ -194,12 +200,12 @@ def usb_evidence(runner, ssh, state, directory, system):
                 runner.qualify.save(out, 'result.json', json.loads((out / 'observe.stdout').read_text()))
             except (ValueError, OSError):
                 pass
-        raise
+        raise RuntimeError('Native USB-C observation failed; see its scalar evidence') from None
     record.update(boot_id=state['boot_id'], system=system,
                   detach_attach_qualified=False, source_power_qualified=False,
                   desktop_responsiveness_qualified=False)
     runner.qualify.save(out, 'result.json', record)
-    print('PASS: native USB-C stable orientation/role without repeated change events', flush=True)
+    print('PASS: native USB-C configured session without repeated change events', flush=True)
     return record
 
 

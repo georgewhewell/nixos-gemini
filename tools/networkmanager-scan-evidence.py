@@ -11,6 +11,12 @@ import json
 from pathlib import Path
 import shlex
 
+# Use the image's importer interpreter without requiring a global Python CLI.
+PYTHON_INTERPRETER = r'''python=$(systemctl show gemini-network-profiles.service -p ExecStart --value | sed -n 's/^{ path=\([^ ;]*\) ;.*$/\1/p')
+case "$python" in /nix/store/*/bin/python3) ;; *) exit 1 ;; esac
+test -x "$python"
+'''
+
 REMOTE_CODE = r'''
 import json, re, subprocess, sys, time
 from pathlib import Path
@@ -249,13 +255,7 @@ def network_evidence(runner, ssh, state, directory, system):
     guard = 'set -eu\n'
     guard += 'test "$(cat /proc/sys/kernel/random/boot_id)" = ' + shlex.quote(state['boot_id']) + '\n'
     guard += 'test "$(readlink /run/current-system)" = ' + shlex.quote(system) + '\n'
-    # The image already contains this importer interpreter. Use its systemd
-    # executable path rather than assuming Python belongs to systemPackages.
-    interpreter = r'''python=$(systemctl show gemini-network-profiles.service -p ExecStart --value | sed -n 's/^{ path=\([^ ;]*\) ;.*$/\1/p')
-case "$python" in /nix/store/*/bin/python3) ;; *) exit 1 ;; esac
-test -x "$python"
-'''
-    script = guard + interpreter
+    script = guard + PYTHON_INTERPRETER
     script += 'timeout --signal=TERM --kill-after=2 155 "$python" - ' + shlex.join(
         [state['boot_id'], system]) + " <<'GEMINI_NM_SCAN_PY'\n"
     script += REMOTE_CODE + '\nGEMINI_NM_SCAN_PY\n'
