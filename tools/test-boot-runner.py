@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Check bundle selection, durable worker routing and recovery on failed checks."""
 import hashlib
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -70,7 +72,7 @@ case "$1" in
       else
         printf 'ActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\n'
       fi
-      printf 'Id=%s\n\n' "$unit"
+      printf 'Restart=no\nId=%s\n\n' "$unit"
     done ;;
   --failed) [ "${HEALTH_ACTIVE_STATUS:-3}" = 0 ] || echo 'display-manager.service loaded failed failed fixed' ;;
   *) exit 1 ;;
@@ -106,6 +108,7 @@ head() { :; }
                 self.assertEqual(details['exit_status'], 3)
                 self.assertEqual(details['failed_units'], ['display-manager.service'])
                 self.assertEqual(details['units']['display-manager.service']['ExecMainStatus'], '1')
+                self.assertEqual(details['units']['display-manager.service']['Restart'], 'no')
                 self.assertEqual(details['boot_id'], '11111111-1111-1111-1111-111111111111')
                 poisoned = checked.stdout+'\n\nId=private.service\nActiveState=failed\nSecret=private\n'
                 error.stdout = poisoned
@@ -140,6 +143,171 @@ head() { :; }
                 self.assertEqual(health['failed_units'], ['display-manager.service'])
                 self.assertNotIn('private', json.dumps(health))
                 self.assertFalse((root/'candidate-linux.json').exists())
+
+    def test_terminal_cellular_failure_shortens_wait_only_for_exact_candidate(self):
+        r = m.configure()
+        before = dict(boot_id='11111111-1111-1111-1111-111111111111', gpt_sha256='a'*64)
+        candidate = dict(boot_id='22222222-2222-2222-2222-222222222222',
+                         system=r.candidate_system(before, m.p.PROFILE),
+                         boot_sha256=r.PROFILES[m.p.PROFILE][1], gpt_sha256=before['gpt_sha256'])
+        unit = dict(ActiveState='failed', SubState='failed', Result='exit-code', ExecMainStatus='1', Restart='no')
+        def failure(state, properties):
+            output = '\n'.join(f'{key}={value}' for key, value in state.items())
+            output += '\nhealth_failure_step=acceptance\nhealth_exit_status=2\n\n'
+            output += '\n'.join(f'{key}={value}' for key, value in properties.items())
+            output += '\nId=gemini-cellular.service\n'
+            return subprocess.CalledProcessError(2, ['private-ssh'], output, 'private-stderr')
+        # Execute the actual retry loop: a terminal identified failure must reach
+        # existing caller-owned rescue, without another sleep or any qualification.
+        cases = [(candidate, unit, True)]
+        cases += [(dict(candidate, **{key:value}), unit, False) for key, value in (
+            ('boot_id', before['boot_id']), ('boot_id', 'malformed'),
+            ('system', '/nix/store/other'), ('boot_sha256', 'b'*64), ('gpt_sha256', 'b'*64))]
+        cases += [(candidate, dict(unit, **{key:value}), False) for key, value in (
+            ('ActiveState', 'activating'), ('SubState', 'auto-restart'),
+            ('Result', 'success'), ('ExecMainStatus', '0'), ('ExecMainStatus', '999'),
+            ('Restart', 'always'), ('Restart', 'on-failure'))]
+        cases.append((candidate, {key:value for key,value in unit.items() if key != 'Restart'}, False))
+        for state, properties, early in cases:
+            with self.subTest(state=state, properties=properties), tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(r, 'candidate_snapshot', side_effect=failure(state, properties)), \
+                    mock.patch.object(r, 'read_state', return_value='waiting'), \
+                    mock.patch.object(r.time, 'monotonic', side_effect=[0, 0, 361]), \
+                    mock.patch.object(r.time, 'sleep') as sleep, \
+                    mock.patch.object(r, 'capture_cellular_failure') as capture, \
+                    mock.patch.object(r, 'handoff_tree') as handoff:
+                directory = Path(tmp)
+                with self.assertRaisesRegex(RuntimeError, 'rescue required' if early else 'did not return'):
+                    r.candidate_return([], before, directory, m.p.PROFILE)
+                self.assertEqual(capture.call_count, int(early))
+                self.assertEqual(sleep.call_count, int(not early))
+                handoff.assert_not_called()
+                self.assertFalse((directory/'candidate-linux.json').exists())
+                self.assertNotIn('private', (directory/'candidate-linux-last-health-error.json').read_text())
+        details = r.qualify.health_failure_details(failure(candidate, unit))
+        for key in ('boot_id', 'gpt_sha256'):
+            self.assertFalse(r.terminal_cellular_failure(details, {k:v for k,v in before.items() if k != key}, m.p.PROFILE))
+
+    def test_cellular_failure_reader_retains_only_native_scalars_and_guards_both_ends(self):
+        r = m.configure()
+        boot = '22222222-2222-2222-2222-222222222222'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            system = root/'system'; system.mkdir()
+            files = {name:root/f'file{index}' for index,name in enumerate((
+                '/proc/sys/kernel/random/boot_id', '/proc/sys/kernel/tainted', '/dev/mmcblk0p22',
+                '/run/gemini-cellular/boot-id', '/run/gemini-cellular/result.log',
+                '/run/gemini-cellular/dmesg-final', '/sys/kernel/debug/mt6797-md1-lk-handoff/runtime_metadata'))}
+            for name in ('/proc/sys/kernel/random/boot_id', '/run/gemini-cellular/boot-id'):
+                files[name].write_text(boot)
+            files['/proc/sys/kernel/tainted'].write_text('0')
+            files['/dev/mmcblk0p22'].write_bytes(b'candidate boot fixture')
+            sha = hashlib.sha256(files['/dev/mmcblk0p22'].read_bytes()).hexdigest()
+            files['/run/gemini-cellular/result.log'].write_text(
+                'private subscriber bait\nMD1 FS authority failed stage=provider-register-roots-once error=No such device; no retry\n')
+            files['/run/gemini-cellular/dmesg-final'].write_text(
+                'private raw reply bait\nMT6797_CCCI_FIRST_FATAL site=transport ready=0 irqs=9 private=discard\n'
+                'MT6797_CCCI_TERMINAL_FAILURE reason=-22\n'
+                'MD1 runtime policy=12 source=board_config; configured policy, not hardware capability\n')
+            metadata = files['/sys/kernel/debug/mt6797-md1-lk-handoff/runtime_metadata']
+            raw = ('schema=1 load_type=9 load_type_valid=1 image_type=3 option_parse_errno=-22 '
+                   'lk_option_gate_present=1 lk_option_gate=0 support_option_present=1 support_option=-1 '
+                   'capability_available=0 capability_provenance=unknown\n')
+            metadata.write_text(raw)
+            code = r.CELLULAR_FAILURE_CODE.replace('/run/current-system', str(system))
+            for name, path in files.items():
+                code = code.replace(name, str(path))
+            def execute(changed=None):
+                output = io.StringIO()
+                original = Path.read_text
+                reads = 0
+                def read_text(path, *args, **kwargs):
+                    nonlocal reads
+                    if path == files['/proc/sys/kernel/random/boot_id']:
+                        reads += 1
+                        if changed and reads == 2:
+                            files[changed].write_text('changed')
+                    return original(path, *args, **kwargs)
+                with mock.patch.object(sys, 'argv', ['capture', boot, str(system), sha]), \
+                        mock.patch.object(Path, 'read_text', read_text), redirect_stdout(output):
+                    with self.assertRaises(SystemExit) as exited:
+                        exec(compile(code, '<actual-cellular-failure-reader>', 'exec'), {})
+                report = json.loads(output.getvalue())
+                self.assertNotIn('private', output.getvalue())
+                return exited.exception.code, report
+            status, report = execute()
+            self.assertEqual(status, 0)
+            self.assertEqual(report['fs_stage'], 'provider-register-roots-once')
+            self.assertEqual(report['fs_error'], 'ENODEV')
+            self.assertEqual(report['terminal_errno'], -22)
+            self.assertEqual(report['fatal_site'], 'transport')
+            self.assertEqual(report['policy_source'], 'board_config')
+            self.assertEqual(report['runtime_metadata']['option_parse_errno'], -22)
+            self.assertEqual(report['runtime_metadata']['support_option'], -1)
+            self.assertTrue(report['runtime_metadata']['valid'])
+            self.assertFalse(report['startup_qualified'])
+            log = files['/run/gemini-cellular/result.log']
+            original = log.read_text()
+            log.write_text(original.replace('No such device', 'private error payload'))
+            self.assertEqual(execute()[1]['fs_error'], 'unknown')
+            log.write_text(original.replace('provider-register-roots-once', 'private-stage'))
+            self.assertIsNone(execute()[1]['fs_stage'])
+            log.write_text(original)
+            for invalid in (raw+'private=discard', raw.replace('schema=1', 'schema=2'),
+                            raw+'schema=1', raw.replace('load_type_valid=1', 'load_type_valid=2'),
+                            raw.replace('support_option=-1', 'support_option=-2147483649'), 'x'*4097):
+                metadata.write_text(invalid)
+                status, report = execute()
+                self.assertEqual(status, 0)
+                self.assertEqual(report['runtime_metadata'], {'available':True, 'valid':False})
+            metadata.unlink()
+            self.assertEqual(execute()[1]['runtime_metadata'], {'available':False})
+            status, report = execute('/proc/sys/kernel/random/boot_id')
+            self.assertEqual(status, 1)
+            self.assertEqual(report['error'], 'boot_changed')
+            self.assertNotIn('fs_stage', report)
+            files['/proc/sys/kernel/random/boot_id'].write_text(boot)
+            for name, value in (('/proc/sys/kernel/tainted', '1'), ('/run/gemini-cellular/boot-id', 'wrong'),
+                                ('/dev/mmcblk0p22', 'wrong')):
+                original = files[name].read_bytes()
+                files[name].write_text(value)
+                self.assertEqual(execute()[0], 1)
+                files[name].write_bytes(original)
+            # The caller bounds the direct Python process and keeps malformed or
+            # failed capture output separate from the original startup failure.
+            with mock.patch.object(r.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout='private malformed')) as run:
+                r.capture_cellular_failure([], root, dict(boot_id=boot, system=str(system), boot_sha256=sha))
+                self.assertIn('timeout --signal=TERM --kill-after=1 2 systemctl show ', run.call_args.args[0][0])
+                self.assertIn('exec timeout --signal=TERM --kill-after=1 5 "$python" -c ', run.call_args.args[0][0])
+                self.assertEqual(run.call_args.kwargs['timeout'], 10)
+                saved = (root/'candidate-cellular-failure.json').read_text()
+                self.assertNotIn('private', saved)
+                self.assertFalse(json.loads(saved)['capture_passed'])
+
+    def test_cellular_failure_capture_kills_stalled_discovery_and_python(self):
+        r = m.configure()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pid = root/'pid'
+            python = str(Path(sys.executable).resolve().with_name('python3'))
+            self.assertTrue(python.startswith('/nix/store/') and python.endswith('/bin/python3'))
+            systemctl = root/'systemctl'
+            normal = '#!/bin/sh\nprintf "{ path='+python+' ; argv[]=fixed ; }\\n"\n'
+            stall = "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); open("+repr(str(pid))+",'w').write(str(os.getpid())); time.sleep(20)"
+            with mock.patch.dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH']):
+                for discovery in (True, False):
+                    with self.subTest(discovery=discovery):
+                        systemctl.write_text('#!/bin/sh\nexec '+python+' -c '+r.shlex.quote(stall)+'\n' if discovery else normal)
+                        systemctl.chmod(0o755)
+                        started = time.monotonic()
+                        with mock.patch.object(r, 'CELLULAR_FAILURE_CODE', stall):
+                            r.capture_cellular_failure(['sh', '-c'], root, dict(boot_id='fixed', system='fixed', boot_sha256='fixed'))
+                        self.assertLess(time.monotonic()-started, 8)
+                        report = json.loads((root/'candidate-cellular-failure.json').read_text())
+                        self.assertFalse(report['capture_passed'])
+                        self.assertNotEqual(report['returncode'], 0)
+                        with self.assertRaises(ProcessLookupError):
+                            os.kill(int(pid.read_text()), 0)
 
     def test_native_startup_evidence_survives_parking_and_rejects_failed_boot(self):
         boot = '6b06926a-a9ab-4367-beec-c95a952bf376'

@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -317,6 +318,151 @@ persistent_nix = module('persistent_nix', ROOT / 'tools/qualify-persistent-nix.p
 entry_dt = module('entry_dt', ROOT / 'tools/qualify-efi-entry-dt.py')
 desktop_keyboard = module('desktop_keyboard', ROOT / 'tools/qualify-desktop-keyboard.py')
 power_kernel = module('power_kernel', ROOT / 'tools/qualify-power-kernel.py')
+network = module('candidate_network', ROOT / 'tools/networkmanager-scan-evidence.py')
+
+# Failure-only reader: RAM logs stay on the device; only fixed native scalars leave.
+CELLULAR_FAILURE_CODE = r'''
+import hashlib, json, os, re, stat, sys
+from pathlib import Path
+
+boot, system, boot_sha = sys.argv[1:]
+STAGES = ('arguments', 'nvdata-block-open', 'nvdata-block-size', 'nvdata-block-stat',
+          'nvdata-md-directory-open', 'nvdata-md-directory-stat', 'nvdata-mount-root-open',
+          'nvdata-mount-root-stat', 'nvdata-mount-root-validation', 'nvdata-partition-identity',
+          'nvdata-superblock-read', 'nvdata-superblock-validation', 'nvdata-sysfs-size',
+          'nvdata-sysfs-uevent', 'provider-device-open', 'provider-register-once',
+          'provider-register-roots-once', 'ram-md-open', 'ram-md-stat', 'ram-root-open',
+          'ram-root-stat', 'ram-root-validation', 'ram-roots-distinct')
+
+def require(value, code):
+    if not value:
+        raise ValueError(code)
+
+def identity():
+    require(Path('/proc/sys/kernel/random/boot_id').read_text().strip() == boot, 'boot_changed')
+    require(str(Path('/run/current-system').resolve(strict=True)) == system, 'system_changed')
+    require(Path('/proc/sys/kernel/tainted').read_text().strip() == '0', 'tainted')
+    with open('/dev/mmcblk0p22', 'rb') as stream:
+        require(hashlib.file_digest(stream, 'sha256').hexdigest() == boot_sha, 'boot_image_changed')
+    require(Path('/run/gemini-cellular/boot-id').read_text().strip() == boot, 'owner_boot_changed')
+
+def read_log(path):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return ''
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        require(stat.S_ISREG(info.st_mode), 'not_regular')
+        stream.seek(max(0, info.st_size - 262144))
+        return stream.read(262144).decode('utf-8', errors='replace')
+
+def metadata():
+    try:
+        with open('/sys/kernel/debug/mt6797-md1-lk-handoff/runtime_metadata', 'rb') as stream:
+            raw = stream.read(4097)
+    except FileNotFoundError:
+        return {'available': False}
+    except OSError as error:
+        return {'available': True, 'valid': False, 'read_errno': error.errno}
+    try:
+        require(len(raw) <= 4096, 'invalid_metadata')
+        tokens = raw.decode('ascii').split()
+        fields = dict(token.split('=', 1) for token in tokens)
+        unsigned = ('schema', 'load_type', 'image_type')
+        booleans = ('load_type_valid', 'lk_option_gate_present', 'support_option_present', 'capability_available')
+        signed = ('option_parse_errno', 'lk_option_gate', 'support_option')
+        require(len(fields) == len(tokens) and set(fields) == set(unsigned + booleans + signed + ('capability_provenance',)), 'invalid_metadata')
+        for key in unsigned + booleans + signed:
+            require(re.fullmatch(r'-?[0-9]{1,10}', fields[key]), 'invalid_metadata')
+            fields[key] = int(fields[key])
+            low, high = (-(2**31), 2**31-1) if key in signed else (0, 1 if key in booleans else 2**32-1)
+            require(low <= fields[key] <= high, 'invalid_metadata')
+        require(fields['schema'] == 1 and fields['capability_provenance'] in ('lk_override', 'unknown'), 'invalid_metadata')
+        return dict(fields, available=True, valid=True)
+    except (ValueError, UnicodeError):
+        return {'available': True, 'valid': False}
+
+def parse_failure(log, kernel):
+    record = {'restore_failed': 'CELLULAR_RESTORE_ARCHIVE_FAILED' in log,
+              'seed_failed': 'CELLULAR_RAM_SEED_FAILED' in log}
+    failures = re.findall(r'MD1 FS authority failed stage=([a-z-]+) error=([^\r\n;]*); no retry', log)
+    failure = next(((stage, error) for stage, error in failures if stage in STAGES), None)
+    record['fs_stage'] = failure[0] if failure else None
+    if failure:
+        errors = {'No such device': 'ENODEV', 'Invalid argument': 'EINVAL',
+                  'No such file or directory': 'ENOENT', 'File exists': 'EEXIST',
+                  'Device or resource busy': 'EBUSY', 'Input/output error': 'EIO',
+                  'Permission denied': 'EACCES', 'Operation not permitted': 'EPERM',
+                  'No data available': 'ENODATA', 'Connection timed out': 'ETIMEDOUT'}
+        record['fs_error'] = errors.get(failure[1], 'unknown')
+    fatal = re.search(r'MT6797_CCCI_FIRST_FATAL site=(transport|ap-handshake-timer|md-wdt-irq) ready=([01]) ', kernel)
+    if fatal:
+        record.update(fatal_site=fatal[1], fatal_ready=int(fatal[2]))
+    failure = re.search(r'MT6797_CCCI_TERMINAL_FAILURE reason=(-?[0-9]{1,10})(?=\s|$)', kernel)
+    if failure and -(2**31) <= int(failure[1]) < 2**31:
+        record['terminal_errno'] = int(failure[1])
+    policy = re.search(r'MD1 runtime policy=([0-9]{1,10}) source=(board_config|lk_override|unknown); configured policy, not hardware capability', kernel)
+    if policy and int(policy[1]) < 2**31:
+        record.update(policy=int(policy[1]), policy_source=policy[2])
+    record['hs1_seen'] = 'MD1 accepted CCCI HS1 v2; runtime reply queued' in kernel
+    record['hs2_seen'] = 'MD1 completed CCCI HS2' in kernel
+    return record
+
+try:
+    identity()
+    report = parse_failure(read_log('/run/gemini-cellular/result.log'), read_log('/run/gemini-cellular/dmesg-final'))
+    report['runtime_metadata'] = metadata()
+    identity()
+    report.update(capture_passed=True, boot_id=boot, system=system, boot_sha256=boot_sha,
+                  startup_qualified=False, scope='failed_cellular_start')
+except (OSError, ValueError) as error:
+    report = {'capture_passed': False, 'error': str(error) if isinstance(error, ValueError) else 'read_error',
+              'errno': error.errno if isinstance(error, OSError) else 0, 'startup_qualified': False}
+print(json.dumps(report, sort_keys=True))
+raise SystemExit(0 if report['capture_passed'] else 1)
+'''
+
+
+def terminal_cellular_failure(details, before, profile):
+    """Only a fresh, identified candidate with a non-restarting native failure."""
+    unit = details.get('units', {}).get('gemini-cellular.service', {})
+    uuid = r'[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}'
+    return (details.get('system') == candidate_system(before, profile) and
+            details.get('boot_sha256') == PROFILES[profile][1] and
+            bool(re.fullmatch(r'[0-9a-f]{64}', before.get('gpt_sha256', ''))) and
+            details.get('gpt_sha256') == before['gpt_sha256'] and
+            bool(re.fullmatch(uuid, before.get('boot_id', ''))) and
+            bool(re.fullmatch(uuid, details.get('boot_id', ''))) and
+            details['boot_id'] != before['boot_id'] and
+            unit.get('ActiveState') == 'failed' and unit.get('SubState') == 'failed' and
+            unit.get('Result') == 'exit-code' and unit.get('Restart') == 'no' and
+            bool(re.fullmatch(r'[1-9][0-9]{0,2}', unit.get('ExecMainStatus', ''))) and
+            int(unit['ExecMainStatus']) <= 255)
+
+
+def capture_cellular_failure(ssh, directory, details):
+    interpreter = network.PYTHON_INTERPRETER
+    if interpreter.count('systemctl show') != 1:
+        raise RuntimeError('Network interpreter lookup changed; review failure capture')
+    script = 'set -eu\n' + interpreter.replace('systemctl show', 'timeout --signal=TERM --kill-after=1 2 systemctl show', 1)
+    script += 'exec timeout --signal=TERM --kill-after=1 5 "$python" -c ' + shlex.quote(CELLULAR_FAILURE_CODE)
+    script += ' ' + ' '.join(shlex.quote(details[key]) for key in ('boot_id', 'system', 'boot_sha256'))
+    result = None
+    try:
+        result = subprocess.run(ssh + [script], capture_output=True, text=True, timeout=10)
+        if len(result.stdout) > 8192:
+            raise ValueError('oversized capture')
+        report = json.loads(result.stdout)
+        if not isinstance(report, dict) or type(report.get('capture_passed')) is not bool:
+            raise ValueError('invalid capture')
+        if result.returncode:
+            report['capture_passed'] = False
+    except (subprocess.SubprocessError, OSError, ValueError) as error:
+        report = {'capture_passed': False, 'error_type': type(error).__name__}
+    if result is not None:
+        report['returncode'] = result.returncode
+    qualify.save(directory, 'candidate-cellular-failure.json', report)
 
 
 def store_profile_for(profile):
@@ -419,6 +565,9 @@ def candidate_return(ssh, before, directory, profile):
             if 'step' in details:
                 # A later SSH failure must not erase the failing Linux unit.
                 qualify.save(directory, 'candidate-linux-last-health-error.json', details)
+            if terminal_cellular_failure(details, before, profile):
+                capture_cellular_failure(ssh, directory, details)
+                raise RuntimeError('Identified candidate cellular startup failed without restart; rescue required')
             time.sleep(3)
             continue
         qualify.save(directory, 'candidate-linux.json', after)
@@ -965,7 +1114,8 @@ def main():
         source_hashes = {}
         for name in ('qualify-uboot-recovery.py', 'qualify-mtkclient.py', 'qualify-efi-linux.py',
                      'qualify-efi-files.py', 'qualify-efi-manager.py', 'qualify-efi-entry-dt.py', 'qualify-gemini-persistence.py',
-                     'qualify-persistent-nix.py', 'qualify-desktop-keyboard.py', 'qualify-power-kernel.py'):
+                     'qualify-persistent-nix.py', 'qualify-desktop-keyboard.py', 'qualify-power-kernel.py',
+                     'networkmanager-scan-evidence.py'):
             raw = (ROOT / 'tools' / name).read_bytes()
             (sources / name).write_bytes(raw)
             source_hashes[name] = backend.digest(raw)

@@ -52,7 +52,7 @@ health_failure() {
     set +e
     printf 'health_failure_step=%s\nhealth_exit_status=%s\n' "$health_step" "$status"
     timeout --signal=TERM --kill-after=1 5 systemctl show @HEALTH_UNITS@ \
-      -p Id -p ActiveState -p SubState -p Result -p ExecMainStatus 2>/dev/null
+      -p Id -p ActiveState -p SubState -p Result -p ExecMainStatus -p Restart 2>/dev/null
   fi
   exit "$status"
 }
@@ -139,7 +139,7 @@ def health_failure_details(error):
                 record[key] = value
             elif key in ('boot_sha256', 'gpt_sha256') and re.fullmatch(r'[0-9a-f]{64}', value):
                 record[key] = value
-            elif unit and ((key in ('ActiveState', 'SubState', 'Result') and re.fullmatch(r'[a-z][a-z0-9-]{0,40}', value)) or
+            elif unit and ((key in ('ActiveState', 'SubState', 'Result', 'Restart') and re.fullmatch(r'[a-z][a-z0-9-]{0,40}', value)) or
                            (key == 'ExecMainStatus' and re.fullmatch(r'[0-9]{1,10}', value))):
                 record['units'][unit][key] = value
     record['failed_units'] = [name for name, status in record['units'].items() if status.get('ActiveState') == 'failed']
