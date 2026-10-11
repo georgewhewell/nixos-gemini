@@ -183,6 +183,31 @@
         "source_integrated": true,
         "installed": false,
         "scope": "Standard uaccess for WWAN ports with type AT only; existing ModemManager inhibition and authorization remain. No extra service, private ABI or polkit policy."
+      },
+      "at_backend_validation": {
+        "status": "Source-integrated host repair; normal cross rebuild pending, not installed",
+        "patch": "nix/esim/at-unix-transport.patch",
+        "test": "nix/esim/test-lpac-at.py",
+        "actual_host_exit": 0,
+        "cases": {
+          "at_ccho": 54,
+          "csim_connect_transmit": 35,
+          "unix_transport": 27
+        },
+        "original_compiled_runtime_controls": 16,
+        "proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/lpac-at-validation/result.json",
+          "sha256": "a001548ff34aceee8f98ff423ff1e26cc0558a356e4d97d8fabe932c03dbb579"
+        },
+        "scope": "Actual-source callback/helper/consumer/Unix IO injection; negative connect errors, command write failures, APDU reply validation, terminal +CME ERROR, session-ID validation and allocation compensation. No hardware/APDU/provisioning qualification.",
+        "remaining": [
+          "Physical typed WWAN AT/ModemManager inhibit/uaccess and current selected UICC CCHO/CGLA/CCHC behavior unqualified. No physical slot or eUICC presence claim.",
+          "Silent modem timeout/cancellation/late-response recovery contract unresolved; no arbitrary transport deadline introduced.",
+          "libeuicc void logical_channel_close/euicc_fini cannot propagate CCHC close failure to operation result; failures now stop waiting after a failed write and remain visible, but normal process completion cannot prove closure.",
+          "Malformed CCHO session response cannot safely identify/close a remotely opened channel; fail closed, no guessed session command.",
+          "Unchanged at_csim logical_channel_open still has unchecked unused aid encoding allocation and loses its first MANAGE CHANNEL reply at resp=NULL. SELECT-failure cleanup/higher-channel CLA are unqualified and outside this repair. GUI selects at/CCHO.",
+          "Allocation-failure compensating CCHC is attempted with validated still-owned session ID; unsuccessful close is reported, not represented as closure."
+        ]
       }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",

@@ -20,6 +20,11 @@ let
       "-DLPAC_WITH_APDU_MBIM=ON"
       "-DLPAC_WITH_APDU_QMI=ON"
     ];
+    # These actual-source checks run on the build host in cross builds too.
+    postPatch = ''
+      HOSTCC=${buildPkgs.stdenv.cc}/bin/cc HOSTCFLAGS=-U_FORTIFY_SOURCE \
+        ${buildPkgs.python3}/bin/python3 ${./test-lpac-at.py} .
+    '';
     strictDeps = true;
     postInstall = ''
       mkdir -p "$out/share/doc/lpac"

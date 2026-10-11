@@ -1,3 +1,4 @@
+diff --git a/driver/apdu/at_cmd_unix.c b/driver/apdu/at_cmd_unix.c
 --- a/driver/apdu/at_cmd_unix.c
 +++ b/driver/apdu/at_cmd_unix.c
 @@ -47,9 +47,20 @@
@@ -65,3 +66,374 @@
              }
              continue;
          }
+@@ -112,7 +134,7 @@
+ 
+         AT_DEBUG_RX(line);
+ 
+-        if (strcmp(line, "ERROR") == 0) {
++        if (strcmp(line, "ERROR") == 0 || strncmp(line, "+CME ERROR:", 11) == 0) {
+             result = -1;
+             goto end;
+         }
+@@ -124,6 +146,8 @@
+         if (expected && strncmp(line, expected, strlen(expected)) == 0) {
+             free(found_response_data);
+             found_response_data = strdup(line + strlen(expected));
++            if (found_response_data == NULL)
++                goto end;
+             while (*found_response_data == ' ')
+                 memmove(found_response_data, found_response_data + 1, strlen(found_response_data));
+         }
+diff --git a/driver/apdu/at_etsi.c b/driver/apdu/at_etsi.c
+--- a/driver/apdu/at_etsi.c
++++ b/driver/apdu/at_etsi.c
+@@ -22,22 +22,25 @@
+         return -1;
+     }
+ 
+-    at_emit_command(userdata, "AT");
+-    if (at_expect(userdata, NULL, NULL) != 0) {
++    if (at_emit_command(userdata, "AT") != 0 || at_expect(userdata, NULL, NULL) != 0) {
+         fprintf(stderr, "Device not responding to AT commands\n");
+-        return false;
++        goto err;
+     }
+ 
+     static const char *commands[] = {"AT+CCHO", "AT+CCHC", "AT+CGLA", NULL};
+     for (int index = 0; commands[index] != NULL; index++) {
+-        at_emit_command(userdata, "%s=?", commands[index]);
+-        if (at_expect(userdata, NULL, NULL) == 0)
++        if (at_emit_command(userdata, "%s=?", commands[index]) == 0 &&
++            at_expect(userdata, NULL, NULL) == 0)
+             continue;
+         fprintf(stderr, "Device missing %s support\n", commands[index]);
+-        return false;
++        goto err;
+     }
+ 
+-    return true;
++    return 0;
++
++err:
++    at_device_close(userdata);
++    return -1;
+ }
+ 
+ static void apdu_interface_disconnect(struct euicc_ctx *ctx) {
+@@ -51,49 +54,24 @@
+     struct at_userdata *userdata = ctx->apdu.interface->userdata;
+     const char *logic_channel = at_channel_get(userdata, ctx->apdu._internal.logic_channel);
+ 
+-    int fret = 0;
+-    char *response = NULL;
+-
+-    int ret;
+-    char *encoded = NULL;
+-
+     *rx = NULL;
+     *rx_len = 0;
++    if (tx_len > (UINT32_MAX - 1) / 2)
++        return -1;
+ 
+-    encoded = malloc(tx_len * 2 + 1);
+-    euicc_hexutil_bin2hex(encoded, tx_len * 2 + 1, tx, tx_len);
++    if (logic_channel == NULL)
++        return -1;
+ 
+-    at_emit_command(userdata, "AT+CGLA=%s,%u,\"%s\"", logic_channel, tx_len * 2, encoded);
+-    if (at_expect(userdata, &response, "+CGLA: ") != 0 || response == NULL)
+-        goto err;
++    _cleanup_free_ char *encoded = malloc(tx_len * 2 + 1);
++    if (encoded == NULL || euicc_hexutil_bin2hex(encoded, tx_len * 2 + 1, tx, tx_len) < 0)
++        return -1;
+ 
+-    strtok(response, ",");        // Skip length
+-    response = strtok(NULL, ","); // Get response
+-    size_t n = strlen(response);
+-    if (response[0] == '"' && response[n - 1] == '"') {
+-        memmove(response, response + 1, n - 2);
+-        response[n - 2] = '\0';
+-    }
+-
+-    *rx_len = strlen(response) / 2;
+-    *rx = malloc(*rx_len);
+-    if (*rx == NULL)
+-        goto err;
+-    ret = euicc_hexutil_hex2bin_r(*rx, *rx_len, response, strlen(response));
+-    if (ret < 0)
+-        goto err;
+-    *rx_len = ret;
+-
+-    goto exit;
+-
+-err:
+-    fret = -1;
+-    free(*rx);
+-    *rx = NULL;
+-    *rx_len = 0;
+-exit:
+-    free(encoded);
+-    return fret;
++    if (at_emit_command(userdata, "AT+CGLA=%s,%u,\"%s\"", logic_channel, tx_len * 2, encoded) != 0)
++        return -1;
++    _cleanup_free_ char *response = NULL;
++    if (at_expect(userdata, &response, "+CGLA: ") != 0)
++        return -1;
++    return at_parse_apdu_response(response, rx, rx_len);
+ }
+ 
+ static int apdu_interface_logic_channel_open(struct euicc_ctx *ctx, const uint8_t *aid, const uint8_t aid_len) {
+@@ -101,23 +79,33 @@
+     char **channels = userdata->channels;
+ 
+     _cleanup_free_ char *aid_hex = malloc(aid_len * 2 + 1);
+-    euicc_hexutil_bin2hex(aid_hex, aid_len * 2 + 1, aid, aid_len);
++    if (aid_hex == NULL || euicc_hexutil_bin2hex(aid_hex, aid_len * 2 + 1, aid, aid_len) < 0)
++        return -1;
+ 
+-    for (int index = 0; index < AT_MAX_LOGICAL_CHANNELS; index++) {
++    for (int index = 1; index <= AT_MAX_LOGICAL_CHANNELS; index++) {
+         if (channels[index] == NULL)
+             continue;
+-        at_emit_command(userdata, "AT+CCHC=%s", channels[index]);
+-        at_expect(userdata, NULL, NULL);
++        if (at_emit_command(userdata, "AT+CCHC=%s", channels[index]) != 0 ||
++            at_expect(userdata, NULL, NULL) != 0)
++            return -1;
++        at_channel_set(userdata, index, NULL);
+     }
+ 
+-    at_emit_command(userdata, "AT+CCHO=\"%s\"", aid_hex);
++    if (at_emit_command(userdata, "AT+CCHO=\"%s\"", aid_hex) != 0)
++        return -1;
+     _cleanup_free_ char *response = NULL;
+     if (at_expect(userdata, &response, "+CCHO: ") != 0 || response == NULL)
++        return -1;
++    /* Session identifiers are decimal integers, not our local channel indices. */
++    if (response[0] == '\0' || strspn(response, "0123456789") != strlen(response))
+         return -1;
+ 
+     const int channel_id = at_channel_next_id(userdata);
+     if (at_channel_set(userdata, channel_id, response) != 0) {
+         fprintf(stderr, "Failed to register channel %d with identifier '%s'\n", channel_id, response);
++        if (at_emit_command(userdata, "AT+CCHC=%s", response) != 0 ||
++            at_expect(userdata, NULL, NULL) != 0)
++            fprintf(stderr, "Failed to close unregistered AT logical channel\n");
+         return -1;
+     }
+     return channel_id;
+@@ -130,8 +118,11 @@
+     if (identifier == NULL)
+         return;
+ 
+-    at_emit_command(userdata, "AT+CCHC=%s", identifier);
+-    at_expect(userdata, NULL, NULL);
++    if (at_emit_command(userdata, "AT+CCHC=%s", identifier) != 0 ||
++        at_expect(userdata, NULL, NULL) != 0) {
++        fprintf(stderr, "Failed to close AT logical channel\n");
++        return;
++    }
+ 
+     at_channel_set(userdata, channel, NULL);
+ }
+diff --git a/driver/apdu/at_etsi_csim.c b/driver/apdu/at_etsi_csim.c
+--- a/driver/apdu/at_etsi_csim.c
++++ b/driver/apdu/at_etsi_csim.c
+@@ -21,19 +21,21 @@
+         return -1;
+     }
+ 
+-    at_emit_command(userdata, "AT");
+-    if (at_expect(userdata, NULL, NULL) != 0) {
++    if (at_emit_command(userdata, "AT") != 0 || at_expect(userdata, NULL, NULL) != 0) {
+         fprintf(stderr, "Device not responding to AT commands\n");
+-        return false;
++        goto err;
+     }
+ 
+-    at_emit_command(userdata, "AT+CSIM=?");
+-    if (at_expect(userdata, NULL, NULL) != 0) {
++    if (at_emit_command(userdata, "AT+CSIM=?") != 0 || at_expect(userdata, NULL, NULL) != 0) {
+         fprintf(stderr, "Device missing +CSIM support\n");
+-        return false;
++        goto err;
+     }
+ 
+-    return true;
++    return 0;
++
++err:
++    at_device_close(userdata);
++    return -1;
+ }
+ 
+ static void apdu_interface_disconnect(struct euicc_ctx *ctx) {
+@@ -45,52 +47,21 @@
+                                    const uint32_t tx_len) {
+     struct at_userdata *userdata = ctx->apdu.interface->userdata;
+ 
+-    int fret = 0;
+-    char *response = NULL;
+-
+-    char *encoded = NULL;
+-
+     *rx = NULL;
+     *rx_len = 0;
++    if (tx_len > (UINT32_MAX - 1) / 2)
++        return -1;
+ 
+-    encoded = malloc(tx_len * 2 + 1);
+-    euicc_hexutil_bin2hex(encoded, tx_len * 2 + 1, tx, tx_len);
++    _cleanup_free_ char *encoded = malloc(tx_len * 2 + 1);
++    if (encoded == NULL || euicc_hexutil_bin2hex(encoded, tx_len * 2 + 1, tx, tx_len) < 0)
++        return -1;
+ 
+-    at_emit_command(userdata, "AT+CSIM=%u,\"%s\"", tx_len * 2, encoded);
+-    if (at_expect(userdata, &response, "+CSIM: ") != 0 || response == NULL)
+-        goto err;
+-
+-    // Parse the response
+-    {
+-        strtok(response, ",");        // Skip the length part
+-        response = strtok(NULL, ","); // Get the response part
+-        // unquote strings
+-        const size_t n = strlen(response);
+-        if (response[0] == '"' && response[n - 1] == '"') {
+-            memmove(response, response + 1, n - 2);
+-            response[n - 2] = '\0'; // Null-terminate the new string
+-        }
+-    }
+-
+-    *rx_len = strlen(response) / 2;
+-    *rx = malloc(*rx_len);
+-    if (*rx == NULL)
+-        goto err;
+-    int ret = euicc_hexutil_hex2bin_r(*rx, *rx_len, response, strlen(response));
+-    if (ret < 0)
+-        goto err;
+-    *rx_len = ret;
+-
+-    goto exit;
+-
+-err:
+-    fret = -1;
+-    free(*rx);
+-    *rx = NULL;
+-    *rx_len = 0;
+-exit:
+-    free(encoded);
+-    return fret;
++    if (at_emit_command(userdata, "AT+CSIM=%u,\"%s\"", tx_len * 2, encoded) != 0)
++        return -1;
++    _cleanup_free_ char *response = NULL;
++    if (at_expect(userdata, &response, "+CSIM: ") != 0)
++        return -1;
++    return at_parse_apdu_response(response, rx, rx_len);
+ }
+ 
+ static int apdu_interface_logic_channel_open(struct euicc_ctx *ctx, const uint8_t *aid, const uint8_t aid_len) {
+diff --git a/driver/apdu/at_helpers.c b/driver/apdu/at_helpers.c
+--- a/driver/apdu/at_helpers.c
++++ b/driver/apdu/at_helpers.c
+@@ -1,4 +1,5 @@
+ #include <stdarg.h>
++#include <errno.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -6,6 +7,7 @@
+ #include "at_helpers.h"
+ 
+ #include <lpac/utils.h>
++#include <euicc/hexutil.h>
+ #include <unistd.h>
+ 
+ inline void at_warning_message(void) {
+@@ -34,12 +36,15 @@
+         return -1;
+ 
+     char **channels = userdata->channels;
++    char *replacement = identifier ? strdup(identifier) : NULL;
++    if (identifier && replacement == NULL)
++        return -1;
+ 
+     if (channels[index]) {
+         free(channels[index]);
+     }
+ 
+-    channels[index] = identifier ? strdup(identifier) : NULL;
++    channels[index] = replacement;
+     return 0;
+ }
+ 
+@@ -64,7 +69,12 @@
+     const int n = vsnprintf(NULL, 0, fmt, args_length);
+     va_end(args_length);
+ 
+-    _cleanup_free_ char *formatted = calloc(n + 2 /* CR+LF */ + 1, 1);
++    if (n < 0) {
++        va_end(args);
++        return -1;
++    }
++
++    _cleanup_free_ char *formatted = calloc((size_t)n + 2 /* CR+LF */ + 1, 1);
+     if (formatted == NULL) {
+         va_end(args);
+         return -1;
+@@ -82,3 +92,48 @@
+     int ret = at_write_command(userdata, formatted);
+     return ret;
+ }
++
++int at_parse_apdu_response(const char *response, uint8_t **rx, uint32_t *rx_len) {
++    *rx = NULL;
++    *rx_len = 0;
++    if (response == NULL)
++        return -1;
++
++    response += strspn(response, " \t");
++    if (*response < '0' || *response > '9')
++        return -1;
++    char *end;
++    errno = 0;
++    unsigned long length = strtoul(response, &end, 10);
++    /* CGLA/CSIM lengths count hex characters; an R-APDU includes SW1/SW2. */
++    if (errno != 0 || length < 4 || length > UINT32_MAX || (length & 1))
++        return -1;
++    end += strspn(end, " \t");
++    if (*end != ',')
++        return -1;
++    const char *data = end + 1;
++    data += strspn(data, " \t");
++    size_t n = strlen(data);
++    while (n && (data[n - 1] == ' ' || data[n - 1] == '\t'))
++        n--;
++    if (n && data[0] == '"') {
++        if (n < 2 || data[n - 1] != '"')
++            return -1;
++        data++;
++        n -= 2;
++    }
++    if (n != length || strspn(data, "0123456789abcdefABCDEF") != n)
++        return -1;
++
++    uint8_t *decoded = malloc(n / 2);
++    if (decoded == NULL)
++        return -1;
++    int ret = euicc_hexutil_hex2bin_r(decoded, n / 2, data, n);
++    if (ret < 0) {
++        free(decoded);
++        return -1;
++    }
++    *rx = decoded;
++    *rx_len = ret;
++    return 0;
++}
+diff --git a/driver/apdu/at_helpers.h b/driver/apdu/at_helpers.h
+--- a/driver/apdu/at_helpers.h
++++ b/driver/apdu/at_helpers.h
+@@ -7,3 +7,4 @@
+ int at_channel_set(struct at_userdata *userdata, int index, const char *identifier);
+ int at_channel_next_id(struct at_userdata *userdata);
+ int at_emit_command(struct at_userdata *userdata, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
++int at_parse_apdu_response(const char *response, uint8_t **rx, uint32_t *rx_len);
