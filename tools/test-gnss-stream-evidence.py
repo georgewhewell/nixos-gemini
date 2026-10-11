@@ -202,8 +202,8 @@ class Evidence(unittest.TestCase):
                         self.assertEqual(configured.candidate_return([], {}, root, 'fixture'), {'boot_id': 'fixture'})
                         self.assertEqual(calls, ['base', 1, 2, 'bt', 'nm'])
                         runner.persistence.run.assert_called_once()
-            self.assertIs(wrapper.p.preflight, wrapper.desktop.boot.base_preflight)
-            self.assertIs(wrapper.p.finish, wrapper.desktop.boot.base_finish)
+            self.assertIs(wrapper.p.preflight, wrapper.desktop.boot.boot_preflight)
+            self.assertIs(wrapper.p.finish, wrapper.desktop.boot.boot_finish)
             for source in ('tools/test-gnss-desktop.py', 'tools/gnss-stream-evidence.py',
                            'tools/test-network-audio-desktop.py', 'tools/networkmanager-scan-evidence.py'):
                 self.assertIn(source, wrapper.p.EXTRA_EXECUTED_SOURCES)

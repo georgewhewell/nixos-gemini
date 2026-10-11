@@ -28,8 +28,8 @@ gnss = load_tool('gnss_stream', 'tools/gnss-stream-evidence.py')
 p = desktop.p
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES += ('tools/test-gnss-desktop.py', 'tools/gnss-stream-evidence.py')
-p.preflight = desktop.boot.base_preflight
-p.finish = desktop.boot.base_finish
+p.preflight = desktop.boot.boot_preflight
+p.finish = desktop.boot.boot_finish
 base_configure = desktop.base_configure
 
 

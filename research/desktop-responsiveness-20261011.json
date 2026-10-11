@@ -454,7 +454,7 @@
     "installed": true,
     "hardware_effect_and_subjective_responsiveness_qualified": false,
     "remaining_owner_work": [
-      "Resolve persistent parking/udev activity in the owning policy; qualify responsiveness during ordinary use.",
+      "Qualify the native FUSB301 event fix, then resolve residual udev and parking CPU cost in its driver or policy owner; qualify responsiveness during ordinary use.",
       "Qualify native MMC0 electrical readbacks before faster timing; controller timing/tuning remains incomplete.",
       "Integrate and qualify standard native PMU so A53/A72 capacities can be measured; no invented ratios.",
       "Native deep idle remains incomplete; current CPU_OFF parking is needed for core power removal."
@@ -664,6 +664,83 @@
         "runtime_policy_writes": false,
         "ui_responsiveness_qualified": false
       }
+    },
+    "usb_typec_change_owner": {
+      "owner": "drivers/usb/typec/fusb301.c",
+      "kernel_source_revision": "a1a88da11c1da5cac457d3476aa203cec7850e2b",
+      "observed_installed_trial": 102,
+      "observation": {
+        "seconds": 30.371,
+        "udevd_cgroup_cpu_percent_one_core": 10.579,
+        "parking_cgroup_cpu_percent_one_core": 3.859,
+        "sampler_cpu_seconds": 1.833674,
+        "sample_includes_short_lived_udev_workers": true,
+        "usb_event_seconds": 3.02,
+        "unchanged_typec_change_events": 5,
+        "unchanged_usb_role_change_events": 5,
+        "event_interval_seconds_approximate": 0.512,
+        "taint": 0
+      },
+      "cause": "The polling FUSB301 port reapplies unchanged successful orientation and USB role every 500 ms; both subsystem APIs emit a change event for each successful call. Udev bursts also occur without a CPU parking transition.",
+      "fix": "Read STATUS and TYPE each time. Skip only an identical fully successful sample; invalidate before changed provider updates and forced disconnects so failed or partial state is retried.",
+      "validation": {
+        "gcc15_asan_ubsan_actual_driver_exit": 0,
+        "old_actual_driver_compiles": true,
+        "old_unchanged_state_assertion_rejects": true,
+        "old_regression_exit": 1,
+        "independent_source_review": "clear",
+        "normal_arm64_kernel_build_exit": 0,
+        "required_host_checks_passed": true,
+        "kernel_package": "/nix/store/nfjbag13i6cja2lpihjm0qkihq0aqdpx-linux-gemini-7.2.9",
+        "configuration_symbols_and_dtb_unchanged": true,
+        "normal_image_build_exit": 0,
+        "gnome_cross_runtime_exit": 0,
+        "system_closure_copy_exit": 0,
+        "bundle": "/nix/store/j8kik8gzyh69rl47p8wz1m7295hxvv0b-gemini-mainline-nixos-bundle",
+        "system": "/nix/store/ah65fmmiqg8fyn89pg7rhnd3c1dgndxn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b"
+      },
+      "evidence": [
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/performance-read-parking.json",
+          "sha256": "cfdc69d0971ced8aea68920542c2ee69412fe5133a3ecdf35d2c9763f2792532"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/uevent-read.json",
+          "sha256": "3c6b1a0d798365f1ec2d4768e825378ff2350b0c07daad3c55a86d196c137511"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/uevent-usb-read.json",
+          "sha256": "c166a8777634e8d62ac9c4b18dc8ca9616462d7c1a84729ac16a5f3c47327898"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/host-result.json",
+          "sha256": "7397553fafc2f306e765f91d78613f2e918d13a476eca28140467750a263cb1f"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/kernel-build-exit.json",
+          "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/kernel-full-build.log",
+          "sha256": "bc8b1b170e8d7afeb1f9cfe523b65924c6c0d5cbdaf7cabbe2cce84a067fb049"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/image-build-exit.json",
+          "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/gnome-check-exit.json",
+          "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/system-copy-exit.json",
+          "sha256": "b7737b03235ece6fc597d2de88eefaefb5e6e5a87b98e7772dd4be478b7f901f"
+        }
+      ],
+      "installed": false,
+      "hardware_effect_qualified": false,
+      "ui_responsiveness_qualified": false,
+      "next": "Qualify a normal image through the common supervised desktop deployment: stable attached USB link, no recurring TypeC/USB-role change events, clean kernel and independent final audit. Then measure residual CPU cost before changing DVFS or parking parameters."
     }
   }
 }

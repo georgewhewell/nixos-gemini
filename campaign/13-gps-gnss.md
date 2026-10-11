@@ -32,7 +32,7 @@ Image 98 was restored and independently audited. That setting is now removed;
 the Bluetooth startup guard remains because HCI registration queues power/setup.
 Image 101 passes admission for the effective udev rule, native GNSS alias,
 ordered drivers and ARM64 runtime. Its supervised trial and independent terminal
-audit pass; image 101 remains installed. Two 10-second open/close cycles pass
+audit pass; later accepted images retain these unchanged GNSS inputs. Two 10-second open/close cycles pass
 native module/driver/class registration and LNA off/on/off with zero taint,
 then GNOME Bluetooth access and a fresh NetworkManager scan pass without radio
 faults. Both GNSS windows receive zero bytes: this qualifies the observed power
@@ -56,6 +56,9 @@ source establishes no additional receiver initialization command or inner
 payload framing. Existing active full-STP diagnostics cannot distinguish task2
 delivery from inactive endpoint discard. The next native observation needs
 scalar accepted/discarded/FIFO-rejected counts at that owner; generic bootstrap
-STP and KUnit counters do not measure this stream. Keep location data out of
+STP and KUnit counters do not measure this stream. Also count CRC-valid task-2
+frames before sequence selection, so duplicate/out-of-order frames discarded
+before dispatch can be distinguished from absent task-2 traffic. Preserve the
+existing whole-frame ACK/retry and power-admission behavior. Keep location data out of
 retained diagnostics. Current status and
 remaining work are recorded in [HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md).
