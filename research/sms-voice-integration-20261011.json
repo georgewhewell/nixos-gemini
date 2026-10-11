@@ -165,7 +165,7 @@
     },
     "native_design_review": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/review.json",
     "native_at_terminal": {
-      "status": "Source integrated; image build and hardware observation pending",
+      "status": "Source integrated; AT-only image built and copied, combined image installation pending",
       "kernel_revision": "8cefe2f9fd6849f13ebe020b08a411e37abc4571",
       "source_sha256": "2409054871d8abb2e0182ccb17c58d782e5e73d1f4f45854db480c41a61229fe",
       "proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-lifetime/production-validation/seal.json",
@@ -176,7 +176,41 @@
       "strict_arm64_gcc15_build_actual_exit": 0,
       "scope": "Standard WWAN removal wakes blocked RX/TX and exposes HUP/ERR; native RX/pointer lifetime and terminal work cancellation serialized. Original DMA STOP/retention contract unchanged.",
       "installed": false,
-      "modem_stability_or_euicc_access_qualified": false
+      "modem_stability_or_euicc_access_qualified": false,
+      "image_build_actual_exit": 0,
+      "image_build_proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-at-image/build-exit.json",
+      "candidate_kernel_revision": "89c13acdc6c0891191be7847450ed8e199a76f10"
+    },
+    "native_sim_electrical_maps": {
+      "status": "Native field maps integrated; installed pad observation and declarative owner state pending",
+      "kernel_revision": "4230863bd3d0e93eb3dbb9c54c86030b57827fc2",
+      "pins": [
+        126,
+        127,
+        128,
+        155,
+        156,
+        157
+      ],
+      "scope": "IES, SMT, PUPD, R0 and R1 maps and pull type only; no state selection or guessed pull strength",
+      "actual_native_pinconf_fixture_exit": 0,
+      "compiled_original_rejects_missing_sim_fields": true,
+      "proof": "/mnt/Home/src/nixos-gemini/handoff/modem-sim-pinctrl-20261011/host-proof/result.json",
+      "proof_sha256": "ca72ed326da61768d837857b8394663d8ea82391bad390f26eccfddb08d6d2c5",
+      "installed": false
     }
+  },
+  "native_modem_runtime": {
+    "status": "Public DBM initialization omission fixed in source; hardware stability remains unqualified",
+    "kernel_revision": "89c13acdc6c0891191be7847450ed8e199a76f10",
+    "scope": "Initialize only the 56-byte disabled-PBM region before the validated HS1 runtime response; retain the existing barrier and DMA STOP ownership",
+    "host_fixture_actual_exit": 0,
+    "compiled_original_rejects_missing_initialization": true,
+    "strict_arm64_actual_exit": 0,
+    "strict_proof": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/dbm-owner/strict-production/result.json",
+    "strict_proof_sha256": "9840dd95673156c4916d95ce19203180ee7d91c85ece06ed9ce48c1627f64c8d",
+    "installed": false,
+    "watchdog_causality_qualified": false,
+    "pbm_implemented": false
   }
 }

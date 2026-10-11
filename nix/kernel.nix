@@ -96,7 +96,7 @@
         gnss-rx-atomic gnss-provider-host mt6797-mmc0-pinctrl-host msdc-clock-host proc-stat-host mtk-sysirq-write-host \
         bt-hci-mt6797-host wifi-radio-admission-host wifi-radio-station-host wifi-radio-tx-host \
         wifi-radio-worker-host wifi-radio-connect-host wifi-radio-scan-cancel-host wifi-scan-probe-host wifi-hif-recovery-host \
-        regulator-exclusive-state dma-direct-sg-host media-clock-bounds drm-synchronous-bind cellular-integration cellular-first-fatal cellular-rx-rejected cellular-napi-mask cellular-at-terminal \
+        regulator-exclusive-state dma-direct-sg-host media-clock-bounds drm-synchronous-bind cellular-integration cellular-first-fatal cellular-rx-rejected cellular-napi-mask cellular-at-terminal cellular-dbm-host \
         fusb301-role-host mt6797-tphy-power-host mtu3-fallback-host; do
         python3 "tools/gemini/test-$test.py"
       done
