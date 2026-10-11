@@ -9,8 +9,8 @@ CCCI is MediaTek's Cross-Core Communication Interface between the application
 processor and modem. The native kernel driver owns CCCI framing, DMA and modem
 lifetime, and exposes standard Linux WWAN AT and network interfaces. The
 source-integrated lpa-gtk/lpac candidate uses generic AT/APDU transport and
-ModemManager ownership. It is cross-built but uninstalled: image117 passed target
-imports, failed healthy boot, and restored116 with an independent audit. No
+ModemManager ownership. It is cross-built but uninstalled: images117 and118 passed
+target imports, failed healthy boot, and restored116 with independent audits. No
 candidate LK metadata/AT observation or watchdog cause was established.
 
 The installed driver removes a failed AT port and wakes existing descriptors
@@ -30,7 +30,7 @@ Calls, Spacebar and callaudiod are already in the normal image.
 Native source `deb62362` now resolves compiled MD1 policy and validated gated LK
 overrides, with strict ARM64 compilation passing. Only the Gemini build selects
 public policy12; it is separate from hardware capability and load/image type.
-The next GUI candidate adds standard active-seat `uaccess` for WWAN ports typed AT,
+Candidate118 adds standard active-seat `uaccess` for WWAN ports typed AT,
 using existing ModemManager authorization without an extra service or private ABI.
 
 Remaining work: qualify the normal installation and native policy selection,

@@ -24,15 +24,17 @@ The bounded public disabled-PBM DBM initializer is installed before the validate
 HS1 runtime reply. The modem still reaches READY and receives its watchdog IRQ;
 SIM presence, eUICC APDUs, cellular data, SMS delivery and calls remain unqualified.
 CCCI framing and DMA remain kernel responsibilities. The generic AT lpa-gtk/lpac
-candidate is source-integrated and cross-built; image117 passed target imports but
-failed its healthy-boot gate. Audited rollback restored116; no candidate LK metadata
-or AT observation was obtained, and no watchdog cause was established.
+candidate is source-integrated and cross-built; images117 and118 passed target
+imports but failed their healthy-boot gates. Audited rollback restored116; no
+candidate LK metadata or AT observation was obtained, and no watchdog cause was
+established.
 
-The next native source `deb62362ce75a4325cdecd04e9f70c875cceb9de` passes GCC15
-strict ARM64 compilation. Its MD1 policy defaults to unknown; Gemini configures12
+Candidate118 native source `deb62362ce75a4325cdecd04e9f70c875cceb9de` passes GCC15
+strict ARM64 compilation and the normal image build. Its MD1 policy defaults to
+unknown; Gemini configures12
 from the public board build, with validated gated LK override precedence. This
 is requested configuration, independent of load/image type and hardware capability.
-The GUI candidate also installs the standard typed-WWAN-AT `uaccess` rule for the
+The GUI candidate includes the standard typed-WWAN-AT `uaccess` rule for the
 active local seat, retaining ModemManager ownership and authorization. Installation,
 eUICC access, provisioning and voice remain unqualified; exact proofs are in the
 [cellular owner](sms-voice-integration-20261011.json).

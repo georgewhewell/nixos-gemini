@@ -160,7 +160,7 @@
         "critical_runtime_arm64_verified": true,
         "whole_closure_arm64_verified": false
       },
-      "status": "Source-integrated normal-image candidate; image117 rejected before healthy Linux observation",
+      "status": "Source-integrated and cross-built normal-image candidate;117 and118 rejected by healthy-boot gate",
       "source_integrated": true,
       "normal_candidate117": {
         "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
@@ -185,7 +185,7 @@
         "scope": "Standard uaccess for WWAN ports with type AT only; existing ModemManager inhibition and authorization remain. No extra service, private ABI or polkit policy."
       },
       "at_backend_validation": {
-        "status": "Source-integrated host repair; normal cross rebuild pending, not installed",
+        "status": "Source-integrated host repair and normal ARM64 rebuild pass;118 rejected healthy boot, not installed",
         "patch": "nix/esim/at-unix-transport.patch",
         "test": "nix/esim/test-lpac-at.py",
         "actual_host_exit": 0,
@@ -207,7 +207,30 @@
           "Malformed CCHO session response cannot safely identify/close a remotely opened channel; fail closed, no guessed session command.",
           "Unchanged at_csim logical_channel_open still has unchecked unused aid encoding allocation and loses its first MANAGE CHANNEL reply at resp=NULL. SELECT-failure cleanup/higher-channel CLA are unqualified and outside this repair. GUI selects at/CCHO.",
           "Allocation-failure compensating CCHC is attempted with validated still-owned session ID; unsuccessful close is reported, not represented as closure."
-        ]
+        ],
+        "normal_build_actual_exit": 0,
+        "target_import_actual_exit": 0,
+        "normal_build_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/normal-build-validation.json",
+          "sha256": "4ce7ae2ab532fcb4e9674ba974409643e47af9821d1bbdc338fb4939b61ca17a"
+        }
+      },
+      "normal_candidate118": {
+        "kernel_revision": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
+        "packaging_revision": "07f22e52e03226ab0b5f385e1a503799475d8ab9",
+        "build_actual_exit": 0,
+        "target_import_actual_exit": 0,
+        "trial_actual_exit": 1,
+        "independent_rollback_audit_actual_exit": 0,
+        "installed": false,
+        "restored_baseline": "boot-test-116",
+        "candidate_lk_metadata_or_at_observed": false,
+        "watchdog_cause_established": false,
+        "proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
+          "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
+        },
+        "scope": "Includes native configured-policy precedence, typed AT active-seat access and checked lpac AT error handling. Candidate write/readback succeeds; SSH health exits3, then healthy-boot gate expires. Audited rollback restores116; no eUICC APDU or provisioning operation."
       }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",
@@ -377,7 +400,7 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "Install the configured-policy candidate and observe its scalar policy provenance and raw LK metadata; then qualify readiness and watchdog separately. Trial117 produced neither candidate metadata nor AT observation.",
+      "remaining": "Establish candidate healthy-boot failure from bounded retained evidence; install and observe configured policy and raw LK metadata, then qualify readiness and watchdog separately. Trials117/118 produced no candidate metadata or AT observer result.",
       "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
       "actual_production_host_exit": 0,
       "strict_arm64_actual_exit": 0,
@@ -387,7 +410,7 @@
         "sha256": "17c569c5de6fbcab604ad0700d2407ccbd8692543206ae6180143a9d72a8ee1d"
       },
       "configured_policy_followup": {
-        "status": "Source-integrated and strict ARM64 compiled; not installed or hardware observed",
+        "status": "Source-integrated, strict ARM64 compiled and normal cross-build passes;118 failed healthy boot and restored116",
         "kernel_revision": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
         "configured_policy": 12,
         "generic_default_policy": 0,
@@ -406,6 +429,12 @@
         "strict_proof": {
           "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/native-policy-validation.json",
           "sha256": "728c16737b34e149280923263c4ad0a749c3f6ab41a817b408f4860ad1033447"
+        },
+        "normal_build_actual_exit": 0,
+        "normal_trial_actual_exit": 1,
+        "normal_trial_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
+          "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
         }
       }
     }
@@ -432,6 +461,15 @@
     "installation_seal": {
       "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/native-sim-image/seal.json",
       "sha256": "7db0b59e3ce15560374f6018f06ce9ff81f679b681962cbd495a6e80272e3879"
+    },
+    "latest_recovery": {
+      "trial": "boot-test-118",
+      "boot_id": "ce9abbea-148c-4646-8ad7-3d50bd7bcddd",
+      "independent_audit_actual_exit": 0,
+      "proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
+        "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
+      }
     }
   },
   "application_build_kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77"
