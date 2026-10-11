@@ -172,6 +172,24 @@
     ],
     "rejected_channels_cause_qualified": false,
     "sim_esim_data_sms_voice_qualified": false,
-    "next": "Decode the public UMOLY exception report in the native first-fatal path and continue transport/SIM bring-up."
+    "next": "Decode the public UMOLY exception report in the native first-fatal path and continue transport/SIM bring-up.",
+    "sim_initialization": {
+      "failure_uptime_seconds": 101.007358,
+      "sim_lock_status_retries": 7,
+      "explicit_not_inserted_error_observed": false,
+      "physical_sim_absence_established": false,
+      "raw_messages_retained": false
+    }
+  },
+  "cellular_development": {
+    "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+    "normal_kernel_build_exit": 0,
+    "kernel_package": "/nix/store/hp3wjwpqipig72y48kd8w5hb7g6v6jv4-linux-gemini-7.2.9",
+    "compiler": "GCC 15.3.0",
+    "exception_decoder": "Bounded public UMOLY numeric fields, one first-fatal snapshot",
+    "required_exception_host_checks": "ASan/UBSan passed",
+    "hostless_pcm_pointer_bounds_fix": true,
+    "installed": false,
+    "hardware_qualified": false
   }
 }

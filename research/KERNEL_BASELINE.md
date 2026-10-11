@@ -19,17 +19,24 @@ terminal audit pass GNOME RFKILL visibility, bounded Bluetooth discovery as
 the desktop user, directed NetworkManager scanning, effective onboard stereo
 mapping, RAM-only paging, retained storage and ordinary Nix builds. Normal
 NetworkManager association and traffic over wlan0 also pass. Selecting another
-SSID, Bluetooth pairing/profiles and audible orientation remain unqualified. RTC and GPU results retain their relevant unchanged-input evidence
+SSID, Bluetooth pairing/profiles and audible orientation remain unqualified.
+RTC and GPU results retain their relevant unchanged-input evidence
 from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
 repeat RTC alarm/calendar diagnostics.
 
-This revision admits
-current supplicant userspace capability flags and station joins to cached
-passive-channel APs. Its real-callback tests use the kernel's native flag enums
+This revision admits current supplicant userspace capability flags and station
+joins to cached passive-channel APs. Its real-callback tests use the kernel's native flag enums
 and are required by the normal kernel build. Native modem bring-up remains
 incomplete: a fresh boot reaches HS2, then receives a modem watchdog interrupt
 at 107 seconds before any SIM diagnostic. SIM/eSIM and cellular data are not
 qualified.
+
+Development now pins `ce9fec57add5607faa3eb9f9c31f69afd414de77`, adding bounded
+public-ABI modem exception decoding and a hostless PCM pointer bounds fix.
+These native changes pass the normal GCC 15 kernel build, including the
+required exception-decoder checks with ASan/UBSan. Hardware qualification is
+pending.
+
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
 GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are
 disabled. The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) remains preserved;
