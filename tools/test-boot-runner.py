@@ -209,12 +209,23 @@ head() { :; }
                 'private raw reply bait\nMT6797_CCCI_FIRST_FATAL site=transport ready=0 irqs=9 private=discard\n'
                 'MT6797_CCCI_TERMINAL_FAILURE reason=-22\n'
                 'MD1 runtime policy=12 source=board_config; configured policy, not hardware capability\n')
+            driver = root/'drivers'/'mt6797-ccci'; driver.mkdir(parents=True)
+            native = root/'10014000.modem'; (native/'of_node').mkdir(parents=True)
+            (driver/native.name).symlink_to(native, target_is_directory=True)
+            (native/'driver').symlink_to(driver, target_is_directory=True)
+            (native/'of_node/compatible').write_bytes(b'mediatek,mt6797-ccci\0')
+            recent = native/'fs_recent'
+            rows = ['seq='+str(i)+' op=1001 parse=0 compact=0 flags=0 req=0 ov=1 of=2 mv=0 mf=0 d0=90 d1=0 done=1 status=0 result=0 sent=32\n'
+                    for i in range(1, 17)]
+            snapshot = 'total=16 count=16 frozen=1 pending=0 ready=0 failed=1\n'+''.join(rows)
+            recent.write_text(snapshot)
             metadata = files['/sys/kernel/debug/mt6797-md1-lk-handoff/runtime_metadata']
             raw = ('schema=1 load_type=9 load_type_valid=1 image_type=3 option_parse_errno=-22 '
                    'lk_option_gate_present=1 lk_option_gate=0 support_option_present=1 support_option=-1 '
                    'capability_available=0 capability_provenance=unknown\n')
             metadata.write_text(raw)
             code = r.CELLULAR_FAILURE_CODE.replace('/run/current-system', str(system))
+            code = code.replace('/sys/bus/platform/drivers/mt6797-ccci', str(driver))
             for name, path in files.items():
                 code = code.replace(name, str(path))
             def execute(changed=None):
@@ -246,6 +257,61 @@ head() { :; }
             self.assertEqual(report['runtime_metadata']['support_option'], -1)
             self.assertTrue(report['runtime_metadata']['valid'])
             self.assertFalse(report['startup_qualified'])
+            self.assertEqual(report.get('fatal_numeric'), {'valid':False})
+            self.assertEqual(report['fs_recent']['header']['count'], 16)
+            self.assertEqual([entry['seq'] for entry in report['fs_recent']['entries']], list(range(9, 17)))
+            kernel = files['/run/gemini-cellular/dmesg-final']
+            old_kernel = kernel.read_text()
+            fatal = ('MT6797_CCCI_FIRST_FATAL site=md-wdt-irq ready=0 irqs=9 '
+                     'first_tx=00000001/0000007f first_rx=00000008/000000ff '
+                     'last_tx=00000002/0000007f last_rx=00000008/000000ff '
+                     'q0_submitted=1 reclaimed=1 head=1 tail=1 used=0 '
+                     'descriptor_valid=1 payload_valid=1 reply_finalized=1 runtime_len=672\n')
+            counters = 'CCCI_AT_METADATA opens=1 closes=1 tx_submitted=0 q1_reclaimed=0 rx_seen=0 rx_closed_drop=0 rx_delivered=0\n'
+            kernel.write_text(fatal+counters+old_kernel)
+            status, report = execute()
+            self.assertEqual(status, 0)
+            self.assertTrue(report['fatal_numeric']['valid'])
+            self.assertEqual(report['fatal_numeric']['first_tx'], [1, 127])
+            self.assertEqual(report['fatal_numeric']['reclaimed'], 1)
+            self.assertEqual(report['fatal_numeric']['used'], 0)
+            self.assertEqual(report['at_counters']['opens'], 1)
+            self.assertLessEqual(len(json.dumps(report, sort_keys=True))+1, 8192)
+            kernel.write_text(fatal.replace('reclaimed=1', 'reclaimed=0').replace('used=0', 'used=1')+old_kernel)
+            recent.write_text(snapshot.replace('pending=0', 'pending=1').replace(rows[-1], rows[-1].replace('done=1', 'done=0').replace('sent=32', 'sent=0')))
+            status, report = execute()
+            self.assertEqual(report['fatal_numeric']['reclaimed'], 0)
+            self.assertEqual(report['fs_recent']['header']['pending'], 1)
+            self.assertEqual(report['fs_recent']['entries'][-1]['done'], 0)
+            self.assertEqual(report['fs_recent']['entries'][-1]['sent'], 0)
+            recent.write_text(snapshot)
+            for invalid in (fatal.replace('irqs=9', 'irqs=-1'), fatal.replace('irqs=9', 'irqs=4294967296'),
+                            fatal.replace('reply_finalized=1', 'reply_finalized=2'),
+                            fatal.replace('last_tx=00000002/0000007f', 'last_tx=private'),
+                            fatal.rstrip()+' private=discard\n', fatal.rstrip()+' irqs=9\n'):
+                kernel.write_text(invalid+counters+old_kernel)
+                self.assertEqual(execute()[1]['fatal_numeric'], {'valid':False})
+            kernel.write_text(fatal+counters.replace('opens=1', 'opens=private')+old_kernel)
+            self.assertEqual(execute()[1]['at_counters'], {'valid':False})
+            kernel.write_text(old_kernel)
+            for invalid in (snapshot.replace('count=16', 'count=17'), snapshot.replace('frozen=1', 'frozen=0'),
+                            snapshot.replace('failed=1', 'failed=0'), snapshot.replace('parse=0', 'parse=-2147483649'),
+                            snapshot.replace('op=1001', 'op=private'), snapshot.replace('d0=90', 'd0=256'),
+                            snapshot.replace('seq=16 ', 'seq=15 '), snapshot+rows[-1],
+                            snapshot.replace('req=0 ', 'req=0 private=discard '), 'x'*4097):
+                recent.write_text(invalid)
+                self.assertEqual(execute()[1]['fs_recent'], {'available':True, 'valid':False})
+            recent.write_text('total=0 count=0 frozen=1 pending=0 ready=0 failed=1\n')
+            self.assertEqual(execute()[1]['fs_recent']['entries'], [])
+            recent.write_text(snapshot)
+            second = driver/'second'; second.symlink_to(native, target_is_directory=True)
+            self.assertEqual(execute()[0], 1)
+            second.unlink()
+            (native/'driver').unlink(); (native/'driver').symlink_to(root)
+            self.assertEqual(execute()[0], 1)
+            (native/'driver').unlink(); (native/'driver').symlink_to(driver, target_is_directory=True)
+            (driver/native.name).unlink()
+            self.assertEqual(execute()[1]['fs_recent'], {'available':False})
             log = files['/run/gemini-cellular/result.log']
             original = log.read_text()
             log.write_text(original.replace('No such device', 'private error payload'))

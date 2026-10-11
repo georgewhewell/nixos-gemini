@@ -383,6 +383,63 @@ def metadata():
     except (ValueError, UnicodeError):
         return {'available': True, 'valid': False}
 
+def numeric_fields(line, unsigned=(), signed=(), boolean=(), hexadecimal=(), wide=(), pairs=()):
+    tokens = line.split()
+    fields = dict(token.split('=', 1) for token in tokens)
+    require(len(fields) == len(tokens) and set(fields) == set(unsigned + signed + boolean + hexadecimal + wide + pairs), 'invalid_native_fields')
+    for key, value in fields.items():
+        if key in pairs:
+            require(re.fullmatch(r'[0-9a-f]{8}/[0-9a-f]{8}', value), 'invalid_native_fields')
+            fields[key] = [int(word, 16) for word in value.split('/')]
+            continue
+        base = 16 if key in hexadecimal else 10
+        require(re.fullmatch(r'[0-9a-f]{1,8}' if base == 16 else r'-?[0-9]{1,20}', value), 'invalid_native_fields')
+        low, high = (-(2**31), 2**31-1) if key in signed else (0, 1 if key in boolean else 2**64-1 if key in wide else 2**32-1)
+        fields[key] = int(value, base)
+        require(low <= fields[key] <= high, 'invalid_native_fields')
+    return fields
+
+def fs_recent():
+    driver = Path('/sys/bus/platform/drivers/mt6797-ccci')
+    if not driver.is_dir():
+        return {'available': False}
+    devices = []
+    for path in driver.iterdir():
+        compatible = path / 'of_node/compatible'
+        if compatible.is_file():
+            with compatible.open('rb') as stream:
+                if stream.read(129) == b'mediatek,mt6797-ccci\0':
+                    devices.append(path.resolve(strict=True))
+    require(len(devices) <= 1, 'native_device_not_unique')
+    if not devices:
+        return {'available': False}
+    native = devices[0]
+    require((native / 'driver').resolve(strict=True).name == 'mt6797-ccci', 'native_driver')
+    try:
+        with (native / 'fs_recent').open('rb') as stream:
+            raw = stream.read(4097)
+    except FileNotFoundError:
+        return {'available': False}
+    except OSError as error:
+        return {'available': True, 'valid': False, 'read_errno': error.errno}
+    try:
+        require(len(raw) <= 4096 and raw.endswith(b'\n'), 'invalid_fs_recent')
+        lines = raw.decode('ascii').splitlines()
+        header = numeric_fields(lines[0], unsigned=('count',), signed=('pending',),
+                                boolean=('frozen', 'ready', 'failed'), wide=('total',))
+        require(header['count'] == len(lines)-1 <= 16 and header['count'] <= header['total'] and
+                header['frozen'] == header['failed'] == 1, 'invalid_fs_recent')
+        entries = [numeric_fields(line, unsigned=('req', 'd0', 'd1'), signed=('parse', 'status', 'result'),
+                                 boolean=('compact', 'ov', 'mv', 'done'), hexadecimal=('op', 'flags', 'of', 'mf'),
+                                 wide=('seq', 'sent')) for line in lines[1:]]
+        previous = 0
+        for entry in entries:
+            require(previous < entry['seq'] <= header['total'] and entry['d0'] <= 255 and entry['d1'] <= 255, 'invalid_fs_recent')
+            previous = entry['seq']
+        return {'available': True, 'valid': True, 'header': header, 'entries': entries[-8:]}
+    except (ValueError, UnicodeError, IndexError):
+        return {'available': True, 'valid': False}
+
 def parse_failure(log, kernel):
     record = {'restore_failed': 'CELLULAR_RESTORE_ARCHIVE_FAILED' in log,
               'seed_failed': 'CELLULAR_RAM_SEED_FAILED' in log}
@@ -399,6 +456,21 @@ def parse_failure(log, kernel):
     fatal = re.search(r'MT6797_CCCI_FIRST_FATAL site=(transport|ap-handshake-timer|md-wdt-irq) ready=([01]) ', kernel)
     if fatal:
         record.update(fatal_site=fatal[1], fatal_ready=int(fatal[2]))
+        line = kernel[fatal.start():].splitlines()[0].split(' ', 2)[2]
+        try:
+            values = numeric_fields(line, unsigned=('irqs', 'q0_submitted', 'reclaimed', 'head', 'tail', 'used'),
+                                    boolean=('ready', 'descriptor_valid', 'payload_valid', 'reply_finalized'),
+                                    wide=('runtime_len',), pairs=('first_tx', 'first_rx', 'last_tx', 'last_rx'))
+            record['fatal_numeric'] = dict(values, valid=True)
+        except ValueError:
+            record['fatal_numeric'] = {'valid': False}
+    at = re.search(r'CCCI_AT_METADATA ([^\r\n]*)', kernel)
+    if at:
+        try:
+            record['at_counters'] = dict(numeric_fields(at[1], unsigned=('opens', 'closes', 'tx_submitted', 'q1_reclaimed',
+                                          'rx_seen', 'rx_closed_drop', 'rx_delivered')), valid=True)
+        except ValueError:
+            record['at_counters'] = {'valid': False}
     failure = re.search(r'MT6797_CCCI_TERMINAL_FAILURE reason=(-?[0-9]{1,10})(?=\s|$)', kernel)
     if failure and -(2**31) <= int(failure[1]) < 2**31:
         record['terminal_errno'] = int(failure[1])
@@ -413,13 +485,18 @@ try:
     identity()
     report = parse_failure(read_log('/run/gemini-cellular/result.log'), read_log('/run/gemini-cellular/dmesg-final'))
     report['runtime_metadata'] = metadata()
+    report['fs_recent'] = fs_recent()
     identity()
     report.update(capture_passed=True, boot_id=boot, system=system, boot_sha256=boot_sha,
                   startup_qualified=False, scope='failed_cellular_start')
 except (OSError, ValueError) as error:
     report = {'capture_passed': False, 'error': str(error) if isinstance(error, ValueError) else 'read_error',
               'errno': error.errno if isinstance(error, OSError) else 0, 'startup_qualified': False}
-print(json.dumps(report, sort_keys=True))
+encoded = json.dumps(report, sort_keys=True)
+if len(encoded) + 1 > 8192:
+    report = {'capture_passed': False, 'error': 'capture_bound', 'startup_qualified': False}
+    encoded = json.dumps(report, sort_keys=True)
+print(encoded)
 raise SystemExit(0 if report['capture_passed'] else 1)
 '''
 
