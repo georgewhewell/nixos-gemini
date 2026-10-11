@@ -26,7 +26,9 @@ def good_report():
                 system_identity_preserved=True, receiver_commands_sent=0,
                 receiver_protocol_qualified=False, position_qualified=False, bytes=0,
                 printable_bytes=0, nmea_shapes=0, nmea_checksum_valid=0,
-                nmea_valid_fix_flags=0, elapsed_ms=10000)
+                nmea_valid_fix_flags=0, elapsed_ms=10000, native_gnss_module_present=True,
+                matching_platform_child_present=True, driver_bound=True, class_registered=True,
+                gnss_node_present=True)
 
 
 class Evidence(unittest.TestCase):
@@ -39,8 +41,10 @@ class Evidence(unittest.TestCase):
                      system_identity_preserved=False, read_window_complete=False,
                      receiver_protocol_qualified=True, position_qualified=True,
                      read_window_seconds=11, elapsed_ms=9999, bytes=-1, printable_bytes=1,
-                     nmea_checksum_valid=1, nmea_valid_fix_flags=1)
-        for key, value in (*wrong.items(), ('lna_during_users', True)):
+                     nmea_checksum_valid=1, nmea_valid_fix_flags=1,
+                     **{key: False for key in gnss.REGISTRATION})
+        for key, value in (*wrong.items(), ('lna_during_users', True),
+                           ('native_gnss_module_present', 1)):
             bad = dict(good, **{key: value})
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 gnss.verify_report(json.dumps(bad))
@@ -71,7 +75,8 @@ class Evidence(unittest.TestCase):
             self.assertLessEqual(len(metadata.pending), 256)
             self.assertTrue(all(type(value) is int for value in metadata.counts.values()))
 
-    def observe_fixture(self, during=(1, 1), read_error=False, changed_identity=False):
+    def observe_fixture(self, during=(1, 1), read_error=False, changed_identity=False,
+                        missing_node=False):
         clock = SimpleNamespace(now=0)
         class Selector:
             def __enter__(self): return self
@@ -88,18 +93,26 @@ class Evidence(unittest.TestCase):
                 return '0'
             def resolve(self): return SimpleNamespace(name='mt6797-gnss')
         identities = [None, remote['CheckError']('identity_changed') if changed_identity else None]
+        registration = {key: True for key in gnss.REGISTRATION}
+        if missing_node: registration['gnss_node_present'] = False
         with mock.patch.dict(remote, Path=DevicePath,
+                             registration_state=lambda record: record.update(registration),
                              identity=mock.Mock(side_effect=identities),
                              lna_state=mock.Mock(side_effect=[(0, 0), during, (0, 0)])), \
                 mock.patch.object(remote['time'], 'monotonic', side_effect=lambda: clock.now), \
                 mock.patch.object(remote['selectors'], 'DefaultSelector', Selector), \
-                mock.patch.object(remote['os'], 'stat', return_value=SimpleNamespace(st_mode=stat.S_IFCHR)), \
+                mock.patch.object(remote['os'], 'stat', return_value=SimpleNamespace(st_mode=stat.S_IFCHR),
+                    side_effect=FileNotFoundError(2, 'fixture') if missing_node else None), \
                 mock.patch.object(remote['os'], 'open', return_value=17) as opened, \
                 mock.patch.object(remote['os'], 'close') as closed, \
                 mock.patch.object(remote['os'], 'read', side_effect=OSError(5, 'fixture')):
             record = remote['observe']('fixture', 'fixture')
-        opened.assert_called_once()
-        closed.assert_called_once_with(17)
+        if missing_node:
+            opened.assert_not_called()
+            closed.assert_not_called()
+        else:
+            opened.assert_called_once()
+            closed.assert_called_once_with(17)
         self.assertEqual(record['lna_after_users'], 0)
         self.assertEqual(record['lna_after_enabled'], 0)
         return record
@@ -112,6 +125,47 @@ class Evidence(unittest.TestCase):
             self.assertEqual(failed['result'], 'failed')
             self.assertTrue(failed['closed'])
             with self.assertRaises(RuntimeError): gnss.verify_report(json.dumps(failed))
+
+    def test_registration_flags_survive_missing_devnode_without_open(self):
+        record = self.observe_fixture(missing_node=True)
+        self.assertEqual(record['errno'], 2)
+        self.assertEqual(record['error'], 'os_error')
+        self.assertFalse(record['opened'])
+        self.assertFalse(record['closed'])
+        self.assertFalse(record['gnss_node_present'])
+        self.assertTrue(all(record[key] for key in gnss.REGISTRATION[:-1]))
+        self.assertTrue(all(type(record[key]) is bool for key in gnss.REGISTRATION))
+        with self.assertRaises(RuntimeError): gnss.verify_report(json.dumps(record))
+
+    def test_registration_matches_compatible_in_memory_and_requires_native_binding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ('sys/module/gnss_mtk_consys', 'sys/class/gnss/gnss0',
+                         'sys/bus/platform/drivers/mt6797-gnss', 'dev'):
+                (root / name).mkdir(parents=True)
+            (root / 'dev/gnss0').touch()
+            for name, compatible in (('native', b'mediatek,mt6797-gnss\0'),
+                                      ('other', b'mediatek,unrelated\0')):
+                device = root / 'sys/bus/platform/devices' / name
+                (device / 'of_node').mkdir(parents=True)
+                (device / 'of_node/compatible').write_bytes(compatible)
+            device = root / 'sys/bus/platform/devices/native'
+            driver = device / 'driver'
+            driver.symlink_to(root / 'sys/bus/platform/drivers/mt6797-gnss')
+            def snapshot():
+                record = {key: False for key in gnss.REGISTRATION}
+                with mock.patch.dict(remote, Path=lambda path: root / path.lstrip('/')):
+                    remote['registration_state'](record)
+                self.assertEqual(set(record), set(gnss.REGISTRATION))
+                self.assertTrue(all(type(value) is bool for value in record.values()))
+                return record
+            self.assertTrue(all(snapshot().values()))
+            driver.unlink()
+            self.assertFalse(snapshot()['driver_bound'])
+            (device / 'of_node/compatible').write_bytes(b'mediatek,unrelated\0')
+            self.assertFalse(snapshot()['matching_platform_child_present'])
+            (root / 'dev/gnss0').unlink()
+            self.assertFalse(snapshot()['gnss_node_present'])
 
     def test_two_cycles_precede_desktop_checks_and_failure_blocks_return(self):
         for failed_cycle in (None, 2):

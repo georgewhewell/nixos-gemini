@@ -20,7 +20,6 @@
   # kernel, DTB, and initramfs.
   boot.kernel.enable = false;
   boot.initrd.enable = false;
-  boot.hardwareScan = false;
   boot.loader.grub.enable = false;
   boot.loader.generic-extlinux-compatible.enable = false;
   system.boot.loader.kernelFile = "Image.gz-dtb";

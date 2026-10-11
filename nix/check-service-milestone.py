@@ -25,6 +25,20 @@ runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
 check = runtime.Check()
 check.file(system/'sw/bin/modprobe', executable=True)
+udev_unit = (system/'etc/systemd/system/systemd-udevd.service').read_text()
+udevd = re.search(r'^ExecStart=(/[^\s]+)', udev_unit, re.M)
+assert udevd, 'missing built udev daemon'
+udevd = Path(udevd[1])
+check.file(udevd, executable=True)
+# Compiled builtin descriptor from systemd's udev-builtin-kmod.c.
+assert b'Kernel module loader\0' in udevd.read_bytes(), 'udev lacks the compiled kmod builtin'
+driver_rules = system/'etc/udev/rules.d/80-drivers.rules'
+# /etc overrides packaged rules, including masks and dangling symlinks.
+if not os.path.lexists(driver_rules):
+    driver_rules = udevd.parent.parent/'udev/rules.d/80-drivers.rules'
+assert driver_rules.is_file(), 'automatic module-loading udev rule is disabled or missing'
+assert 'ENV{MODALIAS}=="?*", RUN{builtin}+="kmod load"' in driver_rules.read_text().splitlines(), \
+    'udev does not load native modules from the device modalias'
 environment = os.environ.copy()
 for name in ('MODPROBE_OPTIONS', 'MODULE_DIR'):
     environment.pop(name, None)
@@ -50,12 +64,12 @@ for path in paths:
     check.file(path)
 assert not check.errors, f'ARM64 module runtime differs: {check.errors}'
 for name in ('panfrost', 'cpufreq_dt', 'mtk_jpeg', 'mt6797_consys',
-             'mt6797_btif_pio_platform', 'mt6797_wifi'):
+             'mt6797_btif_pio_platform', 'mt6797_wifi', 'hci_mt6797'):
     assert not dependencies(name), f'{name}: autoload bypasses ordered startup'
 cmdline = re.search(r'^CONFIG_CMDLINE="(.*)"$', config.read_text(), re.M)
 assert cmdline and re.search(r'\bmodprobe\.blacklist=[^ ]*\bmt6797_spm\b', cmdline[1]), \
     'SPM scoped firmware startup is not protected'
-print('module-discovery=passed native-GNSS-alias-and-ordered-startup')
+print('module-discovery=passed native-udev-GNSS-alias-and-ordered-startup')
 command = re.search(r'^CONFIG_CMDLINE="(.*)"$', config.read_text(), re.M)
 assert command, 'missing kernel command line'
 tokens = re.findall(r'\bGEMINI_A72_CI9_M\d+\b', command[1])

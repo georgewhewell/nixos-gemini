@@ -43,6 +43,8 @@ let
     configured
   '';
 in {
+  # HCI registration queues power/setup; keep it behind the ordered service.
+  boot.blacklistedKernelModules = ["hci_mt6797"];
   # Register and configure the HCI endpoint before BlueZ powers it on.
   hardware.bluetooth = {
     enable = true;

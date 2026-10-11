@@ -28,6 +28,21 @@ def identity(boot, system):
             'identity_changed')
     require(str(Path('/run/current-system').resolve()) == system, 'identity_changed')
 
+def registration_state(record):
+    record['native_gnss_module_present'] = Path('/sys/module/gnss_mtk_consys').is_dir()
+    record['class_registered'] = Path('/sys/class/gnss/gnss0').is_dir()
+    record['gnss_node_present'] = Path('/dev/gnss0').exists()
+    for device in Path('/sys/bus/platform/devices').iterdir():
+        try:
+            compatible = (device / 'of_node/compatible').read_bytes().split(b'\0')
+        except FileNotFoundError:
+            continue
+        if b'mediatek,mt6797-gnss' not in compatible:
+            continue
+        record['matching_platform_child_present'] = True
+        driver = device / 'driver'
+        record['driver_bound'] |= driver.is_symlink() and driver.resolve().name == 'mt6797-gnss'
+
 def lna_state():
     matches = []
     for path in Path('/sys/class/regulator').glob('regulator.*'):
@@ -94,13 +109,16 @@ def observe(boot, system):
                   taint_before=None, taint_after=None, read_window_seconds=10,
                   read_window_complete=False, boot_identity_preserved=False,
                   system_identity_preserved=False, receiver_commands_sent=0,
-                  receiver_protocol_qualified=False, position_qualified=False)
+                  receiver_protocol_qualified=False, position_qualified=False,
+                  native_gnss_module_present=False, matching_platform_child_present=False,
+                  driver_bound=False, class_registered=False, gnss_node_present=False)
     descriptor = None
     started = time.monotonic()
     try:
         identity(boot, system)
         record['taint_before'] = int(Path('/proc/sys/kernel/tainted').read_text().strip())
         require(record['taint_before'] == 0, 'kernel_tainted')
+        registration_state(record)
         require(stat.S_ISCHR(os.stat('/dev/gnss0').st_mode), 'endpoint_missing')
         require(Path('/sys/class/gnss/gnss0/device/driver').resolve().name == 'mt6797-gnss',
                 'owner_differs')
@@ -177,7 +195,9 @@ LNA = tuple('lna_' + phase + '_' + field for phase in ('before', 'during', 'afte
             for field in ('users', 'enabled'))
 BOOLEANS = ('opened', 'closed', 'read_window_complete', 'boot_identity_preserved',
             'system_identity_preserved', 'receiver_protocol_qualified', 'position_qualified')
-FIELDS = set(COUNTS + LNA + BOOLEANS +
+REGISTRATION = ('native_gnss_module_present', 'matching_platform_child_present',
+                'driver_bound', 'class_registered', 'gnss_node_present')
+FIELDS = set(COUNTS + LNA + BOOLEANS + REGISTRATION +
              ('schema', 'result', 'error', 'read_window_seconds', 'taint_before', 'taint_after'))
 
 
@@ -192,7 +212,8 @@ def verify_report(raw):
             or record['receiver_commands_sent'] != 0
             or any(type(record[key]) is not int or record[key] < 0 for key in
                    COUNTS + LNA + ('schema', 'read_window_seconds', 'taint_before', 'taint_after'))
-            or any(type(record[key]) is not bool for key in BOOLEANS)
+            or any(type(record[key]) is not bool for key in BOOLEANS + REGISTRATION)
+            or not all(record[key] for key in REGISTRATION)
             or not all(record[key] for key in BOOLEANS[:5])
             or any(record[key] for key in BOOLEANS[5:])
             or any(record[key] != value for key, value in zip(LNA, (0, 0, 1, 1, 0, 0)))

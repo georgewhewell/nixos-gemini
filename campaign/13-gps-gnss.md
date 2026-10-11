@@ -26,9 +26,12 @@ kernel build pass. Trial 99 rejected the candidate because the custom system
 omitted the standard NixOS kernel module tree, so automatic device loading
 could not find the GNSS module. Accepted image 98 was restored; the independent
 terminal and storage audit passes. The boot integration now supplies the standard
-module tree and consolidates ordered-startup blacklists. Image 100 passes native
-GNSS alias resolution, ARM64 module/runtime and existing service admission checks;
-hardware lifetime checks are pending.
+module tree and consolidates ordered-startup blacklists. Trial 100 still lacked
+the endpoint: the stale hardware-scan disable masked udev's module-loading rule.
+Image 98 was restored and independently audited. That setting is now removed;
+the Bluetooth startup guard remains because HCI registration queues power/setup.
+Image 101 passes admission for the effective udev rule, native GNSS alias,
+ordered drivers and ARM64 runtime. Hardware lifetime checks are pending.
 
 `tools/test-gnss-desktop.py` reuses the existing supervised boot and storage
 owner. It qualifies two bounded open/close cycles, LNA cleanup and subsequent
