@@ -4,10 +4,13 @@ The installed [accepted image](research/accepted-baseline.json) is Linux 7.2.9
 with GNOME Wayland, 200% display scaling, a fixed bottom dock, NetworkManager,
 ModemManager, Bluetooth, IPv6 and RAM-only LZ4 zram. GNOME Calls, Spacebar and
 callaudiod are installed; the call daemon and SMS receiver run normally.
-[Image 113](research/desktop-responsiveness-20261011.json) passes retained-storage,
+[Image 114](research/desktop-responsiveness-20261011.json) passes retained-storage,
 ordinary Nix builds, focused desktop checks and its independent terminal audit.
 Standard eMMC high-speed mode now runs at about 48 MHz, up from 24 MHz, with
-native clock verification and error attribution. The normal cross-runtime check
+native clock verification, error attribution and checked recovery ownership.
+The parking daemon avoids unused IRQ-counter work; a passive 30-second sample
+uses 1.05% of one core versus 3.93% previously, with policy and cadence unchanged.
+UI responsiveness still needs qualification. The normal cross-runtime check
 passes 1,431 ARM64 ELF files and 124 scripts, including target Python/GI and the
 telephony applications.
 

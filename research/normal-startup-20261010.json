@@ -123,10 +123,18 @@
     },
     "bundle": "/nix/store/n63lrc1apva81vqc3hf84ilkqr95ncq1-gemini-mainline-nixos-bundle",
     "kernel_source_revision": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
-    "installed": false,
-    "hardware_qualification": "Pending combined normal update; current accepted image remains 113. RTC inputs unchanged and their existing acceptance is reused.",
+    "installed": true,
+    "hardware_qualification": "Accepted 114 normal update passes supervised deployment and independent terminal audit; M39 absent from system closure. Unchanged RTC alarm/calendar evidence retained without repeated diagnostics.",
     "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-diagnostic-retirement/result.json",
     "proof_sha256": "84372012bcf8335758cf0a054be03640a428ab7ee8a0e3d078a439c1b0e8bbc9",
-    "build_exit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-diagnostic-retirement/build/exit.json"
+    "build_exit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-diagnostic-retirement/build/exit.json",
+    "accepted_image": "boot-test-114",
+    "installed_bundle": "/nix/store/24z451fvn45fwnlnpqjkdz2n2g0p7rr0-gemini-mainline-nixos-bundle",
+    "installed_system": "/nix/store/wbkrfxx0w8gswpbqhhf3071wxdm57gvn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "installed_kernel_source_revision": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
+    "trial_actual_exit": 0,
+    "independent_audit_actual_exit": 0,
+    "combined_build_exit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/image-exit.json",
+    "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/independent-audit-114/result.json"
   }
 }

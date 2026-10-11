@@ -12,8 +12,8 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 113, kernel
-source `2b9abbe756ad5dbee086436b59eed6277e3fd529`.
+The [installed accepted image](accepted-baseline.json) is trial 114, kernel
+source `238590b6df6fb5afae1d11d9d0165e534ff8f18f`.
 Its focused deployment and independent terminal audit pass GNOME RFKILL
 visibility, directed NetworkManager scanning, native eMMC high-speed admission,
 RAM-only paging, retained storage and an ordinary Nix build.
@@ -66,36 +66,32 @@ still fails at 106 seconds and ModemManager exposes no SIM object; corrected
 receive ownership is not a SIM/watchdog fix. The
 [modem record](desktop-radio-activation-20261011.json) preserves both results.
 
-This combined image retains native MMC0 pad ownership and the current-
-demand check before CPU parking removes a core. Image 112's locked readbacks
-confirm all 12 pad settings and configured supplies. Image 113 installs bounded
-masked clock acceptance and restoration, balanced clock leases, failed-clock
-request admission and native command/data error attribution. GCC15 ASan/UBSan
-regressions, strict ARM64 compilation and the normal image build pass. Standard
-high-speed mode requests 52 MHz and runs at 47,999,984 Hz on the unchanged 8-bit
-bus, versus 23,999,992 Hz in legacy mode. All 15 populated error counters stay zero
-before and after retained-storage checks and one ordinary Nix build. The supervised
-trial and independent terminal audit pass. No throughput benchmark or sustained
-storage qualification is claimed. The next source revision,
-`238590b6df6fb5afae1d11d9d0165e534ff8f18f`, bounds native reset/FIFO/STOP polling
-and retains DMA ownership through checked MSDC/CQHCI recovery. It also preserves
-complete procfs text while avoiding IRQ-tail construction for CPU-only readers.
-GCC15 ASan/UBSan actual-source regressions, compiled old-source controls and strict
-ARM64 objects pass; its combined normal build, deployment and performance
-observation are pending. No native MMC hardware failure has been observed.
-Physical controller isolation and generic CQE recovery error propagation remain
-owner work. Image 112 retains the procfs
-sample allocation and seeks for fresh counters. A controlled helper comparison
-attributes 23.7% less read CPU time to that change; the installed daemon still
-uses 3.86% of one core, mostly kernel time, with no topology transitions.
-Udev overhead was removed by the native FUSB301 fix; UI responsiveness remains unqualified in the
-[performance record](desktop-responsiveness-20261011.json). The native PMU
-candidate remains separate until its offline-CPU probe lifetime and hardware
-counters are qualified; scheduling capacity ratios must be measured.
-Image 102 also installs the checked topology sampling cleanup, removing repeated
-steady-state online sysfs reads. One bounded observation records parking at
-4.05% of one core versus 6.24% in image 101; differing activity and online CPU
-sets prevent treating that as a controlled comparison or a UI qualification.
+The combined image retains native MMC0 pad ownership and the current-demand
+check before CPU parking removes a core. Image 112's locked readbacks confirm all
+12 pad settings and configured supplies. Accepted image 114 retains verified
+clock acceptance/restoration, balanced clock leases and standard eMMC high speed:
+52 MHz requested and 47,999,984 Hz actual on the unchanged 8-bit bus. All 15 native
+error counters remain zero around retained-storage checks and one ordinary Nix
+build. It installs bounded reset/FIFO/STOP polling and checked MSDC/CQHCI DMA
+ownership through recovery and teardown. Actual-source GCC15 ASan/UBSan checks,
+compiled old-source controls, strict ARM64 objects, the normal build and supervised
+trial/independent audit pass. No hardware recovery fault or sustained storage
+benchmark is claimed. Physical controller isolation and generic CQE error-return
+propagation remain owner work.
+
+Image 114 also preserves complete procfs text and seeking while avoiding unused
+IRQ-tail construction for CPU-only readers. A post-audit isolated trace records
+40 complete CPU records and zero IRQ-counter lookups, versus 245 per report in
+image 113. Its passive 30-second daemon observation uses 1.05% of one core,
+including 0.73% kernel time, versus 3.93%/3.74% on 113. Both windows keep cores
+0–1 with no transitions; activity is uncontrolled, so this qualifies the removed
+native work and bounded owner cost, not UI latency. Policy and cadence are
+unchanged. Earlier allocation/topology fixes and the native FUSB301 removal of
+udev overhead retain their evidence in the
+[performance record](desktop-responsiveness-20261011.json). Native PMU counters,
+measured scheduling capacities, deep idle and user-visible responsiveness remain
+open. The obsolete per-boot M39 RTC presence service is removed while retaining
+its unchanged logind policy; accepted RTC alarm/calendar evidence is reused.
 
 GNSS uses the existing CONSYS/STP owner and the standard Linux GNSS class.
 Normal module discovery and udev loading now work. Two power cycles receive

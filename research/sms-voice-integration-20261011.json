@@ -140,7 +140,7 @@
       "Fix native fatal AT port lifetime so disconnects wake userspace through standard WWAN removal; qualify the actual path.",
       "Restore public declarative SIM pad ownership at the native modem owner after checking the board mode and pin configuration contract.",
       "Establish stable modem operation and public slot-2/eUICC APDU routing; AT commands do not themselves establish target-slot selection.",
-      "Fix lpac unbounded/HUP-only wait handling and establish long eUICC operation response behavior before enabling provisioning.",
+      "Integrate the checked lpac HUP/error/full-write repair and establish operation cancellation/deadline plus actual modem long-response behavior before enabling provisioning.",
       "Add generic AT support to lpa-gtk with standard discovery, exclusive port ownership, cancellation and actionable errors; no automatic slot/profile mutation during discovery."
     ],
     "board_observation": "A bounded accepted-113 read exited 1 before pad snapshots; identity, taint and host-idle guards passed, locks released. It establishes neither pad state nor SIM absence; no repeated probe.",
@@ -150,6 +150,19 @@
       "https://github.com/estkme-group/lpac/blob/main/docs/backends/at.md",
       "https://github.com/linux-mobile-broadband/ModemManager/blob/main/introspection/org.freedesktop.ModemManager1.Sim.xml"
     ],
-    "provisioning_or_subscriber_changes_performed": false
+    "provisioning_or_subscriber_changes_performed": false,
+    "lpac_transport_candidate": {
+      "revision": "82ada9e53251c7f0cb08bfd9060b17019a30242c",
+      "patch": "/mnt/Home/src/nixos-gemini/handoff/lpac-at-transport-20261011/at-unix-transport.patch",
+      "patch_sha256": "343d75518e76f2d1fd75fc93becf5d2cbb793605c07d3c29f1f5270340b48502",
+      "proof": "/mnt/Home/src/nixos-gemini/handoff/lpac-at-transport-20261011/host-result.json",
+      "proof_sha256": "280e0d33906c0faad8cc59a35d777387b10e36c9e5b87ba3e6722b9fbf7bb02a",
+      "actual_exit": 0,
+      "candidate_cases": 26,
+      "original_source_compiles_and_runtime_defects_rejected": true,
+      "installed": false,
+      "scope": "Complete short writes, handle EINTR and terminate on closed/failed AT transport; preserve fragmented and readable final responses. No silent-operation deadline, slot or provision qualification."
+    },
+    "native_design_review": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/review.json"
   }
 }

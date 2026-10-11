@@ -1104,10 +1104,10 @@
     "native_command_data_error_attribution_qualified": false
   },
   "mmc_high_speed_owner": {
-    "kernel_source_revision": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
-    "native_driver_commit": "82c13922c6ae5f7",
+    "kernel_source_revision": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
+    "native_driver_commit": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
     "native_owner": "drivers/mmc/host/mtk-sd.c",
-    "fix": "Bound masked CFG/CKSTB acceptance and restoration; balance clock leases; preserve failed IOS admission through ordinary/HSQ/CQE requests and resume; defer required init until verified clock. Attribute native MMC command/data/controller errors and propagate DMA faults before completion.",
+    "fix": "Bound masked CFG/CKSTB acceptance and restoration; balance clock leases; preserve failed IOS admission through ordinary/HSQ/CQE requests and resume; defer required init until verified clock. Attribute native MMC command/data/controller errors and propagate DMA faults before completion. Bound reset/FIFO/STOP/idle recovery and retain DMA ownership through checked native/shared CQHCI recovery before completion, unmap and teardown.",
     "board_change": {
       "standard_property": "cap-mmc-highspeed",
       "maximum_frequency_hz": 52000000,
@@ -1133,42 +1133,42 @@
       "independent_audit_source_count": 47
     },
     "source_hashes": {
-      "driver_sha256": "d5b6b3293b665738452a7b85d69efbadd9d3ccfd8ac8ec2d78d0c600c168504d",
-      "fixture_sha256": "939a60b801f147f92c8956878840c89ad4c8e180a4b0d09d4f1e67f3e2f86482"
+      "driver_sha256": "9cd52afa230a9ddce6f34ce75c2337bc7784e8664be38f54ac4abefd64a907e8",
+      "fixture_sha256": "5e6a6697241ab6e2bdc8f130856e5a53fc60d035d3dd07d3c95acde49dfa12a6"
     },
-    "bundle": "/nix/store/nfw35avd12rx8jcy9wf51kncky4gxs4d-gemini-mainline-nixos-bundle",
-    "kernel": "/nix/store/zsz2b4mw4xhvvlr1iy2kj9ixbz8xqkfz-linux-gemini-7.2.9",
-    "system": "/nix/store/vh7wy93v6a1yvynw5nr4wjyxslgd8yix-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "bundle": "/nix/store/24z451fvn45fwnlnpqjkdz2n2g0p7rr0-gemini-mainline-nixos-bundle",
+    "kernel": "/nix/store/fhf7srdck98jmzvscxcqbdgyzfrsvvl0-linux-gemini-7.2.9",
+    "system": "/nix/store/wbkrfxx0w8gswpbqhhf3071wxdm57gvn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
     "hardware_qualified": true,
     "installed": true,
     "storage_benchmark_performed": false,
-    "next": "Install the checked native recovery with the combined normal update, then sustained storage qualification; physical isolation and generic CQE error-return contracts remain separate owner work.",
+    "next": "Native ownership/reset/FIFO/STOP source defects are closed by accepted 114. Qualify sustained storage; physical isolation and generic CQE error-return contracts remain separate owner work.",
     "evidence": {
-      "focused": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/focused-result.json",
-      "strict": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/strict-result.json",
+      "focused": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/recovery/focused-result.json",
+      "strict": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/recovery/strict-result.json",
       "host_gate": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-hs52-host/result.json",
-      "normal_build": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/image-exit.json",
-      "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-113/result.json",
-      "mmc_pair": "/mnt/Home/src/nixos-gemini/handoff/boot-test-113/mmc-high-speed/result.json",
-      "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/independent-audit-113/result.json"
+      "normal_build": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/image-exit.json",
+      "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-114/result.json",
+      "mmc_pair": "/mnt/Home/src/nixos-gemini/handoff/boot-test-114/mmc-high-speed/result.json",
+      "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/independent-audit-114/result.json"
     },
     "cleanup": {
       "obsolete_branch_input_removed": "linux-gemini-next",
       "recovery_derivation_unchanged": true,
       "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/recovery-input-prune-result.json"
     },
-    "trial": "boot-test-113",
-    "boot_id": "6e26e86f-a31c-40dc-929f-b5d0b9bed269",
+    "trial": "boot-test-114",
+    "boot_id": "50e3ee5d-de12-43f4-b4e2-e5187d859626",
     "accepted": {
-      "name": "boot-test-113",
-      "image": "/nix/store/fvymzz1pzbb5am8l6sq0l749g8ll0zlp-gemini-mainline-nixos-padded.img",
-      "boot_sha256": "48beebd02dcdd7e5256ee67d8e0d58c82e1790e26443867f4780adafae881c28",
-      "system": "/nix/store/vh7wy93v6a1yvynw5nr4wjyxslgd8yix-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "name": "boot-test-114",
+      "image": "/nix/store/qjanssas22syfgv00smkn6pan3f486qd-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "f84e6719779ff9c9ca75c1b8505f1f7ab1c752a9098a67fea856846cb05810a4",
+      "system": "/nix/store/wbkrfxx0w8gswpbqhhf3071wxdm57gvn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
       "store": "normal",
       "zswap_shrinker": "absent",
       "boot": "direct",
       "rtc_epoch": "native",
-      "previous": "boot-test-112",
+      "previous": "boot-test-113",
       "paging_policy": "zram",
       "desktop": "gnome"
     },
@@ -1189,9 +1189,9 @@
       "clock_verification_owner": "native_mtk_msdc"
     },
     "proof_hashes": {
-      "trial": "9021b5e963f807af630bdbf3e5782f0f112bf0c15bcf6866cb0a3e24d21e22f2",
-      "mmc_pair": "343feae8f95f57a00617426fa42ca968bb36e80467222e2cfc36a437f6f8d85a",
-      "audit": "0556d8136ca82de1612f1d69642c1adb23e29c054d29d600f0703b7e426aae08"
+      "trial": "4a664194269cfd41d945a3892245ff34527afa48e320f11dfa1549fc3c0afba2",
+      "mmc_pair": "7c0f909bd27af2e3ea8cae7feccba83055f9e26d30beb8a9ddb4f4683972593b",
+      "audit": "ffefee1455122cd181cdd5988231e2e3497e6cd452f5d5da7665625295d38ad0"
     },
     "remaining_owner_work": [
       {
@@ -1199,14 +1199,13 @@
           "drivers/mmc/host/mtk-sd.c",
           "drivers/mmc/host/cqhci-core.c"
         ],
-        "source_defect": "Unbounded reset/FIFO polls; native DMA stop/idle failures can still publish completion, and shared CQHCI recovery completes slots despite failed stop.",
-        "required_contract": "Bound recovery, retain active DMA ownership and fault admission until inactivity is established; propagate recovery failure across HSQ/CQE and teardown. Clock votes and card reset do not prove controller quiescence.",
+        "required_contract": "Physical controller isolation when bounded recovery cannot establish inactivity; generic CQE recovery error-return contract and sustained storage/fault qualification. DMA ownership remains retained on the unresolved physical failure.",
         "hardware_failure_observed": false
       }
     ],
     "native_recovery": {
       "kernel_commit": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
-      "status": "Source and host checks complete; combined normal build and supervised deployment pending",
+      "status": "Installed in accepted 114; supervised storage/radio trial and independent terminal audit pass",
       "fix": "Bound reset/FIFO/STOP/idle polls; retain unsafe DMA mappings, requests, descriptors, binding and clock leases. CQHCI producer admission and disable share its existing lock; checked native inactivity precedes completion. One existing watchdog attempt, no background reset loop. Idle legacy zero-clock teardown drains work without STOP.",
       "source_hashes": {
         "drivers/mmc/host/mtk-sd.c": "9cd52afa230a9ddce6f34ce75c2337bc7784e8664be38f54ac4abefd64a907e8",
@@ -1227,9 +1226,14 @@
         "flags": "W=1 KCFLAGS=-Werror",
         "config_scope": "Baseline strict object tree; only GNSS_SERIAL/GNSS_MTK_SERIAL differ from installed 113, not MMC configuration"
       },
-      "installed": false,
+      "installed": true,
       "hardware_fault_observed": false,
-      "limits": "No physical controller isolation fallback is described. Fatal unquiesced teardown retains its owner and may wait indefinitely while individual MMIO polls remain bounded. Generic void CQE recovery error propagation and sustained storage/fault qualification remain open."
+      "limits": "No physical controller isolation fallback is described. Fatal unquiesced teardown retains its owner and may wait indefinitely while individual MMIO polls remain bounded. Generic void CQE recovery error propagation and sustained storage/fault qualification remain open.",
+      "accepted_image": "boot-test-114",
+      "build_actual_exit": 0,
+      "closure_copy_actual_exit": 0,
+      "trial_actual_exit": 0,
+      "independent_audit_actual_exit": 0
     }
   },
   "proc_stat_owner_113": {
@@ -1255,12 +1259,12 @@
     "normal_policy_writes": false,
     "taint": 0,
     "limits": "Partial ring prefix excluded; instrumentation raises observer cost and durations are not untraced per-function CPU attribution. Online topology changes normally during observation. This establishes executed work, not a controlled speedup or UI qualification.",
-    "next": "After combined image audit, check IRQ-tail work in one isolated trace and compare passive daemon CPU over the same 30-second window; no UI speedup claim.",
+    "next": "CPU-prefix owner qualification complete. Attribute remaining platform governor/workqueue cost and user-visible latency; qualify native PMU before measuring CPU capacities or changing policy.",
     "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/result.json",
     "analysis": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/summary.json",
     "native_fix": {
       "kernel_commit": "15f4f8c1ccf65d9a65458d3b4b42508945cf8daa",
-      "status": "Source and host checks complete; combined normal build, deployment and post-audit observation pending",
+      "status": "Installed and qualified for native CPU-prefix work and bounded daemon CPU observation in accepted 114",
       "fix": "Preserve complete /proc/stat text using two seq records and an opt-in one-record reader. The parking daemon reads a bounded complete CPU prefix and standard loadavg, retaining descriptors but seeking for fresh counters. Failed samples leave prior counters unchanged.",
       "policy_cadence_topology_changes": false,
       "private_userspace_abi_added": false,
@@ -1287,9 +1291,43 @@
         "one_core_cpu_percent": 3.929513869,
         "topology_transitions": 0
       },
-      "installed": false,
-      "hardware_performance_qualified": false,
-      "remaining": "After combined image audit, check IRQ-tail work in one isolated trace and compare passive daemon CPU over the same 30-second window; no UI speedup claim."
+      "installed": true,
+      "hardware_performance_qualified": true,
+      "remaining": "CPU-prefix owner qualification complete. Attribute remaining platform governor/workqueue cost and user-visible latency; qualify native PMU before measuring CPU capacities or changing policy.",
+      "accepted_image": "boot-test-114",
+      "kernel_source_revision": "238590b6df6fb5afae1d11d9d0165e534ff8f18f",
+      "bundle": "/nix/store/24z451fvn45fwnlnpqjkdz2n2g0p7rr0-gemini-mainline-nixos-bundle",
+      "system": "/nix/store/wbkrfxx0w8gswpbqhhf3071wxdm57gvn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "boot_id": "50e3ee5d-de12-43f4-b4e2-e5187d859626",
+      "owner_binary_sha256": "c38de96d18e73206a6d31fd16b3cd6d418de3ce5a83b378121f8403521df66ec",
+      "build_actual_exit": 0,
+      "supervised_trial_actual_exit": 0,
+      "independent_audit_actual_exit": 0,
+      "ui_responsiveness_qualified": false,
+      "hardware": {
+        "trace_proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/native-prefix/installed-114/trace/result.json",
+        "trace_summary": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/native-prefix/installed-114/trace/summary.json",
+        "trace_summary_sha256": "12ee674d1a9f536ebb88f4382ef3aa4446a13f5a14ff5c06b162d85ce2ba5f26",
+        "complete_cpu_records": 40,
+        "irq_counter_lookups": 0,
+        "cpu_decimal_calls_per_record": 30.0,
+        "temporary_instance_removed": true,
+        "global_tracing_unchanged": true,
+        "passive_proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/native-prefix/installed-114/post-install-read/stdout.json",
+        "passive_proof_sha256": "88f8199167164b598b45f80b40d748c3ac160cf95e0923e8bdbb8adb473cce05",
+        "passive_actual_exit": 0,
+        "seconds": 30.003421899000045,
+        "one_core_cpu_percent": 1.051533391964584,
+        "system_cpu_percent": 0.7349628343803988,
+        "online_cpus": [
+          0,
+          1
+        ],
+        "topology_transitions": 0,
+        "policy_writes": false,
+        "comparison_controlled": false,
+        "limits": "Both 30-second observations hold cores 0-1 with no transitions; activity is not controlled. Trace counts prove unused IRQ work removed, but traced durations and passive daemon CPU do not qualify UI latency."
+      }
     }
   }
 }
