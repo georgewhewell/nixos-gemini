@@ -123,7 +123,10 @@ static int fill_format(struct v4l2_format *format, unsigned int width, unsigned 
 	if (!output) {
 		pix->plane_fmt[0].bytesperline = width;
 		pix->plane_fmt[1].bytesperline = width;
-		pix->plane_fmt[1].sizeimage = width * height / 2;
+		/* Both plane views start at the backing base. Chroma's minimum
+		 * coverage includes data_offset=L and its L/2 pixel payload.
+		 */
+		pix->plane_fmt[1].sizeimage = width * height * 3 / 2;
 	}
 	return 0;
 }
@@ -189,31 +192,37 @@ static int queue_setup(struct vb2_queue *queue, unsigned int *buffers,
 	unsigned int luma_size = ctx->width * ctx->height;
 	unsigned int count = output ? 1 : 2;
 	unsigned int first = output ? INPUT_SIZE : luma_size;
+	size_t allocation;
 	if (mt6797_engine_fenced(ctx->decoder->engine))
 		return -EIO;
 	if (*planes) {
-		if (*planes != count || sizes[0] < first || (!output && sizes[1] < luma_size / 2))
+		if (*planes != count || sizes[0] < first)
 			return -EINVAL;
 		if (output)
 			return 0;
-		/* CREATE_BUFS accepts these exact queried allocation lengths.
-		 * Logical format-only or unequal/larger backing requests are not
-		 * supported; accepted sizes must remain unchanged.
+		/* Keep accepted CREATE_BUFS view lengths unchanged. Chroma's view
+		 * includes its stable offset from the compound object's base.
 		 */
-		if (sizes[0] != mt6797_picture_bytes(luma_size) || sizes[1] != sizes[0])
-			return -EINVAL;
-		return 0;
+		return mt6797_capture_size(luma_size, sizes[0], sizes[1], &allocation);
 	}
 	*planes = count;
 	sizes[0] = first;
 	if (!output) {
-		/* sizeimage describes logical image planes. MMAP/QUERYBUF lengths
-		 * cover the compound Y/C/motion backing.
+		/* sizeimage describes minimum mapped pixel coverage, including
+		 * chroma's offset. Default MMAP/QUERYBUF lengths additionally cover
+		 * the compound Y/C/motion backing and guarded tail.
 		 */
 		sizes[0] = mt6797_picture_bytes(luma_size);
 		sizes[1] = sizes[0];
 	}
 	return 0;
+}
+
+size_t mt6797_capture_luma(struct vb2_buffer *vb)
+{
+	struct decode_file *ctx = vb2_get_drv_priv(vb->vb2_queue);
+
+	return ctx->width * ctx->height;
 }
 
 static int initialize_buffer(struct vb2_buffer *buffer)
@@ -250,12 +259,9 @@ static int prepare_buffer(struct vb2_buffer *buffer)
 		struct mt6797_picture picture;
 		int ret;
 
-		if (vb2_plane_size(buffer, 0) < mt6797_picture_bytes(luma_size) ||
-		    vb2_plane_size(buffer, 1) < mt6797_picture_bytes(luma_size))
-			return -EINVAL;
 		ret = mt6797_capture_prepare(buffer);
 		if (!ret)
-			ret = mt6797_picture_from_vb2(buffer, &picture);
+			ret = mt6797_picture_from_vb2(buffer, luma_size, &picture);
 		if (ret)
 			return ret;
 		/* The core resets capture offsets on prepare. Restore the same
@@ -477,7 +483,7 @@ static void decode_work(struct work_struct *work)
 	bool collected = false;
 	int ret;
 
-	ret = mt6797_picture_from_vb2(&capture->vb2_buf, &picture);
+	ret = mt6797_picture_from_vb2(&capture->vb2_buf, ctx->width * ctx->height, &picture);
 	if (!ret)
 		ret = request ? v4l2_ctrl_request_setup(request, &ctx->controls) : -EINVAL;
 	if (!ret) {

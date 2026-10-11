@@ -74,8 +74,9 @@ module identities and trial scopes remain in the unchanged
 CAPTURE now uses one native DMA-buf object for each compound MM21 Y/C, motion
 and guarded allocation. Two independently referenced plane views share that
 object; QUERYBUF and EXPBUF describe the same hardware storage. Format
-`sizeimage` describes logical Y/C lengths, while queried mapping lengths cover
-the whole backing and chroma `data_offset` is the luma length. Empty buffers
+`sizeimage` describes minimum mapped coverage: Y is `L`, C is `L + L/2`,
+including chroma's luma-sized `data_offset`. The C pixel payload remains `L/2`.
+Default queried mapping lengths cover the whole backing. Empty buffers
 retain those offsets with zero logical payload. OUTPUT retains vb2-vmalloc
 NAL staging. The final CPU capture copy and alternate private-picture path are
 removed; retained DPB pictures and jobs own independent DMA-buf references.
@@ -93,12 +94,15 @@ This path requires the pinned kernel's native direct/IOMMU SG bounce-marker
 fix (`01222a4b`). Gemini's GPU uses direct DMA with its own MMU. Unbounced
 direct and IOMMU attachments are eligible; bounced mappings and architecture
 DMA-ops routes are rejected. CAPTURE currently supports MMAP and read/write
-EXPBUF, without importing other DMA-bufs. CREATE_BUFS currently accepts the equal
-queried backing lengths. Logical-only chroma lengths cannot contain its luma-sized
-offset. Larger and unequal lengths with sufficient pixel coverage need the buffer
-owner to separate allocation capacity from the codec's guarded extent, preserving
-accepted plane lengths. These restrictions are in the driver, with no downstream
-copy fallback. Allocation, export and Panfrost PRIME mapping now pass
+EXPBUF, without importing other DMA-bufs. CREATE_BUFS accepts the advertised
+format and larger or unequal view lengths, preserving accepted lengths.
+The shared allocation is page-rounded `max(B, Y_view, C_view)`; the codec's
+guarded extent remains `B`. Each MMAP plane exposes its requested prefix,
+while either exported FD owns the complete allocation. Extents that cannot
+cover their offset and pixels, or exceed the DMA aperture, fail in the driver.
+The changed semantics pass strict module builds and sanitizer regressions;
+their hardware check is pending. Allocation, export and Panfrost PRIME mapping
+of the previous exact-length implementation pass
 [trial 105](buffers-trial-105.json); GPU rendering, display imports and decoded
 pixels on this path remain unqualified.
 

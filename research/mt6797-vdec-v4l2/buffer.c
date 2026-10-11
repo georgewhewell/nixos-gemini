@@ -12,6 +12,7 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/overflow.h>
 #include <linux/refcount.h>
 #include <linux/scatterlist.h>
 #include <linux/sizes.h>
@@ -66,7 +67,33 @@ struct mt6797_surface_job {
 
 size_t mt6797_picture_bytes(size_t luma)
 {
-	return ALIGN(luma * 7 / 4, SZ_64K) + SZ_128K;
+	size_t bytes;
+
+	if (check_mul_overflow(luma, (size_t)7, &bytes) ||
+	    check_add_overflow(bytes / 4, (size_t)SZ_64K - 1, &bytes))
+		return 0;
+	bytes = round_down(bytes, SZ_64K);
+	if (check_add_overflow(bytes, (size_t)SZ_128K, &bytes))
+		return 0;
+	return bytes;
+}
+
+int mt6797_capture_size(size_t luma, size_t first, size_t second, size_t *bytes)
+{
+	size_t picture = mt6797_picture_bytes(luma);
+	size_t chroma_end, allocation;
+
+	if (!luma || !picture || check_add_overflow(luma, luma / 2, &chroma_end) ||
+	    first < luma || second < chroma_end)
+		return -EINVAL;
+	allocation = max(max(picture, first), second);
+	/* The entire object, including padding requested by CREATE_BUFS, must
+	 * fit the decoder's DMA aperture. This bound also makes PAGE_ALIGN safe.
+	 */
+	if (allocation > (size_t)DMA_BIT_MASK(28) + 1)
+		return -EINVAL;
+	*bytes = PAGE_ALIGN(allocation);
+	return 0;
 }
 
 static void surface_to_cpu(struct capture_surface *surface)
@@ -382,8 +409,19 @@ static void *capture_alloc(struct vb2_buffer *vb, struct device *dev, unsigned l
 {
 	struct capture_view *view, *first = vb->planes[0].mem_priv;
 	struct dma_buf *buffer;
+	size_t bytes;
+	int ret;
 
 	if (vb->num_planes != 2)
+		return ERR_PTR(-EINVAL);
+	/* Both original lengths are populated before the first alloc callback.
+	 * Its size argument is rounded for this view, not the compound object.
+	 */
+	ret = mt6797_capture_size(mt6797_capture_luma(vb), vb->planes[0].length,
+				 vb->planes[1].length, &bytes);
+	if (ret)
+		return ERR_PTR(ret);
+	if (size != PAGE_ALIGN((size_t)vb->planes[first ? 1 : 0].length))
 		return ERR_PTR(-EINVAL);
 	view = kzalloc(sizeof(*view), GFP_KERNEL);
 	if (!view)
@@ -393,13 +431,13 @@ static void *capture_alloc(struct vb2_buffer *vb, struct device *dev, unsigned l
 	 */
 	if (first) {
 		buffer = first->buffer;
-		if (buffer->size != size) {
+		if (buffer->size != bytes) {
 			kfree(view);
 			return ERR_PTR(-EINVAL);
 		}
 		get_dma_buf(buffer);
 	} else {
-		buffer = allocate_surface(dev, size);
+		buffer = allocate_surface(dev, bytes);
 		if (IS_ERR(buffer)) {
 			kfree(view);
 			return buffer;
@@ -436,7 +474,9 @@ static int capture_view_mmap(void *private, struct vm_area_struct *vma)
 	struct capture_view *view = private;
 	int ret;
 
-	/* Both plane cookies map the complete object starting at its base. */
+	/* Each plane cookie maps its requested prefix of the same object.
+	 * vb2 bounds the VMA by that plane's page-rounded QUERYBUF length.
+	 */
 	vma->vm_pgoff = 0;
 	ret = capture_mmap(view->buffer, vma);
 	if (ret)
@@ -531,22 +571,30 @@ const struct vb2_mem_ops mt6797_capture_memops = {
 	.finish = capture_finish_view,
 };
 
-int mt6797_picture_from_vb2(struct vb2_buffer *vb, struct mt6797_picture *picture)
+int mt6797_picture_from_vb2(struct vb2_buffer *vb, size_t luma,
+			  struct mt6797_picture *picture)
 {
 	struct capture_view *first = vb->planes[0].mem_priv;
 	struct capture_view *second = vb->planes[1].mem_priv;
 	struct capture_surface *surface;
+	size_t bytes;
+	int ret;
 
 	if (vb->num_planes != 2 || !first || !second || first->buffer != second->buffer)
 		return -EINVAL;
+	ret = mt6797_capture_size(luma, vb->planes[0].length, vb->planes[1].length, &bytes);
+	if (ret)
+		return ret;
 	if (first->cache_error || second->cache_error)
 		return first->cache_error ? first->cache_error : second->cache_error;
 	surface = first->buffer->priv;
+	if (surface->bytes != bytes)
+		return -EINVAL;
 	if (READ_ONCE(surface->poisoned))
 		return -EIO;
 	*picture = (struct mt6797_picture) {
 		.buffer = first->buffer, .cpu = surface->cpu,
-		.dma = surface->dma, .bytes = surface->bytes,
+		.dma = surface->dma, .bytes = mt6797_picture_bytes(luma),
 	};
 	return 0;
 }

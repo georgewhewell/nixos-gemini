@@ -12,11 +12,15 @@ struct mt6797_picture {
 	struct dma_buf *buffer;
 	u8 *cpu;
 	dma_addr_t dma;
-	size_t bytes;
+	size_t bytes; /* Codec extent, independent of the exported allocation size. */
 };
 
 size_t mt6797_picture_bytes(size_t luma);
-int mt6797_picture_from_vb2(struct vb2_buffer *vb, struct mt6797_picture *picture);
+int mt6797_capture_size(size_t luma, size_t first, size_t second, size_t *bytes);
+/* Configured geometry is needed before vb2 calls the frontend's buf_init. */
+size_t mt6797_capture_luma(struct vb2_buffer *vb);
+int mt6797_picture_from_vb2(struct vb2_buffer *vb, size_t luma,
+			  struct mt6797_picture *picture);
 int mt6797_capture_prepare(struct vb2_buffer *vb);
 int mt6797_capture_finish_error(struct vb2_buffer *vb);
 void mt6797_picture_get(struct mt6797_picture *dst, const struct mt6797_picture *src);

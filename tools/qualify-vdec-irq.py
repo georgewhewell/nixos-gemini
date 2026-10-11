@@ -70,13 +70,15 @@ def check_kernel_revision(kernel, expected):
 def buffers_qualified(reports, cached, start, finish, returncode, safe, statuses):
     expected = dict(native_buffers_test_passed=True,
                     scope='native-buffers', width=80, height=64,
-                    capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 2560],
+                    capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 7680],
                     plane_lengths=[196608, 196608], data_offsets=[0, 5120],
                     exported_fds=34, prime_handles=17, prime_aliases_same_handle=True,
                     prime_gpu_va_verified=True, mmap_export_aliases_verified=True,
                     queue_cache_cycle_verified=True, video_close_lifetime_verified=True,
                     closed_fd_aliases_verified=True, prime_release_lifetime_verified=True,
                     all_user_refs_released=True, codec_submissions=0, gpu_submissions=0,
+                    create_bufs_cases=9, create_bufs_lengths_preserved=True,
+                    create_bufs_full_backing_verified=True, create_bufs_queue_prepare_verified=True,
                     decode_qualified=False, gpu_rendering_qualified=False)
     if returncode != 0 or not safe or statuses or len(reports) != 1:
         return False

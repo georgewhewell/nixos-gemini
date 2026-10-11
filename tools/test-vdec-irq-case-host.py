@@ -35,6 +35,12 @@ struct stream { int live; };
 static const char *status_path, *fixture_directory;
 static unsigned width = 64, height = 64, storage_height = 64;
 static int export_buffers, buffers_only, live;
+static void test_create_buffers(const char *video, const char *media)
+{
+    assert(!live && !strcmp(video, "video") && !strcmp(media, "media"));
+    assert(width == 80 && height == 64 && storage_height == 64 && buffers_only);
+    puts("{\"op\":\"create\"}");
+}
 static void test_native_buffers(struct stream *s, const char *video, const char *media,
                                 const char *render)
 {
@@ -92,7 +98,7 @@ static void close_stream(struct stream *s)
         assert grey['name'] == 'grey64' and grey['bytes'] == 20 and grey['controls'] == [0, 0, 0, 1, 0]
         assert hashlib.sha256(bytes.fromhex(grey['grey_hex'])).hexdigest() == GREY_SHA256
         assert single[-1] == dict(public_api_test_passed=True, scope='single-grey64')
-        assert run(['--buffers-only', 'render']) == [dict(op='buffers')]
+        assert run(['--buffers-only', 'render']) == [dict(op='create'), dict(op='buffers')]
         for extra in (['--single'], ['--single', 'pcm64'], ['--other', 'grey64'],
                       ['--single', 'grey64', 'extra'], ['--single', 'grey64', '64', 'mmap'],
                       ['--buffers-only'], ['--buffers-only', 'render', 'extra']):
@@ -203,13 +209,15 @@ def check_qualification(path):
     print(f'Actual qualifier: grey-only and legacy acceptance, {rejected} missing/unsafe/foreign evidence cases rejected: PASS')
 
     report = dict(native_buffers_test_passed=True, scope='native-buffers', width=80, height=64,
-                  capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 2560],
+                  capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 7680],
                   plane_lengths=[196608, 196608], data_offsets=[0, 5120],
                   exported_fds=34, prime_handles=17, prime_aliases_same_handle=True,
                   prime_gpu_va_verified=True, mmap_export_aliases_verified=True,
                   queue_cache_cycle_verified=True, video_close_lifetime_verified=True,
                   closed_fd_aliases_verified=True, prime_release_lifetime_verified=True,
                   all_user_refs_released=True, codec_submissions=0, gpu_submissions=0,
+                  create_bufs_cases=9, create_bufs_lengths_preserved=True,
+                  create_bufs_full_backing_verified=True, create_bufs_queue_prepare_verified=True,
                   decode_qualified=False, gpu_rendering_qualified=False)
     idle = dict.fromkeys(('jobs', 'failures', 'fetch_commands', 'frame_commands',
                          'fetched', 'submitted', 'irq_events', 'irq_unexpected',
@@ -488,7 +496,7 @@ int native_ioctl(int fd, unsigned long command, ...)
             V4L2_PIX_FMT_MM21 : V4L2_PIX_FMT_H264_SLICE;
         f->fmt.pix_mp.num_planes = 2;
         f->fmt.pix_mp.plane_fmt[0].sizeimage = 5120;
-        f->fmt.pix_mp.plane_fmt[1].sizeimage = 2560;
+        f->fmt.pix_mp.plane_fmt[1].sizeimage = 7680;
     } else if (command == VIDIOC_REQBUFS) {
         struct v4l2_requestbuffers *b = arg;
         assert(fd == 1 && b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
@@ -558,7 +566,7 @@ int main(int argc, char **argv)
     assert(argc == 2); fault = strtoul(argv[1], NULL, 10);
     for (unsigned i = 0; i < CAPTURE_COUNT; i++) { data[i] = calloc(1, backing); assert(data[i]); }
     struct stream stream;
-    width = 80; height = storage_height = 64; buffers_only = 1;
+    width = 80; height = storage_height = 64; buffers_only = create_buffers_checked = 1;
     test_native_buffers(&stream, "video", "media", "render");
     assert(imports == CAPTURE_COUNT * 2 && releases == CAPTURE_COUNT && qbufs == CAPTURE_COUNT);
     assert(!video_live && !media_live && !gpu_live);
@@ -590,11 +598,177 @@ int main(int argc, char **argv)
     print('Actual native mode: layouts, 17 aliased PRIME imports, nested CPU access, queue/close lifetimes and release; eight faulty-device cases rejected: PASS')
 
 
+def check_create_buffers(source):
+    """Run the actual CREATE_BUFS exerciser against a bounded ioctl device."""
+    code = r'''
+#define ioctl create_ioctl
+#define open create_open
+#define close create_close
+#define mmap create_mmap
+#define munmap create_munmap
+#define lseek create_lseek
+#define main request_program_main
+'''
+    code += '#include ' + json.dumps(str(source.resolve())) + '\n'
+    code += r'''
+#undef main
+#include <assert.h>
+#include <stdarg.h>
+static const unsigned lengths[4][2] = {
+    {5120,7680}, {196609,204801}, {208897,196611}, {196608,196608}
+};
+static const size_t capacities[4] = {196608,208896,212992,196608};
+static const size_t mmap_lengths[4][2] = {
+    {8192,8192}, {200704,208896}, {212992,200704}, {196608,196608}
+};
+static u8 *data[4], *foreign;
+static unsigned allocated, invalid, queries, exported, qbufs, map_count[4], cpu[4];
+static unsigned fd_live[4][2], queued[4], video_live, media_live, released, fault;
+int create_open(const char *path, int flags, ...) {
+    assert(flags & O_CLOEXEC);
+    if (!strcmp(path,"video")) { assert(!video_live); video_live=1; return 1; }
+    assert(!strcmp(path,"media") && !media_live); media_live=1; return 2;
+}
+int create_close(int fd) {
+    if (fd == 1) { assert(video_live && !media_live && released); video_live=0; }
+    else if (fd == 2) { assert(media_live && released); media_live=0; }
+    else {
+        unsigned i=(fd-10)/2, p=(fd-10)%2;
+        assert(i<4 && fd_live[i][p] && !cpu[i]); fd_live[i][p]=0;
+    }
+    return 0;
+}
+off_t create_lseek(int fd, off_t offset, int whence) {
+    unsigned i=(fd-10)/2, p=(fd-10)%2;
+    assert(i<4 && fd_live[i][p] && !offset && whence==SEEK_END);
+    return capacities[i] + (fault==5 ? 4096 : 0);
+}
+void *create_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset) {
+    (void)address;
+    assert(prot==(PROT_READ|PROT_WRITE) && flags==MAP_SHARED);
+    unsigned i,p;
+    if (fd==1) {
+        assert(video_live && offset>=0x100000 && offset%0x100000==0);
+        i=(offset/0x100000-1)/2; p=(offset/0x100000-1)%2;
+        assert(i<4 && length==mmap_lengths[i][p]);
+    } else {
+        i=(fd-10)/2; p=(fd-10)%2;
+        assert(i<4 && fd_live[i][p] && !offset && length==capacities[i]);
+    }
+    map_count[i]++;
+    return fault==7 && i==0 && fd!=1 && p ? foreign : data[i];
+}
+int create_munmap(void *address, size_t length) {
+    for (unsigned i=0;i<4;i++) if (address==data[i] || (i==0 && address==foreign)) {
+        assert(map_count[i] && length<=capacities[i]); map_count[i]--; return 0;
+    }
+    abort();
+}
+int create_ioctl(int fd, unsigned long command, ...) {
+    va_list args; va_start(args,command); void *arg=va_arg(args,void*); va_end(args);
+    if (command==VIDIOC_QUERYCAP) {
+        assert(fd==1 && video_live);
+        strcpy((char*)((struct v4l2_capability*)arg)->driver,"mt6797-vdec");
+    } else if (command==VIDIOC_S_FMT || command==VIDIOC_G_FMT) {
+        struct v4l2_format *f=arg;
+        assert(fd==1 && video_live);
+        f->fmt.pix_mp.width=80; f->fmt.pix_mp.height=64;
+        f->fmt.pix_mp.pixelformat=f->type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ?
+            V4L2_PIX_FMT_MM21 : V4L2_PIX_FMT_H264_SLICE;
+        f->fmt.pix_mp.num_planes=2;
+        f->fmt.pix_mp.plane_fmt[0].sizeimage=5120;
+        f->fmt.pix_mp.plane_fmt[1].sizeimage=7680;
+    } else if (command==VIDIOC_CREATE_BUFS) {
+        struct v4l2_create_buffers *c=arg;
+        assert(fd==1 && video_live && c->count==1 && c->memory==V4L2_MEMORY_MMAP &&
+               c->format.type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE && c->format.fmt.pix_mp.num_planes==2);
+        if (invalid<5) {
+            static const unsigned bad[5][2]={{5120,2560},{5119,7680},{196608,7679},
+                                             {UINT32_MAX,196608},{196608,UINT32_MAX}};
+            assert(c->format.fmt.pix_mp.plane_fmt[0].sizeimage==bad[invalid][0] &&
+                   c->format.fmt.pix_mp.plane_fmt[1].sizeimage==bad[invalid][1]);
+            invalid++;
+            if (fault==1) return 0;
+            errno=fault==2 ? ENOMEM : EINVAL; return -1;
+        }
+        assert(allocated<4);
+        for (unsigned p=0;p<2;p++)
+            assert(c->format.fmt.pix_mp.plane_fmt[p].sizeimage==lengths[allocated][p]);
+        c->index=allocated++; if (fault==3) c->format.fmt.pix_mp.plane_fmt[0].sizeimage++;
+    } else if (command==VIDIOC_QUERYBUF) {
+        struct v4l2_buffer *b=arg;
+        assert(fd==1 && allocated==4 && b->index<4 && b->length==2); queries++;
+        for (unsigned p=0;p<2;p++) {
+            b->m.planes[p].length=lengths[b->index][p];
+            b->m.planes[p].data_offset=b->m.planes[p].bytesused=p ? 5120 : 0;
+            b->m.planes[p].m.mem_offset=(b->index*2+p+1)*0x100000;
+        }
+        if (fault==4) b->m.planes[0].length++;
+    } else if (command==VIDIOC_EXPBUF) {
+        struct v4l2_exportbuffer *e=arg;
+        assert(fd==1 && e->index<4 && e->plane<2 && e->flags==(O_RDWR|O_CLOEXEC));
+        assert(!fd_live[e->index][e->plane]); fd_live[e->index][e->plane]=1;
+        exported++; e->fd=10+e->index*2+e->plane;
+    } else if (command==DMA_BUF_IOCTL_SYNC) {
+        unsigned i=(fd-10)/2,p=(fd-10)%2; struct dma_buf_sync *s=arg;
+        assert(i<4 && fd_live[i][p]);
+        if (s->flags&DMA_BUF_SYNC_END) { assert(cpu[i]); cpu[i]--; }
+        else { if (fault==8 && cpu[i]) memset(data[i],0,capacities[i]); cpu[i]++; }
+    } else if (command==VIDIOC_QBUF) {
+        struct v4l2_buffer *b=arg;
+        assert(fd==1 && b->index<4 && !cpu[b->index] && !queued[b->index]);
+        assert(b->m.planes[0].length==lengths[b->index][0] &&
+               b->m.planes[1].length==lengths[b->index][1]);
+        if (fault==9) { errno=EINVAL; return -1; }
+        queued[b->index]=1; qbufs++;
+    } else if (command==VIDIOC_REQBUFS) {
+        struct v4l2_requestbuffers *r=arg;
+        assert(fd==1 && r->type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+               r->memory==V4L2_MEMORY_MMAP && !r->count && qbufs==4);
+        for (unsigned i=0;i<4;i++) {
+            assert(queued[i] && !map_count[i] && !cpu[i] && !fd_live[i][0] && !fd_live[i][1]);
+            queued[i]=0;
+        }
+        released=1;
+    } else { fprintf(stderr,"Unexpected CREATE_BUFS ioctl %lu\n",command); abort(); }
+    return 0;
+}
+int main(int argc,char **argv) {
+    assert(argc==2); fault=strtoul(argv[1],NULL,10);
+    for (unsigned i=0;i<4;i++) { data[i]=calloc(1,capacities[i]); assert(data[i]); }
+    foreign=calloc(1,capacities[0]); assert(foreign);
+    if (fault==6) data[0][capacities[0]-1]=1;
+    width=80; height=storage_height=64;
+    test_create_buffers("video","media");
+    assert(create_buffers_checked && allocated==4 && invalid==5 && queries==4 && exported==8);
+    assert(qbufs==4 && released && !video_live && !media_live);
+    for (unsigned i=0;i<4;i++) free(data[i]);
+    free(foreign); return 0;
+}
+'''
+    with tempfile.TemporaryDirectory(prefix='vdec-create-buffers-host-') as tmp:
+        path = Path(tmp); (path/'create.c').write_text(code)
+        compiler = shlex.split(os.environ.get('HOSTCC', os.environ.get('CC', 'cc')))
+        flags = shlex.split(os.environ.get('CFLAGS', ''))
+        subprocess.run(compiler + ['-std=gnu11', '-Wall', '-Wextra', '-Werror'] + flags +
+                       [str(path/'create.c'), '-o', str(path/'create')], check=True)
+        result = subprocess.run([str(path/'create'), '0'], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        for fault, message in ((1, 'Invalid CREATE_BUFS'), (2, 'Invalid CREATE_BUFS'),
+                               (3, 'changed requested'), (4, 'queried lengths'),
+                               (5, 'export capacity'), (6, 'not zeroed'),
+                               (7, 'aliases differ'), (8, 'nested access lost'),
+                               (9, 'QBUF created capture only')):
+            result = subprocess.run([str(path/'create'), str(fault)], capture_output=True, text=True)
+            assert result.returncode != 0 and message in result.stderr, (fault, result.stderr)
+    print('Actual CREATE_BUFS mode: four mixed layouts, five invalid extents, full zeroed exports, nested aliases and prepare; nine faulty-device cases rejected: PASS')
+
+
 def check_surface_jobs(source):
     """Exercise actual owner callbacks with instrumented kernel primitives."""
     original = source.read_text()
     def function(name):
-        match = re.search(r'(?m)^(?:static )?(?:struct \w+ \*|void \*|void |int |long |bool |unsigned int )' +
+        match = re.search(r'(?m)^(?:static )?(?:struct \w+ \*|void \*|void |int |long |bool |size_t |unsigned int )' +
                           re.escape(name) + r'\([^;]*?\)\n\{', original)
         assert match, name
         start = match.end() - 1
@@ -627,12 +801,20 @@ struct dma_fence { unsigned refs; bool signalled; int error; };
 struct dma_resv { int id; bool locked; unsigned usage; struct dma_fence *fence; };
 struct dma_buf { unsigned refs; size_t size; void *priv; struct dma_resv *resv; };
 struct vb2_vmarea_handler { refcount_t *refcount; void (*put)(void *); void *arg; };
-struct vb2_buffer { unsigned num_planes; struct { void *mem_priv; } planes[2]; };
+struct vb2_buffer { unsigned num_planes; struct { void *mem_priv; unsigned length; } planes[2]; };
 struct ww_acquire_ctx { int unused; };
 struct mt6797_picture { struct dma_buf *buffer; u8 *cpu; dma_addr_t dma; size_t bytes; };
 #define SURFACE_LIMIT 17U
 #define DEPENDENCY_TIMEOUT 1000U
 #define GFP_KERNEL 0
+#define SZ_64K ((size_t)65536)
+#define SZ_128K ((size_t)131072)
+#define PAGE_ALIGN(x) (((x) + 4095) & ~(size_t)4095)
+#define DMA_BIT_MASK(n) ((1ULL << (n)) - 1)
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define round_down(x,y) ((x) & ~((__typeof__(x))(y) - 1))
+#define check_mul_overflow(a,b,p) __builtin_mul_overflow((a),(b),(p))
+#define check_add_overflow(a,b,p) __builtin_add_overflow((a),(b),(p))
 #define DMA_RESV_USAGE_WRITE 1U
 #define DMA_RESV_USAGE_READ 2U
 #define READ_ONCE(x) (x)
@@ -649,6 +831,7 @@ static int reservation_ww_class, fail_lock = -1, fail_reserve = -1, fail_wait = 
 static int lock_error, fence_failure, allocated, released, fence_count, cpu_syncs, device_syncs;
 static int wait_error, waits;
 static struct mutex capture_lock;
+static size_t mt6797_capture_luma(struct vb2_buffer *vb) { (void)vb; return 5120; }
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 #define list_for_each_entry(pos, head, member) \
     for (struct list_head *node = (head)->next; node != (head) && \
@@ -728,7 +911,8 @@ static void dma_sync_sgtable_for_device(struct device *d, struct sg_table *s, en
 static void invalidate_kernel_vmap_range(void *p, size_t n) { (void)p; (void)n; assert(capture_lock.locked); }
 static void flush_kernel_vmap_range(void *p, size_t n) { (void)p; (void)n; assert(capture_lock.locked); }
 '''
-    names = ('surface_to_cpu', 'surface_to_device', 'capture_wait_owner', 'capture_lock_owner',
+    names = ('mt6797_picture_bytes', 'mt6797_capture_size',
+             'surface_to_cpu', 'surface_to_device', 'capture_wait_owner', 'capture_lock_owner',
              'capture_unlock_owner', 'capture_begin_cpu', 'capture_end_cpu',
              'capture_view_put', 'capture_alloc', 'capture_num_users', 'capture_get_dmabuf',
              'capture_queue_transition', 'capture_prepare_view', 'capture_finish_view',
@@ -741,17 +925,55 @@ static void flush_kernel_vmap_range(void *p, size_t n) { (void)p; (void)n; asser
         code += function(name)
     code += r'''
 int main(void) {
+    assert(mt6797_picture_bytes(5120) == 196608);
+    assert(mt6797_picture_bytes(SIZE_MAX) == 0);
+    const unsigned sizes[][2] = {{5120,7680}, {196609,204801}, {208897,196611}, {196608,196608}};
+    const size_t capacities[] = {196608,208896,212992,196608};
+    for (unsigned i = 0; i < 4; i++) {
+        size_t capacity = 0;
+        assert(!mt6797_capture_size(5120,sizes[i][0],sizes[i][1],&capacity));
+        assert(capacity == capacities[i]);
+        struct vb2_buffer v = {.num_planes=2};
+        for (unsigned p = 0; p < 2; p++) v.planes[p].length = sizes[i][p];
+        for (unsigned p = 0; p < 2; p++) {
+            v.planes[p].mem_priv = capture_alloc(&v,NULL,PAGE_ALIGN((size_t)sizes[i][p]));
+            assert(!IS_ERR(v.planes[p].mem_priv));
+        }
+        struct capture_view *first = v.planes[0].mem_priv, *second = v.planes[1].mem_priv;
+        assert(first->buffer == second->buffer && first->buffer->size == capacities[i]);
+        struct mt6797_picture picture;
+        assert(!mt6797_picture_from_vb2(&v,5120,&picture));
+        assert(picture.bytes == 196608 && picture.buffer->size == capacities[i]);
+        assert(!mt6797_capture_prepare(&v));
+        capture_view_put(first); capture_view_put(second);
+    }
+    assert(allocated == released); allocated = released = 0;
+    const size_t bad[][3] = {{0,196608,196608},{5120,5119,7680},{5120,196608,7679},
+                            {5120,UINT32_MAX,196608},{5120,196608,UINT32_MAX},
+                            {SIZE_MAX,SIZE_MAX,SIZE_MAX},{5120,268435457,196608}};
+    for (unsigned i = 0; i < sizeof(bad)/sizeof(bad[0]); i++) {
+        size_t capacity = 99;
+        assert(mt6797_capture_size(bad[i][0],bad[i][1],bad[i][2],&capacity) == -EINVAL);
+        assert(capacity == 99);
+    }
+    size_t capacity = 0;
+    assert(!mt6797_capture_size(5120,268435455,196608,&capacity) && capacity == 268435456);
+    assert(!mt6797_capture_size(5120,196608,268435456,&capacity) && capacity == 268435456);
+    struct vb2_buffer bad_view = {.num_planes=2};
+    bad_view.planes[0].length = 196609; bad_view.planes[1].length = 204801;
+    assert(PTR_ERR(capture_alloc(&bad_view,NULL,196608)) == -EINVAL);
     struct vb2_buffer vb[3] = { 0 };
     struct mt6797_picture pictures[4] = { 0 };
     for (unsigned i = 0; i < 3; i++) {
         vb[i].num_planes = 2;
+        vb[i].planes[0].length = vb[i].planes[1].length = 196608;
         for (unsigned j = 0; j < 2; j++) {
             vb[i].planes[j].mem_priv = capture_alloc(&vb[i], NULL, 196608);
             assert(!IS_ERR(vb[i].planes[j].mem_priv));
             assert(capture_num_users(vb[i].planes[j].mem_priv) == 1);
         }
         struct mt6797_picture borrowed;
-        assert(!mt6797_picture_from_vb2(&vb[i], &borrowed));
+        assert(!mt6797_picture_from_vb2(&vb[i], 5120, &borrowed));
         mt6797_picture_get(&pictures[i], &borrowed);
         assert(pictures[i].buffer->refs == 3);
     }
@@ -883,5 +1105,6 @@ if __name__ == '__main__':
     check_cli(args.request_source)
     check_capture(args.request_source)
     check_native_buffers(args.request_source)
+    check_create_buffers(args.request_source)
     check_surface_jobs(REPO/'research/mt6797-vdec-v4l2/buffer.c')
     check_qualification(args.qualifier_source)

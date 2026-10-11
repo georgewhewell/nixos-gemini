@@ -36,6 +36,7 @@ static const char *fixture_directory;
 static unsigned int width = 64, height = 64, storage_height = 64;
 static int export_buffers;
 static int buffers_only;
+static int create_buffers_checked;
 
 static void fail(const char *operation)
 {
@@ -230,6 +231,133 @@ static void close_stream(struct stream *stream)
 		}
 }
 
+/* CREATE_BUFS preserves requested view lengths, while both exports own the
+ * complete page-aligned Y/C/motion allocation. No queue is streamed here.
+ */
+static void test_create_buffers(const char *video, const char *media)
+{
+	const unsigned int luma = 5120, backing = 196608;
+	const unsigned int valid[][2] = {
+		{ luma, luma * 3 / 2 }, { backing + 1, backing + 8193 },
+		{ backing + 12289, backing + 3 }, { backing, backing },
+	};
+	const unsigned int invalid[][2] = {
+		{ luma, luma / 2 }, { luma - 1, luma * 3 / 2 },
+		{ backing, luma * 3 / 2 - 1 }, { UINT32_MAX, backing },
+		{ backing, UINT32_MAX },
+	};
+	struct stream stream;
+	struct v4l2_format format = { .type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE };
+	long page = sysconf(_SC_PAGESIZE);
+	if (page <= 0 || ((unsigned long)page & ((unsigned long)page - 1)))
+		fail("CREATE_BUFS page size");
+	open_device(&stream, video, media);
+	format.fmt.pix_mp.width = width;
+	format.fmt.pix_mp.height = height;
+	checked_ioctl(stream.video, VIDIOC_S_FMT, &format, "CREATE_BUFS output geometry");
+	format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	checked_ioctl(stream.video, VIDIOC_G_FMT, &format, "CREATE_BUFS capture format");
+	if (format.fmt.pix_mp.width != 80 || format.fmt.pix_mp.height != 64 ||
+	    format.fmt.pix_mp.pixelformat != V4L2_PIX_FMT_MM21 ||
+	    format.fmt.pix_mp.num_planes != 2 ||
+	    format.fmt.pix_mp.plane_fmt[0].sizeimage != valid[0][0] ||
+	    format.fmt.pix_mp.plane_fmt[1].sizeimage != valid[0][1]) {
+		fprintf(stderr, "Unexpected CREATE_BUFS format\n"); exit(1);
+	}
+	for (unsigned int i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+		struct v4l2_create_buffers create = { .count = 1,
+			.memory = V4L2_MEMORY_MMAP, .format = format };
+		for (unsigned int p = 0; p < 2; p++)
+			create.format.fmt.pix_mp.plane_fmt[p].sizeimage = invalid[i][p];
+		int ret;
+		do { ret = ioctl(stream.video, VIDIOC_CREATE_BUFS, &create); }
+		while (ret < 0 && errno == EINTR);
+		if (ret != -1 || errno != EINVAL) {
+			fprintf(stderr, "Invalid CREATE_BUFS request accepted or wrong error\n"); exit(1);
+		}
+	}
+	for (unsigned int i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
+		struct v4l2_create_buffers create = { .count = 1,
+			.memory = V4L2_MEMORY_MMAP, .format = format };
+		/* The first allocation must work directly from the advertised format. */
+		if (i)
+			for (unsigned int p = 0; p < 2; p++)
+				create.format.fmt.pix_mp.plane_fmt[p].sizeimage = valid[i][p];
+		checked_ioctl(stream.video, VIDIOC_CREATE_BUFS, &create, "CREATE_BUFS");
+		if (create.count != 1 || create.index != i ||
+		    create.format.fmt.pix_mp.plane_fmt[0].sizeimage != valid[i][0] ||
+		    create.format.fmt.pix_mp.plane_fmt[1].sizeimage != valid[i][1]) {
+			fprintf(stderr, "CREATE_BUFS changed requested lengths/index\n"); exit(1);
+		}
+	}
+	/* Inspect after all four allocations: later CREATE_BUFS calls must not
+	 * change the lengths or capacity of an existing buffer.
+	 */
+	for (unsigned int i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
+		struct v4l2_plane planes[2] = { 0 };
+		struct v4l2_buffer buffer = { .type = format.type, .memory = V4L2_MEMORY_MMAP,
+			.index = i, .length = 2, .m.planes = planes };
+		struct mapping exported[2], mapped[2];
+		size_t capacity = backing;
+		for (unsigned int p = 0; p < 2; p++)
+			if (capacity < valid[i][p]) capacity = valid[i][p];
+		capacity = (capacity + page - 1) & ~((size_t)page - 1);
+		checked_ioctl(stream.video, VIDIOC_QUERYBUF, &buffer, "QUERYBUF created capture");
+		for (unsigned int p = 0; p < 2; p++) {
+			struct v4l2_exportbuffer exp = { .type = format.type, .index = i,
+				.plane = p, .flags = O_RDWR | O_CLOEXEC };
+			if (planes[p].length != valid[i][p] ||
+			    planes[p].data_offset != (p ? luma : 0) ||
+			    planes[p].bytesused != planes[p].data_offset) {
+				fprintf(stderr, "CREATE_BUFS queried lengths/offsets changed\n"); exit(1);
+			}
+			checked_ioctl(stream.video, VIDIOC_EXPBUF, &exp, "EXPBUF created capture");
+			if (lseek(exp.fd, 0, SEEK_END) != (off_t)capacity) {
+				fprintf(stderr, "CREATE_BUFS export capacity differs\n"); exit(1);
+			}
+			exported[p] = (struct mapping) { .fd = exp.fd, .bytes = capacity };
+			exported[p].address = mmap(NULL, capacity, PROT_READ | PROT_WRITE,
+				MAP_SHARED, exp.fd, 0);
+			mapped[p] = (struct mapping) { .fd = -1,
+				.bytes = (valid[i][p] + page - 1) & ~((size_t)page - 1) };
+			mapped[p].address = mmap(NULL, mapped[p].bytes, PROT_READ | PROT_WRITE,
+				MAP_SHARED, stream.video, planes[p].m.mem_offset);
+			if (exported[p].address == MAP_FAILED || mapped[p].address == MAP_FAILED)
+				fail("mmap created capture");
+		}
+		sync_mapping(&exported[0], DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW);
+		for (size_t byte = 0; byte < capacity; byte++)
+			if (((u8 *)exported[0].address)[byte]) {
+				fprintf(stderr, "CREATE_BUFS allocation is not zeroed\n"); exit(1);
+			}
+		memset(exported[0].address, 0x41 + i, capacity);
+		sync_mapping(&exported[1], DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+		for (size_t byte = 0; byte < capacity; byte++)
+			if (((u8 *)exported[0].address)[byte] != 0x41 + i) {
+				fprintf(stderr, "CREATE_BUFS nested access lost contents\n"); exit(1);
+			}
+		for (unsigned int p = 0; p < 2; p++) {
+			if (memcmp(exported[0].address, exported[p].address, capacity) ||
+			    memcmp(exported[0].address, mapped[p].address, mapped[p].bytes)) {
+				fprintf(stderr, "CREATE_BUFS aliases differ\n"); exit(1);
+			}
+		}
+		sync_mapping(&exported[0], DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW);
+		sync_mapping(&exported[1], DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
+		checked_ioctl(stream.video, VIDIOC_QBUF, &buffer, "QBUF created capture only");
+		for (unsigned int p = 0; p < 2; p++) {
+			if (munmap(mapped[p].address, mapped[p].bytes) ||
+			    munmap(exported[p].address, exported[p].bytes) || close(exported[p].fd))
+				fail("release created capture views");
+		}
+	}
+	struct v4l2_requestbuffers release = { .type = format.type,
+		.memory = V4L2_MEMORY_MMAP, .count = 0 };
+	checked_ioctl(stream.video, VIDIOC_REQBUFS, &release, "release created capture queue");
+	if (close(stream.media) || close(stream.video)) fail("close CREATE_BUFS device");
+	create_buffers_checked = 1;
+}
+
 static u8 native_buffer_pattern(unsigned int index, size_t byte, size_t luma)
 {
 	return byte < luma ? 0x31 + index : byte < luma * 3 / 2 ? 0x91 + index : 0x51 + index;
@@ -286,6 +414,9 @@ static void test_native_buffers(struct stream *stream, const char *video,
 	int gpu;
 
 	if (page_size <= 0) fail("page size");
+	if (!create_buffers_checked) {
+		fprintf(stderr, "CREATE_BUFS checks were not completed\n"); exit(1);
+	}
 	open_device(stream, video, media);
 	format.fmt.pix_mp.width = width;
 	format.fmt.pix_mp.height = height;
@@ -299,8 +430,8 @@ static void test_native_buffers(struct stream *stream, const char *video,
 	checked_ioctl(stream->video, VIDIOC_G_FMT, &format, "G_FMT native capture");
 	if (format.fmt.pix_mp.num_planes != 2 ||
 	    format.fmt.pix_mp.plane_fmt[0].sizeimage != luma ||
-	    format.fmt.pix_mp.plane_fmt[1].sizeimage != luma / 2) {
-		fprintf(stderr, "Unexpected logical native capture layout\n"); exit(1);
+	    format.fmt.pix_mp.plane_fmt[1].sizeimage != luma * 3 / 2) {
+		fprintf(stderr, "Unexpected native capture minimum extents\n"); exit(1);
 	}
 	gpu = open(render, O_RDWR | O_CLOEXEC);
 	if (gpu < 0) fail("open render node");
@@ -389,12 +520,14 @@ static void test_native_buffers(struct stream *stream, const char *video,
 	}
 	puts("{\"native_buffers_test_passed\":true,\"scope\":\"native-buffers\","
 	     "\"width\":80,\"height\":64,\"capture_buffers\":17,\"planes_per_buffer\":2,"
-	     "\"sizeimage\":[5120,2560],\"plane_lengths\":[196608,196608],"
+	     "\"sizeimage\":[5120,7680],\"plane_lengths\":[196608,196608],"
 	     "\"data_offsets\":[0,5120],\"exported_fds\":34,\"prime_handles\":17,"
 	     "\"prime_aliases_same_handle\":true,\"prime_gpu_va_verified\":true,"
 	     "\"mmap_export_aliases_verified\":true,\"queue_cache_cycle_verified\":true,"
 	     "\"video_close_lifetime_verified\":true,\"closed_fd_aliases_verified\":true,"
 	     "\"prime_release_lifetime_verified\":true,\"all_user_refs_released\":true,"
+	     "\"create_bufs_cases\":9,\"create_bufs_lengths_preserved\":true,"
+	     "\"create_bufs_full_backing_verified\":true,\"create_bufs_queue_prepare_verified\":true,"
 	     "\"codec_submissions\":0,\"gpu_submissions\":0,\"decode_qualified\":false,"
 	     "\"gpu_rendering_qualified\":false}");
 }
@@ -766,6 +899,7 @@ int main(int argc, char **argv)
 	if (buffers_only) {
 		width = 80;
 		height = storage_height = 64;
+		test_create_buffers(argv[1], argv[2]);
 		test_native_buffers(&stream, argv[1], argv[2], argv[6]);
 		return 0;
 	}
