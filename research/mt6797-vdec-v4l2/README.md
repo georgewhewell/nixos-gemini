@@ -7,10 +7,10 @@ proprietary codec library is loaded. Public register provenance is recorded in
 a formally separated clean-room team.
 
 Normal and media development use the same maintained Linux 7.2.9 branch,
-`gemini-7.2.9`. The [accepted image](../accepted-baseline.json) is image 102,
-source `354d3657`. It supplies the decoder resources and native VDEC clock
+`gemini-7.2.9`. The [accepted image](../accepted-baseline.json) is image 111,
+source `a1a88da1`. It supplies the decoder resources and native VDEC clock
 provider but does not load this experimental module. The current native-buffer
-path requires the DMA-owner SG bounce-marker fix in `01222a4b`.
+path uses the DMA-owner SG bounce-marker fix from `01222a4b`, included in that kernel.
 
 ## Current implementation
 
@@ -65,7 +65,8 @@ Trial 109 fixes the backing-plane image bounds in the shared
 [Mesa owner](../../nix/panfrost-image-extents.patch). Mesa detiles on the GPU;
 the helper does no input CPU conversion. Earlier failed trials and their
 original artifacts remain recorded, including [107](gpu-trial-107.json) and
-[108](gpu-trial-108.json). The accepted normal image remains 102.
+[108](gpu-trial-108.json). Image 111 installs the shared Mesa fix in the normal
+desktop; this preserves trial 109's synthetic scope and does not qualify decoding.
 
 ## Build and focused verification
 

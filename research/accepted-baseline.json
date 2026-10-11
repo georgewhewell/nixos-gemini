@@ -1,13 +1,13 @@
 {
-  "name": "boot-test-102",
-  "image": "/nix/store/vliifhh0dghg596pagv0rg1wsn5v37y3-gemini-mainline-nixos-padded.img",
-  "boot_sha256": "23c83c7228ad639353fb4f167ffbff2ebe8962275262da4e80f3157043dde80c",
-  "system": "/nix/store/rwjm147q06anw948bg23qwpbvyflksh3-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "name": "boot-test-111",
+  "image": "/nix/store/rxskv5jksac5skfkzjq41h94f2lz2vpb-gemini-mainline-nixos-padded.img",
+  "boot_sha256": "d40f7babb462cd061498861844cb6ed86a8a93734a46269d08af397e62ca7331",
+  "system": "/nix/store/ah65fmmiqg8fyn89pg7rhnd3c1dgndxn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
   "store": "normal",
   "zswap_shrinker": "absent",
   "boot": "direct",
   "rtc_epoch": "native",
-  "previous": "boot-test-101",
+  "previous": "boot-test-102",
   "paging_policy": "zram",
   "desktop": "gnome"
 }

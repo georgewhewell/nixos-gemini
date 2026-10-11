@@ -454,7 +454,7 @@
     "installed": true,
     "hardware_effect_and_subjective_responsiveness_qualified": false,
     "remaining_owner_work": [
-      "Qualify the native FUSB301 event fix, then resolve residual udev and parking CPU cost in its driver or policy owner; qualify responsiveness during ordinary use.",
+      "Resolve residual parking and native governor/workqueue CPU cost in their owners; FUSB301 unchanged-event overhead is fixed and accepted in image 111. Qualify responsiveness during ordinary use.",
       "Qualify native MMC0 electrical readbacks before faster timing; controller timing/tuning remains incomplete.",
       "Integrate and qualify standard native PMU so A53/A72 capacities can be measured; no invented ratios.",
       "Native deep idle remains incomplete; current CPU_OFF parking is needed for core power removal."
@@ -751,12 +751,44 @@
         {
           "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/old-image-gate-runtime-2.json",
           "sha256": "dbc0a5ab43c392d9f0b96f78441f5efe9d062db0cab12a65aef1a3fdfdd6bc02"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/boot-test-111-exit.json",
+          "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/independent-audit-111/result.json",
+          "sha256": "44815e55bbc1a56d1b9172f6838e5cc373ae14446d7c864db760242567e3fad4"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/usb-change-owner/independent-audit-111-wrapper.exit.json",
+          "sha256": "6ce46277cfe029d6404f8cb74484c6040cc4f80f80186a017373c1d711ba5d94"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/boot-test-111/usb-typec/result.json",
+          "sha256": "68319b54c59c7a3fcff419c2e499216e7cef3059a95c8ee193339dd94e870080"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/boot-test-111/desktop-integration-result.json",
+          "sha256": "3145d3b6f03588e146a856155d693475c42976c0c8dbda84ff6f5052f65400c4"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/performance-read-111-command.json",
+          "sha256": "d6138432bb0507922c837b798575d2e00b60e885fac9a46264eb7bfe2f4ad6c9"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/performance-read-111-exit.json",
+          "sha256": "e89df0eae5ec7db81135aed16463968955c578bcc4f2ec43172eff351f080c17"
+        },
+        {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/performance-read-111.json",
+          "sha256": "02630d171550c3f0d12ce662f51ceea6a876a5d6427fad5e425ab18d35053d62"
         }
       ],
-      "installed": false,
-      "hardware_effect_qualified": false,
+      "installed": true,
+      "hardware_effect_qualified": true,
       "ui_responsiveness_qualified": false,
-      "next": "Qualify a normal image through the common supervised desktop deployment: stable attached USB link, no recurring TypeC/USB-role change events, clean kernel and independent final audit. Then measure residual CPU cost before changing DVFS or parking parameters.",
+      "next": "Resolve residual CPU parking sampling and native governor/workqueue cost in their owners, then qualify responsiveness during ordinary use; faster native MMC0 timing and PMU/deep idle remain open.",
       "deployment_check": {
         "trial_110": "failed before observation: checker assumed Python on PATH; candidate was not accepted",
         "writer_exit": 1,
@@ -772,7 +804,79 @@
           "taint": 0,
           "expected_rejection": true
         },
-        "fixed_kernel_hardware_qualified": false
+        "fixed_kernel_hardware_qualified": true
+      },
+      "installed_trial": 111,
+      "hardware": {
+        "trial": "boot-test-111",
+        "writer_exit": 0,
+        "independent_audit_exit": 0,
+        "boot_id": "c91aa75a-f7da-4fe9-8581-0b4af80637ab",
+        "boot_sha256": "d40f7babb462cd061498861844cb6ed86a8a93734a46269d08af397e62ca7331",
+        "system": "/nix/store/ah65fmmiqg8fyn89pg7rhnd3c1dgndxn-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+        "observation_seconds": 6.002115,
+        "counts": {
+          "typec": {
+            "change": 0,
+            "other": 0
+          },
+          "usb_role": {
+            "change": 0,
+            "other": 0
+          }
+        },
+        "stable_native_configured_session": true,
+        "taint": 0,
+        "all_trial_units_terminal": true,
+        "source_hashes_match": true,
+        "source_count": 47,
+        "storage_and_ordinary_nix_outputs_retained": true,
+        "ram_only_paging": true,
+        "temporary_decoder_absent": true,
+        "detach_attach_qualified": false,
+        "source_power_qualified": false,
+        "subjective_responsiveness_qualified": false
+      },
+      "post_install_observation": {
+        "seconds": 30.312,
+        "identity_before_after_matches": true,
+        "taint": 0,
+        "service_cpu_deltas_usec": {
+          "gemini-core-parking.service": {
+            "usage_usec": 1238489,
+            "user_usec": 13775,
+            "system_usec": 1224715
+          },
+          "systemd-udevd.service": {
+            "usage_usec": 0,
+            "user_usec": 0,
+            "system_usec": 0
+          }
+        },
+        "udevd_cpu_percent_one_core": 0.0,
+        "parking_cpu_percent_one_core": 4.086,
+        "reader_cpu_seconds": 1.919548,
+        "online_cpu_sets": [
+          [
+            0,
+            1
+          ]
+        ],
+        "parking_transitions": 0,
+        "memory_available_kib_min": 2898396,
+        "vm_deltas": {
+          "pgmajfault": 0,
+          "pswpin": 0,
+          "pswpout": 0,
+          "pgscan_kswapd": 0,
+          "pgscan_direct": 0,
+          "pgsteal_kswapd": 0,
+          "pgsteal_direct": 0,
+          "oom_kill": 0
+        },
+        "emmc_disk_counters_unchanged": true,
+        "runtime_policy_writes": false,
+        "interpretation": "No measurable udev CPU usage after the native fix, versus 10.579% of one core in the prior image-102 observation. Parking remains at 4.086% with no hotplug transitions. These idle observations have different activity and online CPU sets; the sampler itself uses 1.919548 CPU seconds. This does not qualify UI responsiveness or a controlled performance comparison."
       }
     }
   }

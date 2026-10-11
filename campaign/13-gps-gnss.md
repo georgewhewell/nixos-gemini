@@ -60,5 +60,11 @@ STP and KUnit counters do not measure this stream. Also count CRC-valid task-2
 frames before sequence selection, so duplicate/out-of-order frames discarded
 before dispatch can be distinguished from absent task-2 traffic. Preserve the
 existing whole-frame ACK/retry and power-admission behavior. Keep location data out of
-retained diagnostics. Current status and
+retained diagnostics. Use passive counters in the existing CONSYS session and
+GNSS endpoint, with their existing lock and teardown ownership. Preserve counts
+across parser resets and open/close; do not change admission during power-off.
+Extend the existing actual-path fixtures for duplicate/out-of-order frames,
+inactive discard, whole-frame FIFO rejection/retry, corrupt CRC and counter
+lifetime. All-zero selected counters still cannot exclude malformed traffic
+before CRC validation. Current status and
 remaining work are recorded in [HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md).

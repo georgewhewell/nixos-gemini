@@ -3,9 +3,10 @@
 The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
 bottom dock, NetworkManager, ModemManager, Bluetooth, IPv6 and RAM-only zram in
 [accepted-baseline.json](accepted-baseline.json).
-Image 102 uses the GCC 15.3.0 / binutils 2.46 build, native SYSIRQ write acceptance
-and consolidated CPU parking sampling. Its focused deployment and terminal audit
-pass. Native GNSS, Wi-Fi/modem, MMC0 and telephony inputs retain their scoped
+Image 111 uses the GCC 15.3.0 / binutils 2.46 build, native SYSIRQ write acceptance,
+consolidated CPU parking sampling and the native FUSB301 event fix. Its focused
+deployment and independent terminal audit pass. Native GNSS, Wi-Fi/modem, MMC0
+and telephony inputs retain their scoped
 [trial-101 results](gnss-integration-20261011.json).
 
 Experimental media work shares the maintained kernel. Native buffers pass
@@ -13,7 +14,8 @@ Experimental media work shares the maintained kernel. Native buffers pass
 passes the synthetic MM21 rendering check in
 [trial 109](mt6797-vdec-v4l2/gpu-trial-109.json). Both restore image 102 and pass
 their terminal audits. Decoder IRQ completion, decoded-surface rendering and
-encoding remain unfinished; the normal desktop image has not been promoted.
+encoding remain unfinished. Image 111 installs the shared DMA and Mesa owner
+changes in the normal desktop; it does not load the experimental decoder.
 Earlier failed trials retain their original records. The no-swap 7.1.3 fallback
 is preserved in [baselines](baselines/boot-test-76.json).
 
@@ -21,9 +23,9 @@ is preserved in [baselines](baselines/boot-test-76.json).
 | --- | --- | --- |
 | Protected storage, watchdog and native RTC | Working for the recorded checks | [Trial 101 and independent audit](gnss-integration-20261011.json) pass exact image/readback identity, ordinary Nix build and retained data. Native RTC startup/UTC/awake alarms retain [trial 88](desktop-responsiveness-20261011.json) evidence; unchanged RTC behavior is not repeatedly tested during focused desktop updates. |
 | Flash-safe paging | Working: RAM-only zram | Trial 85 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
-| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Installed source `354d3657` includes checked SYSIRQ writes, GNSS lifetime, closed-port AT receive, MMC0 pad ownership and CPU parking cleanup, retaining Wi-Fi teardown and CLDMA RX fixes. Actual-path host regressions and normal ARM64 builds pass. Kernel and development shell use the locked Nixpkgs default compiler (GCC 15.3.0). Current DMA-owner source changes remain separate from installed hardware acceptance. |
+| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Installed source `a1a88da1` includes checked SYSIRQ writes, GNSS lifetime, closed-port AT receive, MMC0 pad ownership, shared DMA ownership and the FUSB301 event fix, retaining Wi-Fi teardown and CLDMA RX fixes. Actual-path host regressions and normal ARM64 builds pass. Kernel and development shell use the locked Nixpkgs default compiler (GCC 15.3.0). Experimental codec qualification remains scoped to its recorded trials. |
 | GPU DVFS | Seven OPPs pass bounded rendering checks | [Trial 88 GPU proof](desktop-responsiveness-20261011.json). Correct clock and voltage readbacks from 238 to 900 MHz, 13 exact pixel checks up/down, 104 job IRQs and no detected GPU faults. Native thermal cooling registers; normal simple_ondemand policy and CPU parking are restored. Sustained thermal load and subjective UI responsiveness remain unqualified. |
-| Desktop and CLI performance | Parking demand fix and native MMC0 pad ownership installed; responsiveness remains open | [Performance evidence](desktop-responsiveness-20261011.json). Current-demand checks prevent removing a CPU needed by the current load/runnable count; sanitizer, actual-policy regressions and normal ARM64 builds pass. Native pinctrl owns the public MMC0 input, drive, pull and delay fields; retained storage checks pass at legacy timing. A 30-second sample on 101 still shows parking/udev activity, with no concurrent reclaim, swap, major-fault or eMMC I/O counter progress. Its sampler uses CPU too; this is not a UI comparison. Image 102 installs the consolidated CPU-topology sample with its parser/lifetime checks and normal ARM64 build. One bounded observation records parking at 4.05% of one core versus 6.24% in image 101; differing activity and online CPU sets prevent a controlled performance comparison. Qualify native PMU counters before measuring A53/A72 capacities, and complete faster eMMC timing/deep idle owners. |
+| Desktop and CLI performance | Native USB event overhead fixed; responsiveness remains open | [Performance evidence](desktop-responsiveness-20261011.json). Image 111 removes repeated unchanged Type-C/USB-role notifications through the FUSB301 driver. A 30.312-second observation records zero udev CPU usage, versus 10.579% of one core on image 102; parking still uses 4.086% with no hotplug transitions. The sampler itself uses 1.919548 CPU seconds, and activity differs between observations; UI responsiveness is unqualified. Current-demand admission and consolidated parking sampling remain installed. Native MMC0 pad ownership retains storage checks at legacy timing. Resolve remaining CPU cost in its owners, qualify native PMU counters before measuring A53/A72 capacities, and complete faster eMMC timing/deep idle. |
 | Bluetooth | Desktop radio access and bounded discovery pass | [Trial 94 Bluetooth proof](desktop-radio-activation-20261011.json). GNOME sees an unblocked, powered controller through native RFKILL. A 16-second scan as `gemini` finds 14 RSSI devices, one named, with fresh LE events, all controller statuses successful and zero Bluetooth/WLAN transport faults. No continuous trace runs at boot. Pairing, profiles and the owner's particular target remain unqualified. |
 | Onboard stereo playback | Corrected effective hardware mapping | [Audio proof](desktop-radio-activation-20261011.json). Native UCM exposes the onboard sink; PipeWire reports logical FL/FR and hardware FR/FL with ALSA hardware-map override disabled. Plain ALSA speaker/headphone/default paths pass independent sample comparisons. Acoustic orientation remains unverified. |
 | GNOME document portal | Working on the installed system | Trial 88 has built-in FUSE, `/dev/fuse`, an active user document portal and its `fuse.portal` mount. The [integration audit](integration-audit-20261011.json) records the missing module autoload on the preceding image. |
@@ -55,8 +57,8 @@ userspace workaround does not qualify an unfinished driver.
 Record remaining owner work here and return to it: GNSS needs its public
 initialization/data-delivery contract, then stream, position and sustained
 coexistence qualification; passing power cycles do not prove a fix.
-Desktop/CLI performance needs persistent parking/udev overhead resolved and
-responsiveness qualified during use, native MMC0 electrical readbacks before
+Desktop/CLI performance needs residual parking and native governor/workqueue
+CPU cost attributed and responsiveness qualified during use, native MMC0 electrical readbacks before
 faster timing, native PMU counters before measured A53/A72 scheduling capacities,
 and a proper deep-idle owner. Cellular watchdog/SIM/speech and
 media completion remain open as recorded above.

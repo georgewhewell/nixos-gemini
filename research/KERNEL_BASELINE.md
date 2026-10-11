@@ -12,11 +12,14 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 102, kernel
-source `354d3657699458b144f838adbbd64f74bfa12f93`.
+The [installed accepted image](accepted-baseline.json) is trial 111, kernel
+source `a1a88da11c1da5cac457d3476aa203cec7850e2b`.
 Its focused deployment and independent terminal audit pass GNOME RFKILL
-visibility, directed NetworkManager scanning, RAM-only paging, retained storage
-and ordinary Nix builds, as recorded in the [native IRQ owner note](mt6797-vdec-v4l2/irq-contract.json).
+visibility, directed NetworkManager scanning, onboard audio mapping, RAM-only
+paging, retained storage and ordinary Nix builds. The native FUSB301 fix removes
+repeated unchanged Type-C/USB-role notifications: zero of each in six seconds,
+versus 12 of each on image 102. The [performance record](desktop-responsiveness-20261011.json)
+retains both observations, the exact build and independent audit.
 Native GNSS registration and two bounded LNA cycles retain the unchanged owner
 inputs and [image 101 proof](gnss-integration-20261011.json). Onboard stereo mapping retains
 unchanged-input trial 98 evidence. Normal
@@ -51,7 +54,7 @@ instruction offender and a cross-core exception, without establishing their
 cause. The watchdog remains unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
 native SIM, speech control and call-audio lifetime work remains open.
 
-Installed source `6e84a8a9a31c431f9774d828a15efb90fa4d6e41` retains validated
+Modem receive change `6e84a8a9a31c431f9774d828a15efb90fa4d6e41` retains validated
 closed-port AT frames in a bounded native FIFO. First open drains it in order;
 close, failure and removal share the same receive owner. The existing regression
 fixture checks the old loss, queue limits and concurrent lifetime transitions.
@@ -105,14 +108,16 @@ public register leads, which still require MT6797-specific validation.
 The experimental decoder now replaces private-picture capture copying with
 native compound DMA-buf surfaces, independent DPB/job references, reservation
 fences and explicit CPU/MMAP cache transitions for every attachment. The
-maintained kernel input `01222a4b2074555955a85715587bebf0933fb0eb` marks direct
-DMA SG bounce mappings and clears direct/IOMMU markers on teardown. This belongs
+maintained kernel includes change `01222a4b2074555955a85715587bebf0933fb0eb`,
+which marks direct DMA SG bounce mappings and clears direct/IOMMU markers on
+teardown. This belongs
 in the DMA owner: Gemini's GPU uses direct DMA with its own MMU, rather than a
 system-IOMMU domain. The driver admits proved unbounced mapping routes and
 rejects unsupported routes without a copy fallback. See the
 [decoder owner](mt6797-vdec-v4l2/README.md) for current restrictions and the
-hardware qualification still required. The installed accepted image remains
-102; these source changes have not been promoted to the accepted image.
+hardware qualification still required. Image 111 installs the shared DMA and
+Mesa owner changes in the normal desktop. Experimental decoder results retain
+their exact module and kernel inputs; hardware completion remains unfinished.
 Trial 105 on the `01222a4b` kernel now qualifies native allocation, export,
 Panfrost PRIME mapping, cache transitions and release lifetime with no codec
 or GPU submissions. [Its scoped proof](mt6797-vdec-v4l2/buffers-trial-105.json)

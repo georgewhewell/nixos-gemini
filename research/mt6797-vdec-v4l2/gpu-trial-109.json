@@ -91,5 +91,13 @@
     "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/independent-audit-109/result.json",
     "independent_audit_sha256": "2f41df16788b078882c8c98a99f08621a6a7874e34eedce88e5571db8db94ca1",
     "cleanup_proof_sha256": "05cb60230142d68804594793934418286cde1b078b86b444382ffabd2d5bc622"
+  },
+  "later_normal_installation": {
+    "trial": "boot-test-111",
+    "promoted": true,
+    "shared_mesa_and_dma_owners_installed": true,
+    "experimental_decoder_loaded": false,
+    "synthetic_fixture_scope_unchanged": true,
+    "evidence": "../desktop-responsiveness-20261011.json"
   }
 }
