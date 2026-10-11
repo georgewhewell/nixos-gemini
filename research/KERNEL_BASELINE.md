@@ -12,11 +12,11 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 112, kernel
-source `8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0`.
+The [installed accepted image](accepted-baseline.json) is trial 113, kernel
+source `2b9abbe756ad5dbee086436b59eed6277e3fd529`.
 Its focused deployment and independent terminal audit pass GNOME RFKILL
-visibility, directed NetworkManager scanning, two GNSS power cycles with passive
-receive attribution, RAM-only paging, retained storage and ordinary Nix builds.
+visibility, directed NetworkManager scanning, native eMMC high-speed admission,
+RAM-only paging, retained storage and an ordinary Nix build.
 Onboard audio mapping retains its unchanged inputs. The native FUSB301 fix removes
 repeated unchanged Type-C/USB-role notifications: zero of each in six seconds,
 versus 12 of each on image 102. The [performance record](desktop-responsiveness-20261011.json)
@@ -66,18 +66,19 @@ still fails at 106 seconds and ModemManager exposes no SIM object; corrected
 receive ownership is not a SIM/watchdog fix. The
 [modem record](desktop-radio-activation-20261011.json) preserves both results.
 
-This combined image also installs native MMC0 pad ownership and the current-
-demand check before CPU parking removes a core. Storage retention passes with
-legacy timing; faster eMMC modes are not enabled. Two locked image-112 snapshots
-confirm all 12 native pad settings, enabled configured supplies and zero-valued
-MMC error counters. The installed MSDC driver does not populate command/data
-counters, so zero alone does not qualify error-free transfers. Cached CCF state
-and computed IOS rates do not qualify the raw
-controller clock fields; bounded native acceptance and failure handling precede
-standard HS52 qualification. The normal candidate at `2b9abbe756ad5dbe` now
-builds with verified clock admission, native error attribution and standard
-52 MHz high-speed support. GCC15 sanitizer regressions and strict ARM64 compile
-pass; its supervised storage trial is pending. Image 112 retains the procfs
+This combined image retains native MMC0 pad ownership and the current-
+demand check before CPU parking removes a core. Image 112's locked readbacks
+confirm all 12 pad settings and configured supplies. Image 113 installs bounded
+masked clock acceptance and restoration, balanced clock leases, failed-clock
+request admission and native command/data error attribution. GCC15 ASan/UBSan
+regressions, strict ARM64 compilation and the normal image build pass. Standard
+high-speed mode requests 52 MHz and runs at 47,999,984 Hz on the unchanged 8-bit
+bus, versus 23,999,992 Hz in legacy mode. All 15 populated error counters stay zero
+before and after retained-storage checks and one ordinary Nix build. The supervised
+trial and independent terminal audit pass. No throughput benchmark or sustained
+storage qualification is claimed. Native reset/FIFO polling and DMA quiescence
+before completion, including shared CQHCI recovery, remain owner work; no such
+hardware failure has been observed. Image 112 retains the procfs
 sample allocation and seeks for fresh counters. A controlled helper comparison
 attributes 23.7% less read CPU time to that change; the installed daemon still
 uses 3.86% of one core, mostly kernel time, with no topology transitions.

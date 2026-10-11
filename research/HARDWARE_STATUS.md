@@ -3,10 +3,11 @@
 The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
 bottom dock, NetworkManager, ModemManager, Bluetooth, IPv6 and RAM-only zram in
 [accepted-baseline.json](accepted-baseline.json).
-Image 112 uses the GCC 15.3.0 / binutils 2.46 build, native SYSIRQ write acceptance,
-fresh CPU sampling with a retained procfs handle, native FUSB301 event suppression
-and passive GNSS receive counters. Its focused deployment and independent
-terminal audit pass. Unchanged Wi-Fi/modem, MMC0 and telephony inputs retain their scoped
+Image 113 uses the GCC 15.3.0 / binutils 2.46 build, native MMC clock admission,
+populated error counters and standard eMMC high-speed mode. Its retained-storage,
+ordinary Nix build, focused desktop checks and independent terminal audit pass.
+Fresh CPU sampling, FUSB301 event suppression and GNSS receive attribution retain
+their accepted results. Unchanged Wi-Fi/modem and telephony inputs retain their scoped
 [trial-101 results](gnss-integration-20261011.json).
 
 Experimental media work shares the maintained kernel. Native buffers pass
@@ -23,10 +24,10 @@ is preserved in [baselines](baselines/boot-test-76.json).
 | --- | --- | --- |
 | Protected storage, watchdog and native RTC | Working for the recorded checks | [Trial 101 and independent audit](gnss-integration-20261011.json) pass exact image/readback identity, ordinary Nix build and retained data. Native RTC startup/UTC/awake alarms retain [trial 88](desktop-responsiveness-20261011.json) evidence; unchanged RTC behavior is not repeatedly tested during focused desktop updates. |
 | Flash-safe paging | Working: RAM-only zram | Trial 85 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
-| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Installed source `8e0e9aa9` adds passive GNSS receive attribution to the checked SYSIRQ, GNSS lifetime, closed-port AT receive, MMC0 pads, shared DMA, FUSB301, Wi-Fi teardown and CLDMA RX owners. Actual-path host regressions and normal ARM64 builds pass. Kernel and development shell use the locked Nixpkgs default compiler (GCC 15.3.0). Experimental codec qualification remains scoped to its recorded trials. |
+| Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Installed source `2b9abbe7` adds verified MMC clocks, failure admission, native error attribution and standard eMMC high speed to the accepted platform owners. Actual-path host regressions and normal ARM64 builds pass. Kernel and development shell use the locked Nixpkgs default compiler (GCC 15.3.0). Experimental codec qualification remains scoped to its recorded trials. |
 | GPU DVFS | Seven OPPs pass bounded rendering checks | [Trial 88 GPU proof](desktop-responsiveness-20261011.json). Correct clock and voltage readbacks from 238 to 900 MHz, 13 exact pixel checks up/down, 104 job IRQs and no detected GPU faults. Native thermal cooling registers; normal simple_ondemand policy and CPU parking are restored. Sustained thermal load and subjective UI responsiveness remain unqualified. |
 | Desktop and CLI performance | Native USB overhead fixed; procfs sample reuse installed; responsiveness remains open | [Performance evidence](desktop-responsiveness-20261011.json). Image 111 removes repeated FUSB301 notifications and records zero udev CPU usage, versus 10.579% of one core on image 102. A controlled 120-sample comparison attributes 23.7% less parking read CPU time to retaining its procfs allocation, with fresh counters every time. Image 112's passive 30-second sample still records parking at 3.86% of one core, mostly kernel time, with cores 0–1 and no transitions. Different activity prevents a controlled whole-daemon/UI comparison. Policies are unchanged. Resolve residual native procfs cost, qualify PMU counters before measuring A53/A72 capacities, and finish the deep-idle owner. |
-| eMMC timing | Legacy storage retention passes; HS52 remains a candidate | [Native MMC evidence](desktop-responsiveness-20261011.json). Image 112 passes all 12 pad settings and configured supplies. Standard error counters are zero-valued but lack native command/data attribution. Native clock acceptance, failure handling, DMA error propagation and counter attribution pass host regressions and the normal ARM64 build. Standard HS52 awaits its supervised retained-storage/ordinary-Nix trial. |
+| eMMC timing | Standard high-speed mode installed and qualified for the recorded storage checks | [Native MMC evidence](desktop-responsiveness-20261011.json). Image 113 requests 52 MHz and runs at 47,999,984 Hz, versus 23,999,992 Hz in legacy mode. Native clock-field acceptance precedes request admission. All 15 populated error counters stay zero around retained-storage checks and one ordinary Nix build; the independent audit passes. The 8-bit bus, pads and supplies are unchanged. This is no throughput benchmark; sustained storage and fatal reset/DMA recovery remain open. |
 | Bluetooth | Desktop radio access and bounded discovery pass | [Trial 94 Bluetooth proof](desktop-radio-activation-20261011.json). GNOME sees an unblocked, powered controller through native RFKILL. A 16-second scan as `gemini` finds 14 RSSI devices, one named, with fresh LE events, all controller statuses successful and zero Bluetooth/WLAN transport faults. No continuous trace runs at boot. Pairing, profiles and the owner's particular target remain unqualified. |
 | Onboard stereo playback | Corrected effective hardware mapping | [Audio proof](desktop-radio-activation-20261011.json). Native UCM exposes the onboard sink; PipeWire reports logical FL/FR and hardware FR/FL with ALSA hardware-map override disabled. Plain ALSA speaker/headphone/default paths pass independent sample comparisons. Acoustic orientation remains unverified. |
 | GNOME document portal | Working on the installed system | Trial 88 has built-in FUSE, `/dev/fuse`, an active user document portal and its `fuse.portal` mount. The [integration audit](integration-audit-20261011.json) records the missing module autoload on the preceding image. |
@@ -59,11 +60,13 @@ Record remaining owner work here and return to it: GNSS needs its public
 initialization/data-delivery contract, then stream, position and sustained
 coexistence qualification; passing power cycles do not prove a fix.
 Desktop/CLI performance needs residual parking and native governor/workqueue
-CPU cost attributed and responsiveness qualified during use. Image 112 passes native
-MMC0 pad readbacks and configured supply state. The native clock/error fix
-and standard HS52 candidate now build; complete their supervised storage
-qualification. Then address bounded reset/FIFO recovery and sustained storage
-behavior. Qualify
+CPU cost attributed and responsiveness qualified during use. Image 113 completes
+standard eMMC high-speed qualification. The native MSDC owner must bound reset/FIFO
+polls and prove DMA inactivity before completion, unmapping or descriptor reuse;
+failed quiescence must retain ownership and reject new requests. Shared CQHCI
+recovery currently completes slots despite stop failures, so its lifetime contract
+must be corrected too. No such hardware fault has been observed. Finish sustained
+storage qualification. Qualify
 native PMU counters before measured A53/A72 scheduling capacities,
 and a proper deep-idle owner. Cellular watchdog/SIM/speech and
 media completion remain open as recorded above.

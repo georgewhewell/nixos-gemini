@@ -1097,7 +1097,7 @@
     "analog_rail_voltage_qualified": false,
     "ccf_hardware_mux_readback_qualified": false,
     "faster_timing_enabled": false,
-    "next": "Complete bounded masked clock-field acceptance, lease unwind and faulted-request admission in the native MSDC owner; then qualify standard HS52 with retained storage and ordinary Nix builds.",
+    "next": "Completed by mmc_high_speed_owner / accepted boot-test-113; retain this electrical snapshot as historical evidence.",
     "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc0-owner-read/proof/result.json",
     "proof_sha256": "30ce6da26b6ef96e9ec133a5454243b551a115e4929e02fbe48ae8a46ec0825d",
     "terminal_proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc0-owner-read/proof/exit.json",
@@ -1126,7 +1126,11 @@
         "elf_files": 1431,
         "script_interpreters": 124,
         "foreign_elf_files": 0
-      }
+      },
+      "closure_copy_exit": 0,
+      "supervised_trial_exit": 0,
+      "independent_audit_exit": 0,
+      "independent_audit_source_count": 47
     },
     "source_hashes": {
       "driver_sha256": "d5b6b3293b665738452a7b85d69efbadd9d3ccfd8ac8ec2d78d0c600c168504d",
@@ -1135,20 +1139,70 @@
     "bundle": "/nix/store/nfw35avd12rx8jcy9wf51kncky4gxs4d-gemini-mainline-nixos-bundle",
     "kernel": "/nix/store/zsz2b4mw4xhvvlr1iy2kj9ixbz8xqkfz-linux-gemini-7.2.9",
     "system": "/nix/store/vh7wy93v6a1yvynw5nr4wjyxslgd8yix-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "hardware_qualified": false,
-    "installed": false,
+    "hardware_qualified": true,
+    "installed": true,
     "storage_benchmark_performed": false,
-    "next": "One supervised normal image trial: strict native high-speed IOS/counters before and after the existing retained-storage/ordinary-daemon-build checks; independent terminal audit before accepting.",
+    "next": "Complete native reset/FIFO and DMA-stop recovery with verified inactivity before releasing request/mapping/descriptor ownership, including shared CQHCI recovery; then sustained storage qualification.",
     "evidence": {
       "focused": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/focused-result.json",
       "strict": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/strict-result.json",
       "host_gate": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-hs52-host/result.json",
-      "normal_build": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/image-exit.json"
+      "normal_build": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/image-exit.json",
+      "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-113/result.json",
+      "mmc_pair": "/mnt/Home/src/nixos-gemini/handoff/boot-test-113/mmc-high-speed/result.json",
+      "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/independent-audit-113/result.json"
     },
     "cleanup": {
       "obsolete_branch_input_removed": "linux-gemini-next",
       "recovery_derivation_unchanged": true,
       "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/recovery-input-prune-result.json"
-    }
+    },
+    "trial": "boot-test-113",
+    "boot_id": "6e26e86f-a31c-40dc-929f-b5d0b9bed269",
+    "accepted": {
+      "name": "boot-test-113",
+      "image": "/nix/store/fvymzz1pzbb5am8l6sq0l749g8ll0zlp-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "48beebd02dcdd7e5256ee67d8e0d58c82e1790e26443867f4780adafae881c28",
+      "system": "/nix/store/vh7wy93v6a1yvynw5nr4wjyxslgd8yix-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "store": "normal",
+      "zswap_shrinker": "absent",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "previous": "boot-test-112",
+      "paging_policy": "zram",
+      "desktop": "gnome"
+    },
+    "hardware": {
+      "result": "passed",
+      "source_hz": 383999878,
+      "requested_hz": 52000000,
+      "actual_hz": 47999984,
+      "previous_legacy_actual_hz": 23999992,
+      "timing": "MMC_HS",
+      "bus_width_bits": 8,
+      "signal_microvolts": 1800000,
+      "native_error_counters": 15,
+      "all_counters_zero_before_after": true,
+      "owner_identity_preserved": true,
+      "existing_storage_checks_completed": true,
+      "ios_alone_qualifies_raw_clock": false,
+      "clock_verification_owner": "native_mtk_msdc"
+    },
+    "proof_hashes": {
+      "trial": "9021b5e963f807af630bdbf3e5782f0f112bf0c15bcf6866cb0a3e24d21e22f2",
+      "mmc_pair": "343feae8f95f57a00617426fa42ca968bb36e80467222e2cfc36a437f6f8d85a",
+      "audit": "0556d8136ca82de1612f1d69642c1adb23e29c054d29d600f0703b7e426aae08"
+    },
+    "remaining_owner_work": [
+      {
+        "owners": [
+          "drivers/mmc/host/mtk-sd.c",
+          "drivers/mmc/host/cqhci-core.c"
+        ],
+        "source_defect": "Unbounded reset/FIFO polls; native DMA stop/idle failures can still publish completion, and shared CQHCI recovery completes slots despite failed stop.",
+        "required_contract": "Bound recovery, retain active DMA ownership and fault admission until inactivity is established; propagate recovery failure across HSQ/CQE and teardown. Clock votes and card reset do not prove controller quiescence.",
+        "hardware_failure_observed": false
+      }
+    ]
   }
 }
