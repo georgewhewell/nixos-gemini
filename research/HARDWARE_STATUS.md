@@ -22,9 +22,11 @@ allocation capacity from codec extent. Its hardware check and independent
 restored-system audit pass; four obsolete probes are retired to pinned Git history.
 [Trial 108](mt6797-vdec-v4l2/gpu-trial-108.json) reaches native EGL import and GPU
 activity but rejects incorrect synthetic MM21 pixels. The Mesa descriptor owner
-is corrected in source and passes its actual host regression; its unchanged
-hardware pixel check remains pending. Image 102 is restored and its
-independent terminal audit passes. This is separate from decoder completion.
+is corrected in source and passes its actual host regression.
+[Trial 109](mt6797-vdec-v4l2/gpu-trial-109.json) then passes the unchanged 5,120-pixel
+fixture, reference release and module unload. Image 102 is restored and its
+independent terminal audit passes; the normal desktop image is not promoted.
+This is separate from decoder completion.
 The modem still fails separately. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 
@@ -45,6 +47,7 @@ in [baselines](baselines/boot-test-76.json).
 | SMS and call applications | Installed; normal startup verified on trial 96 | [Application proof](sms-voice-integration-20261011.json). GNOME Calls, Spacebar and callaudiod use the existing ModemManager/session APIs. Their package inputs retain trial 96 startup evidence; image 101's full cross-runtime check passes. Native transport/SIM, speech control and call audio remain unfinished. Delivery and acoustics are unqualified. |
 | GNSS | Native registration and two power lifetime cycles pass; zero received bytes | [Trial 101 proof](gnss-integration-20261011.json) and [owner record](../campaign/13-gps-gnss.md). Source `8b9fa390` uses the existing CONSYS/STP owner and standard `lna-supply`; whole-frame FIFO admission and teardown checks pass. Standard module discovery and udev native alias loading register the endpoint. Two 10-second opens/closes pass LNA off/on/off, zero taint and subsequent Bluetooth/NetworkManager checks. Both windows receive zero bytes. Public receiver initialization/data delivery, framing, position, sustained coexistence and suspend remain unfinished. |
 | Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units are explicit diagnostics. Trial 88 reaches graphical startup in 95.056 seconds, including 50.843 seconds in kernel/initramfs. The old Wi-Fi worker and dhcpcd are retired from the default image. |
+| Native tiled GPU import and rendering | Working for the recorded synthetic 80×64 fixture | [Trial 109](mt6797-vdec-v4l2/gpu-trial-109.json) fixes the backing-plane image bounds in the shared Mesa owner. All 5,120 BT.601 pixels pass with the original RGB tolerance of 2 and exact alpha; parent/video/export release, caller FD closure, EGL/GL teardown and module unload pass. Six GPU job IRQs progress with no detected faults; zero codec jobs are submitted. Recovery and the independent audit pass all 65 source hashes. Actual decoded frames, display scanout and sustained playback remain unqualified. |
 | Experimental H.264 decoder | Recorded polling cases work; native buffer API, mapping and lifetime pass on hardware | [Decoder owner](mt6797-vdec-v4l2/README.md). Trials 66–67 compare progressive 8-bit I/P/B, Baseline/Main/High and tested multislice pixels exactly on their recorded 7.1.3 builds. [Trial 106](mt6797-vdec-v4l2/buffers-trial-106.json) adds nine CREATE_BUFS cases to 17 native objects, 34 FDs, Panfrost PRIME mappings, cache transitions and release lifetime with zero codec/GPU submissions. Strict ARM64 builds and sanitizer failure regressions also pass. Four obsolete probes are retired to Git history. Decoder IRQ completion, GPU rendering of decoded surfaces, display imports and suspend remain unqualified. |
 | Decoder IRQ completion | Tested; no interrupt delivered | [Trial 103](mt6797-vdec-v4l2/irq-trial-103.json) uses the exact image-102 kernel. Native SPI 240 setup/polarity acceptance passes; a compressed grey picture completes in AVC with ACTIVE clear (`0x101`), zero syntax error and zero IRQ delta across all ten CPUs. Stop, guards, unload, supervised return to image 102 and independent audit pass. This uses the earlier private-DMA backend; no successful frame or replacement-buffer path is qualified. Exact done-source enablement/handshake remains unfinished. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |

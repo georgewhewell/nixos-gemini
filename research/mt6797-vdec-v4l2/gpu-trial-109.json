@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-11",
+  "trial": "boot-test-109",
+  "scope": "synthetic-native-mm21-gpu",
+  "passed": true,
+  "packaging_revision": "63e76d99b36a6fe94052da984a7bc4e8e68d28f9",
+  "kernel_revision": "01222a4b2074555955a85715587bebf0933fb0eb",
+  "kernel_package": "/nix/store/h84dph6rpdqf4rwf2c3abnpbpmgk5s0b-linux-gemini-7.2.9",
+  "module_sha256": "d5ac214615c4644feea527b737808ba9514dad0443f6126c422b8fe2469c8248",
+  "request_test_sha256": "c0414d396d04d55d3720d960324fcc7a5dcb02aa403af6c81c3a12af2316b1b5",
+  "helper": {
+    "path": "/nix/store/8bcc1lym3v7pw0wragzm0fk2hh5hlj7d-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/gpu-render-smoke",
+    "wrapper_sha256": "7e09ff6b20cac30f7ba1930884b984071a74b99531e2d48e6b7cb72ed45ae135",
+    "elf_sha256": "55166411e8dbef5debf341a550b579b3d953b1170f3b572e240a258f96f1cfef",
+    "mesa": "/nix/store/wz6zvv7wf0kmmnq25hhs0zmpi9biyx4w-mesa-aarch64-unknown-linux-gnu-26.2.1"
+  },
+  "owner_fix": {
+    "path": "nix/panfrost-image-extents.patch",
+    "sha256": "e67a7f732c7f57ec83d04df3e2a173adac2f76386679e1bf09753cc346f7a56b",
+    "behavior": "Use selected backing-plane extents for GPU image descriptor bounds; preserve logical API dimensions.",
+    "host_regression": "Actual emitter and generated Midgard/Bifrost descriptors pass; compiled old emitter fails at the observed row5 boundary."
+  },
+  "observed": {
+    "candidate_boot_id": "4594f275-5d76-444c-bc55-bf227b91333f",
+    "renderer": "Mali-T880 MC4 (Panfrost)",
+    "native_report": {
+      "native_gpu_test_passed": true,
+      "scope": "synthetic-native-mm21-gpu",
+      "width": 80,
+      "height": 64,
+      "pixels": 5120,
+      "rgb_tolerance": 2,
+      "exported_fds": 2,
+      "export_capacity": 196608,
+      "api_draws": 1,
+      "parent_refs_released": true,
+      "codec_submissions": 0,
+      "decode_qualified": false
+    },
+    "input_cpu_conversion": false,
+    "mesa_gpu_detiling": true,
+    "gpu_irq_totals_before": {
+      "job": 0,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_irq_totals_after": {
+      "job": 6,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_kernel_health": {
+      "scoped_gpu_error_lines": 0,
+      "kernel_failure_lines": 0
+    },
+    "decoder_irq_delta": 0,
+    "decoder_cached_counters_all_zero": true,
+    "safe_quiescence": true,
+    "unloaded": true
+  },
+  "gpu_rendering_qualified": true,
+  "decoder_completion_qualified": false,
+  "decoded_surface_rendering_qualified": false,
+  "display_scanout_qualified": false,
+  "sustained_playback_qualified": false,
+  "supervised_profile_qualified": true,
+  "normal_desktop_image_promoted": false,
+  "recovery": {
+    "final_boot_id": "fcacc685-1b92-48cd-8833-e8c446c9a041",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 65,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "cleanup": {
+    "superseded_board_helper_removed": true,
+    "nix_liveness_protection": true,
+    "host_and_prior_trial_artifacts_retained": true
+  },
+  "evidence": {
+    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-109",
+    "admission": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/mesa-extents/admission.json",
+    "admission_sha256": "698e608a2d712c6c571bb2d9df8ebceb2f792fb2861b9eac9bc6fd54ce1b6067",
+    "observer_result_sha256": "c57bdb0835ad07dede7247aefe0a740bf02f2e0e49f23fc71b9e24ec6b99b95d",
+    "helper_log_sha256": "eee82ada75855941701641e4f64cc6d04e04ba266ebf6c8814e42b5ea84a88ae",
+    "build_proof_sha256": "a052f9b92880374c3e0157bc600eb46a9e31fb1ab5bd0d820b75905c26f80a11",
+    "source_review_sha256": "af941597f20d9ce1fd631b6740df2bffbe759129b38cd1388fd6cb670c759f72",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/independent-audit-109/result.json",
+    "independent_audit_sha256": "2f41df16788b078882c8c98a99f08621a6a7874e34eedce88e5571db8db94ca1",
+    "cleanup_proof_sha256": "05cb60230142d68804594793934418286cde1b078b86b444382ffabd2d5bc622"
+  }
+}

@@ -114,7 +114,7 @@
     "installed": true,
     "hardware_polarity_qualified": false,
     "decoder_completion_qualified": false,
-    "remaining_work": "Establish the exact public MT6797 peripheral end-of-picture enable/latch/handshake and source-to-SPI240 contract now that physical status mapping is pinned. No documented extra step was established in the existing allowed GPL review. Keep decoder programming unchanged until such a contract is available; no guessed fields, firmware calls or repeated polling qualification. Native DMA-buf hardware surfaces, encoder frame submission and production/suspend integration also remain unfinished.",
+    "remaining_work": "Establish the exact public MT6797 AVC full-finish to MISC0xa4 DONE16 latch/enable/handshake and IRQ assertion contract. Public DT/GIC-v3/SYSIRQ numbering is consistent; no documented additional peripheral step was established. Native buffer API/mapping/lifetime pass trial106 and synthetic tiled GPU rendering passes trial109. Complete real decoded-surface interoperation, CAPTURE import, encoder frame submission, sustained playback and suspend.",
     "normal_kernel_build": {
       "package": "/nix/store/m6qz9mw36h7da2gfi0rqhpya81nj0i4k-linux-gemini-7.2.9",
       "derivation": "/nix/store/jq0qc28r3a2r792di0cq1wi1w0h9cwx2-linux-gemini-7.2.9.drv",
@@ -160,6 +160,16 @@
       "observer_exit": 1,
       "independent_audit_exit": 0,
       "restored_accepted_image": 102
+    },
+    "public_irq_identity_review": {
+      "record": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/completion-owner-review/review.json",
+      "sha256": "c6493d41e0ac482773bd6edd5bdb2c214f749ea79fa400ee19025c6a5477e998",
+      "dt_spi": 240,
+      "parent_gic_intid": 272,
+      "sysirq_word": 7,
+      "sysirq_bit": 16,
+      "conclusion": "The exact MT6797 GPL DT and selected GIC-v3 owner agree with native translation; an off-by-32 change is unsupported.",
+      "hardware_irq_assertion_qualified": false
     }
   },
   "irq_trial_scope_20261011": {

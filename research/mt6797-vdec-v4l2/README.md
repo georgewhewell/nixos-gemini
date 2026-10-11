@@ -202,7 +202,9 @@ its video, media and export references, and the renderer closes the input FDs
 after EGL import. One draw must match all 5,120 independently calculated
 BT.601 pixels before EGL/GL teardown and module removal. A CLOEXEC pipe admits
 the helper only after every parent reference closes. This synthetic mode
-has passed host checks and strict ARM64 builds; hardware is unqualified.
+passes host checks, strict ARM64 builds and the scoped [trial 109](gpu-trial-109.json)
+hardware check: all 5,120 pixels match within the original RGB tolerance of 2,
+with exact alpha, successful EGL/GL teardown and module unload.
 It does not submit codec work or qualify decoder completion or display scanout.
 
 [Trial 107](gpu-trial-107.json) failed before observed GPU activity because the
@@ -216,10 +218,12 @@ dimensions where this import requires its flattened backing extent. That bound
 first rejects the luma load for row 5. The [Mesa owner patch](../../nix/panfrost-image-extents.patch)
 uses the backing plane extents; its build-time regression runs the actual
 descriptor emitter and generated packers for Midgard and Bifrost. Restoring the
-old bounds fails at row 5. Qualify all pixels with the same fixture, then return
-to decoder IRQ completion and decoded
-surface imports. Both trials restored the accepted image and passed independent
-terminal audits; synthetic rendering remains unqualified.
+old bounds fails at row 5. Trial 109 passes the unchanged fixture after that
+owner fix, with six GPU job interrupts and no detected GPU or kernel faults.
+All three trials restored the accepted image and passed independent terminal
+audits. The replaced helper is removed from the board's store, with its original
+artifacts retained on the host. Reuse this scoped rendering result; continue
+decoder IRQ completion, actual decoded-surface rendering and display imports.
 
 Decode admission also requires a recorded nonzero single-core full-finish word,
 following the public GPL HAL's raw Boolean semantics. This closes an acceptance
