@@ -148,6 +148,9 @@
       audio-playback-routing = gemini.buildPkgs.runCommand "gemini-audio-playback-routing-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.alsa-utils];
       } ''
+        cp ${./tools/audio-playback-evidence.py} audio-playback-evidence.py
+        cp ${./tools/test-audio-playback-evidence.py} test-audio-playback-evidence.py
+        python3 test-audio-playback-evidence.py
         python3 ${./nix/test-audio-playback-routing.py} \
           ${gemini.buildPkgs.writeText "gemini-asound.conf" gemini.system.config.environment.etc."asound.conf".text} \
           ${gemini.system.config.system.build.geminiAudioUcm}/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf \

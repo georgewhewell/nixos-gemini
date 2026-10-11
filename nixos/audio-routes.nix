@@ -90,7 +90,8 @@ let
   '';
   # Both onboard outputs share Playback_1 and the MT6351 HP buffers. On
   # this board their physical stereo order is reversed. Correct samples
-  # once at the playback PCM, including UCM clients; capture is separate.
+  # once at the standalone playback PCM. PipeWire's native UCM transport
+  # uses its hardware channel map below; capture is separate.
   playbackPcm = name: slave: ''
     pcm.${name} {
       type route
@@ -144,9 +145,6 @@ let
       ${pkgs.alsa-utils}/bin/amixer -c mt6797mt6351 cget ${lib.escapeShellArg "name='${control.name}'"} |
         ${pkgs.gnugrep}/bin/grep -Fq ': values=on'
     '') (playbackInterconnects ++ captureInterconnects)}
-  '';
-  playbackInspect = pkgs.writeShellScript "gemini-audio-playback-inspect" ''
-    exec ${pkgs.python3}/bin/python3 ${../tools/audio-playback-evidence.py} --inspect
   '';
   ucm = pkgs.runCommand "gemini-alsa-ucm" {} ''
     mkdir -p "$out/share/alsa"
@@ -261,7 +259,6 @@ in {
   # Expose the exact active board profile for read-only candidate validation.
   environment.etc."gemini/audio-ucm-hifi.conf".source =
     "${ucm}/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf";
-  environment.etc."gemini/audio-playback-inspect".source = playbackInspect;
   environment.etc."asound.conf".text = ''
     # ASoC power follows the selected stream. No GPIO is written by userspace.
     ${hookedPlaybackPcm "gemini_speakers" speakers}
