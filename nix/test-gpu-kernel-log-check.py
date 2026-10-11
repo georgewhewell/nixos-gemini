@@ -3,7 +3,7 @@ import subprocess,tempfile
 checker=Path(__file__).with_name('gpu-kernel-log-check.sh')
 zero='[ 120.978347] panfrost 13040000.gpu: MT6797_GPU_DIAG event=submit as=0 status=00000000 fault=00000000 tt_flags=007 memattr=0000000000484d48 transcfg=0000000000000000'
 warning='[ 120.00] panfrost 13040000.gpu: [drm:panfrost_devfreq_init [panfrost]] Failed to register cooling device'
-cases=[('ordinary debug: startup\n',True),(zero,True),(warning,True),
+cases=[('ordinary debug: startup\n',True),(zero,True),(warning,False),
  (zero.replace('fault=00000000','fault=00000001'),False),
  (zero.replace('status=00000000','status=00000001'),True),
  (zero.replace('status=00000000','status=00000002'),False),
@@ -21,4 +21,4 @@ with tempfile.TemporaryDirectory() as d:
   (p/'log').write_text(line+'\n')
   result=subprocess.run(['sh',str(checker),str(p/'log'),str(p/'scoped')],capture_output=True,text=True)
   assert (result.returncode==0)==ok,(i,result.stdout,result.stderr)
-print('PASS actual GPU log classifier: zero-fault AS idle/active snapshots, optional warning and real/malformed failures')
+print('PASS actual GPU log classifier: zero-fault AS idle/active snapshots; cooling and real/malformed failures rejected')
