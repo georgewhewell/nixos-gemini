@@ -240,5 +240,112 @@
     "Registration and bounded radio checks do not qualify sustained concurrent traffic.",
     "Build-time hardware_trial_complete fields precede this trial; this record states the final accepted scope."
   ],
-  "audit_bookkeeping": "The post-audit log-saving wrapper failed; the auditor itself completed with exit 0 and retained its proof. No audit rerun."
+  "audit_bookkeeping": "The post-audit log-saving wrapper failed; the auditor itself completed with exit 0 and retained its proof. No audit rerun.",
+  "receive_attribution_112": {
+    "accepted": {
+      "name": "boot-test-112",
+      "image": "/nix/store/aanjkb8k2rmhqxhn9jsczcq3sq3xrvrl-gemini-mainline-nixos-padded.img",
+      "boot_sha256": "f26627726b1548140f1cd552091041ea3b2ee30aab0a019251dbabfdf29e3ea4",
+      "system": "/nix/store/g1csfnznsydv7zsydqcd1bisk5i9vn5g-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "store": "normal",
+      "zswap_shrinker": "absent",
+      "boot": "direct",
+      "rtc_epoch": "native",
+      "previous": "boot-test-111",
+      "paging_policy": "zram",
+      "desktop": "gnome"
+    },
+    "boot_id": "48dfc77b-8fcf-410e-b842-c1f89ec9dbfe",
+    "kernel_revision": "8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0",
+    "packaging_revision": "8c92fe3",
+    "kernel": "/nix/store/1ffmn3kijrykrlb7blhiyk73yrr2hkvm-linux-gemini-7.2.9",
+    "bundle": "/nix/store/mn42bgjl1783cvxmk3l7a9fdwcrsy2hs-gemini-mainline-nixos-bundle",
+    "build_and_deployment_exits": {
+      "kernel": 0,
+      "image": 0,
+      "copy": 0,
+      "trial": 0,
+      "audit": 0
+    },
+    "independent_audit_source_count": 49,
+    "counter_contract": {
+      "crc_valid_task2": "Nonempty CRC-valid task-2 frames before sequence selection, including retries/out-of-order frames.",
+      "admitted_inactive_rejected": "Actual native endpoint callback outcomes for nonempty frames.",
+      "lifetime": "Owner-local counts preserved across parser resets, open/close and power transitions; separate non-atomic snapshots."
+    },
+    "cycles": [
+      {
+        "schema": 2,
+        "result": "passed",
+        "bytes": 0,
+        "read_window_seconds": 10,
+        "lna_before_users": 0,
+        "lna_before_enabled": 0,
+        "lna_during_users": 1,
+        "lna_during_enabled": 1,
+        "lna_after_users": 0,
+        "lna_after_enabled": 0,
+        "rx_before": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        },
+        "rx_during": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        },
+        "rx_after": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        }
+      },
+      {
+        "schema": 2,
+        "result": "passed",
+        "bytes": 0,
+        "read_window_seconds": 10,
+        "lna_before_users": 0,
+        "lna_before_enabled": 0,
+        "lna_during_users": 1,
+        "lna_during_enabled": 1,
+        "lna_after_users": 0,
+        "lna_after_enabled": 0,
+        "rx_before": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        },
+        "rx_during": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        },
+        "rx_after": {
+          "admitted": 0,
+          "crc_valid_task2": 0,
+          "inactive": 0,
+          "rejected": 0
+        }
+      }
+    ],
+    "desktop_radio_results": {
+      "bluetooth": "passed",
+      "network": "passed"
+    },
+    "conclusion": "Both windows and all owner counters stay zero. No CRC-valid task-2 frame reaches the selected boundary; no endpoint discard or FIFO rejection is observed. Malformed traffic before CRC validation remains possible.",
+    "receiver_commands_sent": 0,
+    "stream_progress_qualified": false,
+    "receiver_protocol_qualified": false,
+    "position_qualified": false,
+    "next": "Establish public receiver output/initialization and inner framing. Do not change sequence selection, power admission or FIFO retry based on all-zero counters.",
+    "proof_directory": "/mnt/Home/src/nixos-gemini/handoff/boot-test-112",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/gnss-integration-20261011/rx-attribution-build/independent-audit-112/result.json"
+  }
 }

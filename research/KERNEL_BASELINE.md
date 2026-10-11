@@ -12,16 +12,17 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 111, kernel
-source `a1a88da11c1da5cac457d3476aa203cec7850e2b`.
+The [installed accepted image](accepted-baseline.json) is trial 112, kernel
+source `8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0`.
 Its focused deployment and independent terminal audit pass GNOME RFKILL
-visibility, directed NetworkManager scanning, onboard audio mapping, RAM-only
-paging, retained storage and ordinary Nix builds. The native FUSB301 fix removes
+visibility, directed NetworkManager scanning, two GNSS power cycles with passive
+receive attribution, RAM-only paging, retained storage and ordinary Nix builds.
+Onboard audio mapping retains its unchanged inputs. The native FUSB301 fix removes
 repeated unchanged Type-C/USB-role notifications: zero of each in six seconds,
 versus 12 of each on image 102. The [performance record](desktop-responsiveness-20261011.json)
 retains both observations, the exact build and independent audit.
-Native GNSS registration and two bounded LNA cycles retain the unchanged owner
-inputs and [image 101 proof](gnss-integration-20261011.json). Onboard stereo mapping retains
+Native GNSS registration and two bounded LNA cycles pass with the new owner
+counters in [image 112 proof](gnss-integration-20261011.json). Onboard stereo mapping retains
 unchanged-input trial 98 evidence. Normal
 NetworkManager association and traffic over wlan0 retain trial 95 evidence;
 Bluetooth discovery retains trial 94 evidence with unchanged radio inputs. Selecting another
@@ -67,8 +68,11 @@ receive ownership is not a SIM/watchdog fix. The
 
 This combined image also installs native MMC0 pad ownership and the current-
 demand check before CPU parking removes a core. Storage retention passes with
-legacy timing; faster eMMC modes are not enabled. Sampled idle activity still
-shows parking and udev overhead; UI responsiveness remains unqualified in the
+legacy timing; faster eMMC modes are not enabled. Image 112 retains the procfs
+sample allocation and seeks for fresh counters. A controlled helper comparison
+attributes 23.7% less read CPU time to that change; the installed daemon still
+uses 3.86% of one core, mostly kernel time, with no topology transitions.
+Udev overhead was removed by the native FUSB301 fix; UI responsiveness remains unqualified in the
 [performance record](desktop-responsiveness-20261011.json). The native PMU
 candidate remains separate until its offline-CPU probe lifetime and hardware
 counters are qualified; scheduling capacity ratios must be measured.
@@ -79,7 +83,9 @@ sets prevent treating that as a controlled comparison or a UI qualification.
 
 GNSS uses the existing CONSYS/STP owner and the standard Linux GNSS class.
 Normal module discovery and udev loading now work. Two power cycles receive
-zero bytes, so receiver initialization, framing, position and suspend remain
+zero bytes and all CRC-valid/admitted/inactive/rejected counters stay zero.
+No validated task-2 frame reaches the selected boundary; malformed traffic
+before CRC validation remains possible. Receiver output/initialization, framing, position and suspend remain
 open in the [GNSS owner record](../campaign/13-gps-gnss.md).
 
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
