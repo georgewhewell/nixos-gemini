@@ -53,5 +53,9 @@ positions. The public vendor NMEA-labelled port buffers userspace-written data;
 its name does not prove receiver NMEA output. Public GPS EMI is optional MNL
 offload and is disabled in the retained board configuration. Checked public
 source establishes no additional receiver initialization command or inner
-payload framing. Keep location data out of retained diagnostics. Current status and
+payload framing. Existing active full-STP diagnostics cannot distinguish task2
+delivery from inactive endpoint discard. The next native observation needs
+scalar accepted/discarded/FIFO-rejected counts at that owner; generic bootstrap
+STP and KUnit counters do not measure this stream. Keep location data out of
+retained diagnostics. Current status and
 remaining work are recorded in [HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md).

@@ -112,7 +112,17 @@
     "position_qualified": false,
     "suspend_qualified": false,
     "sustained_radio_coexistence_qualified": false,
-    "next": "Establish the public receiver initialization and delivery contract; qualify received data, framing and position using ordinary userspace."
+    "next": "Distinguish task2 delivery from native endpoint accepted/inactive-discarded/FIFO-rejected bytes with scalar owner evidence; then establish public receiver initialization/framing and qualify position using ordinary userspace.",
+    "source_review": {
+      "public_pin": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+      "receive_function_active": "Registered STP callback; public callback registration flushes its queue and sends no receiver-enable command.",
+      "receiver_start_payload_established": false,
+      "existing_active_session_rx_counters": false,
+      "generic_stp_counters_qualify_active_gnss": false,
+      "proprietary_source_or_binary_examined": false,
+      "source_note": "/mnt/Home/src/nixos-gemini/handoff/gnss-integration-20261011/public-gnss-zero-byte.txt",
+      "source_note_sha256": "c04788310877cead663f6d980c0a2d778dc270354b14eb4bf912d7b1cc8f78bb"
+    }
   },
   "desktop_radio": {
     "bluetooth": {

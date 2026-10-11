@@ -561,6 +561,29 @@
       "scope": "Native ARM PMU, PERF_EVENTS and DT PPI partitions; offline PMU probe defers and existing deferred-probe work retries after successful CPU online outside CPUHP locks.",
       "hardware_qualified": false,
       "capacity_weights_measured": false
+    },
+    "online_sampling_consolidation": {
+      "behavior": "Only the steady decision uses the coherent /proc/stat online mask already used for cap/load. Input admission, apply and post-write recount continue fresh sysfs queries. Existing threshold and timing rules preserved.",
+      "bounds": "Existing supported CPU range0..31 retained; parser guards unsigned shift. Sparse unmanaged31 contributes cap/load. Blocked8 contributes cap/load but is excluded from managed count.",
+      "steady_state_sysfs_reads_removed_per_second": 180,
+      "validation": {
+        "strict_actual_parser_policy_asan_ubsan_exit": 0,
+        "normal_arm64_component_exit": 0,
+        "normal_host_and_fake_sysfs_passed": true,
+        "elf_machine": 183,
+        "package": "/nix/store/ipdpyz7nnqwlnbhshszzl4wj6w36vlbg-gemini-core-parking-static-aarch64-unknown-linux-musl-1",
+        "binary_sha256": "69d45a760b1bc280a5044f2927713b9a3f19f8c2369364b57edf79008edac496",
+        "source_sha256": {
+          "nix/core-parking.c": "72ff98baf9d05a07d6f94c581223dca214f5398e1e7fd7212baea1960cabd757",
+          "nix/test-core-parking-policy.c": "116730aaa233287420aa5af26b43c19cecb0a4fcf69c7ff45bf81bbaa87ae59f"
+        }
+      },
+      "installed": false,
+      "accepted_image_unchanged": 101,
+      "runtime_cpu_cost_and_ui_effect_qualified": false,
+      "evidence": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/parking-online-snapshot-checks/result.json",
+      "evidence_sha256": "4332e6582cdff13e5c47b566c5f5e10afda322ab38a6a7d009717a1671ddde95",
+      "next": "Include the checked component in the next focused image update, then compare its scalar CPU/transition cost during ordinary use. Do not repeat unchanged RTC/GPU/audio qualification."
     }
   }
 }

@@ -66,6 +66,7 @@ struct sample {
 	int load;	/* sum of busy percent over online CPUs */
 	int cap;	/* online CPUs */
 	int nr;		/* runnable tasks, excluding this daemon */
+	uint32_t online_mask;	/* supported online CPUs from this sample */
 };
 
 struct pstate {
@@ -192,8 +193,6 @@ static int decide(const struct policy *p, struct pstate *s,
 	return want;
 }
 
-#ifndef CORE_PARKING_NO_MAIN
-
 static const char *root = "";
 static bool dry_run;
 static bool restore_on_exit = true;
@@ -311,13 +310,19 @@ static bool usable(int cpu, int64_t now)
 	return !blocked[cpu] && !pinned[cpu] && now >= backoff_until[cpu];
 }
 
-static int count_online_managed(void)
+/* Policy uses its load snapshot; admissions and writes need fresh state. */
+static int count_online_managed(const struct sample *x)
 {
 	int i, k = 0;
 
-	for (i = 0; i < norder; i++)
-		if (!blocked[order[i]] && cpu_online(order[i]) == 1)
+	for (i = 0; i < norder; i++) {
+		int cpu = order[i];
+
+		if (!blocked[cpu] && (x ?
+		    (x->online_mask & (UINT32_C(1) << cpu)) != 0 :
+		    cpu_online(cpu) == 1))
 			k++;
+	}
 	return k;
 }
 
@@ -370,16 +375,16 @@ static bool park_one(enum reason why, const struct sample *x, int k)
 
 static void apply(int want, enum reason why, const struct sample *x)
 {
-	int k = count_online_managed();
+	int k = count_online_managed(NULL);
 	int guard = MAX_CPUS * 2;
 
 	while (k < want && guard--) {
 		if (!unpark_one(why, x, k))
 			break;
-		k = count_online_managed();
+		k = count_online_managed(NULL);
 	}
 	if (k > want && park_one(why, x, k))
-		k = count_online_managed();
+		k = count_online_managed(NULL);
 }
 
 static bool read_stat(struct sample *x)
@@ -387,6 +392,7 @@ static bool read_stat(struct sample *x)
 	char path[512], line[512];
 	FILE *f;
 	int load = 0, cap = 0, nr = 0;
+	uint32_t online_mask = 0;
 
 	snprintf(path, sizeof(path), "%s/proc/stat", root);
 	f = fopen(path, "re");
@@ -410,6 +416,7 @@ static bool read_stat(struct sample *x)
 		if (cpu < 0 || cpu >= MAX_CPUS)
 			continue;
 		cap++;
+		online_mask |= UINT32_C(1) << cpu;
 		total = 0;
 		for (i = 0; i < 8; i++)	/* guest time is already in user */
 			total += v[i];
@@ -427,6 +434,7 @@ static bool read_stat(struct sample *x)
 	x->load = load;
 	x->cap = cap;
 	x->nr = nr < 0 ? 0 : nr;
+	x->online_mask = online_mask;
 	return cap > 0;
 }
 
@@ -807,7 +815,7 @@ int main(int argc, char **argv)
 		if (input_boost) {
 			s.boost_until = now + p.boost_hold_ms;
 			if (!file_exists("pause")) {
-				int k = count_online_managed();
+				int k = count_online_managed(NULL);
 				int want = policy_floor(&p, &s, now);
 
 				if (s.hot && want > p.thermal_k)
@@ -843,7 +851,7 @@ int main(int argc, char **argv)
 			continue;
 		{
 			bool hold = file_exists("hold");
-			int k = count_online_managed();
+			int k = count_online_managed(&last);
 			enum reason why;
 			int want = decide(&p, &s, &last, now, k, managed_total(),
 					  hold, &why);
@@ -864,5 +872,3 @@ bad:
 	usage();
 	return 2;
 }
-
-#endif /* CORE_PARKING_NO_MAIN */

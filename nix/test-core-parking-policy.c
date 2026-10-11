@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-/* Host unit test for the pure policy step of core-parking.c. */
-#define CORE_PARKING_NO_MAIN
+/* Host checks for the actual policy, parser and admission paths. */
+#define main core_parking_daemon_main
 #include "core-parking.c"
+#undef main
 
 #include <assert.h>
 
@@ -20,12 +21,109 @@ static int step(struct pstate *s, int load, int cap, int nr, int64_t t, int k,
 	return decide(&P, s, &x, t, k, 9, false, why);
 }
 
+static void fixture_file(const char *relative, const char *value, bool remove)
+{
+	char *path;
+	FILE *f;
+
+	assert(asprintf(&path, "%s%s", root, relative) >= 0);
+	if (remove) {
+		assert(unlink(path) == 0);
+	} else {
+		f = fopen(path, "w");
+		assert(f && fputs(value, f) >= 0 && fclose(f) == 0);
+	}
+	free(path);
+}
+
+static void test_parser(void)
+{
+	static const char *const dirs[] = {
+		"/proc", "/sys", "/sys/devices", "/sys/devices/system",
+		"/sys/devices/system/cpu", "/sys/devices/system/cpu/cpu1",
+		"/sys/devices/system/cpu/cpu3", "/sys/devices/system/cpu/cpu8",
+		"/sys/devices/system/cpu/cpu31",
+	};
+	static const int cpus[] = {1, 3, 8, 31};
+	struct sample x;
+	char *tmp, *path;
+	const char *tmpdir = getenv("TMPDIR");
+
+	assert(asprintf(&tmp, "%s/core-parking-parser-XXXXXX",
+			tmpdir ? tmpdir : "/tmp") >= 0);
+	assert(mkdtemp(tmp));
+	root = tmp;
+	for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
+		assert(asprintf(&path, "%s%s", root, dirs[i]) >= 0);
+		assert(mkdir(path, 0700) == 0);
+		free(path);
+	}
+	fixture_file("/proc/stat",
+		"cpu  0 0 0 0 0 0 0 0 0 0\n"
+		"cpu0 10 0 0 90 0 0 0 0 0 0\n"
+		"cpu3 20 0 0 80 0 0 0 0 0 0\n"
+		"cpu8 30 0 0 70 0 0 0 0 0 0\n"
+		"cpu31 0 0 0 100 0 0 0 0 0 0\n"
+		"cpu32 100 0 0 0 0 0 0 0 0 0\n"
+		"cpu2 malformed\nprocs_running 3\n", false);
+	assert(read_stat(&x));
+	assert(x.cap == 4 && x.nr == 2 && x.load == 0);
+	assert(x.online_mask == (UINT32_C(1) | (UINT32_C(1) << 3) |
+				(UINT32_C(1) << 8) | (UINT32_C(1) << 31)));
+	memcpy(order, cpus, sizeof(cpus));
+	norder = sizeof(cpus) / sizeof(cpus[0]);
+	blocked[8] = true;
+	/* CPU0 is unmanaged; blocked CPU8 still contributes to sample cap. */
+	assert(count_online_managed(&x) == 2);
+	fixture_file("/proc/stat",
+		"cpu0 20 0 0 180 0 0 0 0 0 0\n"
+		"cpu3 70 0 0 130 0 0 0 0 0 0\n"
+		"cpu31 0 0 0 200 0 0 0 0 0 0\n"
+		"procs_running 0\n", false);
+	assert(read_stat(&x));
+	assert(x.cap == 3 && x.nr == 0 && x.load == 60);
+	assert(x.online_mask == (UINT32_C(1) | (UINT32_C(1) << 3) |
+				(UINT32_C(1) << 31)));
+	assert(count_online_managed(&x) == 2);
+	fixture_file("/sys/devices/system/cpu/cpu1/online", "1\n", false);
+	fixture_file("/sys/devices/system/cpu/cpu3/online", "0\n", false);
+	fixture_file("/sys/devices/system/cpu/cpu8/online", "1\n", false);
+	fixture_file("/sys/devices/system/cpu/cpu31/online", "0\n", false);
+	/* Admission must reread current state even when the sample says k=2. */
+	assert(count_online_managed(NULL) == 1);
+	apply(2, R_MIN, &x);
+	assert(cpu_online(3) == 1 && cpu_online(31) == 0);
+	assert(count_online_managed(NULL) == 2);
+	assert(count_online_managed(&x) == 2);
+	fixture_file("/proc/stat", "cpu2 malformed\nprocs_running 1\n", false);
+	assert(!read_stat(&x) && x.cap == 0 && x.online_mask == 0);
+	fixture_file("/proc/stat", NULL, true);
+	x = (struct sample){ .cap = 7, .online_mask = UINT32_C(1) << 31 };
+	assert(!read_stat(&x) && x.cap == 7 &&
+	       x.online_mask == (UINT32_C(1) << 31));
+	for (size_t i = 0; i < sizeof(cpus) / sizeof(cpus[0]); i++) {
+		assert(asprintf(&path, "/sys/devices/system/cpu/cpu%d/online", cpus[i]) >= 0);
+		fixture_file(path, NULL, true);
+		free(path);
+	}
+	for (size_t i = sizeof(dirs) / sizeof(dirs[0]); i > 0; i--) {
+		assert(asprintf(&path, "%s%s", root, dirs[i - 1]) >= 0);
+		assert(rmdir(path) == 0);
+		free(path);
+	}
+	assert(rmdir(root) == 0);
+	root = "";
+	free(tmp);
+}
+
 int main(void)
 {
 	struct pstate s = { .low_since = -1 };
 	enum reason why;
 	int64_t t = 0;
 	int k, i;
+
+	test_parser();
 
 	/* Idle, 10 CPUs online: nothing before the hold, then one per hold. */
 	k = 9;
