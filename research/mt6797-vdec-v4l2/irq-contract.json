@@ -178,5 +178,15 @@
     "polling_trials_66_67": "Exact retained engine reads MISC0xa4 after picture-complete polling and before stop, core reset or cleanup ACK. The sampled0x3001 is pre-cleanup but is not continuous source observation.",
     "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase.",
     "trial_103_completed_changed_scope": "The truthful --single grey64 selector submitted the original20-byte compressed input first and alone under ACTIVE-clear0x101 on exact accepted image102/K354. Native SPI240 setup was accepted, but AVC complete1/PIC80000001/MB3,3/error0 coexisted with -110/event0/all10-CPU delta0/MISC3001. Capture remained sentinel; private pixels unmeasured. Stop/guards/unload and supervised return102/independent terminal audit pass. This input/owner scope is now measured; repeating it unchanged cannot close the peripheral completion contract."
+  },
+  "additional_public_producer_lead": {
+    "url": "https://chromium.googlesource.com/chromiumos/platform/ec/+/08f5a1e6fc2c9467230444ac9b582dcf4d9f0068/baseboard/mtscp-rv32i/vdec.c",
+    "revision": "08f5a1e6fc2c9467230444ac9b582dcf4d9f0068",
+    "sha256": "81fec7e4bdbc600b51f0be89c134e8c9e580dd0005b6b98c7c711425cad51283",
+    "license": "BSD-style, stated in file header",
+    "finding": "Public LAT/CORE dispatch queues call empty vdec_msg_handler/vdec_core_msg_handler stubs when the private overlay is absent. No peripheral enable/latch or direct frame programming is supplied.",
+    "private_overlay_examined": false,
+    "mt6797_compatibility_established": false,
+    "new_peripheral_register_change_justified": false
   }
 }

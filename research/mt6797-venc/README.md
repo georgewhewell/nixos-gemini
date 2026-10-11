@@ -12,6 +12,12 @@ VPU/SCP firmware or a private overlay. This does not establish that MT6797
 requires firmware. No proprietary codec source, library or firmware has been
 examined or used by this work.
 
+The public [MT6582 kernel wrapper](https://android.googlesource.com/kernel/mediatek/+/f3aa758d997877557afc249dfc45db452e585f6f/drivers/misc/mediatek/videocodec/mt6582/videocodec_kernel_driver.c)
+also supplies IRQ/ACK handling and maps encoder registers to callers. Its
+[GPL HAL](https://android.googlesource.com/kernel/mediatek/+/f3aa758d997877557afc249dfc45db452e585f6f/drivers/misc/mediatek/videocodec/mt6582/common/hal/src/hal.c)
+has empty initialization/control cases. These inspected sources supply no
+direct frame backend or MT6797 register-compatibility contract.
+
 Remaining work belongs in one native V4L2 encoder driver:
 
 1. Establish source-plane address/pitch fields, reference and reconstruction
