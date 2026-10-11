@@ -1,78 +1,44 @@
 # Gemini kernel development baseline
 
-Development follows the latest stable upstream Linux APIs. As checked against
-[kernel.org](https://www.kernel.org/releases.json) on 2026-10-10, that is Linux
-7.2.9 (`v7.2.9`, `5fce161649b4d779d1b76d9fcd52dc77779774b8`).
-Mainline is 7.3-rc6. Use mainline documentation and subsystem implementations
-when designing drivers, and verify the APIs against the pinned stable source.
-Update the stable base regularly; keep the pin reproducible rather than fetching
-a moving branch during a build.
+The maintained base is Linux 7.2.9 (`v7.2.9`,
+`5fce161649b4d779d1b76d9fcd52dc77779774b8`), the latest stable release checked
+against [kernel.org](https://www.kernel.org/releases.json) on 2026-10-10.
+Mainline was 7.3-rc6. New drivers use current subsystem contracts, checked
+against the pinned stable source; builds use reproducible commits.
 
-The normal kernel and development shell share the default ARM64 compiler
-from the locked current Nixpkgs input. This evaluates to GCC 15.3.0 on the
-current lock; there is no separate GCC version pin. The former GCC 12.2.0
-selection was inherited from the original board packaging, without a
-documented GCC 15 incompatibility. [Trial 87](default-toolchain-20261010.json)
-passed the full build, required kernel host checks, ARM64 desktop/manager runtime
-audit, supervised hardware acceptance and independent terminal audit. Its GCC
-15.3.0 / binutils 2.46 image was retained. [Trial 88](desktop-responsiveness-20261011.json)
-installs the same toolchain with GPU DVFS, built-in FUSE and Wi-Fi cancellation
-fixes; Bluetooth now registers and powers on automatically. The experimental
-decoder module is rebuilt with strict MODPOST and `W=1` against this exact
-kernel/configuration/symbol table in the trial 88 record; its IRQ hardware test remains
-pending. [Trial 85](networkmanager-image-20261010.json) preserves the earlier
-GCC 12 image evidence.
+Linux development uses one branch, `gemini-7.2.9`, with upstream ancestry and
+the replayed board port. Packaging uses `master`. The default build and
+its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
+binutils 2.46. There is no separate compiler version pin or media kernel variant.
+Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The 7.2.9 port is in branch `gemini-7.2.9`, with the full upstream ancestry,
-854 replayed board commits and the original 11 merges. The normal kernel,
-DTB and modules build successfully, and every required kernel host check passes.
-The native media modules build with strict MODPOST against the generated
-7.2.9 `Module.symvers` and matching kernel configuration. Earlier platform
-qualification used source `5fb8876` and restored 7.1.3 after its tests. The
-current source and installed GNOME image are qualified below. Media hardware,
-suspend and hibernation remain unqualified on 7.2.9.
-Previous hardware results describe their exact source, configuration and kernel;
-they do not qualify a rebased kernel. Historical reproduction packages retain
-their original version pins. Uncommitted allocator diagnostics in the original
-kernel checkout are preserved separately and are not part of this build.
+The [installed accepted image](accepted-baseline.json) is trial 94, kernel
+source `690c7c5119657c6fecc8568d5642cd7268c1b1d3`.
+Its [desktop proof](desktop-radio-activation-20261011.json) and independent
+terminal audit pass GNOME RFKILL visibility, bounded Bluetooth discovery as
+the desktop user, directed NetworkManager scanning, effective onboard stereo
+mapping, RAM-only paging, retained storage and ordinary Nix builds. Wi-Fi
+association/data, Bluetooth pairing/profiles and audible orientation remain
+unqualified. RTC and GPU results retain their relevant unchanged-input evidence
+from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
+repeat RTC alarm/calendar diagnostics.
 
-The earlier qualified port source was `5fb8876d52f20cf79d8618c675d478633b052fc5`.
-Current development pins `a25cb83b405045f7a1d8b25aeba71036eb277206` on
-`gemini-7.2.9`. This single kernel includes the decoder's device-tree resources,
-its clock provider, built-in IPv6, FUSE and LZ4 zram, with zswap and zram writeback
-disabled. GPU voltage changes use native OPP ordering through the existing
-shared-rail owner; seven frequencies and clock/voltage readbacks pass rendering
-on the installed board. Wi-Fi scan cancellation drains the matching firmware
-completion rather than fencing the radio. The temporary `gemini-video-7.2.9` branch was merged, then deleted
-locally and remotely. Its earlier source snapshot remains detached for
-reproducing recorded build evidence; it is not a development branch.
+Development pins `9d8ecc3776f0c0705173149446c66ea417d700e7`, which also admits
+current supplicant userspace capability flags and station joins to cached
+passive-channel APs. Its real-callback tests use the kernel's native flag enums
+and are required by the normal kernel build. Hardware activation is pending.
+The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
+GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are
+disabled. The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) remains preserved;
+historical packages and their exact proofs are separate from current development.
 
-[Trial 88](desktop-responsiveness-20261011.json) qualifies the current GCC 15-built
-GNOME/zram image and keeps it installed after a passing independent audit.
-[Trial 81](desktop-ui-20261010.json) retains the earlier UI evidence. Local Wayland, HiDPI and
-the dock pass; IPv6 ping passed on this configuration in trial 80.
-The seven explicit hardware test units did not start during normal boot.
-RTC startup, UTC and awake alarm delivery/cancellation/rearming, actual zram
-I/O and ordinary Nix builds pass. The RTC IRQ test now counts all possible
-CPUs, preserving events when cores park; no RTC driver change was needed.
-The [consolidated build record](consolidated-kernel-gnome-ipv6-20261010.json)
-records the decoder IRQ module rebuilt against this kernel's exact configuration
-and symbol table, with `W=1` and strict MODPOST. It requires a delivered done
-event before accepting a picture and synchronizes before reset or power release.
-[Trial 86](mt6797-vdec-v4l2/irq-trial-86.json) loaded its controller diagnostic
-successor and observed no delivered IRQ. Earlier polling results do not qualify
-IRQ delivery. The next module must match the default-compiler kernel exactly.
-
-The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) and its immutable
-[host](ram-only-recovery-20261010.json) and [hardware](ram-only-recovery-hardware-20261010.json)
-proofs remain preserved. Its unchanged image needs no new baseline trial.
-Current development and the installed system use the single 7.2.9 kernel.
-The rebase keeps upstream's new DSI pre-enable ordering, optional Panfrost ACE
-clock ownership and native CPU hotplug code. Board followups adapt the renamed
-CNP capability, add the codec's required `#sound-dai-cells`, and expand the
-GPULDO host fixture to cover both optional clocks and every acquisition failure.
-The maintained package exports its generated `Module.symvers` for external
-module builds and verifies the upstream version against its declared version.
+The kernel exports its generated configuration and `Module.symvers` for strict
+external-module builds. Experimental media modules must be rebuilt against the
+exact installed kernel and toolchain. [Decoder trials 89–90](mt6797-vdec-v4l2/irq-trial-90.json)
+used the recorded trial-88 build: both timed out with zero delivered decoder
+interrupts, then passed quiescence, unload, recovery and terminal audits.
+No successful frame was exported. Media hardware completion, shared surfaces,
+encoding and suspend remain unfinished.
 
 ## Media interfaces
 

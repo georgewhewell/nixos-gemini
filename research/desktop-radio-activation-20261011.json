@@ -1,148 +1,124 @@
 {
   "schema_version": 1,
   "date": "2026-10-11",
-  "candidate_91": {
-    "boot_id": "ca430f25-3355-4496-954c-83f37c0f2b4a",
-    "system": "/nix/store/wvzcrli6vwc2d9y9aysl92vin8xa5z5z-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "gnome_rfkill_radio_inputs": "passed",
-    "network_scan_check": "failed before scan request: unit script uses a bare exec command",
-    "candidate_kept": false,
+  "accepted": {
+    "boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
+    "system": "/nix/store/5nmv4zbddx208ypqhz1vqz29r4kdkhmc-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
+    "candidate_kept": true,
     "independent_recovery_audit": "passed",
-    "recovered_boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
-    "wifi_association_driver_failures_observed": true
+    "source_count": 47,
+    "rtc_alarm_calendar_diagnostics_run": false,
+    "gnome_radio_inputs": "passed",
+    "directed_wildcard_nm_scan": "passed",
+    "scan_duration_seconds": 13.475,
+    "hif_faults": 0,
+    "hif_restarts": 0,
+    "effective_audio_hardware_mapping": "passed",
+    "audio_observed": {
+      "schema": 1,
+      "sinks": [
+        {
+          "channel_maps": [
+            [
+              "FL",
+              "FR"
+            ]
+          ],
+          "channels": 2,
+          "hardware_positions": [
+            [
+              "FR",
+              "FL"
+            ]
+          ],
+          "hardware_use_chmap": [
+            false
+          ],
+          "id": 54,
+          "pcm": "hw:mt6797mt6351,0",
+          "position": [
+            "FR",
+            "FL"
+          ],
+          "profile": "HiFi: Speaker: sink",
+          "state": "suspended"
+        }
+      ]
+    }
   },
-  "bluetooth_discovery_on_restored_88": {
-    "boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
-    "system": "/nix/store/hnaa5h6jpah5ji8ngcb5c78ka1p2pqr2-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "bluetooth_discovery": {
+    "result": "passed",
+    "client_user": "gemini",
     "bounded_discovery_seconds": 16,
-    "wifi_netdev_present": true,
     "before": {
       "device_objects": 0,
+      "named_objects": 0,
+      "paired_objects": 0,
+      "random_address_objects": 0,
       "rssi_objects": 0,
-      "paired_objects": 0
+      "uuid_objects": 0
     },
     "after": {
-      "device_objects": 13,
-      "rssi_objects": 13,
-      "paired_objects": 0
-    },
-    "discovering_samples": 16,
-    "final_discovering": false,
-    "hci_commands": {
-      "LE Set Random Address": 2,
-      "LE Set Scan Parameters": 1,
-      "LE Set Scan Enable": 4,
-      "Inquiry": 1,
-      "LE Set Scan Paramet..": 1
+      "device_objects": 14,
+      "named_objects": 1,
+      "paired_objects": 0,
+      "random_address_objects": 11,
+      "rssi_objects": 14,
+      "uuid_objects": 1
     },
     "hci_events": {
       "Command Complete": 8,
-      "LE Meta Event": 84,
       "Command Status": 1,
-      "Inquiry Complete": 1
+      "Inquiry Complete": 1,
+      "LE Meta Event": 60
     },
     "hci_statuses": {
       "00": 16
     },
-    "bluez_discovery_started": true,
     "bluez_discovery_failure_codes": [],
-    "radio_power_or_pairing_actions": 0,
-    "owner": "bounded diagnostic bluetoothctl client",
-    "gnome_discovery_qualified": false,
-    "wifi_association_qualified": false
-  },
-  "wifi_activation_failure": {
-    "boot_id": "de34d512-3a41-4645-93f1-9dc9164abb65",
-    "supplicant_version": "2.11",
-    "source_tar_sha256": "912ea06f74e30a8e36fbb68064d6cdff218d8d591db0fc5d75dee6c81ac7fc0a",
-    "locked_nixpkgs_source_matches_public_tar": true,
-    "nl80211_connect_errno": -95,
-    "request": {
-      "wpa_version": 2,
-      "group_cipher": "000fac04",
-      "pairwise_cipher": "000fac04",
-      "allowed_akms": [
-        "000fac02",
-        "000fac06"
-      ],
-      "station_rsn_akm": "000fac02",
-      "station_rsn_capabilities": 140,
-      "ie_ids": [
-        48,
-        127,
-        59
-      ],
-      "auth_type": 0
+    "faults_after": {
+      "bt_command_timeouts": 0,
+      "shared_transport_fences": 0,
+      "wlan_hif_faults": 0,
+      "wlan_restarts": 0
     },
-    "cause": "Driver required exactly one allowed AKM; cfg80211 and current wpa_supplicant supply an allowed list with a separate single station RSN selection.",
-    "fix_kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
-    "fix": "Admit supported allowed-AKM lists and retain the station RSN selection, requiring membership; preserve CCMP/PMF/SAE policy and reject unsupported or absent selections.",
-    "host_before_actual_callback": "failed as expected with two supported AKMs",
-    "host_after_actual_callback": "passed with GCC15 ASan/UBSan, including reversed allowed-list order, SHA256/SAE selections and missing/unsupported lists",
+    "wifi_netdev_present": true,
+    "radio_power_or_pairing_actions": 0,
+    "gnome_panel_visual_confirmation": false
+  },
+  "wifi_activation": {
+    "source_verified_against": [
+      "wpa_supplicant 2.11 driver_nl80211.c:7064",
+      "Linux include/net/cfg80211.h:3380",
+      "Linux net/wireless/nl80211.c:14064",
+      "Linux net/mac80211/mlme.c:1336"
+    ],
+    "trace_boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
+    "bounded_trace_seconds": 18,
+    "connect_callbacks_observed": 2,
+    "station_rsn_parser_invoked": false,
+    "function_graph_return_values_available": false,
     "manual_connection_actions": 0,
+    "cause": "MLO_SUPPORT is a userspace capability unconditionally sent by current fullmac supplicant; the single-link driver rejected its flag before station RSN parsing.",
+    "additional_generic_fix": "Permit joining a cached infrastructure BSS on NO_IR/DFS channels, with disabled channels rejected and passive scan constraints preserved.",
+    "host_fixture_fixed": "Use the pinned kernel association/channel flag enums; copied UHR value incorrectly overlapped MLO_SUPPORT.",
+    "before_real_callback": "failed as expected for MLO capability and cached NO_IR BSS",
+    "after_real_callback": "passed with GCC15 ASan/UBSan",
+    "fix_kernel_revision": "9d8ecc3776f0c0705173149446c66ea417d700e7",
     "hardware_fix_qualified": false,
     "association_and_data_qualified": false
   },
-  "verification_fix": {
-    "bare_nixos_unit_command_resolved_through_running_unit_path": true,
-    "offline_cases": 14,
-    "result": "passed"
-  },
-  "next_candidate": "94: same compiled 690c7c5 kernel and production native UCM/WirePlumber routing; remove installed diagnostic helper and inspect actual ALSA backend parameters ephemerally.",
+  "limits": [
+    "Wi-Fi association and data are not qualified.",
+    "Bluetooth pairing, profiles and the owner's target are not qualified.",
+    "Speaker/headphone acoustic orientation is not verified."
+  ],
   "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/radio-activation-discovery-20261011",
-  "candidate_92": {
-    "boot_id": "1d8a51fe-3f4e-4d49-8bad-fc8120f8ba1e",
-    "system": "/nix/store/1516k650fdgabqk172jr1ps1g9pkrnsp-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
-    "gnome_rfkill_radio_inputs": "passed",
-    "directed_wildcard_nm_scan": "passed",
-    "scan_duration_seconds": 13.527,
-    "scan_requests": 1,
-    "scan_failed_events": 0,
-    "hif_faults": 0,
-    "hif_restarts": 0,
-    "audio_effective_path": "failed: no onboard sink present with the custom UCM playback PCM",
-    "candidate_kept": false,
-    "independent_recovery_audit": "passed",
-    "recovered_boot_id": "f20f96e2-bac2-492a-aa29-90afd4e2a31b",
-    "rtc_alarm_calendar_diagnostics_run": false,
-    "wifi_association_driver_failures_still_observed": 8,
-    "association_qualified": false,
-    "data_qualified": false,
-    "manual_connection_actions": 0
+  "failed_trials": {
+    "91": "Verifier could not resolve a bare unit command; automatic recovery and audit passed.",
+    "92": "Custom UCM PCM removed the onboard sink; automatic recovery and audit passed.",
+    "93": "Verifier confused logical client channels with hardware positions; automatic recovery and audit passed."
   },
-  "audio_followup": "Restore the native UCM hardware PCM used by ACP and map the onboard playback node physical channels to FR/FL through WirePlumber. Plain ALSA playback retains its independently tested route swap; capture and other cards stay unchanged.",
-  "candidate_93": {
-    "boot_id": "7705dfe3-7321-4011-bf26-d0ac917d3380",
-    "system": "/nix/store/8x719cfiqq6vyx07cxz5f19dggf1dd3f-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
-    "gnome_rfkill_radio_inputs": "passed",
-    "directed_wildcard_nm_scan": "passed",
-    "scan_duration_seconds": 12.373,
-    "audio_onboard_sink_present": true,
-    "audio_pcm": "hw:mt6797mt6351,0",
-    "audio_gate": "failed: verifier parsed JSON-quoted positions as literal quotes and compared client volume channels with hardware order; actual ALSA backend parameters were not captured",
-    "candidate_kept": false,
-    "independent_recovery_audit": "passed",
-    "recovered_boot_id": "abce5ff1-d8c7-4315-8a78-a3120b5247a4",
-    "rtc_alarm_calendar_diagnostics_run": false,
-    "association_qualified": false,
-    "data_qualified": false,
-    "manual_connection_actions": 0
-  },
-  "audio_verification_followup": {
-    "client_volume_channel_map": [
-      "FL",
-      "FR"
-    ],
-    "required_hardware_order": [
-      "FR",
-      "FL"
-    ],
-    "required_hardware_use_chmap": false,
-    "backend_parameters_required": true,
-    "host_regression_cases": 9,
-    "normal_image_diagnostic_helper_removed": true,
-    "physical_orientation_qualified": false
-  }
+  "next": "95: updated connection admission on the same maintained kernel branch; use the audited 94 image as recovery."
 }

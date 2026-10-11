@@ -2,16 +2,21 @@
 
 The installed system is Linux 7.2.9 with GNOME Wayland, 200% display scaling,
 a fixed bottom dock, NetworkManager, ModemManager, Bluetooth, IPv6 and LZ4 zram.
-[Trial 88](research/desktop-responsiveness-20261011.json)
+[Trial 94](research/desktop-radio-activation-20261011.json)
 passed the supervised installation and independent terminal audit, and was
 kept as the [accepted baseline](research/accepted-baseline.json).
-Native RTC startup, UTC read/write, alarm delivery/cancellation/rearming,
-128 MiB of actual zram paging, an ordinary Nix build and retained storage pass.
+Native RTC startup, UTC read/write and awake alarm checks retain their prior
+accepted evidence. This focused update skips those diagnostics; RAM-only
+paging, an ordinary Nix build and retained storage pass its deployment audit.
 The cross-built desktop and networking runtime check passes 1,224 ARM64 ELF
 files and 124 script checks, including service entrypoints, target Python and
 GI libraries. Both managers run, the onboard modem is detected and wired DHCP
 works. Saved Wi-Fi profiles are imported; Wi-Fi association and cellular data
 remain unqualified on this image. Bluetooth registers and powers on at boot;
+RFKILL now exposes its radio to GNOME, and a bounded desktop-user scan finds
+14 nearby devices with fresh controller events and no shared transport faults.
+Pairing and profiles remain unqualified. Onboard playback corrects the reversed
+speaker/headphone hardware channel order; audible orientation remains unverified.
 the GNOME document portal has built-in FUSE support. GPU DVFS now uses seven
 operating points from 238 to 900 MHz, with verified voltage/clock readbacks and
 pixel rendering in both directions. The [integration audit](research/integration-audit-20261011.json)
@@ -109,8 +114,10 @@ python tools/test-boot.py --bundle result --out ../handoff/boot-test-$(date +%s)
 Omit `--execute` for a read-only preflight, using a fresh output directory.
 The supervisor checks the candidate and restores the accepted image afterwards.
 Add `--keep` to leave a fully passing candidate installed; adopt its recorded
-`promoted-baseline.json` after the independent terminal audit. Trial 88 did this
-for the current GNOME image. The unchanged accepted image needs no new baseline
+`promoted-baseline.json` after the independent terminal audit. Trial 94 did this
+for the current GNOME image. Radio/audio updates use
+`tools/test-network-audio-desktop.py` to check the changed desktop behavior
+without repeating RTC alarm/calendar tests. The unchanged accepted image needs no new baseline
 cycle. Test changed behavior and unmet acceptance checks using the
 [current testing criteria](research/HARDWARE_STATUS.md).
 

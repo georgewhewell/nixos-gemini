@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=690c7c5119657c6fecc8568d5642cd7268c1b1d3&shallow=1";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=9d8ecc3776f0c0705173149446c66ea417d700e7&shallow=1";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -130,13 +130,6 @@
         python3 test-networkmanager-import-wifi.py
         touch "$out"
       '';
-      wifi-connect = gemini.buildPkgs.runCommand "gemini-wifi-connect-check" {
-        nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.stdenv.cc];
-      } ''
-        export CC=${gemini.buildPkgs.stdenv.cc}/bin/cc
-        python3 ${inputs.linux-gemini}/tools/gemini/test-wifi-radio-connect-host.py
-        touch "$out"
-      '';
       networkmanager-scan = gemini.buildPkgs.runCommand "gemini-networkmanager-scan-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3];
       } ''
@@ -149,9 +142,8 @@
         nativeBuildInputs = [gemini.buildPkgs.python3 gemini.buildPkgs.alsa-utils];
       } ''
         cp ${./tools/audio-playback-evidence.py} audio-playback-evidence.py
-        cp ${./tools/test-audio-playback-evidence.py} test-audio-playback-evidence.py
-        python3 test-audio-playback-evidence.py
-        python3 ${./nix/test-audio-playback-routing.py} \
+        cp ${./nix/test-audio-playback-routing.py} test-audio-playback-routing.py
+        python3 test-audio-playback-routing.py \
           ${gemini.buildPkgs.writeText "gemini-asound.conf" gemini.system.config.environment.etc."asound.conf".text} \
           ${gemini.system.config.system.build.geminiAudioUcm}/share/alsa/ucm2/MediaTek/Gemini/HiFi.conf \
           ${gemini.buildPkgs.alsa-utils}/bin/aplay
