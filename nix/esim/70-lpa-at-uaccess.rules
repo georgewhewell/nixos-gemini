@@ -1,0 +1,3 @@
+# Standard AT access follows the active local seat; other WWAN port types
+# remain under their existing policy. ModemManager owns operation inhibition.
+SUBSYSTEM=="wwan", ATTR{type}=="AT", TAG+="uaccess"

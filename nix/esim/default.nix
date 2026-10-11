@@ -66,6 +66,8 @@ let
     # Blueprint and resource tools need native GI during the build. Only
     # target typelibs may be baked into the installed GApps wrapper.
     postInstall = ''
+      install -Dm644 ${./70-lpa-at-uaccess.rules} "$out/lib/udev/rules.d/70-lpa-at-uaccess.rules"
+      ${buildPkgs.systemd}/bin/udevadm verify "$out/lib/udev/rules.d/70-lpa-at-uaccess.rules"
       export GI_TYPELIB_PATH="${lib.makeSearchPathOutput "lib" "lib/girepository-1.0" [
         pkgs.glib pkgs.gobject-introspection pkgs.gdk-pixbuf pkgs.librsvg
         pkgs.graphene pkgs.harfbuzz pkgs.pango pkgs.gtk4 pkgs.libadwaita

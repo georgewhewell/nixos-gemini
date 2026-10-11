@@ -20,7 +20,12 @@ bounded discovery passes; pairing and profiles remain unqualified. The native
 modem reaches HS2, then fails with a watchdog interrupt. Its standard WWAN AT port
 now signals HUP/ERR and disappears on that failure. Linux owns all six SIM pins
 through the protected modem cold-start transaction. SIM/eSIM, cellular data,
-SMS delivery and voice require further native driver bring-up. GNSS now exposes
+SMS delivery and voice require further native driver bring-up. The generic AT
+lpa-gtk/lpac packages are source-integrated and cross-built, but remain uninstalled:
+image117 failed its healthy-boot gate and restored116 with an independent audit.
+The next candidate adds native configured-policy selection and standard active-seat
+access to typed WWAN AT ports; eUICC access and provisioning remain unqualified.
+GNSS now exposes
 the standard Linux endpoint and passes two power lifetime cycles, but receives
 no data; receiver initialization and positioning remain unfinished. Native video
 buffer allocation, export and Panfrost mapping pass on hardware; decoder completion,

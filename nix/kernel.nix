@@ -50,6 +50,8 @@
       grep -Fqx CONFIG_EVENT_TRACING=y .config
       grep -Fqx CONFIG_IPV6=y .config
       grep -Fqx CONFIG_FUSE_FS=y .config
+      # Preserve the public Gemini board policy if Kconfig dependencies change.
+      grep -Fqx CONFIG_MTK_MT6797_MD1_SUPPORT=12 .config
       # GNOME's radio controls discover Bluetooth through the standard
       # HCI rfkill endpoint as well as BlueZ's Adapter1 object.
       grep -Fqx CONFIG_RFKILL=y .config

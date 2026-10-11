@@ -7,9 +7,11 @@ access, SMS delivery and voice calls remain unqualified.
 
 CCCI is MediaTek's Cross-Core Communication Interface between the application
 processor and modem. The native kernel driver owns CCCI framing, DMA and modem
-lifetime, and exposes standard Linux WWAN AT and network interfaces. The eSIM
-GUI should use lpac's generic AT/APDU transport with ModemManager ownership;
-CCCI does not belong in the GUI.
+lifetime, and exposes standard Linux WWAN AT and network interfaces. The
+source-integrated lpa-gtk/lpac candidate uses generic AT/APDU transport and
+ModemManager ownership. It is cross-built but uninstalled: image117 passed target
+imports, failed healthy boot, and restored116 with an independent audit. No
+candidate LK metadata/AT observation or watchdog cause was established.
 
 The installed driver removes a failed AT port and wakes existing descriptors
 with standard HUP/ERR; image116 hardware observation confirms that boundary.
@@ -25,10 +27,17 @@ The current implementation is in `drivers/net/wwan/mediatek/mtk_mt6797_ccci.c`,
 [Linux source tree](https://github.com/georgewhewell/linux-gemini/tree/gemini-7.2.9).
 Calls, Spacebar and callaudiod are already in the normal image.
 
-Remaining work: resolve the modem watchdog, establish eUICC APDU routing, integrate
-and qualify the generic AT GUI/transport, and finish the modem speech-control and
-duplex audio lifetime. AT availability and ModemManager's SIM-missing fallback
-do not establish physical card absence or a selected SIM slot.
+Native source `deb62362` now resolves compiled MD1 policy and validated gated LK
+overrides, with strict ARM64 compilation passing. Only the Gemini build selects
+public policy12; it is separate from hardware capability and load/image type.
+The next GUI candidate adds standard active-seat `uaccess` for WWAN ports typed AT,
+using existing ModemManager authorization without an extra service or private ABI.
+
+Remaining work: qualify the normal installation and native policy selection,
+resolve the modem watchdog, establish eUICC APDU routing and safe generic AT
+operation lifetime before provisioning, then finish speech control and duplex
+audio lifetime. AT availability and ModemManager's SIM-missing fallback do not
+establish physical card absence or a selected SIM slot.
 
 Keep current installation evidence and unfinished work in
 [the cellular status record](../research/sms-voice-integration-20261011.json)

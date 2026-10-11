@@ -121,7 +121,7 @@
     "voice_operation_qualified": false
   },
   "esim": {
-    "status": "Native modem/eUICC access and GUI integration incomplete",
+    "status": "Generic AT GUI/lpac source-integrated and cross-built but uninstalled; native modem/eUICC access incomplete",
     "public_board_contract": "Planet Gemini user guide identifies physical SIM as slot 1 and eSIM as slot 2.",
     "gui_candidate": {
       "project": "lpa-gtk",
@@ -147,7 +147,7 @@
       "scratch_host_cases": 23,
       "scratch_scope": "Read-only standard WWAN AT discovery, cached eUICC identity and asynchronous cancellation; no physical-slot or provisioning qualification",
       "cross_package_built": true,
-      "packaging_remaining": "Install through the normal GNOME image; verify desktop launch and standard ModemManager/WWAN ownership on the board. Generic AT profile mutations remain disabled pending modem/card protocol qualification.",
+      "packaging_remaining": "Qualify healthy normal installation, desktop launch and standard ModemManager/WWAN ownership. Generic AT profile mutations remain disabled pending modem/card protocol qualification.",
       "recipe": "nix/esim/default.nix",
       "patches": [
         "nix/esim/lpa-at.patch",
@@ -159,9 +159,33 @@
         "scope": "scratch-only generic AT GUI and lpac cross packages; no R/K edits, device actions, installation or provisioning",
         "critical_runtime_arm64_verified": true,
         "whole_closure_arm64_verified": false
+      },
+      "status": "Source-integrated normal-image candidate; image117 rejected before healthy Linux observation",
+      "source_integrated": true,
+      "normal_candidate117": {
+        "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
+        "build_actual_exit": 0,
+        "target_import_actual_exit": 0,
+        "trial_actual_exit": 1,
+        "independent_rollback_audit_actual_exit": 0,
+        "installed": false,
+        "restored_baseline": "boot-test-116",
+        "candidate_lk_metadata_or_at_observed": false,
+        "watchdog_cause_established": false,
+        "proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-metadata-image/seal.json",
+          "sha256": "5cf0c178453a245295457322e4bcc7b38a7cecb2ad68ec81f130e3a1be0dd4c4"
+        },
+        "scope": "Rejected by healthy-boot gate; audited recovery retained116. No candidate modem, eUICC or provisioning observation."
+      },
+      "active_seat_at_access": {
+        "rule": "nix/esim/70-lpa-at-uaccess.rules",
+        "source_integrated": true,
+        "installed": false,
+        "scope": "Standard uaccess for WWAN ports with type AT only; existing ModemManager inhibition and authorization remain. No extra service, private ABI or polkit policy."
       }
     },
-    "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
+    "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",
     "remaining": [
       "Resolve the native modem watchdog and establish eUICC APDU routing through the existing standard WWAN AT endpoint; AT availability does not establish card presence or slot association.",
       "Qualify generic AT operation deadlines, cancellation, long replies and late responses before enabling provisioning. GUI child deadlines alone do not establish modem/card recovery.",
@@ -328,7 +352,7 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "Install and read the bounded native LK metadata diagnostic. Select only an established independent capability policy; unknown capability currently fails the runtime response instead of advertising fabricated data. Qualify modem readiness and watchdog separately.",
+      "remaining": "Install the configured-policy candidate and observe its scalar policy provenance and raw LK metadata; then qualify readiness and watchdog separately. Trial117 produced neither candidate metadata nor AT observation.",
       "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
       "actual_production_host_exit": 0,
       "strict_arm64_actual_exit": 0,
@@ -336,6 +360,28 @@
       "production_proof": {
         "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-metadata-image/wire-production-validation.json",
         "sha256": "17c569c5de6fbcab604ad0700d2407ccbd8692543206ae6180143a9d72a8ee1d"
+      },
+      "configured_policy_followup": {
+        "status": "Source-integrated and strict ARM64 compiled; not installed or hardware observed",
+        "kernel_revision": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
+        "configured_policy": 12,
+        "generic_default_policy": 0,
+        "public_board_source": "https://github.com/gemian/gemini-linux-kernel-3.18/blob/8cfe6596a503612e3332d9c26e292a19525a7f07/arch/arm64/configs/aeon6797_6m_n_defconfig#L243",
+        "scope": "Configured MD1 policy, not discovered hardware capability or image/load type. Absent/disabled LK gate or missing support uses the configured value; enabled invalid override and malformed metadata refuse without fallback. Raw LK diagnostic unchanged; existing wire converter reused.",
+        "actual_host_exit": 0,
+        "original_native_source_compiles_and_rejects_missing_default": true,
+        "strict_arm64_actual_exit": 0,
+        "installed": false,
+        "hardware_observed": false,
+        "watchdog_cause_established": false,
+        "host_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/configured-policy/result.json",
+          "sha256": "e92131d32649f64f10ad1b2c58da6888eb7f00cee9796aaf29de98f6795d3eb2"
+        },
+        "strict_proof": {
+          "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/native-policy-validation.json",
+          "sha256": "728c16737b34e149280923263c4ad0a749c3f6ab41a817b408f4860ad1033447"
+        }
       }
     }
   },

@@ -37,17 +37,17 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1791737381,
-        "narHash": "sha256-Tx8Kd21SImf6rxnTkAAc8OxPPL57BALfvttveKYI4t8=",
+        "lastModified": 1791740041,
+        "narHash": "sha256-Ts9Xzye8dBg0gEONL29xd4aN/ld2PSpTZjVR3PDCgvo=",
         "ref": "gemini-7.2.9",
-        "rev": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
+        "rev": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
         "shallow": true,
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
         "ref": "gemini-7.2.9",
-        "rev": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
+        "rev": "deb62362ce75a4325cdecd04e9f70c875cceb9de",
         "shallow": true,
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"

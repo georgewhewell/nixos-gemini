@@ -135,6 +135,7 @@
   # installs callaudiod for the standard session audio-routing API.
   programs.calls.enable = true;
   systemd.packages = [pkgs.calls];
+  services.udev.packages = [geminiEsim.lpaGtk];
   systemd.user.services.calls-daemon.wantedBy = ["gnome-session.target"];
 
   # Install the desktop and everyday tools without the GNOME games and
