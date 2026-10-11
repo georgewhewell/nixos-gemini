@@ -301,7 +301,22 @@
       "sha256": "cbd79a8f0b2d9e7867ead716f8353c225614c3fdd2ebb77f1e60c585231d5f2a"
     },
     "dbm_hardware_bytes_read": false,
-    "installed_kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d"
+    "installed_kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d",
+    "runtime_capability_work": {
+      "status": "Public feature9 omission identified; scalar publication/conversion scratch candidate, not installed",
+      "review": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/review.json",
+        "sha256": "266aa9d528258288f9b0bee3bc86e087b86ee9fcd7b218bd012cc0770f44c968"
+      },
+      "scratch_candidate": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/candidate-result.json",
+        "sha256": "b3b5e9812f21410e0405754a6062cbf766382ac69d3fbafd6a30b91bed903324"
+      },
+      "actual_scratch_host_exit": 0,
+      "target_or_hardware_qualified": false,
+      "watchdog_cause_established": false,
+      "remaining": "Review and qualify actual LK load type and independent RAT-capability policy, retain validated scalar metadata through the existing handoff consumer, and populate feature9 with an actual-builder regression. Current image116 has no metadata endpoint; do not infer capability from firmware image type or hardcode a bitmap."
+    }
   },
   "current_native_installation": {
     "baseline": "boot-test-116",
