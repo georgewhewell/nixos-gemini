@@ -18,6 +18,14 @@ also supplies IRQ/ACK handling and maps encoder registers to callers. Its
 has empty initialization/control cases. These inspected sources supply no
 direct frame backend or MT6797 register-compatibility contract.
 
+Rockchip MPP's Apache-2.0 [VEPU1 H.264 backend](https://github.com/rockchip-linux/mpp/blob/14729dd578e570e5f00fd1dd2113f5429012d64b/mpp/hal/vpu/h264e/hal_h264e_vepu1_v2.c)
+does program frames directly through register-write jobs. Its
+[register table](https://github.com/rockchip-linux/mpp/blob/14729dd578e570e5f00fd1dd2113f5429012d64b/mpp/hal/vpu/h264e/hal_h264e_vepu1_reg_tbl.h)
+places IRQ status at `0x004`, whereas the public MT6797 wrapper uses status
+`0x05c` and ACK `0x060`. No examined source establishes a compatible IP revision
+or register translation; this reference does not justify an MT6797 register
+transplant. Establish that hardware relationship before using its frame setup.
+
 Remaining work belongs in one native V4L2 encoder driver:
 
 1. Establish source-plane address/pitch fields, reference and reconstruction
