@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Gate a supervised image trial on desktop radio and audio integration.
+"""Gate a supervised HS52 image trial on native storage and desktop integration.
 
+Brackets existing storage checks with native MMC IOS/error observations.
+Clock-register acceptance belongs to the native MSDC driver.
 Uses the existing boot/storage recovery owner. Bluetooth checks are read-only;
 the network check requests one bounded diagnostic scan without changing a
 profile or connection. Audio checks inspect the active onboard route. A failed
@@ -16,6 +18,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,6 +43,197 @@ p.EXTRA_EXECUTED_SOURCES += (
     'nixos/audio-routes.nix',
     'nix/test-audio-playback-routing.py',
 )
+
+
+MMC_REMOTE_CODE = r'''
+import json, re, sys
+from pathlib import Path
+
+class CheckError(Exception):
+    pass
+
+def require(value, reason):
+    if not value:
+        raise CheckError(reason)
+
+def read(path, limit=256):
+    with path.open('rb') as stream:
+        value = stream.read(limit + 1)
+    require(len(value) <= limit, 'attribute_too_large')
+    return value.decode('ascii').strip()
+
+def uint(value, maximum=2**32-1):
+    require(re.fullmatch(r'[0-9]+', value) is not None, 'invalid_number')
+    number = int(value)
+    require(number <= maximum, 'number_out_of_range')
+    return number
+
+def identity(boot_id, system):
+    require(read(Path('/proc/sys/kernel/random/boot_id')) == boot_id,
+            'boot_identity_changed')
+    require(str(Path('/run/current-system').resolve(strict=True)) == system,
+            'system_identity_changed')
+    require(read(Path('/proc/sys/kernel/tainted')) == '0', 'kernel_tainted')
+
+IOS_FIELDS = ('clock', 'actual clock', 'vdd', 'bus mode', 'chip select',
+              'power mode', 'bus width', 'timing spec', 'signal voltage', 'driver type')
+ERROR_FIELDS = ('Command Timeout Occurred', 'Command CRC Errors Occurred',
+                'Data Timeout Occurred', 'Data CRC Errors Occurred',
+                'Auto-Cmd Error Occurred', 'ADMA Error Occurred', 'Tuning Error Occurred',
+                'CMDQ RED Errors', 'CMDQ GCE Errors', 'CMDQ ICCE Errors',
+                'Request Timedout', 'CMDQ Request Timedout', 'ICE Config Errors',
+                'Controller Timedout errors', 'Unexpected IRQ errors')
+
+def rows(path, fields, pattern):
+    values = {}
+    for line in read(path, 4096).splitlines():
+        match = re.fullmatch(pattern, line)
+        require(match is not None, 'malformed_attribute')
+        key = match[1]
+        require(key in fields and key not in values, 'missing_or_duplicate_field')
+        values[key] = uint(match[2])
+    require(set(values) == set(fields), 'missing_or_duplicate_field')
+    return values
+
+def fingerprint(paths):
+    result = []
+    for path in paths:
+        direct, target = path.lstat(), path.stat()
+        result.append([direct.st_dev, direct.st_ino, target.st_dev, target.st_ino])
+    return result
+
+def snapshot(boot_id, system):
+    identity(boot_id, system)
+    native = Path('/sys/bus/platform/devices/11230000.mmc')
+    require((native / 'driver').resolve(strict=True).name == 'mtk-msdc', 'native_driver_missing')
+    require(read(native / 'of_node/compatible') == 'mediatek,mt6797-mmc\0',
+            'native_compatible_differs')
+    hosts = list(Path('/sys/class/mmc_host').iterdir())
+    require(len(hosts) <= 64, 'too_many_hosts')
+    hosts = [host for host in hosts if re.fullmatch(r'mmc[0-9]+', host.name) and
+             host.resolve(strict=True).parent.parent == native.resolve(strict=True)]
+    require(len(hosts) == 1, 'native_host_not_unique')
+    host = hosts[0]
+    debug = Path('/sys/kernel/debug') / host.name
+    source = Path('/sys/kernel/debug/clk/infra_msdc0/clk_rate')
+    paths = [native, native / 'driver', native / 'of_node', host,
+             debug / 'ios', debug / 'err_stats', source]
+    owner = fingerprint(paths)
+    ios = rows(debug / 'ios', IOS_FIELDS, r'([^:]+):\s+([0-9]+)(?:\s+[^\r\n]+)?')
+    errors = rows(debug / 'err_stats', ERROR_FIELDS, r'# ([^:]+):\s+([0-9]+)')
+    source_hz = uint(read(source))
+    require(source_hz > 0, 'source_clock_zero')
+    require(ios['clock'] == 52000000 and ios['timing spec'] == 1 and
+            ios['bus width'] == 3 and ios['signal voltage'] == 1 and
+            ios['power mode'] == 2, 'not_standard_hs52')
+    # Native MSDC SDR divider; actual_clock is computed, not a frequency meter.
+    requested = ios['clock']
+    if requested >= source_hz:
+        expected = source_hz
+    elif requested >= source_hz >> 1:
+        expected = source_hz >> 1
+    else:
+        divisor = (source_hz + requested * 4 - 1) // (requested * 4)
+        expected = (source_hz >> 2) // divisor
+    require(26000000 < expected <= requested and ios['actual clock'] == expected,
+            'computed_clock_differs')
+    require(not any(errors.values()), 'native_error_counter_nonzero')
+    require(fingerprint(paths) == owner, 'owner_changed_during_snapshot')
+    identity(boot_id, system)
+    return dict(schema=1, result='passed', error='none', identity_preserved=True,
+                host=host.name, owner_fingerprint=owner, ios=ios, source_hz=source_hz,
+                errors=[errors[name] for name in ERROR_FIELDS],
+                ios_alone_qualifies_raw_clock=False, clock_verification_owner='native_mtk_msdc')
+
+if __name__ == '__main__':
+    try:
+        record = snapshot(*sys.argv[1:])
+    except CheckError as error:
+        record = dict(result='failed', error=str(error))
+    except Exception:
+        record = dict(result='failed', error='mmc_owner_read_failed')
+    print(json.dumps(record, sort_keys=True))
+    sys.exit(0 if record['result'] == 'passed' else 1)
+'''
+
+
+def verify_mmc_report(raw):
+    def unique(pairs):
+        record = dict(pairs)
+        if len(record) != len(pairs):
+            raise ValueError('Duplicate MMC report field')
+        return record
+    record = json.loads(raw, object_pairs_hook=unique)
+    try:
+        valid = (record['schema'] == 1 and type(record['schema']) is int and
+                 record['result'] == 'passed' and record['error'] == 'none' and
+                 record['identity_preserved'] is True and
+                 record['ios_alone_qualifies_raw_clock'] is False and
+                 record['clock_verification_owner'] == 'native_mtk_msdc')
+        valid &= isinstance(record['host'], str) and record['host'].startswith('mmc') and record['host'][3:].isdecimal()
+        owner = record['owner_fingerprint']
+        valid &= isinstance(owner, list) and len(owner) == 7
+        valid &= all(isinstance(row, list) and len(row) == 4 and
+                     all(type(n) is int and 0 <= n < 2**64 for n in row) for row in owner)
+        valid &= type(record['source_hz']) is int and 0 < record['source_hz'] < 2**32
+        ios = record['ios']
+        valid &= isinstance(ios, dict) and len(ios) == 10
+        valid &= all(type(n) is int and 0 <= n < 2**32 for n in ios.values())
+        valid &= all(ios[key] == value for key, value in
+                     (('clock', 52000000), ('timing spec', 1), ('bus width', 3),
+                      ('signal voltage', 1), ('power mode', 2)))
+        valid &= 26000000 < ios['actual clock'] <= ios['clock']
+        valid &= record['errors'] == [0] * 15 and all(type(n) is int for n in record['errors'])
+    except (KeyError, TypeError, AttributeError):
+        valid = False
+    if not valid:
+        raise RuntimeError('Native MMC high-speed evidence incomplete')
+    return record
+
+
+def mmc_snapshot(runner, ssh, boot_id, system, directory, phase):
+    out = Path(directory) / 'mmc-high-speed'
+    out.mkdir(mode=0o700, exist_ok=True)
+    script = 'set -eu\n' + network.PYTHON_INTERPRETER
+    script += 'timeout --signal=TERM --kill-after=2 10 "$python" - ' + shlex.join(
+        [boot_id, system]) + " <<'GEMINI_MMC_PY'\n" + MMC_REMOTE_CODE + '\nGEMINI_MMC_PY\n'
+    try:
+        raw = runner.persistence.run(ssh, script, out, phase, timeout=15)
+        record = verify_mmc_report(raw)
+    except Exception:
+        raise RuntimeError('Native MMC observation failed; see its scalar evidence') from None
+    runner.qualify.save(out, phase + '.json', record)
+    return record
+
+
+def install_mmc_gate(runner):
+    # configure() gives each trial a fresh runner; leave its shared module intact.
+    previous = runner.persistent_nix.evidence
+    original = getattr(previous, '_mmc_original', previous)
+    runner.persistent_nix = SimpleNamespace(**vars(runner.persistent_nix))
+
+    def evidence(ssh, boot_id, directory, qualify, persistence, **kwargs):
+        snapshots = {}
+        out = Path(directory) / 'mmc-high-speed'
+        out.mkdir(mode=0o700, exist_ok=True)
+        try:
+            snapshots['before'] = mmc_snapshot(runner, ssh, boot_id, kwargs['system'], directory, 'before')
+            result = original(ssh, boot_id, directory, qualify, persistence, **kwargs)
+            snapshots['after'] = mmc_snapshot(runner, ssh, boot_id, kwargs['system'], directory, 'after')
+            if snapshots['before'] != snapshots['after']:
+                raise RuntimeError('Native MMC owner or high-speed state changed across storage checks')
+        except Exception as error:
+            qualify.save(out, 'result.json', dict(result='failed', snapshots=snapshots,
+                                                 error_class=type(error).__name__))
+            raise
+        qualify.save(out, 'result.json', dict(result='passed', boot_id=boot_id,
+            system=kwargs['system'], snapshots=snapshots, existing_storage_checks_completed=True,
+            ios_alone_qualifies_raw_clock=False, clock_verification_owner='native_mtk_msdc',
+            storage_benchmark_performed=False))
+        return result
+
+    evidence._mmc_original = original
+    runner.persistent_nix.evidence = evidence
 
 
 USB_REMOTE_CODE = r'''
@@ -306,12 +500,14 @@ def configure(*args, **kwargs):
     runner = base_configure(*args, **kwargs)
     runner.CANDIDATE_DESKTOP = 'gnome'
     runner.backend.MTK = runner.backend.MTK_RTC
+    install_mmc_gate(runner)
     candidate = runner.candidate_return
 
     def qualified(ssh, before, directory, profile):
         state = candidate(ssh, before, directory, profile)
         results = {}
         try:
+            results['mmc_high_speed'] = json.loads((directory / 'mmc-high-speed' / 'result.json').read_text())
             results['usb_typec'] = usb_evidence(runner, ssh, state, directory, p.SYSTEM)
             results['bluetooth'] = bluetooth_evidence(runner, ssh, state, directory)
             results['network'] = network.network_evidence(runner, ssh, state, directory, p.SYSTEM)

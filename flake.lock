@@ -37,36 +37,18 @@
     "linux-gemini": {
       "flake": false,
       "locked": {
-        "lastModified": 1791720250,
-        "narHash": "sha256-8LiZgggPgts09mlohyfkC/fS4iZZBYt1Q6j15cdNzEE=",
+        "lastModified": 1791723119,
+        "narHash": "sha256-MSym/n7A/lYnhfInGvwmWbrXakY7PBLj5JvNLLfyuLE=",
         "ref": "gemini-7.2.9",
-        "rev": "8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0",
+        "rev": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
         "shallow": true,
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       },
       "original": {
         "ref": "gemini-7.2.9",
-        "rev": "8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0",
+        "rev": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
         "shallow": true,
-        "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
-      }
-    },
-    "linux-gemini-next": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1788136112,
-        "narHash": "sha256-fWfZGAB117H7Y6VEmzpL63BAWLnaQiWrvh8t/rBX4Jg=",
-        "ref": "gemini-platform",
-        "rev": "da6e93b0bce1b62e0e38425938efe3ceba7cfc09",
-        "revCount": 186,
-        "type": "git",
-        "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
-      },
-      "original": {
-        "ref": "gemini-platform",
-        "rev": "da6e93b0bce1b62e0e38425938efe3ceba7cfc09",
         "type": "git",
         "url": "ssh://git@github.com/georgewhewell/linux-gemini.git"
       }
@@ -143,7 +125,6 @@
         "ixoo-candidate": "ixoo-candidate",
         "ixoo-kernel": "ixoo-kernel",
         "linux-gemini": "linux-gemini",
-        "linux-gemini-next": "linux-gemini-next",
         "linux-gemini-recovery": "linux-gemini-recovery",
         "nixpkgs": "nixpkgs",
         "nixpkgs-old": "nixpkgs-old",

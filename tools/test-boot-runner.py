@@ -310,6 +310,256 @@ class Profile(unittest.TestCase):
             self.assertFalse(saved['rtc_alarm_diagnostics_qualified'])
 
 
+class MMCHighSpeed(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('desktop_profile',
+            Path(__file__).with_name('test-network-audio-desktop.py'))
+        cls.desktop = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.desktop)
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.boot_id = '11111111-1111-1111-1111-111111111111'
+        self.system = str(self.root/'nix/store' / ('a'*32+'-candidate'))
+        Path(self.system).mkdir(parents=True)
+        self.write('/proc/sys/kernel/random/boot_id', self.boot_id+'\n')
+        self.write('/proc/sys/kernel/tainted', '0\n')
+        self.path('/run').mkdir()
+        self.path('/run/current-system').symlink_to(self.system)
+        self.native = self.path('/sys/devices/platform/soc/11230000.mmc')
+        self.native.mkdir(parents=True)
+        self.driver = self.path('/sys/bus/platform/drivers/mtk-msdc')
+        self.driver.mkdir(parents=True)
+        (self.native/'driver').symlink_to(self.driver)
+        self.write('/sys/devices/platform/soc/11230000.mmc/of_node/compatible',
+                   'mediatek,mt6797-mmc\0')
+        devices = self.path('/sys/bus/platform/devices'); devices.mkdir()
+        (devices/'11230000.mmc').symlink_to(self.native)
+        self.host = self.native/'mmc_host/mmc0'; self.host.mkdir(parents=True)
+        hosts = self.path('/sys/class/mmc_host'); hosts.mkdir(parents=True)
+        (hosts/'mmc0').symlink_to(self.host)
+        self.debug = self.path('/sys/kernel/debug/mmc0'); self.debug.mkdir(parents=True)
+        self.scope = {'__name__': 'mmc_fixture'}
+        exec(compile(self.desktop.MMC_REMOTE_CODE, '<actual-mmc-reader>', 'exec'), self.scope)
+        self.scope['Path'] = self.path
+        self.ios_text = ('clock:\t\t52000000 Hz\nactual clock:\t47999984 Hz\n'
+            'vdd:\t\t21 (3.3 ~ 3.4 V)\nbus mode:\t2 (push-pull)\n'
+            "chip select:\t0 (don't care)\npower mode:\t2 (on)\n"
+            'bus width:\t3 (8 bits)\ntiming spec:\t1 (mmc high-speed)\n'
+            'signal voltage:\t1 (1.80 V)\ndriver type:\t0 (type B)\n')
+        self.error_text = ('# Command Timeout Occurred:\t 0\n# Command CRC Errors Occurred:\t 0\n'
+            '# Data Timeout Occurred:\t 0\n# Data CRC Errors Occurred:\t 0\n'
+            '# Auto-Cmd Error Occurred:\t 0\n# ADMA Error Occurred:\t 0\n'
+            '# Tuning Error Occurred:\t 0\n# CMDQ RED Errors:\t 0\n# CMDQ GCE Errors:\t 0\n'
+            '# CMDQ ICCE Errors:\t 0\n# Request Timedout:\t 0\n# CMDQ Request Timedout:\t 0\n'
+            '# ICE Config Errors:\t 0\n# Controller Timedout errors:\t 0\n# Unexpected IRQ errors:\t 0\n')
+        self.restore()
+
+    def path(self, value):
+        return self.root / str(value).lstrip('/')
+
+    def write(self, path, value):
+        target = self.path(path); target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(value)
+
+    def restore(self):
+        (self.debug/'ios').write_text(self.ios_text)
+        (self.debug/'err_stats').write_text(self.error_text)
+        self.write('/sys/kernel/debug/clk/infra_msdc0/clk_rate', '383999878\n')
+
+    def read_snapshot(self):
+        return self.scope['snapshot'](self.boot_id, self.system)
+
+    def test_actual_reader_handles_native_sdr_clock_branches(self):
+        for source, actual in ((383999878, 47999984), (192000000, 48000000),
+                               (208000000, 52000000), (104000000, 52000000),
+                               (52000000, 52000000)):
+            with self.subTest(source=source):
+                self.write('/sys/kernel/debug/clk/infra_msdc0/clk_rate', str(source)+'\n')
+                (self.debug/'ios').write_text(self.ios_text.replace('47999984', str(actual)))
+                record = self.read_snapshot()
+                self.assertEqual(record['ios']['actual clock'], actual)
+                self.assertEqual(self.desktop.verify_mmc_report(json.dumps(record)), record)
+                self.assertFalse(record['ios_alone_qualifies_raw_clock'])
+
+    def test_actual_reader_rejects_legacy_wrong_ios_and_clock_projection(self):
+        for old, new in (('52000000', '25000000'), ('1 (mmc high-speed)', '0 (legacy)'),
+                         ('1 (mmc high-speed)', '2 (sd high-speed)'),
+                         ('3 (8 bits)', '2 (4 bits)'), ('1 (1.80 V)', '0 (3.30 V)'),
+                         ('2 (on)', '1 (up)'), ('47999984', '52000000')):
+            with self.subTest(new=new):
+                (self.debug/'ios').write_text(self.ios_text.replace(old, new))
+                with self.assertRaises(self.scope['CheckError']): self.read_snapshot()
+        self.restore()
+        for value in ('0', '-1', 'bad', str(2**32), '192000000'):
+            with self.subTest(source=value):
+                self.write('/sys/kernel/debug/clk/infra_msdc0/clk_rate', value+'\n')
+                with self.assertRaises(self.scope['CheckError']): self.read_snapshot()
+
+    def test_actual_reader_rejects_missing_duplicate_and_malformed_fields(self):
+        bad_ios = (self.ios_text.replace('actual clock:\t47999984 Hz\n', ''),
+                   self.ios_text+'clock:\t52000000 Hz\n',
+                   self.ios_text+'foreign:\t0\n', self.ios_text.replace('47999984', '-1'),
+                   self.ios_text.replace('47999984', str(2**32)), 'x'*4097)
+        bad_errors = (self.error_text.split('\n', 1)[1],
+                      self.error_text+self.error_text.splitlines()[0]+'\n',
+                      self.error_text.replace(':\t 0', ':\t -1', 1),
+                      self.error_text.replace(':\t 0', ':\t '+str(2**32), 1),
+                      self.error_text+'# unknown:\t 0\n')
+        for name, values in (('ios', bad_ios), ('err_stats', bad_errors)):
+            for value in values:
+                with self.subTest(name=name, value=value[:40]):
+                    self.restore(); (self.debug/name).write_text(value)
+                    with self.assertRaises(self.scope['CheckError']): self.read_snapshot()
+
+    def test_actual_reader_attributes_each_nonzero_error_and_closes_reads(self):
+        before_fds = len(list(Path('/proc/self/fd').iterdir()))
+        for row in self.error_text.splitlines():
+            name = row.split(':')[0].removeprefix('# ')
+            with self.subTest(counter=name):
+                (self.debug/'err_stats').write_text(self.error_text.replace('# '+name+':\t 0', '# '+name+':\t 1'))
+                with self.assertRaisesRegex(self.scope['CheckError'], 'native_error_counter_nonzero'):
+                    self.read_snapshot()
+        self.assertEqual(len(list(Path('/proc/self/fd').iterdir())), before_fds)
+
+    def test_actual_reader_rejects_identity_binding_and_host_changes(self):
+        for path, value in (('/proc/sys/kernel/random/boot_id', 'different'),
+                            ('/proc/sys/kernel/tainted', '1'),
+                            ('/sys/devices/platform/soc/11230000.mmc/of_node/compatible', 'foreign\0')):
+            target = self.path(path); original = target.read_text()
+            with self.subTest(path=path), self.assertRaises(self.scope['CheckError']):
+                target.write_text(value); self.read_snapshot()
+            target.write_text(original)
+        with self.assertRaisesRegex(self.scope['CheckError'], 'system_identity_changed'):
+            self.scope['snapshot'](self.boot_id, self.system+'-foreign')
+        (self.native/'driver').unlink(); (self.native/'driver').symlink_to(self.native/'of_node')
+        with self.assertRaisesRegex(self.scope['CheckError'], 'native_driver_missing'): self.read_snapshot()
+        (self.native/'driver').unlink(); (self.native/'driver').symlink_to(self.driver)
+        extra = self.native/'mmc_host/mmc1'; extra.mkdir()
+        self.path('/sys/class/mmc_host/mmc1').symlink_to(extra)
+        with self.assertRaisesRegex(self.scope['CheckError'], 'native_host_not_unique'): self.read_snapshot()
+
+    def test_actual_reader_detects_rebind_during_snapshot(self):
+        read = self.scope['read']
+        def rebound(path, limit=256):
+            value = read(path, limit)
+            if path == self.debug/'ios':
+                (self.native/'driver').rename(self.native/'retired-driver')
+                (self.native/'driver').symlink_to(self.driver)
+            return value
+        self.scope['read'] = rebound
+        with self.assertRaisesRegex(self.scope['CheckError'], 'owner_changed_during_snapshot'):
+            self.read_snapshot()
+
+    def test_actual_reader_rejects_missing_attributes(self):
+        for path in (self.debug/'ios', self.debug/'err_stats', self.native/'driver',
+                     self.path('/sys/kernel/debug/clk/infra_msdc0/clk_rate')):
+            retired = path.with_name(path.name+'.missing')
+            with self.subTest(attribute=path.name):
+                path.rename(retired)
+                try:
+                    with self.assertRaises(OSError): self.read_snapshot()
+                finally:
+                    retired.rename(path)
+
+    def test_report_parser_rejects_incomplete_duplicate_or_false_success(self):
+        record = self.read_snapshot()
+        for value in ({}, dict(record, errors=[0]*14), dict(record, errors=[False]*15),
+                      dict(record, identity_preserved=False), dict(record, owner_fingerprint=[])):
+            with self.subTest(value=value), self.assertRaises(RuntimeError):
+                self.desktop.verify_mmc_report(json.dumps(value))
+        with self.assertRaises(ValueError):
+            self.desktop.verify_mmc_report('{"schema":1,"schema":1}')
+
+    def test_gate_brackets_existing_storage_once_and_does_not_mutate_shared_owner(self):
+        events = []
+        output = object()
+        def storage(*args, **kwargs): events.append('existing-storage'); return output
+        owner = SimpleNamespace(evidence=storage, retained_attribute=object())
+        def save(directory, name, value): (directory/name).write_text(json.dumps(value))
+        runner = SimpleNamespace(persistent_nix=owner, qualify=SimpleNamespace(save=save))
+        def snapshot(r, ssh, boot, system, directory, phase):
+            events.append(phase); return self.read_snapshot()
+        with mock.patch.object(self.desktop, 'mmc_snapshot', side_effect=snapshot):
+            self.desktop.install_mmc_gate(runner)
+            self.desktop.install_mmc_gate(runner)
+            result = runner.persistent_nix.evidence([], self.boot_id, self.root, runner.qualify,
+                                                    object(), system=self.system, kernel='/kernel')
+        self.assertIs(result, output)
+        self.assertEqual(events, ['before', 'existing-storage', 'after'])
+        self.assertIs(owner.evidence, storage)
+        self.assertIs(runner.persistent_nix.retained_attribute, owner.retained_attribute)
+        self.assertEqual(json.loads((self.root/'mmc-high-speed/result.json').read_text())['result'], 'passed')
+        second = SimpleNamespace(persistent_nix=owner)
+        self.desktop.install_mmc_gate(second)
+        self.assertIs(second.persistent_nix.evidence._mmc_original, storage)
+
+    def test_gate_failures_abort_before_candidate_can_return(self):
+        for failure in ('before', 'storage', 'after', 'rebind', 'source'):
+            with self.subTest(failure=failure):
+                events = []
+                def save(directory, name, value): (directory/name).write_text(json.dumps(value))
+                def storage(*args, **kwargs):
+                    events.append('existing-storage')
+                    if failure == 'storage': raise RuntimeError('storage failed')
+                owner = SimpleNamespace(evidence=storage)
+                runner = SimpleNamespace(persistent_nix=owner, qualify=SimpleNamespace(save=save))
+                def snapshot(r, ssh, boot, system, directory, phase):
+                    events.append(phase)
+                    if phase == failure: raise RuntimeError('MMC failed')
+                    record = self.read_snapshot()
+                    if phase == 'after' and failure == 'rebind': record['owner_fingerprint'][0][1] += 1
+                    if phase == 'after' and failure == 'source': record['source_hz'] += 1
+                    return record
+                self.desktop.install_mmc_gate(runner)
+                with mock.patch.object(self.desktop, 'mmc_snapshot', side_effect=snapshot), self.assertRaises(RuntimeError):
+                    runner.persistent_nix.evidence([], self.boot_id, self.root, runner.qualify,
+                                                   object(), system=self.system)
+                    events.append('candidate-returned')
+                self.assertNotIn('candidate-returned', events)
+                if failure == 'before': self.assertEqual(events, ['before'])
+                if failure == 'storage': self.assertEqual(events, ['before', 'existing-storage'])
+                self.assertEqual(json.loads((self.root/'mmc-high-speed/result.json').read_text())['result'], 'failed')
+
+    def test_configured_candidate_rejects_mmc_before_desktop_checks(self):
+        for failure in ('before', 'after'):
+            with self.subTest(failure=failure):
+                trial = self.root/failure; trial.mkdir()
+                (trial/'before-tree.json').write_text('{}')
+                runner = self.desktop.base_configure()
+                owner = runner.persistent_nix
+                storage = mock.Mock(spec=lambda: None)
+                runner.persistent_nix = SimpleNamespace(**vars(owner))
+                runner.persistent_nix.evidence = storage
+                state = {'boot_id': self.boot_id}
+                phases = []
+                def snapshot(r, ssh, boot, system, directory, phase):
+                    phases.append(phase)
+                    if phase == failure: raise RuntimeError('MMC admission failed')
+                    return self.read_snapshot()
+                with mock.patch.object(self.desktop, 'base_configure', return_value=runner), \
+                        mock.patch.object(self.desktop, 'mmc_snapshot', side_effect=snapshot), \
+                        mock.patch.object(self.desktop, 'usb_evidence') as usb, \
+                        mock.patch.object(runner, 'candidate_snapshot', return_value=state), \
+                        mock.patch.object(runner, 'handoff_tree', return_value={}), \
+                        mock.patch.object(runner, 'verify_handoff_tree'), \
+                        mock.patch.object(runner, 'observe_candidate'), \
+                        mock.patch.object(runner, 'read_state', return_value='waiting'), \
+                        mock.patch.object(runner.efi_files, 'evidence'), \
+                        mock.patch.object(runner.qualify, 'run', side_effect=AssertionError('unexpected remote command')), \
+                        mock.patch.object(runner.power_kernel, 'evidence'):
+                    configured = self.desktop.configure()
+                    with self.assertRaisesRegex(RuntimeError, 'MMC admission failed'):
+                        configured.candidate_return([], {}, trial, self.desktop.p.PROFILE)
+                self.assertEqual(phases, ['before'] if failure == 'before' else ['before', 'after'])
+                self.assertEqual(storage.call_count, int(failure == 'after'))
+                usb.assert_not_called()
+                self.assertIs(runner.persistent_nix.evidence._mmc_original, storage)
+                self.assertIsNot(owner.evidence, storage)
+        self.assertEqual(self.desktop.p.EXTRA_EXECUTED_SOURCES.count('tools/test-network-audio-desktop.py'), 1)
+
+
 class MediaAdmission(unittest.TestCase):
     def setUp(self):
         spec = importlib.util.spec_from_file_location('media_profile', Path(__file__).with_name('test-media-boot.py'))

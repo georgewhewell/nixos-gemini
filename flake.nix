@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=8e0e9aa9358e48a4d6b2dbe2b45ae922afd0f1a0&shallow=1";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=2b9abbe756ad5dbee086436b59eed6277e3fd529&shallow=1";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -22,10 +22,6 @@
     };
     linux-gemini-recovery = {
       url = "git+file:///mnt/Home/src/nixos-gemini/linux?ref=gemini&rev=c0dbf01b2bdaa9cc741582ae0c88df3daac74285";
-      flake = false;
-    };
-    linux-gemini-next = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-platform&rev=da6e93b0bce1b62e0e38425938efe3ceba7cfc09";
       flake = false;
     };
     ixoo-candidate = {
@@ -61,7 +57,9 @@
       (import "${inputs.recovery-packaging}/legacy.nix")
       (builtins.removeAttrs (inputs
         // {
+          # The frozen template requires both names; only recovery is exported.
           linux-gemini = inputs.linux-gemini-recovery;
+          linux-gemini-next = inputs.linux-gemini-recovery;
         }) ["linux-gemini-recovery" "u-boot-gemini" "recovery-packaging"]);
   in {
     packages.${host} = {

@@ -69,10 +69,15 @@ receive ownership is not a SIM/watchdog fix. The
 This combined image also installs native MMC0 pad ownership and the current-
 demand check before CPU parking removes a core. Storage retention passes with
 legacy timing; faster eMMC modes are not enabled. Two locked image-112 snapshots
-confirm all 12 native pad settings, enabled configured supplies and zero MMC
-error counters. Cached CCF state and computed IOS rates do not qualify the raw
+confirm all 12 native pad settings, enabled configured supplies and zero-valued
+MMC error counters. The installed MSDC driver does not populate command/data
+counters, so zero alone does not qualify error-free transfers. Cached CCF state
+and computed IOS rates do not qualify the raw
 controller clock fields; bounded native acceptance and failure handling precede
-standard HS52 qualification. Image 112 retains the procfs
+standard HS52 qualification. The normal candidate at `2b9abbe756ad5dbe` now
+builds with verified clock admission, native error attribution and standard
+52 MHz high-speed support. GCC15 sanitizer regressions and strict ARM64 compile
+pass; its supervised storage trial is pending. Image 112 retains the procfs
 sample allocation and seeks for fresh counters. A controlled helper comparison
 attributes 23.7% less read CPU time to that change; the installed daemon still
 uses 3.86% of one core, mostly kernel time, with no topology transitions.

@@ -1092,7 +1092,7 @@
       "driver type": 0
     },
     "zero_error_counters": 15,
-    "limits": "Pinctrl native field readbacks and configured supply state pass. VEMC uses PMIC selector readback; fixed VIO18 is nominal, not ADC measurement. CCF cached parent/rates and the computed IOS rate do not qualify hardware mux or raw MSDC_CFG state.",
+    "limits": "Pinctrl native field readbacks and configured supply state pass. VEMC uses PMIC selector readback; fixed VIO18 is nominal, not ADC measurement. CCF cached parent/rates and the computed IOS rate do not qualify hardware mux or raw MSDC_CFG state. The installed MSDC host does not populate standard command/data error counters, so their zero values alone do not establish error-free transfers.",
     "raw_msdccfg_qualified": false,
     "analog_rail_voltage_qualified": false,
     "ccf_hardware_mux_readback_qualified": false,
@@ -1100,6 +1100,55 @@
     "next": "Complete bounded masked clock-field acceptance, lease unwind and faulted-request admission in the native MSDC owner; then qualify standard HS52 with retained storage and ordinary Nix builds.",
     "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc0-owner-read/proof/result.json",
     "proof_sha256": "30ce6da26b6ef96e9ec133a5454243b551a115e4929e02fbe48ae8a46ec0825d",
-    "terminal_proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc0-owner-read/proof/exit.json"
+    "terminal_proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc0-owner-read/proof/exit.json",
+    "native_command_data_error_attribution_qualified": false
+  },
+  "mmc_high_speed_owner": {
+    "kernel_source_revision": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
+    "native_driver_commit": "82c13922c6ae5f7",
+    "native_owner": "drivers/mmc/host/mtk-sd.c",
+    "fix": "Bound masked CFG/CKSTB acceptance and restoration; balance clock leases; preserve failed IOS admission through ordinary/HSQ/CQE requests and resume; defer required init until verified clock. Attribute native MMC command/data/controller errors and propagate DMA faults before completion.",
+    "board_change": {
+      "standard_property": "cap-mmc-highspeed",
+      "maximum_frequency_hz": 52000000,
+      "ddr_hs200_hs400_enabled": false,
+      "pad_and_supply_inputs_unchanged": true
+    },
+    "checks": {
+      "gcc15_asan_ubsan_actual_source_exit": 0,
+      "old_source_compiles": true,
+      "old_source_dropped_write_rejected": true,
+      "strict_arm64_w1_werror_exit": 0,
+      "host_deployment_tests": 34,
+      "host_deployment_exit": 0,
+      "normal_image_and_required_kernel_checks_exit": 0,
+      "gnome_cross_runtime": {
+        "elf_files": 1431,
+        "script_interpreters": 124,
+        "foreign_elf_files": 0
+      }
+    },
+    "source_hashes": {
+      "driver_sha256": "d5b6b3293b665738452a7b85d69efbadd9d3ccfd8ac8ec2d78d0c600c168504d",
+      "fixture_sha256": "939a60b801f147f92c8956878840c89ad4c8e180a4b0d09d4f1e67f3e2f86482"
+    },
+    "bundle": "/nix/store/nfw35avd12rx8jcy9wf51kncky4gxs4d-gemini-mainline-nixos-bundle",
+    "kernel": "/nix/store/zsz2b4mw4xhvvlr1iy2kj9ixbz8xqkfz-linux-gemini-7.2.9",
+    "system": "/nix/store/vh7wy93v6a1yvynw5nr4wjyxslgd8yix-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "hardware_qualified": false,
+    "installed": false,
+    "storage_benchmark_performed": false,
+    "next": "One supervised normal image trial: strict native high-speed IOS/counters before and after the existing retained-storage/ordinary-daemon-build checks; independent terminal audit before accepting.",
+    "evidence": {
+      "focused": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/focused-result.json",
+      "strict": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-clock-owner/strict-result.json",
+      "host_gate": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-hs52-host/result.json",
+      "normal_build": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/image-exit.json"
+    },
+    "cleanup": {
+      "obsolete_branch_input_removed": "linux-gemini-next",
+      "recovery_derivation_unchanged": true,
+      "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/mmc-high-speed-build/recovery-input-prune-result.json"
+    }
   }
 }
