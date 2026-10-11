@@ -67,6 +67,26 @@ int main(void)
 		assert(step(&s, 10, 3, 0, t += 50, 2, &why) == 2);
 	assert(s.low_since >= 0);
 
+	/* The hold and low mean must not hide new runnable/load demand.
+	 * Measured hotplug downs removed CPU1 with cap=2/nr=4, or with
+	 * current load=120, followed by immediate rush unpark. Neither fits
+	 * the prospective one-core capacity even when the old mean is low.
+	 */
+	for (int demand = 0; demand < 2; demand++) {
+		s = (struct pstate){ .low_since = -1 };
+		t = 0;
+		for (i = 0; i < 23; i++, t += 50)
+			assert(step(&s, 10, 2, 0, t, 1, &why) == 1);
+		assert(step(&s, demand ? 53 : 120, 2, demand ? 4 : 1,
+			    t, 1, &why) == 1 && why == R_NONE);
+		assert(s.low_since < 0);
+		/* Return to quiet load starts a fresh hold, not immediate park. */
+		for (i = 0; i < 20; i++)
+			assert(step(&s, 10, 2, 0, t += 50, 1, &why) == 1);
+		assert(step(&s, 10, 2, 0, t += 50, 1, &why) == 0 &&
+		       why == R_DOWN);
+	}
+
 	/* Input boost floor, then decay after the hold. */
 	s = (struct pstate){ .low_since = -1 };
 	s.boost_until = t + 1500;

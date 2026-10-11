@@ -17,6 +17,7 @@ in [baselines](baselines/boot-test-76.json).
 | Flash-safe paging | Working: RAM-only zram | Trial 85 exercises 128 MiB with exact data, no physical swap, no writeback and zero flash-swap writes. The preserved 7.1.3 fallback uses no swap. |
 | Linux 7.2.9 platform port | Working on one maintained kernel | [Kernel record](KERNEL_BASELINE.md). Installed source `04ecf8c` adds detach-before-notify Wi-Fi connection ownership and AP-side CLDMA RX acknowledgement. Actual-path host regressions and strict ARM64 object builds pass; the normal build requires those checks. Kernel and development shell use the locked Nixpkgs default compiler (GCC 15.3.0). |
 | GPU DVFS | Seven OPPs pass bounded rendering checks | [Trial 88 GPU proof](desktop-responsiveness-20261011.json). Correct clock and voltage readbacks from 238 to 900 MHz, 13 exact pixel checks up/down, 104 job IRQs and no detected GPU faults. Native thermal cooling registers; normal simple_ondemand policy and CPU parking are restored. Sustained thermal load and subjective UI responsiveness remain unqualified. |
+| Desktop and CLI performance | Measured parking regression fixed in development | [Performance evidence](desktop-responsiveness-20261011.json). Current-demand checks prevent removing a CPU needed by the current load/runnable count; sanitizer, actual-policy regressions, existing integration and normal ARM64 cross-build pass. The fix is not installed yet. Idle measurements show parking/udev activity, Panfrost rendering and legacy 24 MHz eMMC, with no concurrent reclaim or storage I/O. Native MMC0 pad ownership, measured A53/A72 scheduling capacities, deep idle and responsiveness under use remain open. |
 | Bluetooth | Desktop radio access and bounded discovery pass | [Trial 94 Bluetooth proof](desktop-radio-activation-20261011.json). GNOME sees an unblocked, powered controller through native RFKILL. A 16-second scan as `gemini` finds 14 RSSI devices, one named, with fresh LE events, all controller statuses successful and zero Bluetooth/WLAN transport faults. No continuous trace runs at boot. Pairing, profiles and the owner's particular target remain unqualified. |
 | Onboard stereo playback | Corrected effective hardware mapping | [Audio proof](desktop-radio-activation-20261011.json). Native UCM exposes the onboard sink; PipeWire reports logical FL/FR and hardware FR/FL with ALSA hardware-map override disabled. Plain ALSA speaker/headphone/default paths pass independent sample comparisons. Acoustic orientation remains unverified. |
 | GNOME document portal | Working on the installed system | Trial 88 has built-in FUSE, `/dev/fuse`, an active user document portal and its `fuse.portal` mount. The [integration audit](integration-audit-20261011.json) records the missing module autoload on the preceding image. |
@@ -46,9 +47,10 @@ userspace workaround does not qualify an unfinished driver.
 Record remaining owner work here and return to it: GNSS needs the retained native
 endpoint wired into the current CONSYS transport, then public protocol and
 position-fix qualification; earlier power/control checks do not prove a fix.
-Desktop/CLI performance needs measured scheduling, clock, memory, I/O and render
-bottlenecks before changing policy. Cellular SIM/speech and media completion
-remain open as recorded above.
+Desktop/CLI performance needs the changed parking policy qualified during use,
+complete native MMC0 pad ownership before faster timing, measured A53/A72
+scheduling capacities and a proper deep-idle owner. Cellular SIM/speech and
+media completion remain open as recorded above.
 
 Run tests for changed behavior, an observed regression or a specific unmet
 acceptance check. Reuse existing results when their relevant inputs are

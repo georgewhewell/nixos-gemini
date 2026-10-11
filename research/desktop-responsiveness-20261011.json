@@ -398,5 +398,73 @@
     "kernel_symvers_sha256": "1c226cc2ce3678d1f29d0549e498f4c15590c5b66c793ffa064ddf9f07e55aef",
     "evidence": "/mnt/Home/src/nixos-gemini/handoff/media-module-boot88-20261011/module-build-result.json",
     "proof_sha256": "eb4804cf4ee517ff3d05ef9ec8a851ae2e1e164b89932de98c85f6a1b634838c"
+  },
+  "performance_followup": {
+    "date": "2026-10-11",
+    "installed_trial": 98,
+    "kernel_source_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
+    "measurement": {
+      "seconds": 30.349,
+      "idle": true,
+      "identity_before_after_matches": true,
+      "taint": 0,
+      "parking_cpu_percent_one_core": 6.524,
+      "udevd_cpu_percent_one_core": 6.425,
+      "sampler_cpu_percent_one_core": 5.173,
+      "gnome_cpu_percent_one_core": 0.494,
+      "reclaim_swap_major_faults_and_emmc_io_during_sample": false,
+      "available_memory_kib_min": 2655092,
+      "gpu_runtime_suspended": true,
+      "gpu_frequency_hz": 238000000,
+      "gpu_max_frequency_hz": 900000000,
+      "gnome_drm_driver": "panfrost",
+      "emmc_actual_clock_hz": 23999992,
+      "emmc_timing": "legacy",
+      "emmc_bus_width_bits": 8,
+      "pressure_and_task_io_interfaces": "unavailable, not zero"
+    },
+    "observed_native_policy_regression": [
+      {
+        "capacity": 2,
+        "load": 120,
+        "runnable": 1,
+        "removed_cpu": 1
+      },
+      {
+        "capacity": 2,
+        "load": 53,
+        "runnable": 4,
+        "removed_cpu": 1
+      }
+    ],
+    "fix": "Require current runnable count and load to fit prospective capacity before the existing history and hold permit CPU removal; new demand resets the hold.",
+    "validation": {
+      "old_actual_decide_regression_exit": 1,
+      "canonical_policy_asan_ubsan_exit": 0,
+      "canonical_strict_daemon_build_exit": 0,
+      "existing_fake_sysfs_exit": 0,
+      "normal_cross_daemon_build_exit": 0,
+      "cross_daemon_elf_machine": 183,
+      "cross_daemon": "/nix/store/xgivlmllxf3fqy43i85qibsd5nka8vg6-gemini-core-parking-static-aarch64-unknown-linux-musl-1",
+      "source_hashes": {
+        "nix/core-parking.c": "758b547e0e5644e8d57c359962a8b7c2884e98a1b8277104873c787dd1c4e073",
+        "nix/test-core-parking-policy.c": "4ca40cdb194d99d9b9f6fe35f8b9b09ce84953042713d828b4de331c21d54d72"
+      }
+    },
+    "installed": false,
+    "hardware_effect_and_subjective_responsiveness_qualified": false,
+    "remaining_owner_work": [
+      "Qualify changed parking decisions during ordinary use on the combined next image.",
+      "Native MMC0 pad electrical fields and drive encoding are incomplete; qualify the pad owner before enabling faster eMMC timing.",
+      "DT lacks measured CPU capacity data for A53/A72 scheduling; no invented ratios.",
+      "Native deep idle remains incomplete; current CPU_OFF parking is still needed for core power removal."
+    ],
+    "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011",
+    "evidence_files": [
+      "performance-read.json",
+      "performance-inventory-read.json",
+      "parking-demand-candidate/review-result.json",
+      "parking-demand-candidate/root-check/canonical-validation.json"
+    ]
   }
 }

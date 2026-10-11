@@ -153,7 +153,9 @@ static int decide(const struct policy *p, struct pstate *s,
 		want = k + 1;
 		*why = R_UP;
 		s->low_since = -1;
-	} else if (cap > 1 && s->nhist >= p->down_samples &&
+	} else if (cap > 1 && x->nr < cap &&
+		   x->load < p->down_pct * (cap - 1) &&
+		   s->nhist >= p->down_samples &&
 		   hist_mean(s, p->down_samples) < p->down_pct * (cap - 1)) {
 		if (s->low_since < 0)
 			s->low_since = now;
