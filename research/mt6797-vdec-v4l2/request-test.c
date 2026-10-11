@@ -18,6 +18,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 typedef uint8_t u8;
@@ -532,6 +533,107 @@ static void test_native_buffers(struct stream *stream, const char *video,
 	     "\"gpu_rendering_qualified\":false}");
 }
 
+/* Feed an original fixture through the standard Mesa MM21 import path. CPU
+ * writes initialize the test input only; the renderer samples exported storage
+ * through EGL and has no CPU input conversion or mapping.
+ */
+static void test_native_gpu(const char *video, const char *media, const char *render,
+			    const char *helper, const char *out)
+{
+	static const u8 colors[][3] = { {81,90,240}, {145,54,34}, {41,240,110}, {128,128,128} };
+	struct stream stream;
+	struct v4l2_format format = { .type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE };
+	struct v4l2_plane planes[2] = { 0 };
+	struct v4l2_buffer buffer = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+		.memory = V4L2_MEMORY_MMAP, .length = 2, .m.planes = planes };
+	struct mapping exports[2] = { {.fd=-1}, {.fd=-1} };
+	const size_t luma = 5120, capacity = 196608;
+	char log_path[1024], fd_text[2][32];
+	open_device(&stream, video, media);
+	format.fmt.pix_mp.width = width;
+	format.fmt.pix_mp.height = height;
+	checked_ioctl(stream.video, VIDIOC_S_FMT, &format, "GPU output geometry");
+	format.type = buffer.type;
+	checked_ioctl(stream.video, VIDIOC_G_FMT, &format, "GPU capture format");
+	if (format.fmt.pix_mp.width != 80 || format.fmt.pix_mp.height != 64 ||
+	    format.fmt.pix_mp.pixelformat != V4L2_PIX_FMT_MM21 || format.fmt.pix_mp.num_planes != 2 ||
+	    format.fmt.pix_mp.plane_fmt[0].sizeimage != luma ||
+	    format.fmt.pix_mp.plane_fmt[1].sizeimage != luma * 3 / 2) {
+		fprintf(stderr, "Unexpected native GPU capture geometry\n"); exit(1);
+	}
+	struct v4l2_create_buffers create = { .count=1, .memory=V4L2_MEMORY_MMAP, .format=format };
+	checked_ioctl(stream.video, VIDIOC_CREATE_BUFS, &create, "GPU CREATE_BUFS");
+	if (create.count != 1 || create.index != 0) {
+		fprintf(stderr, "Unexpected native GPU buffer count\n"); exit(1);
+	}
+	checked_ioctl(stream.video, VIDIOC_QUERYBUF, &buffer, "GPU QUERYBUF");
+	for (unsigned p = 0; p < 2; p++) {
+		struct v4l2_exportbuffer exp = { .type=buffer.type, .plane=p,
+			.flags=O_RDWR | O_CLOEXEC };
+		if (planes[p].length != luma * (p ? 3 : 2) / 2 ||
+		    planes[p].data_offset != (p ? luma : 0) ||
+		    planes[p].bytesused != planes[p].data_offset) {
+			fprintf(stderr, "Unexpected native GPU plane metadata\n"); exit(1);
+		}
+		checked_ioctl(stream.video, VIDIOC_EXPBUF, &exp, "GPU EXPBUF");
+		exports[p].fd = exp.fd;
+		if (exp.fd < 3 || (p && exp.fd == exports[0].fd) ||
+		    lseek(exp.fd, 0, SEEK_END) != (off_t)capacity) {
+			fprintf(stderr, "Unexpected native GPU export capacity/fd\n"); exit(1);
+		}
+	}
+	exports[0].address = mmap(NULL, capacity, PROT_READ | PROT_WRITE, MAP_SHARED, exports[0].fd, 0);
+	if (exports[0].address == MAP_FAILED) fail("GPU input mmap");
+	sync_mapping(&exports[0], DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE);
+	u8 *data = exports[0].address;
+	for (unsigned y = 0; y < 64; y++)
+		for (unsigned x = 0; x < 80; x++) {
+			unsigned cell = (x / 8 + 3 * (y / 8)) % 4;
+			size_t address = ((y / 32) * 5 + x / 16) * 512 + (y % 32) * 16 + x % 16;
+			data[address] = colors[cell][0];
+		}
+	for (unsigned y = 0; y < 32; y++)
+		for (unsigned x = 0; x < 40; x++) {
+			unsigned cell = (x / 4 + 3 * (y / 4)) % 4;
+			size_t address = luma + ((y / 16) * 5 + x / 8) * 256 + (y % 16) * 16 + 2 * (x % 8);
+			data[address] = colors[cell][1]; data[address+1] = colors[cell][2];
+		}
+	sync_mapping(&exports[0], DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
+	if (munmap(exports[0].address, capacity)) fail("GPU input munmap");
+	if (snprintf(log_path, sizeof(log_path), "%s/native-gpu.txt", out) >= (int)sizeof(log_path)) {
+		fprintf(stderr, "Native GPU output path too long\n"); exit(1);
+	}
+	int log = open(log_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+	if (log < 0) fail("GPU helper output");
+	for (unsigned p = 0; p < 2; p++) snprintf(fd_text[p], sizeof(fd_text[p]), "%d", exports[p].fd);
+	pid_t child = fork();
+	if (child < 0) fail("GPU helper fork");
+	if (!child) {
+		if (dup2(log, STDOUT_FILENO) < 0 || dup2(log, STDERR_FILENO) < 0) _exit(126);
+		close(log);
+		for (unsigned p = 0; p < 2; p++)
+			if (fcntl(exports[p].fd, F_SETFD, 0) < 0) _exit(126);
+		execl(helper, helper, render, "--native-mm21", fd_text[0], fd_text[1], (char *)NULL);
+		_exit(127);
+	}
+	/* The child alone owns the original exports before EGL imports them.
+	 * It closes them after import; retained EGL/PRIME refs own the draw.
+	 * The existing observer's process-group timeout bounds parent and child.
+	 */
+	if (close(log) || close(stream.media) || close(stream.video) ||
+	    close(exports[0].fd) || close(exports[1].fd)) fail("GPU parent release");
+	int status;
+	pid_t waited;
+	do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
+	if (waited != child || !WIFEXITED(status) || WEXITSTATUS(status)) {
+		fprintf(stderr, "Native GPU helper failed; retain module until recovery\n"); exit(1);
+	}
+	puts("{\"native_gpu_test_passed\":true,\"scope\":\"synthetic-native-mm21-gpu\","
+	     "\"width\":80,\"height\":64,\"pixels\":5120,\"rgb_tolerance\":2,"
+	     "\"exported_fds\":2,\"export_capacity\":196608,\"api_draws\":1,"
+	     "\"parent_refs_released\":true,\"codec_submissions\":0,\"decode_qualified\":false}");
+}
+
 static int64_t milliseconds(void)
 {
 	struct timespec now;
@@ -892,10 +994,16 @@ int main(int argc, char **argv)
 	int single_grey = argc == 7 && !strcmp(argv[5], "--single") &&
 			  !strcmp(argv[6], "grey64");
 	buffers_only = argc == 7 && !strcmp(argv[5], "--buffers-only");
-	if (argc != 5 && argc != 9 && argc != 10 && !single_grey && !buffers_only) {
-		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [--buffers-only RENDER_NODE | --single grey64 | FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
+	int native_gpu = argc == 8 && !strcmp(argv[5], "--native-gpu");
+	if (argc != 5 && argc != 9 && argc != 10 && !single_grey && !buffers_only && !native_gpu) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [--native-gpu RENDER_NODE HELPER | --buffers-only RENDER_NODE | --single grey64 | FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
 	}
 	status_path = argv[4];
+	if (native_gpu) {
+		width = 80; height = storage_height = 64;
+		test_native_gpu(argv[1], argv[2], argv[6], argv[7], argv[3]);
+		return 0;
+	}
 	if (buffers_only) {
 		width = 80;
 		height = storage_height = 64;

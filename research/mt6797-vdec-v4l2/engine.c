@@ -1122,7 +1122,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->irq_status = engine->irq_status;
 	if (!ret && (status->irq_events != 1 || status->irq_unexpected ||
 		     status->irq_received_command != status->irq_command ||
-		     !(status->irq_status & BIT(16))))
+		     !(status->irq_status & BIT(16)) || !status->irq_complete))
 		ret = -EIO;
 	status->state = readl(avc + 0x278);
 	status->irq = readl(misc + 0xa4);

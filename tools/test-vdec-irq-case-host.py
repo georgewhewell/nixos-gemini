@@ -35,6 +35,14 @@ struct stream { int live; };
 static const char *status_path, *fixture_directory;
 static unsigned width = 64, height = 64, storage_height = 64;
 static int export_buffers, buffers_only, live;
+static void test_native_gpu(const char *video, const char *media, const char *render,
+                            const char *helper, const char *out)
+{
+    assert(!live && !strcmp(video, "video") && !strcmp(media, "media"));
+    assert(!strcmp(render, "render") && !strcmp(helper, "helper") && !strcmp(out, "output"));
+    assert(width == 80 && height == 64 && storage_height == 64 && !buffers_only);
+    puts("{\"op\":\"gpu\"}");
+}
 static void test_create_buffers(const char *video, const char *media)
 {
     assert(!live && !strcmp(video, "video") && !strcmp(media, "media"));
@@ -99,9 +107,12 @@ static void close_stream(struct stream *s)
         assert hashlib.sha256(bytes.fromhex(grey['grey_hex'])).hexdigest() == GREY_SHA256
         assert single[-1] == dict(public_api_test_passed=True, scope='single-grey64')
         assert run(['--buffers-only', 'render']) == [dict(op='create'), dict(op='buffers')]
+        assert run(['--native-gpu', 'render', 'helper']) == [dict(op='gpu')]
         for extra in (['--single'], ['--single', 'pcm64'], ['--other', 'grey64'],
                       ['--single', 'grey64', 'extra'], ['--single', 'grey64', '64', 'mmap'],
-                      ['--buffers-only'], ['--buffers-only', 'render', 'extra']):
+                      ['--buffers-only'], ['--buffers-only', 'render', 'extra'],
+                      ['--native-gpu'], ['--native-gpu', 'render'],
+                      ['--native-gpu', 'render', 'helper', 'extra']):
             assert run(extra, expected=2) == [], extra
         assert run([], expected=2, base=False) == []
         legacy = run([])
@@ -141,7 +152,7 @@ def check_qualification(path):
                   fetch_commands=1, frame_commands=1, nal_bytes=20, header_bits=28,
                   irq_clock_result=0, state=0x80000001, irq_status=0x13001,
                   irq_command=1, irq_received_command=1, irq_clock_trace_valid=0x1f,
-                  irq_clock_submit=0x101, irq_clock_guard=0x101)
+                  irq_clock_submit=0x101, irq_clock_guard=0x101, irq_complete=1)
     status['break'] = 0
     before = dict(irq=77, counts=[0]*10, total=0)
     # CPU8 may have parked after the event; its possible-CPU counter remains.
@@ -162,14 +173,14 @@ def check_qualification(path):
                       jobs=2, fetch_commands=2, frame_commands=2, nal_bytes=6180,
                       header_bits=38, irq_clock_result=-5, state=1, irq_status=0x3001,
                       irq_command=0, irq_received_command=2, irq_clock_trace_valid=0x3f,
-                      irq_clock_submit=0x111, irq_clock_guard=0x111)
+                      irq_clock_submit=0x111, irq_clock_guard=0x111, irq_complete=0)
     bad_fields['break'] = 1
     for field, value in bad_fields.items():
         changed = copy.deepcopy(good)
         changed['statuses']['grey64'][field] = value
         reject(changed, field)
     for field in ('irq_status', 'irq_command', 'irq_received_command', 'irq_clock_result',
-                  'irq_clock_trace_valid', 'irq_clock_submit', 'irq_clock_guard'):
+                  'irq_clock_trace_valid', 'irq_clock_submit', 'irq_clock_guard', 'irq_complete'):
         changed = copy.deepcopy(good)
         del changed['statuses']['grey64'][field]
         reject(changed, 'absent ' + field)
@@ -206,6 +217,9 @@ def check_qualification(path):
     assert module.completion_qualified(**full), 'Legacy four-picture predicate changed'
     full['statuses']['pattern64']['irq_command'] = full['statuses']['pattern64']['irq_received_command'] = 1
     reject(full, 'Reused command attribution across legacy pictures')
+    changed = copy.deepcopy(good)
+    changed['statuses']['grey64']['irq_complete'] = 0x20
+    assert module.completion_qualified(**changed), 'Raw nonzero single-core finish word rejected'
     print(f'Actual qualifier: grey-only and legacy acceptance, {rejected} missing/unsafe/foreign evidence cases rejected: PASS')
 
     report = dict(native_buffers_test_passed=True, scope='native-buffers', width=80, height=64,
@@ -260,6 +274,261 @@ def check_qualification(path):
         changed = copy.deepcopy(buffers); changed['reports'][0][key] = value
         reject_buffer(changed, 'foreign type/key ' + key)
     print(f'Actual native-buffer predicate: exact scope and zero-command evidence; {rejected} incomplete/foreign cases rejected: PASS')
+
+    gpu_report = dict(native_gpu_test_passed=True, scope='synthetic-native-mm21-gpu',
+                      width=80, height=64, pixels=5120, rgb_tolerance=2, exported_fds=2,
+                      export_capacity=196608, api_draws=1, parent_refs_released=True,
+                      codec_submissions=0, decode_qualified=False)
+    marker = ('GPU_NATIVE_MM21_PASS width=80 height=64 pixels=5120 '
+              'rgb_tolerance=2 imported_fds_closed=1')
+    gpu_before = {kind: dict(irq=80+index, counts=[0]*10, total=0,
+                            actions='panfrost-'+kind, counter='sysfs-all-possible-cpus')
+                  for index, kind in enumerate(('job', 'mmu', 'gpu'))}
+    gpu_after = copy.deepcopy(gpu_before)
+    gpu_after['job'].update(counts=[0]*8+[3, 0], total=3)
+    gpu = dict(reports=[gpu_report], helper_log='renderer=Mali-T880\n'+marker+'\n',
+               cached=copy.deepcopy(buffers['cached']), start=before, finish=before.copy(),
+               gpu_before=gpu_before, gpu_after=gpu_after,
+               kernel_health=dict(scoped_gpu_error_lines=0, kernel_failure_lines=0),
+               returncode=0, safe=True, statuses={})
+    assert module.native_gpu_qualified(**gpu)
+    rejected = 0
+
+    def reject_gpu(changed, label):
+        nonlocal rejected
+        assert not module.native_gpu_qualified(**changed), label
+        rejected += 1
+
+    for key, value in gpu_report.items():
+        changed = copy.deepcopy(gpu); del changed['reports'][0][key]
+        reject_gpu(changed, 'missing GPU field '+key)
+        changed = copy.deepcopy(gpu)
+        changed['reports'][0][key] = (not value if type(value) is bool else
+                                    value+1 if type(value) is int else 'foreign')
+        reject_gpu(changed, 'bad GPU field '+key)
+    for key, value in (('reports', []), ('reports', [gpu_report, gpu_report]),
+                       ('reports', [True]), ('cached', {}), ('safe', False), ('returncode', 1),
+                       ('statuses', {'grey64': status}), ('finish', after),
+                       ('gpu_before', {}), ('gpu_after', {})):
+        changed = copy.deepcopy(gpu); changed[key] = value
+        reject_gpu(changed, key)
+    for text in ('', marker+'\nlate output\n', marker+'\n'+marker+'\n',
+                 'GPU_RENDER_FAIL: error\n'+marker, marker.replace('pixels=5120', 'pixels=5119')):
+        changed = copy.deepcopy(gpu); changed['helper_log'] = text
+        reject_gpu(changed, 'incomplete/failed/helper marker')
+    for name in gpu['cached']:
+        for key in idle:
+            changed = copy.deepcopy(gpu); changed['cached'][name][key] = 1
+            reject_gpu(changed, name+'/'+key)
+            del changed['cached'][name][key]
+            reject_gpu(changed, 'missing '+name+'/'+key)
+    for kind in gpu_before:
+        for key, value in (('irq', 900), ('counts', [0]), ('total', 123),
+                           ('counts', [False]*10), ('counts', [-1]+[0]*9),
+                           ('actions', 'foreign'), ('counter', 'online-cpus')):
+            changed = copy.deepcopy(gpu); changed['gpu_after'][kind][key] = value
+            reject_gpu(changed, kind+'/'+key)
+        changed = copy.deepcopy(gpu)
+        changed['gpu_before'][kind].update(counts=[4]+[0]*9, total=4)
+        changed['gpu_after'][kind].update(counts=[0, 5]+[0]*8, total=5)
+        reject_gpu(changed, 'counter regression '+kind)
+    for kind in ('mmu', 'gpu'):
+        changed = copy.deepcopy(gpu)
+        changed['gpu_after'][kind].update(counts=[1]+[0]*9, total=1)
+        assert module.native_gpu_qualified(**changed), 'Benign/recoverable IRQ rejected '+kind
+    for health in ({}, dict(scoped_gpu_error_lines=1, kernel_failure_lines=0),
+                   dict(scoped_gpu_error_lines=0, kernel_failure_lines=1),
+                   dict(scoped_gpu_error_lines=False, kernel_failure_lines=0),
+                   dict(scoped_gpu_error_lines=0, kernel_failure_lines=0, extra=0)):
+        changed = copy.deepcopy(gpu); changed['kernel_health'] = health
+        reject_gpu(changed, 'absent/fault/foreign kernel health')
+    changed = copy.deepcopy(gpu); changed['gpu_after']['job'] = copy.deepcopy(gpu_before['job'])
+    reject_gpu(changed, 'no GPU jobs')
+    for key, value in (('native_gpu_test_passed', 1), ('codec_submissions', False), ('extra', True)):
+        changed = copy.deepcopy(gpu); changed['reports'][0][key] = value
+        reject_gpu(changed, 'foreign type/key '+key)
+    for action in ('16020000.video-codec', 'panfrost-job', 'panfrost-mmu', 'panfrost-gpu'):
+        text = 'irq=77\nactions='+action+'\ncounts='+','.join(['0']*10)+'\n'
+        assert module.irq_counter(text, action)['actions'] == action
+        assert '"'+action+'"' in module.irq_snapshot_script(action)
+        for changed in (text.replace(action, 'foreign'), text+'extra=0\n', text.replace('counts=0', 'counts=-1', 1)):
+            try:
+                module.irq_counter(changed, action)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('Foreign/malformed IRQ snapshot accepted')
+    for message, gpu_errors, kernel_errors in (
+            ('',0,0), ('panfrost 13040000.gpu: GPU Fault 0x123',1,0),
+            ('panfrost 13040000.gpu: Unhandled Page fault in AS0',1,0),
+            ('panfrost 13040000.gpu: js fault, status=DATA_INVALID_FAULT',1,0),
+            ('panfrost 13040000.gpu: AS_ACTIVE bit stuck',1,0),
+            ('rt5735: vgpu regulator failed',1,0), ('Oops: kernel error',0,1),
+            ('Failed to power on domain mfg_async',1,0), ('WARNING: kernel ownership',0,1),
+            ('BUG: generic error',0,1), ('rcu: detected stalls',0,1),
+            ('panfrost 13040000.gpu: idle status=1',0,0),
+            ('wifi: unrelated private failure omitted',0,0)):
+        filtered = subprocess.run(['sh', '-c', module.gpu_fault_filter_script()],
+                                  input=message+'\n',capture_output=True,text=True,check=True)
+        assert json.loads(filtered.stdout)==dict(scoped_gpu_error_lines=gpu_errors,kernel_failure_lines=kernel_errors)
+        assert not filtered.stderr
+        if message:
+            assert message not in filtered.stdout
+    print(f'Actual native-GPU predicate: full pixel marker, CPU release, zero codec work, real GPU jobs and scalar kernel health; {rejected} incomplete/unsafe cases rejected: PASS')
+
+
+def check_native_gpu(source):
+    """Run the production ioctl/tiling/fork/exec path with real file aliases."""
+    code = '#define ioctl fake_ioctl\n#define main request_program_main\n'
+    code += '#include '+json.dumps(str(source.resolve()))+'\n'
+    code += r'''
+#undef main
+#include <assert.h>
+#include <stdarg.h>
+static unsigned fault, exports, syncs;
+static int backing;
+int fake_ioctl(int fd, unsigned long command, ...)
+{
+    va_list args; va_start(args, command); void *arg = va_arg(args, void *); va_end(args);
+    if (command == VIDIOC_QUERYCAP) {
+        strcpy((char *)((struct v4l2_capability *)arg)->driver, fault==1 ? "foreign" : "mt6797-vdec");
+        char value[32]; snprintf(value, sizeof(value), "%d", fd);
+        assert(!setenv("TEST_VIDEO_FD", value, 1));
+        /* open_device opens media immediately after video. */
+        snprintf(value, sizeof(value), "%d", fd+1); assert(!setenv("TEST_MEDIA_FD", value, 1));
+    } else if (command == VIDIOC_S_FMT) {
+        struct v4l2_format *f=arg;
+        assert(f->type==V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE && f->fmt.pix_mp.width==80 && f->fmt.pix_mp.height==64);
+    } else if (command == VIDIOC_G_FMT) {
+        struct v4l2_format *f=arg;
+        assert(f->type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+        f->fmt.pix_mp.width=80; f->fmt.pix_mp.height=64; f->fmt.pix_mp.num_planes=2;
+        f->fmt.pix_mp.pixelformat=fault==2 ? V4L2_PIX_FMT_NV12 : V4L2_PIX_FMT_MM21;
+        f->fmt.pix_mp.plane_fmt[0].sizeimage=5120; f->fmt.pix_mp.plane_fmt[1].sizeimage=7680;
+        if (fault==3) f->fmt.pix_mp.plane_fmt[1].sizeimage=2560;
+    } else if (command == VIDIOC_CREATE_BUFS) {
+        struct v4l2_create_buffers *c=arg;
+        assert(c->count==1 && c->memory==V4L2_MEMORY_MMAP && c->format.fmt.pix_mp.plane_fmt[1].sizeimage==7680);
+        c->index=fault==4; if (fault==5) c->count=2;
+    } else if (command == VIDIOC_QUERYBUF) {
+        struct v4l2_buffer *b=arg;
+        assert(b->index==0 && b->length==2 && b->memory==V4L2_MEMORY_MMAP);
+        b->m.planes[0].length=5120; b->m.planes[1].length=7680;
+        b->m.planes[1].bytesused=b->m.planes[1].data_offset=5120;
+        if (fault==6) b->m.planes[0].length--;
+        if (fault==7) b->m.planes[1].data_offset=0;
+        if (fault==8) b->m.planes[1].bytesused++;
+    } else if (command == VIDIOC_EXPBUF) {
+        struct v4l2_exportbuffer *e=arg;
+        assert(e->type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE && e->index==0);
+        assert(e->plane==exports && e->flags==(O_RDWR|O_CLOEXEC));
+        e->fd=fcntl(backing, F_DUPFD_CLOEXEC, 3); assert(e->fd>=3);
+        if (++exports==2) { assert(!close(backing)); backing=-1; }
+    } else if (command == DMA_BUF_IOCTL_SYNC) {
+        struct dma_buf_sync *s=arg; assert(exports==2 && syncs<2);
+        assert(s->flags==(syncs ? DMA_BUF_SYNC_END|DMA_BUF_SYNC_WRITE : DMA_BUF_SYNC_START|DMA_BUF_SYNC_WRITE));
+        syncs++;
+    } else assert(!"Unexpected ioctl in native GPU input path");
+    return 0;
+}
+int main(int argc, char **argv)
+{
+    assert(argc==4); fault=strtoul(argv[2], NULL, 10);
+    char path[1024], video[1024], media[1024];
+    snprintf(path,sizeof(path),"%s/backing",argv[1]);
+    backing=open(path,O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC,0600); assert(backing>=3); assert(!unlink(path));
+    size_t capacity=fault==9 ? 131072 : 196608;
+    assert(!ftruncate(backing,capacity));
+    void *data=mmap(NULL,capacity,PROT_READ|PROT_WRITE,MAP_SHARED,backing,0); assert(data!=MAP_FAILED);
+    memset(data,0xa5,capacity); assert(!munmap(data,capacity));
+    snprintf(video,sizeof(video),"%s/video",argv[1]); snprintf(media,sizeof(media),"%s/media",argv[1]);
+    int fd=open(video,O_WRONLY|O_CREAT|O_EXCL,0600); assert(fd>=0); assert(!close(fd));
+    fd=open(media,O_WRONLY|O_CREAT|O_EXCL,0600); assert(fd>=0); assert(!close(fd));
+    width=80; height=storage_height=64;
+    test_native_gpu(video,media,"render",argv[3],argv[1]);
+    assert(exports==2 && syncs==2 && backing==-1);
+    return 0;
+}
+'''
+    helper = r'''
+#define _POSIX_C_SOURCE 200809L
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+int main(int argc,char **argv)
+{
+    assert(argc==5 && !strcmp(argv[1],"render") && !strcmp(argv[2],"--native-mm21"));
+    int fd[2]={atoi(argv[3]),atoi(argv[4])}; assert(fd[0]>=3 && fd[1]>=3 && fd[0]!=fd[1]);
+    int video=atoi(getenv("TEST_VIDEO_FD")),media=atoi(getenv("TEST_MEDIA_FD"));
+    assert(fcntl(video,F_GETFD)==-1 && errno==EBADF);
+    assert(fcntl(media,F_GETFD)==-1 && errno==EBADF);
+    assert(fcntl(fd[0],F_GETFD)==0 && fcntl(fd[1],F_GETFD)==0);
+    struct stat a,b; assert(!fstat(fd[0],&a) && !fstat(fd[1],&b));
+    assert(a.st_dev==b.st_dev && a.st_ino==b.st_ino && a.st_size==196608);
+    /* Wait until the actual parent reaches its waitpid, releasing its owners. */
+    int owners[]={video,media,fd[0],fd[1]};
+    for (unsigned attempt=0;;attempt++) {
+        unsigned live=0;
+        for (unsigned i=0;i<4;i++) {
+            char p[128]; snprintf(p,sizeof(p),"/proc/%d/fd/%d",(int)getppid(),owners[i]);
+            if (!access(p,F_OK)) live++;
+        }
+        if (!live) break;
+        assert(attempt<500); struct timespec pause={.tv_nsec=1000000}; nanosleep(&pause,NULL);
+    }
+    uint8_t *data=mmap(NULL,196608,PROT_READ,MAP_SHARED,fd[1],0); assert(data!=MAP_FAILED);
+    static const uint8_t colors[][3]={{81,90,240},{145,54,34},{41,240,110},{128,128,128}};
+    /* Inverse byte-to-pixel oracle is independent of the production addressing loops. */
+    for (size_t i=0;i<5120;i++) {
+        unsigned tile=i/512, local=i%512;
+        unsigned x=16*(tile%5)+local%16, y=32*(tile/5)+local/16;
+        assert(data[i]==colors[(x/8+3*(y/8))%4][0]);
+    }
+    for (size_t i=0;i<2560;i++) {
+        unsigned tile=i/256, local=i%256;
+        unsigned x=8*(tile%5)+(local%16)/2,y=16*(tile/5)+local/16;
+        assert(data[5120+i]==colors[(x/4+3*(y/4))%4][1+i%2]);
+    }
+    for (size_t i=7680;i<196608;i++) assert(data[i]==0xa5);
+    assert(!munmap(data,196608)); assert(!close(fd[0]) && !close(fd[1]));
+    const char *failure=getenv("TEST_HELPER_FAIL");
+    return failure ? atoi(failure) : 0;
+}
+'''
+    with tempfile.TemporaryDirectory(prefix='vdec-native-gpu-host-') as tmp:
+        path = Path(tmp)
+        compiler = shlex.split(os.environ.get('HOSTCC', os.environ.get('CC', 'cc')))
+        flags = shlex.split(os.environ.get('CFLAGS', ''))
+        for name, text in (('input', code), ('helper', helper)):
+            (path/(name+'.c')).write_text(text)
+            subprocess.run(compiler+['-std=gnu11', '-Wall', '-Wextra', '-Werror']+flags+
+                           [str(path/(name+'.c')), '-o', str(path/name)], check=True)
+        def run(name, fault=0, executable=None, failure=None):
+            out=path/name; out.mkdir()
+            env=os.environ.copy()
+            if failure is not None: env['TEST_HELPER_FAIL']=str(failure)
+            return subprocess.run([str(path/'input'), str(out), str(fault),
+                                   str(executable or path/'helper')], env=env,
+                                  capture_output=True, text=True, timeout=8)
+        good=run('good')
+        assert good.returncode==0, good.stderr
+        record=json.loads(good.stdout)
+        assert record['parent_refs_released'] is True and record['pixels']==5120 and record['codec_submissions']==0
+        for fault in range(1,10):
+            bad=run('fault-'+str(fault),fault)
+            assert bad.returncode==1 and not bad.stdout, (fault,bad)
+        for name, executable, failure in (('nonzero',None,7),('missing',path/'absent',None)):
+            bad=run(name,executable=executable,failure=failure)
+            assert bad.returncode==1 and not bad.stdout and 'retain module' in bad.stderr, bad
+    print('Actual native-GPU input: typed geometry/export capacity, complete independent tiling and untouched guards, real fork/exec FD inheritance and parent release; 11 invalid/device/helper cases rejected: PASS')
 
 
 def check_capture(source):
@@ -1103,6 +1372,7 @@ if __name__ == '__main__':
     parser.add_argument('--qualifier-source', type=Path, default=Path(__file__).with_name('qualify-vdec-irq.py'))
     args = parser.parse_args()
     check_cli(args.request_source)
+    check_native_gpu(args.request_source)
     check_capture(args.request_source)
     check_native_buffers(args.request_source)
     check_create_buffers(args.request_source)

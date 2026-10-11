@@ -35,23 +35,24 @@ def fields(text):
     return {k: int(v, 0) for k, v in re.findall(r'(\w+)=(-?0x[0-9a-f]+|-?\d+)', text)}
 
 
-def irq_snapshot_script():
+def irq_snapshot_script(action='16020000.video-codec'):
     # /proc identifies the IRQ only; its counts omit offline CPUs.
-    return """irq=$(awk '$NF == "16020000.video-codec" {n++; gsub(":", "", $1); print $1} END {if(n!=1)exit 1}' /proc/interrupts)
+    assert action in ('16020000.video-codec', 'panfrost-job', 'panfrost-mmu', 'panfrost-gpu')
+    return """irq=$(awk '$NF == "ACTION" {n++; gsub(":", "", $1); print $1} END {if(n!=1)exit 1}' /proc/interrupts)
 case "$irq" in ''|*[!0-9]*) exit 1;; esac
 printf 'irq=%s\\n' "$irq"
 printf 'actions='; cat /sys/kernel/irq/$irq/actions
 printf 'counts='; cat /sys/kernel/irq/$irq/per_cpu_count
-"""
+""".replace('ACTION', action)
 
 
-def irq_counter(text):
+def irq_counter(text, action='16020000.video-codec'):
     rows = text.splitlines()
     if len(rows) != 3 or [r.split('=', 1)[0] for r in rows] != ['irq', 'actions', 'counts']:
-        raise RuntimeError('Incomplete decoder IRQ snapshot')
+        raise RuntimeError('Incomplete IRQ snapshot')
     value = dict(r.split('=', 1) for r in rows)
-    if not re.fullmatch(r'[0-9]+', value['irq']) or value['actions'] != '16020000.video-codec':
-        raise RuntimeError('Foreign or ambiguous decoder IRQ')
+    if not re.fullmatch(r'[0-9]+', value['irq']) or value['actions'] != action:
+        raise RuntimeError('Foreign or ambiguous IRQ')
     if not re.fullmatch(r'[0-9]+(?:,[0-9]+)*', value['counts']):
         raise RuntimeError('Invalid possible-CPU IRQ counter')
     counts = [int(v) for v in value['counts'].split(',')]
@@ -100,6 +101,72 @@ def buffers_qualified(reports, cached, start, finish, returncode, safe, statuses
             and start['total'] == finish['total'])
 
 
+def gpu_fault_filter_script():
+    # Feed only warning-or-higher kernel entries after the pre-draw cursor.
+    # Heap-growth page faults and benign submit snapshots are debug/info;
+    # terminal MMU/job/GPU failures are errors in the owning Panfrost driver.
+    # Never save or print raw kernel messages, addresses, or unrelated entries.
+    return r'''awk '
+    {
+        line=tolower($0)
+        if (line ~ /(panfrost|13040000[.]gpu|mfg|rt5735|vgpu)/ &&
+            line ~ /(fault|error|timeout|timed out|failed|failure|stuck)/) gpu++
+        if (line ~ /(^|[[:space:]])(bug:|oops:|warning:|call trace:)/ ||
+            line ~ /gpuldo_first_failure|gpu_render_fail|rcu.*detected stalls|kernel panic|unable to handle kernel/) kernel++
+    }
+    END {printf "{\"scoped_gpu_error_lines\":%d,\"kernel_failure_lines\":%d}\n", gpu, kernel}
+    '
+'''.strip()
+
+
+def native_gpu_qualified(reports, helper_log, cached, start, finish,
+                         gpu_before, gpu_after, kernel_health, returncode, safe, statuses):
+    expected = dict(native_gpu_test_passed=True, scope='synthetic-native-mm21-gpu',
+                    width=80, height=64, pixels=5120, rgb_tolerance=2,
+                    exported_fds=2, export_capacity=196608, api_draws=1,
+                    parent_refs_released=True, codec_submissions=0, decode_qualified=False)
+    if returncode != 0 or not safe or statuses or len(reports) != 1:
+        return False
+    record = reports[0]
+    if not isinstance(record, dict) or set(record) != set(expected):
+        return False
+    if any(type(record[k]) is not type(v) or record[k] != v for k, v in expected.items()):
+        return False
+    marker = ('GPU_NATIVE_MM21_PASS width=80 height=64 pixels=5120 '
+              'rgb_tolerance=2 imported_fds_closed=1')
+    rows = helper_log.splitlines()
+    if not rows or rows[-1] != marker or rows.count(marker) != 1 or 'GPU_RENDER_FAIL' in helper_log:
+        return False
+    if set(cached) != {'last-job', 'engine-failure', 'context-failure'}:
+        return False
+    zero = ('jobs', 'failures', 'fetch_commands', 'frame_commands', 'fetched',
+            'submitted', 'irq_events', 'irq_unexpected', 'result', 'engine_result')
+    if any(any(status.get(key) != 0 for key in zero) for status in cached.values()):
+        return False
+    if start != finish or set(gpu_before) != {'job', 'mmu', 'gpu'} or set(gpu_after) != set(gpu_before):
+        return False
+    if not isinstance(kernel_health, dict) or set(kernel_health) != {'scoped_gpu_error_lines', 'kernel_failure_lines'}:
+        return False
+    if any(type(v) is not int or v != 0 for v in kernel_health.values()):
+        return False
+    for kind in gpu_before:
+        before, after = gpu_before[kind], gpu_after[kind]
+        action = 'panfrost-'+kind
+        if (before.get('actions') != action or after.get('actions') != action
+                or before.get('counter') != 'sysfs-all-possible-cpus'
+                or after.get('counter') != before.get('counter')
+                or before.get('irq') != after.get('irq')
+                or len(before.get('counts', [])) != 10 or len(after.get('counts', [])) != 10):
+            return False
+        if any(type(v) is not int or v < 0 for v in before['counts']+after['counts']):
+            return False
+        if before.get('total') != sum(before['counts']) or after.get('total') != sum(after['counts']):
+            return False
+        if any(b < a for a, b in zip(before['counts'], after['counts'])):
+            return False
+    return gpu_after['job']['total'] > gpu_before['job']['total']
+
+
 def completion_qualified(statuses, comparisons, start, finish, returncode,
                          safe, program_complete, single=None):
     valid = (single,) if single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
@@ -117,6 +184,9 @@ def completion_qualified(statuses, comparisons, start, finish, returncode,
                             nal_bytes=20, header_bits=28, irq_clock_result=0)
         passed = passed and all(s.get(k) == v for k, v in expected.items())
         passed = passed and bool(s.get('state', 0) & (1 << 31)) and bool(s.get('irq_status', 0) & (1 << 16))
+        # The GPL single-core HAL returns the whole RO_AVLD_COMPLETE word;
+        # its consumer tests nonzero rather than a guessed bit or exact value.
+        passed = passed and s.get('irq_complete', 0) > 0
         passed = passed and s.get('irq_command', 0) > 0 and s.get('irq_command') == s.get('irq_received_command')
         if single:
             passed = passed and s.get('irq_clock_trace_valid', 0) == 0x1f
@@ -141,8 +211,11 @@ def main():
     case.add_argument('--single', choices=('grey64',))
     case.add_argument('--buffers-only', action='store_true',
                       help='Qualify native allocation/export/import lifetime without decode')
+    case.add_argument('--native-gpu-helper', type=Path,
+                      help='Render an original MM21 fixture through the installed native GPU helper')
     args = parser.parse_args()
-    if not args.buffers_only and args.fixtures is None:
+    native_only = args.buffers_only or args.native_gpu_helper is not None
+    if not native_only and args.fixtures is None:
         parser.error('--fixtures is required for decode observations')
     trial = args.trial.resolve()
     metadata_file = args.module_build.resolve(strict=True)
@@ -165,13 +238,26 @@ def main():
     assert sha(KERNEL/'Module.symvers') == metadata['module_symvers_sha256']
     assert metadata['build_exit_code'] == 0 and metadata['build_terminal'] is True
     assert metadata['strict_modpost'] is True
-    if args.buffers_only:
+    if native_only:
         assert {'mt6797-vdec-v4l2/buffer.c', 'mt6797-vdec-v4l2/buffer.h'} <= metadata['source_sha256'].keys()
         assert metadata['native_dma_contract_source_sha256']
     for name, expected in metadata['source_sha256'].items():
         assert sha(REPO/'research'/name) == expected, name
     assert {'mt6797-vdec-v4l2/request-test.c', 'mt6797-vdec/pcm64-fixture.h'} <= request_build['source_sha256'].keys()
     assert sha(REPO/'research/mt6797-vdec/pcm64-fixture.h') == 'a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758'
+    helper = args.native_gpu_helper.resolve(strict=True) if args.native_gpu_helper else None
+    if helper:
+        gpu_build = metadata['gpu_helper']
+        assert helper == Path(gpu_build['path']).resolve(strict=True)
+        assert sha(helper) == gpu_build['sha256']
+        assert gpu_build['build_exit_code'] == 0 and gpu_build['build_terminal'] is True
+        elf = Path(gpu_build['elf_path']).resolve(strict=True)
+        assert sha(elf) == gpu_build['elf_sha256']
+        assert elf.read_bytes()[:4] == b'\x7fELF' and int.from_bytes(elf.read_bytes()[18:20], 'little') == 183
+        assert gpu_build['mesa'] == '/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1'
+        assert {'nix/gpu-render-smoke.c', 'nix/gpu-userspace.nix', 'nix/test-gpu-pixel-check.py'} <= gpu_build['source_sha256'].keys()
+        for name, expected in gpu_build['source_sha256'].items():
+            assert sha(REPO/name) == expected, name
     deadline = time.monotonic()+900
     while not (trial/'candidate-observation.json').exists():
         if (trial/'worker-error.txt').exists():
@@ -190,12 +276,17 @@ def main():
     SYSTEM = str((bundle/'system').resolve(strict=True))
     boot = observation['boot_id']
     assert re.fullmatch(r'[0-9a-f-]{36}', boot)
-    out = trial/('decoder-buffers' if args.buffers_only else 'decoder-irq')
+    out = trial/('decoder-gpu' if helper else 'decoder-buffers' if args.buffers_only else 'decoder-irq')
     out.mkdir()
     shutil.copy2(__file__, out/'observer-at-execution.py')
     shutil.copy2(metadata_file, out/'build-result.json')
     shutil.copy2(module, out/'mt6797_vdec.ko')
     shutil.copy2(program, out/'request-test')
+    if helper:
+        shutil.copy2(helper, out/'gpu-render-smoke-wrapper')
+        shutil.copy2(elf, out/'gpu-render-smoke-elf')
+        for name in gpu_build['source_sha256']:
+            shutil.copy2(REPO/name, out/Path(name).name)
     for source in [REPO/'research'/name for name in metadata['source_sha256']]:
         shutil.copy2(source, out/source.name)
     for name in ['request-test.c', '../mt6797-vdec/pcm64-fixture.h', '../mt6797-vdec/compare-frame.py']:
@@ -203,7 +294,7 @@ def main():
         shutil.copy2(source, out/source.name)
     fixtures = args.fixtures.resolve(strict=True) if args.fixtures else None
     (out/'fixtures').mkdir()
-    valid = () if args.buffers_only else ((args.single,) if args.single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64'))
+    valid = () if native_only else ((args.single,) if args.single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64'))
     for name in valid:
         for suffix in ('.json', '.yuv', '.nal'):
             shutil.copy2(fixtures/(name+suffix), out/'fixtures'/(name+suffix))
@@ -236,6 +327,10 @@ def main():
     before = remote('uname -r; systemctl is-system-running; cat /proc/sys/kernel/tainted; sha256sum '+str(KERNEL/'kernel.config'), 'before').decode().splitlines()
     assert before[:3] == [RELEASE, 'running', '0'], before
     assert before[3].split()[0] == metadata['kernel_config_sha256']
+    if helper:
+        helper_hash = remote('test -x '+shlex.quote(str(helper))+'\nsha256sum '+
+                             shlex.join([str(helper), str(elf)]), 'gpu-helper-installed').decode().splitlines()
+        assert [row.split()[0] for row in helper_hash] == [gpu_build['sha256'], gpu_build['elf_sha256']]
     base = '/run/mt6797-irq-'+metadata['module']['sha256'][:12]
     remote('umask 077; mkdir '+base+'; cat > '+base+'/decoder.ko', 'upload-module', module.read_bytes())
     remote('cat > '+base+'/request-test; chmod 700 '+base+'/request-test', 'upload-program', program.read_bytes())
@@ -253,17 +348,33 @@ def main():
     assert len(nodes) == 2 and nodes[0].startswith('/dev/video') and nodes[1].startswith('/dev/media'), nodes
     start = irq_counter(remote(irq_snapshot_script(), 'irq-before').decode())
     selection = ' --single '+args.single if args.single else ''
-    if args.buffers_only:
+    if native_only:
         render_nodes = remote('for node in /sys/class/drm/renderD*; do '
                               'test "$(basename "$(readlink -f "$node/device/driver")")" != panfrost || '
                               'echo /dev/dri/${node##*/}; done', 'render-nodes').decode().splitlines()
         assert len(render_nodes) == 1 and re.fullmatch(r'/dev/dri/renderD[0-9]+', render_nodes[0])
-        selection = ' --buffers-only '+render_nodes[0]
-    command = 'mkdir '+base+'/output\nset +e\ntimeout --kill-after=2 12 '+base+'/request-test '+shlex.join(nodes)+' '+base+'/output '+DEVICE+'/last_job'+selection+' > '+base+'/output/stdout.txt 2> '+base+'/output/stderr.txt\n'
+        selection = (' --native-gpu '+shlex.join([render_nodes[0], str(helper)]) if helper
+                     else ' --buffers-only '+render_nodes[0])
+    gpu_before = {}
+    if helper:
+        for kind in ('job', 'mmu', 'gpu'):
+            action = 'panfrost-'+kind
+            gpu_before[kind] = irq_counter(remote(irq_snapshot_script(action), 'gpu-'+kind+'-before').decode(), action)
+    command = 'mkdir '+base+'/output\n'
+    if helper:
+        command += ('set -o pipefail\n'
+                    'gpu_cursor=$(journalctl -k -b -n 0 --show-cursor --no-pager | sed -n "s/^-- cursor: //p")\n'
+                    'test -n "$gpu_cursor"\n')
+    command += 'set +e\ntimeout --kill-after=2 12 '+base+'/request-test '+shlex.join(nodes)+' '+base+'/output '+DEVICE+'/last_job'+selection+' > '+base+'/output/stdout.txt 2> '+base+'/output/stderr.txt\n'
     command += 'rc=$?\nset -e\nprintf "%s\\n" "$rc" > '+base+'/output/returncode.txt\n'
     for source, name in [('last_job', 'last-job'), ('last_engine_failure', 'engine-failure'), ('first_context_failure', 'context-failure')]:
         command += 'cat '+DEVICE+'/'+source+' > '+base+'/output/'+name+'.txt\n'
     command += '{\n'+irq_snapshot_script()+'} > '+base+'/output/interrupts-after.txt\n'
+    if helper:
+        for kind in ('job', 'mmu', 'gpu'):
+            command += '{\n'+irq_snapshot_script('panfrost-'+kind)+'} > '+base+'/output/gpu-'+kind+'-after.txt\n'
+        command += ('journalctl -k -b --after-cursor "$gpu_cursor" -p 0..4 --no-pager -o cat | '+
+                    gpu_fault_filter_script()+' > '+base+'/output/gpu-kernel-health.json\n')
     command += 'tar -cf - -C '+base+'/output .'
     data = remote(command, 'decode', timeout=20)
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
@@ -280,6 +391,9 @@ def main():
                (not (s['fetched'] or s['submitted']) or s['quiesced'] == 1)
                for s in safety_statuses)
     finish = irq_counter((out/'interrupts-after.txt').read_text())
+    gpu_after = {kind: irq_counter((out/('gpu-'+kind+'-after.txt')).read_text(), 'panfrost-'+kind)
+                 for kind in gpu_before}
+    kernel_health = json.loads((out/'gpu-kernel-health.json').read_text()) if helper else {}
     spec = importlib.util.spec_from_file_location('irq_compare', out/'compare-frame.py')
     compare = importlib.util.module_from_spec(spec); spec.loader.exec_module(compare)
     comparisons = {}
@@ -300,7 +414,18 @@ def main():
         reports = []
         reports_valid = False
     returncode = int((out/'returncode.txt').read_text())
-    if args.buffers_only:
+    if helper:
+        helper_log = (out/'native-gpu.txt').read_text() if (out/'native-gpu.txt').exists() else ''
+        program_complete = bool(reports_valid and len(reports) == 1
+                                and isinstance(reports[0], dict)
+                                and reports[0].get('native_gpu_test_passed') is True)
+        passed = native_gpu_qualified(reports, helper_log, cached, start, finish,
+                                      gpu_before, gpu_after, kernel_health, returncode, safe, statuses)
+        # A stopped process is not proof that a failed GPU job stopped DMA.
+        # Only full completion plus GL/EGL teardown permits module removal.
+        safe = safe and passed
+        case_scope = 'synthetic-native-mm21-gpu'
+    elif args.buffers_only:
         program_complete = bool(reports_valid and len(reports) == 1
                                 and isinstance(reports[0], dict)
                                 and reports[0].get('native_buffers_test_passed') is True)
@@ -315,9 +440,11 @@ def main():
     result = dict(passed=bool(passed), safe_quiescence=safe, boot_id=boot, module_sha256=sha(module),
                   returncode=returncode, statuses=statuses, cached=cached,
                   irq_before=start, irq_after=finish, irq_delta=finish['total']-start['total'], comparisons=comparisons,
-                  case_scope=case_scope, native_buffer_reports=reports if args.buffers_only else [],
-                  decoder_completion_qualified=bool(passed and not args.buffers_only),
-                  gpu_rendering_qualified=False,
+                  case_scope=case_scope, native_buffer_reports=reports if native_only else [],
+                  decoder_completion_qualified=bool(passed and not native_only),
+                  gpu_rendering_qualified=bool(passed and helper),
+                  gpu_irq_before=gpu_before, gpu_irq_after=gpu_after,
+                  gpu_kernel_health=kernel_health,
                   program_complete=program_complete, reports_valid=reports_valid,
                   native_irq_setup_and_bind_accepted=True,
                   system_profile_qualification_pending=True, unloaded=False)

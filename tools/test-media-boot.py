@@ -17,6 +17,8 @@ spec.loader.exec_module(boot)
 p = boot.p
 p.ENTRYPOINT = Path(__file__).resolve()
 p.EXTRA_EXECUTED_SOURCES += ('tools/test-media-boot.py', 'tools/qualify-vdec-irq.py')
+p.EXTRA_EXECUTED_SOURCES += ('nix/gpu-render-smoke.c', 'nix/test-gpu-pixel-check.py',
+                             'nix/gpu-userspace.nix', 'nix/mesa.nix')
 p.EXTRA_EXECUTED_SOURCES += tuple('research/'+name for name in (
     'mt6797-vdec-v4l2/Kbuild', 'mt6797-vdec-v4l2/v4l2.c',
     'mt6797-vdec-v4l2/engine.c', 'mt6797-vdec-v4l2/engine.h',

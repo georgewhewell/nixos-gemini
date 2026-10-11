@@ -193,9 +193,17 @@ public firmware-free frame-programming contract and has produced no frame.
 Reuse unchanged accepted results; there is one maintained kernel and no
 normal-boot media qualification loop.
 
-The pinned Mesa already supports `DRM_FORMAT_NV12` with
-`DRM_FORMAT_MOD_MTK_16L_32S_TILE` for external-texture sampling, using GPU
-detiling. The next rendering check will use that existing standard import path
-with offsets `0/L` and both pitches equal to the storage width, then compare
-original synthetic pixels before combining it with decoder completion.
-No input CPU conversion or private Mesa patch is required for this path.
+`--native-gpu RENDER_NODE HELPER` initializes an original colored MM21 fixture
+in a native CAPTURE export. The existing GPU helper imports it through
+`DRM_FORMAT_NV12` and `DRM_FORMAT_MOD_MTK_16L_32S_TILE`, with offsets `0/L`
+and both pitches equal to the storage width. Mesa performs GPU detiling;
+there is no input CPU conversion or private Mesa patch. The parent releases
+its video, media and export references, and the renderer closes the input FDs
+after EGL import. One draw must match all 5,120 independently calculated
+BT.601 pixels before EGL/GL teardown and module removal. This synthetic
+mode has passed host checks and strict ARM64 builds; hardware is unqualified.
+It does not submit codec work or qualify decoder completion or display scanout.
+
+Decode admission also requires a recorded nonzero single-core full-finish word,
+following the public GPL HAL's raw Boolean semantics. This closes an acceptance
+gap; it does not fix the missing completion interrupt.
