@@ -74,6 +74,7 @@ let
     echo 'gpu=render-and-autosuspend-pass' > /run/gemini-gpu/result
   '';
 in {
+  boot.blacklistedKernelModules = ["panfrost"];
   environment.etc."gemini/gpu-render".source = "${geminiGpuSmoke}/bin/gpu-render-smoke";
   systemd.services.gemini-gpu = {
     description = "Initialize the Gemini Panfrost GPU";

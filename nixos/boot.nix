@@ -13,10 +13,12 @@
 in {
   environment.systemPackages = [tools];
   system.build.geminiBootTools = tools;
+  system.modulesTree = [geminiBootKernel];
   system.build.installBootLoader = "${tools}/bin/gemini-boot-install --system";
   system.boot.loader.id = "gemini";
   system.systemBuilderCommands = ''
     ln -s ${geminiBootKernel}/Image "$out/kernel"
+    ln -s ${config.system.modulesTree} "$out/kernel-modules"
     ln -s ${geminiBootInitrd} "$out/initrd"
     ln -s ${geminiBootDtb}/gemini.dtb "$out/gemini.dtb"
     printf '%s\n' ${lib.escapeShellArg (lib.concatStringsSep " " config.boot.kernelParams)} > "$out/kernel-params"

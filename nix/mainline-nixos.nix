@@ -531,7 +531,8 @@ let
   bootImg = buildPkgs.runCommand "gemini-mainline-nixos.boot.img" {
     nativeBuildInputs = [buildPkgs.python3];
   } ''
-    python3 ${./check-service-milestone.py} ${kernel}/kernel.config ${nixosToplevel}
+    python3 ${./check-service-milestone.py} ${kernel} ${nixosToplevel} \
+      ${buildPkgs.kmod}/bin/modprobe ${../tools/check-gnome-cross-runtime.py}
     grep -Fqx CONFIG_CMDLINE_EXTEND=y ${kernel}/kernel.config
     cmdline="bootopt=64S3,32N2,64N2 init=${nixosToplevel}/init $(cat ${nixosToplevel}/kernel-params)"
     # Retained LK reads only the first 512-byte Android command-line field.

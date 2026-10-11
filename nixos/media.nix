@@ -1,8 +1,7 @@
 # Hardware JPEG codec (mtk-jpeg) behind the MT6797 M4U.
 #
-# Modules are loaded explicitly on this image (no udev autoload from the
-# kernel closure); load mtk_jpeg once boot recovery has settled and check
-# that both codec nodes registered.
+# Keep codec registration after watchdog takeover; the existing service
+# loads mtk_jpeg explicitly and checks both codec nodes.
 { pkgs, geminiGpuKernel, ... }:
 let
   load = pkgs.writeShellScript "gemini-jpeg-load" ''
@@ -15,6 +14,7 @@ let
     echo 'jpeg=mtk-jpeg-dec,mtk-jpeg-enc'
   '';
 in {
+  boot.blacklistedKernelModules = ["mtk_jpeg"];
   systemd.services.gemini-jpeg = {
     description = "Gemini hardware JPEG codec";
     wantedBy = ["multi-user.target"];

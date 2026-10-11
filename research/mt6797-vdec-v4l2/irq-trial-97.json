@@ -138,5 +138,16 @@
     "handoff/boot-test-97/plan.json": "9a8338bfe4a7547ba98c6566865b7c8c620badbb23ee08ce541f4f28f95362e4",
     "handoff/media-module-kernel96-20261011/build-record.json": "cfa9bc0398bab77d57c1ce0095351924c34ffe10af85ec9bbb2c8da09b7b1a3a",
     "handoff/media-module-kernel96-20261011/independent-audit-97/result.json": "f67f191bcace3454024d24bd47817a0d7a03d5862f09459b0d8a22d087cbffcc"
-  }
+  },
+  "historical_irq_boundary": {
+    "trial": "boot-test-video-frame-23",
+    "case": "frame-probe/variant-5/result.json",
+    "proof_sha256": "229423231e0933c407668735e775c9a18640f36a4de94985b44693b2a6535776",
+    "interrupt_mode": true,
+    "irq_count": 0,
+    "result": -110,
+    "private_mm21_comparison_all_6144_samples_match": true,
+    "inference": "An undelivered wrapper interrupt with correct private PCM predates the 7.2 rebase; trial97 does not establish a DMA/pixel regression."
+  },
+  "remaining_owner_work": "Establish the exact public MT6797 condition that asserts MISC done bit16 after AVC completion. Existing public ISR documents the done check and acknowledgement, but inspected HAL finish flags do not establish wrapper source enablement."
 }

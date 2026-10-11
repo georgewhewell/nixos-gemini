@@ -8,6 +8,7 @@ the receiver protocol and position remain unqualified even when bytes arrive.
 import json
 from pathlib import Path
 import shlex
+import subprocess
 
 PYTHON = '/nix/store/81jsmi7hxdbcikna1zxj49qnr856mcra-python3-aarch64-unknown-linux-gnu-3.14.7/bin/python3'
 
@@ -218,7 +219,10 @@ def evidence(runner, ssh, state, directory, system, cycle):
     script += 'timeout --signal=TERM --kill-after=5s 30 ' + shlex.quote(PYTHON) + ' - ' + shlex.join(
         [state['boot_id'], system]) + " <<'GEMINI_GNSS_SCALAR_SOURCE'\n"
     script += REMOTE_CODE + '\nGEMINI_GNSS_SCALAR_SOURCE\n' + guard
-    raw = runner.persistence.run(ssh, script, out, 'cycle', timeout=40)
+    try:
+        raw = runner.persistence.run(ssh, script, out, 'cycle', timeout=40)
+    except subprocess.SubprocessError as error:
+        raise RuntimeError(f'GNSS power cycle {cycle} failed; inspect {out / "cycle.stdout"}') from error
     record = verify_report(raw)
     runner.qualify.save(out, 'result.json', record)
     print(f'PASS: GNSS power cycle {cycle} closes with LNA off; receiver protocol and position unqualified',

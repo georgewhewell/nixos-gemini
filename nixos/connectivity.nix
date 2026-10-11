@@ -74,11 +74,9 @@ let
   '';
 in {
   # Udev must not load these via modalias before the ordered service runs.
-  environment.etc."modprobe.d/gemini-connectivity.conf".text = ''
-    blacklist mt6797-consys
-    blacklist mt6797-btif-pio-platform
-    blacklist mt6797-wifi
-  '';
+  boot.blacklistedKernelModules = [
+    "mt6797-consys" "mt6797-btif-pio-platform" "mt6797-wifi"
+  ];
   systemd.services.gemini-connectivity = {
     description = "Start verified MT6797 connectivity firmware and WLAN HIF";
     wantedBy = ["multi-user.target"];

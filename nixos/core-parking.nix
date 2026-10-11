@@ -84,6 +84,7 @@ let
     done
   '';
 in {
+  boot.blacklistedKernelModules = ["cpufreq_dt"];
   system.build.geminiCoreParking = daemon;
 
   systemd.services.gemini-cpufreq = {
