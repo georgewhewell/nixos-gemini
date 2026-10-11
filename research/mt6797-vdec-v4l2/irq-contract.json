@@ -65,12 +65,13 @@
       "IRQF_NO_AUTOEN"
     ],
     "immediate_masking": "IRQ_DISABLE_UNLAZY; line masked on first delivery",
-    "positive_completion": "Exactly one nonunexpected done event attributed to the submitted command, followed by existing picture/error/last-MB/stop/guard checks",
+    "positive_completion": "Exactly one nonunexpected done event attributed to the submitted command, a recorded nonzero raw single-core RO_AVLD_COMPLETE word, followed by existing picture/error/last-MB/stop/guard checks",
     "stale_event_rejection": "Reject live done status before arming; an event before hardware submission fails without issuing the picture start",
     "power_lifetime": "Disable and synchronize handlers before reset, restore, suspend or release; fatal stop failure retains DMA and power with the IRQ masked",
     "fatal_syntax_detection": "Bounded CABAC alignment error check remains; picture-complete polling cannot produce success",
     "hardware_validation_pending": true,
-    "does_not_qualify_previous_polling_trials_as_irq_delivery": true
+    "does_not_qualify_previous_polling_trials_as_irq_delivery": true,
+    "single_core_full_finish": "AVC offset0x274 is sampled read-only before stop/reset. The allowed GPL HAL returns this whole word and its single-core consumer tests nonzero; no guessed mask or exact-value restriction. This acceptance fix does not enable or qualify missing IRQ delivery."
   },
   "native_polarity_acceptance_20261011": {
     "kernel_source_revision": "354d3657699458b144f838adbbd64f74bfa12f93",

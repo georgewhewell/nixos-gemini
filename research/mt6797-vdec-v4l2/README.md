@@ -200,9 +200,16 @@ and both pitches equal to the storage width. Mesa performs GPU detiling;
 there is no input CPU conversion or private Mesa patch. The parent releases
 its video, media and export references, and the renderer closes the input FDs
 after EGL import. One draw must match all 5,120 independently calculated
-BT.601 pixels before EGL/GL teardown and module removal. This synthetic
-mode has passed host checks and strict ARM64 builds; hardware is unqualified.
+BT.601 pixels before EGL/GL teardown and module removal. A CLOEXEC pipe admits
+the helper only after every parent reference closes. This synthetic mode
+has passed host checks and strict ARM64 builds; hardware is unqualified.
 It does not submit codec work or qualify decoder completion or display scanout.
+
+[Trial 107](gpu-trial-107.json) failed before observed GPU activity because the
+launcher used an x86-64 shell. The package now uses the cross package set's
+wrapper hook and checks both the actual interpreter and program architecture.
+The accepted image was restored and independently audited; rendering remains
+unqualified until the corrected launcher and release gate pass on the board.
 
 Decode admission also requires a recorded nonzero single-core full-finish word,
 following the public GPL HAL's raw Boolean semantics. This closes an acceptance

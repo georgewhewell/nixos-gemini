@@ -129,6 +129,55 @@ def check_qualification(path):
     spec = importlib.util.spec_from_file_location('vdec_irq_case', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory(prefix='vdec-gpu-launcher-') as tmp:
+        root = Path(tmp)
+        helper, elf, interpreter = (root/name for name in ('launcher', 'program', 'shell'))
+        arm64 = bytearray(64)
+        arm64[:7] = b'\x7fELF\x02\x01\x01'
+        arm64[16:20] = (2).to_bytes(2, 'little')+(183).to_bytes(2, 'little')
+        elf.write_bytes(arm64); interpreter.write_bytes(arm64)
+        helper.write_text('#! '+str(interpreter)+' -e\nexec '+str(elf)+' "$@"\n')
+        module.check_gpu_launcher(helper, elf, interpreter)
+        for dependency in (elf, interpreter):
+            for change in ('absent', 'host', 'relocatable', 'endian', 'truncated'):
+                bad = bytearray(arm64)
+                if change == 'absent': dependency.unlink()
+                else:
+                    if change == 'host': bad[18:20] = (62).to_bytes(2, 'little')
+                    if change == 'relocatable': bad[16:18] = (1).to_bytes(2, 'little')
+                    if change == 'endian': bad[5] = 2
+                    dependency.write_bytes(bad[:32] if change == 'truncated' else bad)
+                try:
+                    module.check_gpu_launcher(helper, elf, interpreter)
+                except (RuntimeError, FileNotFoundError):
+                    pass
+                else:
+                    raise AssertionError('Invalid GPU execution dependency admitted: '+change)
+                dependency.write_bytes(arm64)
+        for text in ('', '#!/bin/sh\n', '#! '+str(interpreter)+'\n'):
+            helper.write_text(text)
+            try:
+                module.check_gpu_launcher(helper, elf, interpreter)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('Absent/foreign GPU launcher shebang admitted')
+    # Optional immutable trial input supplements portable fixtures without
+    # making ordinary host checks depend on this machine's retained store.
+    retained = os.environ.get('VDEC_REJECTED_GPU_ADMISSION')
+    if retained:
+        gpu = json.loads(Path(retained).read_text())['gpu_helper']
+        helper, elf = Path(gpu['path']), Path(gpu['elf_path'])
+        interpreter = Path(helper.read_text().splitlines()[0].removeprefix('#! ').removesuffix(' -e'))
+        assert hashlib.sha256(helper.read_bytes()).hexdigest() == gpu['sha256']
+        assert hashlib.sha256(elf.read_bytes()).hexdigest() == gpu['elf_sha256']
+        try:
+            module.check_gpu_launcher(helper, elf, interpreter)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError('Retained host-shell GPU launcher admitted')
+    print('Actual GPU launcher admission: ARM64 program/interpreter accepted; absent/host/relocatable/endian/truncated dependencies and foreign shebangs rejected: PASS')
     with tempfile.TemporaryDirectory(prefix='vdec-kernel-revision-') as tmp:
         kernel = Path(tmp)
         revision = '01222a4b2074555955a85715587bebf0933fb0eb'
@@ -379,14 +428,75 @@ def check_qualification(path):
 
 def check_native_gpu(source):
     """Run the production ioctl/tiling/fork/exec path with real file aliases."""
-    code = '#define ioctl fake_ioctl\n#define main request_program_main\n'
+    code = ('#define ioctl fake_ioctl\n#define main request_program_main\n'
+            '#define close fake_close\n#define read fake_read\n#define write fake_write\n'
+            '#define waitpid fake_waitpid\n')
     code += '#include '+json.dumps(str(source.resolve()))+'\n'
     code += r'''
 #undef main
+#undef close
+#undef read
+#undef write
+#undef waitpid
+extern int close(int);
+extern ssize_t read(int, void *, size_t);
+extern ssize_t write(int, const void *, size_t);
+extern pid_t waitpid(pid_t, int *, int);
 #include <assert.h>
+#include <signal.h>
+#include <stdatomic.h>
 #include <stdarg.h>
 static unsigned fault, exports, syncs;
-static int backing;
+static int backing, video_fd, media_fd, export_fds[2];
+static pid_t parent;
+static _Atomic unsigned *events;
+int fake_close(int fd)
+{
+    int owner=exports==2 && syncs==2 && getpid()==parent &&
+              (fd==video_fd || fd==media_fd || fd==export_fds[0] || fd==export_fds[1]);
+    if (owner && fd==media_fd) {
+        /* Force exec to race this live parent owner unless the actual child
+         * enters its gate read. An ungated helper snapshots once, then signals.
+         */
+        for (unsigned attempt=0; !atomic_load(events) && !atomic_load(events+1); attempt++) {
+            assert(attempt<1000);
+            struct timespec pause={.tv_nsec=1000000}; nanosleep(&pause,NULL);
+        }
+    }
+    int result=close(fd);
+    if (owner) {
+        atomic_fetch_add(events+2,1);
+        if (fd==media_fd && (fault==10 || fault==11)) {
+            assert(!result); errno=fault==10 ? EIO : EINTR; return -1;
+        }
+    }
+    return result;
+}
+ssize_t fake_read(int fd, void *buffer, size_t bytes)
+{
+    if (getpid()!=parent) {
+        assert(bytes==1);
+        unsigned reads=atomic_fetch_add(events,1);
+        if (fault==13 && !reads) { errno=EINTR; return -1; }
+    }
+    return read(fd,buffer,bytes);
+}
+ssize_t fake_write(int fd, const void *buffer, size_t bytes)
+{
+    static unsigned writes;
+    assert(getpid()==parent && bytes==1);
+    if (fault==12 && !writes++) { errno=EINTR; return -1; }
+    if (fault==14) { assert(!raise(SIGPIPE)); errno=EPIPE; return -1; }
+    return write(fd,buffer,bytes);
+}
+pid_t fake_waitpid(pid_t child, int *status, int options)
+{
+    static unsigned waits;
+    if (fault==15 && !waits++) { errno=EINTR; return -1; }
+    pid_t result=waitpid(child,status,options);
+    if (result==child) atomic_store(events+3,1);
+    return result;
+}
 int fake_ioctl(int fd, unsigned long command, ...)
 {
     va_list args; va_start(args, command); void *arg = va_arg(args, void *); va_end(args);
@@ -396,6 +506,7 @@ int fake_ioctl(int fd, unsigned long command, ...)
         assert(!setenv("TEST_VIDEO_FD", value, 1));
         /* open_device opens media immediately after video. */
         snprintf(value, sizeof(value), "%d", fd+1); assert(!setenv("TEST_MEDIA_FD", value, 1));
+        video_fd=fd; media_fd=fd+1;
     } else if (command == VIDIOC_S_FMT) {
         struct v4l2_format *f=arg;
         assert(f->type==V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE && f->fmt.pix_mp.width==80 && f->fmt.pix_mp.height==64);
@@ -423,6 +534,7 @@ int fake_ioctl(int fd, unsigned long command, ...)
         assert(e->type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE && e->index==0);
         assert(e->plane==exports && e->flags==(O_RDWR|O_CLOEXEC));
         e->fd=fcntl(backing, F_DUPFD_CLOEXEC, 3); assert(e->fd>=3);
+        export_fds[exports]=e->fd;
         if (++exports==2) { assert(!close(backing)); backing=-1; }
     } else if (command == DMA_BUF_IOCTL_SYNC) {
         struct dma_buf_sync *s=arg; assert(exports==2 && syncs<2);
@@ -435,6 +547,12 @@ int main(int argc, char **argv)
 {
     assert(argc==4); fault=strtoul(argv[2], NULL, 10);
     char path[1024], video[1024], media[1024];
+    parent=getpid();
+    int event_fd=open(getenv("TEST_EVENT_PATH"),O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC,0600);
+    assert(event_fd>=3 && !ftruncate(event_fd,4*sizeof(*events)));
+    events=mmap(NULL,4*sizeof(*events),PROT_READ|PROT_WRITE,MAP_SHARED,event_fd,0);
+    assert(events!=MAP_FAILED && !close(event_fd));
+    for (unsigned i=0;i<4;i++) atomic_init(events+i,0);
     snprintf(path,sizeof(path),"%s/backing",argv[1]);
     backing=open(path,O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC,0600); assert(backing>=3); assert(!unlink(path));
     size_t capacity=fault==9 ? 131072 : 196608;
@@ -445,8 +563,13 @@ int main(int argc, char **argv)
     int fd=open(video,O_WRONLY|O_CREAT|O_EXCL,0600); assert(fd>=0); assert(!close(fd));
     fd=open(media,O_WRONLY|O_CREAT|O_EXCL,0600); assert(fd>=0); assert(!close(fd));
     width=80; height=storage_height=64;
+    struct sigaction before,after;
+    assert(!sigaction(SIGPIPE,NULL,&before));
     test_native_gpu(video,media,"render",argv[3],argv[1]);
     assert(exports==2 && syncs==2 && backing==-1);
+    assert(atomic_load(events)>=1 && atomic_load(events+1)==1 &&
+           atomic_load(events+2)==4 && atomic_load(events+3)==1);
+    assert(!sigaction(SIGPIPE,NULL,&after) && before.sa_handler==after.sa_handler);
     return 0;
 }
 '''
@@ -456,6 +579,7 @@ int main(int argc, char **argv)
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -473,17 +597,18 @@ int main(int argc,char **argv)
     assert(fcntl(fd[0],F_GETFD)==0 && fcntl(fd[1],F_GETFD)==0);
     struct stat a,b; assert(!fstat(fd[0],&a) && !fstat(fd[1],&b));
     assert(a.st_dev==b.st_dev && a.st_ino==b.st_ino && a.st_size==196608);
-    /* Wait until the actual parent reaches its waitpid, releasing its owners. */
+    /* Observe once at helper entry; waiting for the parent would mask the race. */
     int owners[]={video,media,fd[0],fd[1]};
-    for (unsigned attempt=0;;attempt++) {
-        unsigned live=0;
-        for (unsigned i=0;i<4;i++) {
-            char p[128]; snprintf(p,sizeof(p),"/proc/%d/fd/%d",(int)getppid(),owners[i]);
-            if (!access(p,F_OK)) live++;
-        }
-        if (!live) break;
-        assert(attempt<500); struct timespec pause={.tv_nsec=1000000}; nanosleep(&pause,NULL);
+    unsigned live=0;
+    for (unsigned i=0;i<4;i++) {
+        char p[128]; snprintf(p,sizeof(p),"/proc/%d/fd/%d",(int)getppid(),owners[i]);
+        if (!access(p,F_OK)) live++;
     }
+    int event_fd=open(getenv("TEST_EVENT_PATH"),O_RDWR|O_CLOEXEC); assert(event_fd>=3);
+    _Atomic unsigned *events=mmap(NULL,4*sizeof(*events),PROT_READ|PROT_WRITE,MAP_SHARED,event_fd,0);
+    assert(events!=MAP_FAILED && !close(event_fd));
+    atomic_fetch_add(events+1,1);
+    assert(!live && "Helper entered before parent owner release");
     uint8_t *data=mmap(NULL,196608,PROT_READ,MAP_SHARED,fd[1],0); assert(data!=MAP_FAILED);
     static const uint8_t colors[][3]={{81,90,240},{145,54,34},{41,240,110},{128,128,128}};
     /* Inverse byte-to-pixel oracle is independent of the production addressing loops. */
@@ -511,24 +636,37 @@ int main(int argc,char **argv)
             (path/(name+'.c')).write_text(text)
             subprocess.run(compiler+['-std=gnu11', '-Wall', '-Wextra', '-Werror']+flags+
                            [str(path/(name+'.c')), '-o', str(path/name)], check=True)
+        print('Compiled actual native-GPU parent and single-shot ownership helper: PASS', flush=True)
         def run(name, fault=0, executable=None, failure=None):
             out=path/name; out.mkdir()
             env=os.environ.copy()
+            env['TEST_EVENT_PATH']=str(out/'host-events')
             if failure is not None: env['TEST_HELPER_FAIL']=str(failure)
             return subprocess.run([str(path/'input'), str(out), str(fault),
                                    str(executable or path/'helper')], env=env,
                                   capture_output=True, text=True, timeout=8)
         good=run('good')
-        assert good.returncode==0, good.stderr
+        helper_log=path/'good/native-gpu.txt'
+        assert good.returncode==0, good.stderr+(helper_log.read_text() if helper_log.exists() else '')
         record=json.loads(good.stdout)
         assert record['parent_refs_released'] is True and record['pixels']==5120 and record['codec_submissions']==0
+        for fault in (12,13,15):
+            retried=run('retry-'+str(fault),fault)
+            assert retried.returncode==0, (fault,retried.stderr)
         for fault in range(1,10):
             bad=run('fault-'+str(fault),fault)
             assert bad.returncode==1 and not bad.stdout, (fault,bad)
         for name, executable, failure in (('nonzero',None,7),('missing',path/'absent',None)):
             bad=run(name,executable=executable,failure=failure)
             assert bad.returncode==1 and not bad.stdout and 'retain module' in bad.stderr, bad
-    print('Actual native-GPU input: typed geometry/export capacity, complete independent tiling and untouched guards, real fork/exec FD inheritance and parent release; 11 invalid/device/helper cases rejected: PASS')
+        for fault in (10,11,14):
+            name='release-'+str(fault); bad=run(name,fault)
+            assert bad.returncode==1 and not bad.stdout and 'GPU parent release' in bad.stderr, (fault,bad)
+            event=(path/name/'host-events').read_bytes()
+            assert len(event)==16
+            values=[int.from_bytes(event[i:i+4],byteorder='little') for i in range(0,16,4)]
+            assert values[0]>=1 and values[1:]==[0,4,1], (fault,values)
+    print('Actual native-GPU input: typed layout/tiling, deterministic parent-release gate and single-shot helper ownership, EINTR/SIGPIPE handling and reaped no-exec failures; 14 invalid/device/helper/release cases rejected: PASS')
 
 
 def check_capture(source):

@@ -12,6 +12,7 @@
 #include <linux/media.h>
 #include <linux/videodev2.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -606,25 +607,53 @@ static void test_native_gpu(const char *video, const char *media, const char *re
 	int log = open(log_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
 	if (log < 0) fail("GPU helper output");
 	for (unsigned p = 0; p < 2; p++) snprintf(fd_text[p], sizeof(fd_text[p]), "%d", exports[p].fd);
+	int gate[2];
+	if (pipe(gate) || fcntl(gate[0], F_SETFD, FD_CLOEXEC) < 0 ||
+	    fcntl(gate[1], F_SETFD, FD_CLOEXEC) < 0) fail("GPU helper gate");
 	pid_t child = fork();
 	if (child < 0) fail("GPU helper fork");
 	if (!child) {
+		char ready = 0;
+		ssize_t bytes;
+		if (close(gate[1])) _exit(126);
+		do { bytes = read(gate[0], &ready, 1); } while (bytes < 0 && errno == EINTR);
+		if (close(gate[0]) || bytes != 1 || ready != 1) _exit(126);
 		if (dup2(log, STDOUT_FILENO) < 0 || dup2(log, STDERR_FILENO) < 0) _exit(126);
 		close(log);
 		for (unsigned p = 0; p < 2; p++)
 			if (fcntl(exports[p].fd, F_SETFD, 0) < 0) _exit(126);
 		execl(helper, helper, render, "--native-mm21", fd_text[0], fd_text[1], (char *)NULL);
+		perror("GPU helper exec");
 		_exit(127);
 	}
-	/* The child alone owns the original exports before EGL imports them.
-	 * It closes them after import; retained EGL/PRIME refs own the draw.
-	 * The existing observer's process-group timeout bounds parent and child.
+	/* Admit exec only after every parent owner is released. EOF denies the
+	 * child on any release failure; still reap it before reporting failure.
+	 * Linux closes a descriptor on EINTR, so never retry close on a reused fd.
+	 * The observer's process-group timeout bounds both processes.
 	 */
-	if (close(log) || close(stream.media) || close(stream.video) ||
-	    close(exports[0].fd) || close(exports[1].fd)) fail("GPU parent release");
+	int owners[] = { gate[0], log, stream.media, stream.video, exports[0].fd, exports[1].fd };
+	int release_errno = 0, pipe_ignored = 0;
+	for (unsigned i = 0; i < sizeof(owners) / sizeof(owners[0]); i++)
+		if (close(owners[i]) && !release_errno) release_errno = errno;
+	struct sigaction old_pipe, ignore_pipe = { .sa_handler = SIG_IGN };
+	sigemptyset(&ignore_pipe.sa_mask);
+	if (!release_errno) {
+		if (sigaction(SIGPIPE, &ignore_pipe, &old_pipe)) release_errno = errno;
+		else {
+			char ready = 1;
+			ssize_t bytes;
+			pipe_ignored = 1;
+			do { bytes = write(gate[1], &ready, 1); } while (bytes < 0 && errno == EINTR);
+			if (bytes != 1) release_errno = bytes < 0 ? errno : EIO;
+		}
+	}
+	if (close(gate[1]) && !release_errno) release_errno = errno;
+	if (pipe_ignored && sigaction(SIGPIPE, &old_pipe, NULL) && !release_errno)
+		release_errno = errno;
 	int status;
 	pid_t waited;
 	do { waited = waitpid(child, &status, 0); } while (waited < 0 && errno == EINTR);
+	if (release_errno) { errno = release_errno; fail("GPU parent release"); }
 	if (waited != child || !WIFEXITED(status) || WEXITSTATUS(status)) {
 		fprintf(stderr, "Native GPU helper failed; retain module until recovery\n"); exit(1);
 	}

@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-11",
+  "trial": "boot-test-107",
+  "scope": "synthetic-native-mm21-gpu",
+  "passed": false,
+  "packaging_revision": "d37a2e6d63678c1a28993dc8e0c2f4e0982ccf1d",
+  "kernel_revision": "01222a4b2074555955a85715587bebf0933fb0eb",
+  "kernel_package": "/nix/store/h84dph6rpdqf4rwf2c3abnpbpmgk5s0b-linux-gemini-7.2.9",
+  "module_sha256": "d5ac214615c4644feea527b737808ba9514dad0443f6126c422b8fe2469c8248",
+  "request_test_sha256": "f43a43ebb0d2e529a4bbe4912e5b91dbf4546d5a00e01db0d38d6cde25070d97",
+  "observer_sha256": "ca0bc9222a6b28a35c2cd27db424af0f28d6ce5c940b51db9ba9eb41d7dbd098",
+  "helper": {
+    "path": "/nix/store/hhnrrizx12k4cx96yxp9d7553j7692ar-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/gpu-render-smoke",
+    "sha256": "82295f5eae40e17e599be0d77c6dc50f0ebd07e4cb41428b3d7e2d348eb463d2",
+    "elf_path": "/nix/store/hhnrrizx12k4cx96yxp9d7553j7692ar-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/.gpu-render-smoke-wrapped",
+    "elf_sha256": "55166411e8dbef5debf341a550b579b3d953b1170f3b572e240a258f96f1cfef",
+    "machine": 183,
+    "build_exit_code": 0,
+    "build_terminal": true,
+    "mesa": "/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1",
+    "source_sha256": {
+      "nix/gpu-render-smoke.c": "0082656b3cb78afca41475d4b661b1b2215bcd5d4d90648460e9b2dd13c27f31",
+      "nix/test-gpu-pixel-check.py": "b674784c4c9277ee14cde530b2bd6b2fef637975c7ea26c9c2eaf71a497691f6",
+      "nix/gpu-userspace.nix": "19449f3771a1f34522d0c4283c2e78b84949e264e7b685d64fd2063d7e0902eb"
+    },
+    "build_record": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/gpu-build/metadata.json",
+    "build_record_sha256": "977f60d96eee298ff05e3dcc5c1949572699e88b0f4da0c97f4212ffa6120c10"
+  },
+  "observed": {
+    "returncode": 1,
+    "helper_log_empty": true,
+    "gpu_irq_totals_before": {
+      "job": 0,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_irq_totals_after": {
+      "job": 0,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_kernel_health": {
+      "scoped_gpu_error_lines": 0,
+      "kernel_failure_lines": 0
+    },
+    "decoder_irq_delta": 0,
+    "unloaded": false,
+    "module_retained_until_recovery": true
+  },
+  "cause": {
+    "owner": "nix/gpu-userspace.nix",
+    "launcher_interpreter": "/nix/store/9ipfvwnqp1q8ijnmi5sxvlx9r8w34lw3-bash-5.3p15/bin/bash",
+    "interpreter_sha256": "0a9eca3749b671a0424bfa85be097ab52d56943e096d9b0c24f39e681718986b",
+    "interpreter_machine": 62,
+    "expected_machine": 183,
+    "inference": "The launcher points to a host x86-64 shell; the helper produced no output and no GPU IRQ activity was observed."
+  },
+  "decoder_completion_qualified": false,
+  "gpu_rendering_qualified": false,
+  "parent_release_before_render_qualified": false,
+  "lifetime_review": "The parent closes after fork without an execution barrier. The helper may start first; add a CLOEXEC pipe gate and force this scheduling order in the existing host regression.",
+  "supervised_profile_qualified": true,
+  "recovery": {
+    "final_boot_id": "bba0678e-dd52-4fd0-9c50-f7be51458a3c",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 62,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "evidence": {
+    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-107",
+    "admission_sha256": "9cd711ed3fc5b62e8f4ff4d00fa3387f6f6f17a4295cf9749315e99458a4a683",
+    "observer_result_sha256": "1963cfd3bb6284f5a4a6697313c5efe48924ae1cb3d25257ff10040035949815",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/independent-audit-107/result.json",
+    "independent_audit_sha256": "f7dc8b3d457300904a7204058ab1bda2a33f0f3aaba13a2ad197f9e0cae62a9e",
+    "wrapper_owner_review": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/wrapper-owner-review/review.json",
+    "wrapper_owner_review_sha256": "99c771de3c07386dff55178a48cd4e68af119cd93c3427154cc81622dbc1dbcc"
+  }
+}

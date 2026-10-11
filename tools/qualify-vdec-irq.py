@@ -68,6 +68,24 @@ def check_kernel_revision(kernel, expected):
         raise RuntimeError('Kernel source revision differs; matching module ABI is insufficient')
 
 
+def check_arm64_elf(path, executable=False):
+    header = path.read_bytes()[:64]
+    if (len(header) != 64 or header[:7] != b'\x7fELF\x02\x01\x01'
+            or int.from_bytes(header[18:20], 'little') != 183
+            or (executable and int.from_bytes(header[16:18], 'little') not in (2, 3))):
+        raise RuntimeError('Execution dependency is not a little-endian ARM64 ELF: '+str(path))
+
+
+def check_gpu_launcher(helper, elf, interpreter):
+    # A target program in a host-shell wrapper cannot run on the board.
+    # Check the real execution chain, including its script interpreter.
+    rows = helper.read_text().splitlines()
+    if not rows or rows[0] != '#! '+str(interpreter)+' -e':
+        raise RuntimeError('GPU launcher does not use its admitted target interpreter')
+    check_arm64_elf(elf, executable=True)
+    check_arm64_elf(interpreter, executable=True)
+
+
 def buffers_qualified(reports, cached, start, finish, returncode, safe, statuses):
     expected = dict(native_buffers_test_passed=True,
                     scope='native-buffers', width=80, height=64,
@@ -230,7 +248,8 @@ def main():
     assert request_build['machine'] == 183
     assert program == Path(request_build['path']).resolve(strict=True)
     assert sha(program) == request_build['sha256']
-    assert program.read_bytes()[:4] == b'\x7fELF' and int.from_bytes(program.read_bytes()[18:20], 'little') == 183
+    check_arm64_elf(program, executable=True)
+    check_arm64_elf(module)
     for name, expected in request_build['source_sha256'].items():
         assert sha(REPO/'research'/name) == expected, name
     assert subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() == metadata['module']['vermagic']
@@ -253,7 +272,9 @@ def main():
         assert gpu_build['build_exit_code'] == 0 and gpu_build['build_terminal'] is True
         elf = Path(gpu_build['elf_path']).resolve(strict=True)
         assert sha(elf) == gpu_build['elf_sha256']
-        assert elf.read_bytes()[:4] == b'\x7fELF' and int.from_bytes(elf.read_bytes()[18:20], 'little') == 183
+        interpreter = Path(gpu_build['interpreter']['path']).resolve(strict=True)
+        assert sha(interpreter) == gpu_build['interpreter']['sha256']
+        check_gpu_launcher(helper, elf, interpreter)
         assert gpu_build['mesa'] == '/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1'
         assert {'nix/gpu-render-smoke.c', 'nix/gpu-userspace.nix', 'nix/test-gpu-pixel-check.py'} <= gpu_build['source_sha256'].keys()
         for name, expected in gpu_build['source_sha256'].items():
@@ -328,9 +349,10 @@ def main():
     assert before[:3] == [RELEASE, 'running', '0'], before
     assert before[3].split()[0] == metadata['kernel_config_sha256']
     if helper:
-        helper_hash = remote('test -x '+shlex.quote(str(helper))+'\nsha256sum '+
-                             shlex.join([str(helper), str(elf)]), 'gpu-helper-installed').decode().splitlines()
-        assert [row.split()[0] for row in helper_hash] == [gpu_build['sha256'], gpu_build['elf_sha256']]
+        helper_hash = remote('test -x '+shlex.quote(str(helper))+'\ntest -x '+shlex.quote(str(interpreter))+'\nsha256sum '+
+                             shlex.join([str(helper), str(elf), str(interpreter)]), 'gpu-helper-installed').decode().splitlines()
+        assert [row.split()[0] for row in helper_hash] == [gpu_build['sha256'], gpu_build['elf_sha256'],
+                                                       gpu_build['interpreter']['sha256']]
     base = '/run/mt6797-irq-'+metadata['module']['sha256'][:12]
     remote('umask 077; mkdir '+base+'; cat > '+base+'/decoder.ko', 'upload-module', module.read_bytes())
     remote('cat > '+base+'/request-test; chmod 700 '+base+'/request-test', 'upload-program', program.read_bytes())
