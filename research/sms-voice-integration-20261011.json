@@ -1,0 +1,85 @@
+{
+  "date": "2026-10-11",
+  "status": "Applications built and integrated; native cellular and voice bring-up incomplete",
+  "configuration": "nixosConfigurations.gemini",
+  "architecture": "aarch64-linux",
+  "kernel_commit": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+  "sources": ["nixos/gnome.nix", "nix/cross-fixes.nix", "tools/check-gnome-cross-runtime.py", "sound/soc/mediatek/common/mtk-afe-platform-driver.c"],
+  "host_evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/sms-voice-integration-20261011",
+  "applications": {
+    "calls": {
+      "version": "50.0",
+      "output": "/nix/store/ydqwd1cgp134l27zl95c4rcrbqmapq52-calls-aarch64-unknown-linux-gnu-50.0",
+      "backend": "ModemManager plugin shipped and selected by the GNOME schema override",
+      "activation": "Upstream calls-daemon user service wanted by gnome-session.target"
+    },
+    "spacebar": {
+      "version": "6.7.4",
+      "output": "/nix/store/p6xg5409yrz924dgyrb7rz0vnz1p463k-spacebar-aarch64-unknown-linux-gnu-6.7.4",
+      "backend": "ModemManagerQt Messaging/Sms API; compatible with the generic AT backend",
+      "activation": "Upstream XDG autostart entry for spacebar-daemon",
+      "storage": "Upstream receiver copies incoming messages into the user's SQLite database, then deletes them from modem storage"
+    },
+    "callaudiod": {
+      "version": "0.1.10",
+      "output": "/nix/store/skz22pnq9cyhip4msm488hgb1raxbpia-callaudiod-aarch64-unknown-linux-gnu-0.1.10",
+      "activation": "Standard session D-Bus service installed by programs.calls"
+    },
+    "chatty": "Pinned 0.8.9 requires libcmatrix/olm even without Purple; no SMS-only build switch exists. Spacebar avoids the insecure olm exception and a downstream Chatty fork."
+  },
+  "cross_packaging": {
+    "fixes": [
+      "Restore Qt Quick by correcting the native ShaderToolsTools CMake directory",
+      "Discover native Qt/KDE generators through shared builders while retaining target libraries",
+      "Run the upstream QML install checks with native qmllint and retain library-mixing guards",
+      "Disable unused optional KDE Python bindings; provide native Gom test Python"
+    ],
+    "derivations_checked": 4541,
+    "spacebar_closure_paths": 567,
+    "qtwebengine_pyside_shiboken_olm_dependencies": [],
+    "native_qt_closure_references": "Pinned target QtBase's cross-qmake wrapper references native qmake; Qt translations are architecture-independent. Neither introduces host libraries into the checked application runtime."
+  },
+  "validation": {
+    "application_build_exit": 0,
+    "isolated_runtime_scan": {"elf_files": 207, "errors": []},
+    "normal_image_runtime_check": {
+      "output": "/nix/store/61afxz4wng39qbmlnsi0f5hj8f9g3c5r-gemini-gnome-cross-runtime-check",
+      "elf_files": 1431,
+      "script_files": 124,
+      "errors": []
+    },
+    "qemu_help_exit": {"calls": 0, "spacebar_ui": 0, "spacebar_receiver": 0},
+    "qemu_spacebar_startup": {
+      "exit": 0,
+      "alive_seconds": 20,
+      "ui_and_receiver_alive": true,
+      "main_qml_loaded": true,
+      "qml_import_trace_lines": 3860,
+      "fatal_qml_errors": [],
+      "isolation": "Temporary home, private session bus, unavailable system bus, image fontconfig and software rendering",
+      "receiver_database_migrations_completed": true
+    },
+    "normal_image_bundle": "/nix/store/xa2bdx2mv2zbll814h974pbcpnz6qx58-gemini-mainline-nixos-bundle",
+    "normal_image_build_exit": 0,
+    "hardware_tested": false
+  },
+  "native_voice": {
+    "afe_fix": "mtk_afe_pcm_pointer checks the DAI id before indexing memory interfaces; Hostless_Speech id 12 has no memif",
+    "object_compile_exit": 0,
+    "asan_ubsan_before_exit": 1,
+    "asan_ubsan_after_exit": 0,
+    "whole_kernel_build_exit": 0,
+    "guard_cases": "Valid ids preserve the hardware pointer; negative, first out-of-range, Hostless_Speech and INT_MAX ids avoid array/register access",
+    "existing_route": "Hostless_Speech connects ADDA to PCM2/MD1; PCM2 uses mode B and asynchronous FIFO",
+    "remaining": "Establish the modem speech-control contract and an owner that prepares and holds the duplex hostless PCM route for the call lifetime; then integrate the standard ALSA VoiceCall profile used by callaudiod",
+    "voicecall_ucm_added": false,
+    "public_vendor_contract": "GPL CCCI maps PCM RX/TX channels 4/5 to ccci_aud with user headers. Its kernel port neither decodes speech messages nor supplies a startup acknowledgement; missing channel handling alone does not establish the modem-watchdog cause."
+  },
+  "limitations": {
+    "native_transport_and_sim": "Trial 95 reaches HS2 READY, then the modem watchdog fires before SIM diagnostics. ModemManager's SIM-missing fallback does not establish physical card absence.",
+    "sms_send_receive_qualified": false,
+    "voice_control_audio_qualified": false,
+    "calls_or_sms_sent_during_validation": false,
+    "device_or_subscriber_changes_during_app_validation": false
+  }
+}

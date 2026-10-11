@@ -1,5 +1,96 @@
 # Packaging fixes for the pinned nixpkgs cross build.
-final: prev: {
+final: prev: let
+  cross = !prev.stdenv.buildPlatform.canExecute prev.stdenv.hostPlatform;
+  qtHostToolsFlag = "-DQT_ADDITIONAL_HOST_PACKAGES_PREFIX_PATH=${final.pkgsBuildBuild.qt6.qtdeclarative};${final.pkgsBuildBuild.qt6.qttools};${final.pkgsBuildBuild.qt6.qtshadertools};${final.pkgsBuildBuild.qt6.qtquick3d}";
+  nativeDocTools = final.pkgsBuildBuild.kdePackages.kdoctools.overrideAttrs (old: {
+    cmakeFlags = (old.cmakeFlags or []) ++ ["-DINSTALL_INTERNAL_TOOLS=ON"];
+  });
+  nativeBreezeTools = final.pkgsBuildBuild.kdePackages.breeze-icons.overrideAttrs (old: {
+    cmakeFlags = (old.cmakeFlags or []) ++ ["-DINSTALL_HOST_TOOLS=ON"];
+  });
+in {
+  qt6 = prev.qt6.overrideScope (qtFinal: qtPrev: {
+    qtModule = args: (qtPrev.qtModule args).overrideAttrs (old:
+      # Modules using Qt Declarative need its native generation tools.
+      prev.lib.optionalAttrs (cross && prev.lib.any
+        (input: (input.pname or "") == "qtdeclarative")
+        (args.propagatedBuildInputs or [])) {
+        cmakeFlags = (old.cmakeFlags or []) ++ [
+          qtHostToolsFlag
+          # Qt Quick 3D searches this tool package directly.
+          "-DQt6ShaderToolsTools_DIR=${final.pkgsBuildBuild.qt6.qtshadertools}/lib/cmake/Qt6ShaderToolsTools"
+        ];
+      });
+    qtdeclarative = qtPrev.qtdeclarative.overrideAttrs (old:
+      prev.lib.optionalAttrs cross {
+        # The pinned package points at ShaderTools instead of its Tools
+        # directory, silently disabling Qt Quick during cross configure.
+        cmakeFlags = map (flag:
+          if prev.lib.hasPrefix "-DQt6ShaderToolsTools_DIR=" flag then
+            "-DQt6ShaderToolsTools_DIR=${final.pkgsBuildBuild.qt6.qtshadertools}/lib/cmake/Qt6ShaderToolsTools"
+          else flag) (old.cmakeFlags or []) ++ [
+          "-DQt6QuickTools_DIR=${final.pkgsBuildBuild.qt6.qtdeclarative}/lib/cmake/Qt6QuickTools"
+        ];
+      });
+  });
+  kdePackages = prev.kdePackages.overrideScope (kdeFinal: kdePrev: {
+    # Gemini's Qt applications use the C++/QML libraries. The optional
+    # Python bindings require native Shiboken and every Qt module, including
+    # Chromium, without supplying anything used by the SMS application.
+    mkKdeDerivation = args:
+      let
+        # Use native tools in the existing upstream install-check hook.
+        nativeQmlLintHook = final.buildPackages.makeSetupHook {
+          name = "qmllint-validate-hook";
+          substitutions = {
+            qmllint = "${final.pkgsBuildBuild.qt6.qtdeclarative}/bin/qmllint";
+            jq = prev.lib.getExe final.pkgsBuildBuild.jq;
+          };
+          meta.license = prev.lib.licenses.mit;
+        } (prev.path + "/pkgs/kde/lib/qmllint-hook.sh");
+      in (kdePrev.mkKdeDerivation (args // prev.lib.optionalAttrs cross {
+        hasPythonBindings = false;
+        # ECM supplies architecture-independent CMake modules. CMake's
+        # cross search path does not find native build dependencies.
+        extraNativeBuildInputs = (args.extraNativeBuildInputs or []) ++ [
+          final.buildPackages.kdePackages.extra-cmake-modules
+        ];
+        extraCmakeFlags = (args.extraCmakeFlags or []) ++ [
+          "-DECM_DIR=${final.buildPackages.kdePackages.extra-cmake-modules}/share/ECM/cmake"
+          qtHostToolsFlag
+          "-DKF6_HOST_TOOLING=${final.pkgsBuildBuild.kdePackages.kconfig.dev}/lib/cmake;${nativeDocTools.dev}/lib/cmake;${nativeBreezeTools}/bin"
+        ] ++ prev.lib.optionals (args.hasPythonBindings or false) [
+          "-DBUILD_PYTHON_BINDINGS=OFF"
+        ];
+      })).overrideAttrs (old: prev.lib.optionalAttrs cross {
+        nativeBuildInputs = map (input:
+          if prev.lib.getName input == "qmllint-validate-hook" then nativeQmlLintHook
+          # Native Qt dev outputs propagate host libraries and setup hooks.
+          # Use only the outputs needed by generators and QML checks.
+          else if prev.lib.getName input == "qttools" then final.pkgsBuildBuild.qt6.qttools.out
+          else if prev.lib.getName input == "qtsvg" then final.pkgsBuildBuild.qt6.qtsvg.out
+          else input) (old.nativeBuildInputs or []);
+      });
+    futuresql = kdePrev.futuresql.overrideAttrs (old:
+      prev.lib.optionalAttrs cross {
+        cmakeFlags = (old.cmakeFlags or []) ++ [
+          "-DECM_DIR=${final.buildPackages.kdePackages.extra-cmake-modules}/share/ECM/cmake"
+        ];
+      });
+    qcoro = kdePrev.qcoro.overrideAttrs (old:
+      prev.lib.optionalAttrs cross {
+        cmakeFlags = (old.cmakeFlags or []) ++ [qtHostToolsFlag];
+      });
+    kdoctools = kdePrev.kdoctools.overrideAttrs (old:
+      prev.lib.optionalAttrs cross {
+        # Bootstrap documentation and localization with host executables.
+        cmakeFlags = (old.cmakeFlags or []) ++ [
+          "-DMEINPROC6_EXECUTABLE=${nativeDocTools}/bin/meinproc6"
+          "-DDOCBOOKL10NHELPER_EXECUTABLE=${nativeDocTools}/bin/docbookl10nhelper"
+          "-DCHECKXML6_EXECUTABLE=${nativeDocTools}/bin/checkXML6"
+        ];
+      });
+  });
   pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
     (pythonFinal: pythonPrev: {
       buildPythonApplication = pythonPrev.buildPythonApplication // {
@@ -27,6 +118,11 @@ final: prev: {
     # 0.14.5 looks up gi-docgen twice. The second lookup accidentally asks
     # for a target executable; documentation generation runs on the host.
     patches = (old.patches or []) ++ [./patches/gupnp-av-native-docgen.patch];
+  });
+  gom = prev.gom.overrideAttrs (old: {
+    # Meson runs Python to install the GI overrides. Their destination is
+    # already the target sitePackages path supplied by the package.
+    nativeBuildInputs = (old.nativeBuildInputs or []) ++ [final.buildPackages.python3];
   });
   gnome-session = prev.gnome-session.overrideAttrs (old: {
     # Meson needs a separate native pkg-config to find gdbus-codegen.

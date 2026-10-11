@@ -120,7 +120,10 @@
           --shell ${gemini.system.pkgs.gnome-shell} \
           --orca ${gemini.system.pkgs.orca} \
           --networkmanager ${gemini.system.config.networking.networkmanager.package} \
-          --modemmanager ${gemini.system.config.networking.modemmanager.package} --out "$out"
+          --modemmanager ${gemini.system.config.networking.modemmanager.package} \
+          --calls ${gemini.system.pkgs.calls} \
+          --spacebar ${gemini.system.pkgs.kdePackages.spacebar} \
+          --callaudiod ${gemini.system.pkgs.callaudiod} --out "$out"
       '';
       network-profiles = gemini.buildPkgs.runCommand "gemini-network-profiles-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3];

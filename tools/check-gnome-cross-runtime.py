@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check desktop and networking executables and their runtime libraries."""
+"""Check desktop, networking and telephony executables and runtime libraries."""
 import argparse
 import json
 import os
@@ -55,11 +55,20 @@ class Check:
         words = shlex.split(recipe.replace('\\\n', ' '))
         self.file(words[0], executable=True)
         for index, word in enumerate(words):
-            if word == '--prefix' and words[index+1] == 'GI_TYPELIB_PATH':
+            if word == '--prefix' and words[index+1] in (
+                    'GI_TYPELIB_PATH', 'QT_PLUGIN_PATH', 'QML_IMPORT_PATH', 'QML2_IMPORT_PATH',
+                    'NIXPKGS_QT6_QML_IMPORT_PATH'):
+                name = words[index+1]
                 value = words[index+3]
                 if value.encode()+b'\0' not in code:
-                    raise ValueError('Typelib path missing from compiled wrapper: '+str(path))
-                self.typelibs(value)
+                    raise ValueError(name+' missing from compiled wrapper: '+str(path))
+                if name == 'GI_TYPELIB_PATH':
+                    self.typelibs(value)
+                else:
+                    for directory in value.split(':'):
+                        if not Path(directory).is_dir():
+                            raise ValueError('Missing Qt runtime directory: '+directory)
+                        self.tree(directory)
 
     def typelibs(self, value):
         for directory in value.split(':'):
@@ -100,9 +109,13 @@ def main():
     parser.add_argument('--orca', type=Path, required=True)
     parser.add_argument('--networkmanager', type=Path, required=True)
     parser.add_argument('--modemmanager', type=Path, required=True)
+    parser.add_argument('--calls', type=Path, required=True)
+    parser.add_argument('--spacebar', type=Path, required=True)
+    parser.add_argument('--callaudiod', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
-    for package in (args.system, args.shell, args.orca, args.networkmanager, args.modemmanager):
+    for package in (args.system, args.shell, args.orca, args.networkmanager, args.modemmanager,
+                    args.calls, args.spacebar, args.callaudiod):
         if not package.is_dir():
             raise ValueError('Runtime package is missing: '+str(package))
     check = Check()
@@ -121,10 +134,16 @@ def main():
         for sub in ('bin', 'libexec', 'share/gnome-shell'):
             check.tree(package/sub, executables=True)
         check.tree(package/'lib')
-    for package in (args.networkmanager, args.modemmanager):
+    for package in (args.networkmanager, args.modemmanager, args.calls, args.spacebar,
+                    args.callaudiod):
         for sub in ('bin', 'sbin', 'libexec'):
             check.tree(package/sub, executables=True)
         check.tree(package/'lib')
+    check.file(args.calls/'lib/calls/plugins/provider/mm/libmm.so')
+    check.file(args.calls/'share/systemd/user/calls-daemon.service')
+    check.file(args.spacebar/'libexec/spacebar-daemon', executable=True)
+    check.file(args.spacebar/'etc/xdg/autostart/org.kde.spacebar.daemon.desktop')
+    check.file(args.callaudiod/'share/dbus-1/services/org.mobian_project.CallAudio.service')
     environment = wrapper_environment(args.orca/'bin/orca')
     check.typelibs(environment['GI_TYPELIB_PATH'])
     cache = Path(environment['GDK_PIXBUF_MODULE_FILE'])
@@ -136,6 +155,7 @@ def main():
     result = dict(passed=not check.errors, elf_files=check.elf, script_files=check.scripts,
                   system=str(args.system), shell=str(args.shell), orca=str(args.orca),
                   networkmanager=str(args.networkmanager), modemmanager=str(args.modemmanager),
+                  calls=str(args.calls), spacebar=str(args.spacebar), callaudiod=str(args.callaudiod),
                   orca_environment=environment, pixbuf_loaders=loaders, errors=check.errors,
                   hardware_tested=False)
     args.out.write_text(json.dumps(result, indent=2)+'\n')

@@ -96,11 +96,13 @@
     [org.gnome.settings-daemon.plugins.power]
     sleep-inactive-ac-type='nothing'
     sleep-inactive-battery-type='nothing'
+    [org.gnome.Calls]
+    autoload-plugins=['mm']
   '';
-  services.desktopManager.gnome.extraGSettingsOverridePackages = [pkgs.gnome-settings-daemon];
+  services.desktopManager.gnome.extraGSettingsOverridePackages = [pkgs.gnome-settings-daemon pkgs.calls];
   services.desktopManager.gnome.favoriteAppsOverride = ''
     [org.gnome.shell]
-    favorite-apps=['org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Settings.desktop']
+    favorite-apps=['org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.TextEditor.desktop', 'org.gnome.Settings.desktop', 'org.gnome.Calls.desktop', 'org.kde.spacebar.desktop']
   '';
 
   # The 1080x2160 panel needs HiDPI sizing. A compact fixed dock keeps
@@ -129,6 +131,12 @@
     pulse.enable = true;
   };
 
+  # Both applications use the existing ModemManager service. Calls also
+  # installs callaudiod for the standard session audio-routing API.
+  programs.calls.enable = true;
+  systemd.packages = [pkgs.calls];
+  systemd.user.services.calls-daemon.wantedBy = ["gnome-session.target"];
+
   # Install the desktop and everyday tools without the GNOME games and
   # developer suites. Additional applications use environment.systemPackages.
   services.gnome.core-apps.enable = false;
@@ -138,5 +146,6 @@
     gnome-text-editor
     gnome-control-center
     gnomeExtensions.dash-to-dock
+    kdePackages.spacebar
   ];
 }
