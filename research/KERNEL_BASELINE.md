@@ -12,13 +12,13 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 95, kernel
-source `9d8ecc3776f0c0705173149446c66ea417d700e7`.
+The [installed accepted image](accepted-baseline.json) is trial 96, kernel
+source `ce9fec57add5607faa3eb9f9c31f69afd414de77`.
 Its [desktop proof](desktop-radio-activation-20261011.json) and independent
-terminal audit pass GNOME RFKILL visibility, bounded Bluetooth discovery as
-the desktop user, directed NetworkManager scanning, effective onboard stereo
+terminal audit pass GNOME RFKILL visibility, directed NetworkManager scanning, effective onboard stereo
 mapping, RAM-only paging, retained storage and ordinary Nix builds. Normal
-NetworkManager association and traffic over wlan0 also pass. Selecting another
+NetworkManager association and traffic over wlan0 retain trial 95 evidence;
+Bluetooth discovery retains trial 94 evidence with unchanged radio inputs. Selecting another
 SSID, Bluetooth pairing/profiles and audible orientation remain unqualified.
 RTC and GPU results retain their relevant unchanged-input evidence
 from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
@@ -31,11 +31,13 @@ incomplete: a fresh boot reaches HS2, then receives a modem watchdog interrupt
 at 107 seconds before any SIM diagnostic. SIM/eSIM and cellular data are not
 qualified.
 
-Development now pins `ce9fec57add5607faa3eb9f9c31f69afd414de77`, adding bounded
-public-ABI modem exception decoding and a hostless PCM pointer bounds fix.
-These native changes pass the normal GCC 15 kernel build, including the
-required exception-decoder checks with ASan/UBSan. Hardware qualification is
-pending.
+The installed revision adds bounded public-ABI modem exception decoding and a
+hostless PCM pointer bounds fix. The normal GCC 15 kernel build, including the
+required exception-decoder checks with ASan/UBSan, and supervised image/audit
+checks pass. Its modem snapshot reports nine cores and is rejected by the
+public eight-core layout guard; no exception cause or cellular operation is
+qualified. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
+native SIM, speech control and call-audio lifetime work remains open.
 
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
 GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are

@@ -4,7 +4,12 @@
   "configuration": "nixosConfigurations.gemini",
   "architecture": "aarch64-linux",
   "kernel_commit": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
-  "sources": ["nixos/gnome.nix", "nix/cross-fixes.nix", "tools/check-gnome-cross-runtime.py", "sound/soc/mediatek/common/mtk-afe-platform-driver.c"],
+  "sources": [
+    "nixos/gnome.nix",
+    "nix/cross-fixes.nix",
+    "tools/check-gnome-cross-runtime.py",
+    "sound/soc/mediatek/common/mtk-afe-platform-driver.c"
+  ],
   "host_evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/sms-voice-integration-20261011",
   "applications": {
     "calls": {
@@ -41,14 +46,21 @@
   },
   "validation": {
     "application_build_exit": 0,
-    "isolated_runtime_scan": {"elf_files": 207, "errors": []},
+    "isolated_runtime_scan": {
+      "elf_files": 207,
+      "errors": []
+    },
     "normal_image_runtime_check": {
       "output": "/nix/store/61afxz4wng39qbmlnsi0f5hj8f9g3c5r-gemini-gnome-cross-runtime-check",
       "elf_files": 1431,
       "script_files": 124,
       "errors": []
     },
-    "qemu_help_exit": {"calls": 0, "spacebar_ui": 0, "spacebar_receiver": 0},
+    "qemu_help_exit": {
+      "calls": 0,
+      "spacebar_ui": 0,
+      "spacebar_receiver": 0
+    },
     "qemu_spacebar_startup": {
       "exit": 0,
       "alive_seconds": 20,
@@ -81,5 +93,32 @@
     "voice_control_audio_qualified": false,
     "calls_or_sms_sent_during_validation": false,
     "device_or_subscriber_changes_during_app_validation": false
+  },
+  "installed_hardware": {
+    "boot_id": "11579f72-f9f4-4c86-988d-f5e8069a75f7",
+    "system": "/nix/store/sdy4d4ryf9gqm84rg69v906n6ld93ydk-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "installed_files": {
+      "calls_desktop": true,
+      "spacebar_desktop": true,
+      "spacebar_autostart": true,
+      "callaudiod_activation": true
+    },
+    "processes": {
+      "calls_daemon": true,
+      "spacebar_receiver": true
+    },
+    "calls_unit": {
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "launched_by_test": false,
+    "message_contents_read": false,
+    "calls_or_sms_sent": false,
+    "callaudiod_service_directory_registered": true,
+    "trial": 96,
+    "parent_install_exit": 0,
+    "independent_audit_exit": 0,
+    "sms_delivery_qualified": false,
+    "voice_operation_qualified": false
   }
 }
