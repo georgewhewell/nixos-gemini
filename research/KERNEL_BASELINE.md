@@ -38,10 +38,18 @@ ASan/UBSan; strict ARM64 builds, the normal build and supervised image/audit pas
 Bounded exception decoding reads the independent PL prefix of the nine-core
 report while keeping its overview unqualified. It identifies an undefined-
 instruction offender and a cross-core exception, without establishing their
-cause. Two valid AT frames are dropped while the frontend is closed; bounded
-native receive ownership is the next supported correction. The watchdog remains
-unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
+cause. Two valid AT frames are dropped while the frontend is closed. The watchdog
+remains unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
 native SIM, speech control and call-audio lifetime work remains open.
+
+Development source `6e84a8a9a31c431f9774d828a15efb90fa4d6e41` now retains validated
+closed-port AT frames in a bounded native FIFO. First open drains it in order;
+close, failure and removal share the same receive owner. The existing regression
+fixture checks the old loss, queue limits and concurrent lifetime transitions.
+GCC 15 ASan/UBSan, strict ARM64 compilation and the normal kernel build pass with
+unchanged configuration. This revision is built and pushed, but is not installed
+or qualified as a SIM/watchdog fix. Qualify changed receive behavior with the
+next combined image rather than repeating unchanged baseline checks.
 
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
 GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are

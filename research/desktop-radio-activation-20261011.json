@@ -306,7 +306,22 @@
     "normal_image_install_exit": 0,
     "independent_terminal_audit_exit": 0,
     "cldma_rx_ip_busy_ack": true,
-    "watchdog_resolved": false
+    "watchdog_resolved": false,
+    "bounded_at_receive_fix": {
+      "kernel_revision": "6e84a8a9a31c431f9774d828a15efb90fa4d6e41",
+      "kernel_package": "/nix/store/8ahi3qr8cfcr5vngjkg2qg6hjvyxi37w-linux-gemini-7.2.9",
+      "normal_kernel_build_exit": 0,
+      "canonical_host_checks_exit": 0,
+      "strict_arm64_w1_werror_exit": 0,
+      "negative_control": "Actual old UART2 dispatch branch fails preopen retention; candidate declarations retained for a behavioral comparison",
+      "maximum_closed_frames": 32,
+      "maximum_closed_payload_bytes": 114176,
+      "maximum_closed_skb_truesize_bytes": 262144,
+      "fifo_start_stop_terminal_remove_checks": "passed",
+      "installed": false,
+      "watchdog_or_sim_fix_qualified": false,
+      "next": "Qualify changed receive behavior in the next combined image; continue native SIM/speech and exception bring-up"
+    }
   },
   "cross_runtime": {
     "result": "passed",
