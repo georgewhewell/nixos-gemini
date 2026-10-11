@@ -21,8 +21,9 @@ GCC 15.3.0, strict MODPOST and `W=1`. Native SPI 240 setup and polarity write
 acceptance pass. One original compressed grey picture reaches fetch and
 submission with ACTIVE clear (`0x101`); AVC reports picture completion, the
 last macroblock and zero syntax error. It nevertheless times out with no IRQ
-across all ten possible CPUs and MISC status `0x3001`. V4L2 correctly leaves
-capture at its `0x79` sentinel on failure; private pixels are not measured.
+across all ten possible CPUs and MISC status `0x3001`. That earlier private-DMA
+backend leaves CPU capture at its `0x79` sentinel on failure; private pixels
+are not measured. This result does not qualify the replacement allocation path.
 Native stop, guards and unload pass, followed by supervised return to image
 102 and independent terminal audit with 54 matching source hashes and taint 0.
 
@@ -70,16 +71,40 @@ qualifies the current IRQ module. Exact fixtures, failed variants, commands,
 module identities and trial scopes remain in the unchanged
 [trial history](README-history-20261011.md).
 
-Userspace queues use vb2-vmalloc storage; hardware uses separate cached DMA
-surfaces with explicit ownership, padding and guards. The worker synchronizes
-for the device before fetch and for the CPU only after a proven hardware stop.
-It validates references before allocation/power and checks guards and retained
-reference storage before copying output. Stream-off and close drain work.
-An unproven stop retains DMA, clocks, power and a module reference until reboot.
-The `last_job` sysfs attribute reads cached state rather than live registers.
-Exporting CPU capture storage does not qualify shared hardware surfaces.
-Native DMA-buf attachment mapping, modifiers, cache boundaries, reference
-lifetime and completion fences remain unfinished.
+CAPTURE now uses one native DMA-buf object for each compound MM21 Y/C, motion
+and guarded allocation. Two independently referenced plane views share that
+object; QUERYBUF and EXPBUF describe the same hardware storage. Format
+`sizeimage` describes logical Y/C lengths, while queried mapping lengths cover
+the whole backing and chroma `data_offset` is the luma length. Empty buffers
+retain those offsets with zero logical payload. OUTPUT retains vb2-vmalloc
+NAL staging. The final CPU capture copy and alternate private-picture path are
+removed; retained DPB pictures and jobs own independent DMA-buf references.
+
+Reservation fences cover dependencies, CPU cache transitions, hardware work
+and post-stop checks. Output and reference errors have separate fences; both
+use exclusive ownership because reference diagnostics also access memory
+through the CPU. CPU access and ordinary MMAP queue transitions synchronize
+the decoder mapping and every attached device mapping. Dependency waits are
+bounded and happen outside the common cache-owner mutex. Stream-off and close
+drain work; an unproven stop retains objects, mappings, power and unsignalled
+fences until reboot. The `last_job` attribute reads cached state.
+
+This path requires the pinned kernel's native direct/IOMMU SG bounce-marker
+fix (`01222a4b`). Gemini's GPU uses direct DMA with its own MMU. Unbounced
+direct and IOMMU attachments are eligible; bounced mappings and architecture
+DMA-ops routes are rejected. CAPTURE currently supports MMAP and read/write
+EXPBUF, without importing other DMA-bufs. CREATE_BUFS accepts equal queried
+backing lengths; accepting logical-only sizes or larger backing requests is
+unfinished. These restrictions are in the driver, with no downstream copy
+fallback. Hardware allocation, export, GPU/display imports and decoded pixels
+on this new path remain unqualified.
+
+The pinned GCC 15.3 build passes the normal kernel checks and full image build.
+The module passes a fresh ARM64 build with `W=1` and `KCFLAGS=-Werror`; all 163
+required exports match that kernel. Host regressions with ASan/UBSan exercise
+the actual buffer ownership, cache-transition, fence and request-test code,
+including failure and fatal-retention paths. These checks cover source and
+build behavior; the new image has not been installed or hardware-qualified.
 
 Build `mt6797_vdec.ko` through this directory's Kbuild against the exact
 configured kernel, retaining the sibling `mt6797-vdec` control translator.
@@ -104,8 +129,10 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   FIXTURE_DIRECTORY 64 64 export faults
 ```
 
-It checks requests, capture metadata, open/stream/close, invalid references,
-export lifetime and optional timeout paths. Compare saved MM21 samples against
+It selects capture outside the active userspace DPB and brackets exported CPU
+access with DMA_BUF_IOCTL_SYNC. It checks requests, plane offsets and bounds,
+open/stream/close, invalid references, export lifetime and optional timeout
+paths. Compare saved MM21 samples against
 independent expected output with `../mt6797-vdec/compare-frame.py`.
 Original fixture generators and the recorded GStreamer pipelines are retained
 in the [reproduction history](README-history-20261011.md).
@@ -113,7 +140,11 @@ in the [reproduction history](README-history-20261011.md).
 propagates failed capture through request failure, qualified on its recorded
 polling build. It does not establish successful hardware completion.
 
-Video encoding has produced no frame. Other codec features, sustained playback,
-production IRQ completion, shared surfaces and suspend remain unqualified.
-Keep these tasks in their native owners and reuse unchanged accepted results;
-there is one maintained kernel and no normal-boot media qualification loop.
+Remaining work stays here: establish the exact completion path to SPI 240;
+qualify native allocations/export lifetime and real GPU/display imports with
+independent MM21 comparisons; remove reference snapshot overhead only after
+its replacement safety contract is proven; finish CAPTURE import and allocation
+semantics, sustained playback and suspend. The encoder owner still needs a
+public firmware-free frame-programming contract and has produced no frame.
+Reuse unchanged accepted results; there is one maintained kernel and no
+normal-boot media qualification loop.

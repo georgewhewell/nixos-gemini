@@ -4,6 +4,7 @@
 
 #include <linux/platform_device.h>
 #include <linux/v4l2-controls.h>
+#include "buffer.h"
 
 #define MT6797_MAX_WIDTH 1920U
 #define MT6797_MAX_HEIGHT 1088U
@@ -71,6 +72,7 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev);
 void mt6797_engine_destroy(struct mt6797_engine *engine);
 int mt6797_engine_resume(struct mt6797_engine *engine);
 int mt6797_engine_suspend(struct mt6797_engine *engine);
+bool mt6797_engine_fenced(const struct mt6797_engine *engine);
 struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine *engine);
 void mt6797_decode_context_destroy(struct mt6797_decode_context *ctx);
 void mt6797_decode_context_reset(struct mt6797_decode_context *ctx);
@@ -81,6 +83,7 @@ int mt6797_engine_validate_slice(struct mt6797_decode_context *ctx,
 			       const struct mt6797_decode_job *job);
 int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
-			 const u8 **pixels, struct mt6797_decode_status *status);
+			 const struct mt6797_picture *capture,
+			 struct mt6797_decode_status *status);
 
 #endif

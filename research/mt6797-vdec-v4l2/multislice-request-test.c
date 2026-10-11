@@ -35,22 +35,15 @@ static void save_status(const char *out, const char *name, int error, int collec
 	if (!file || fputs(text, file) == EOF || fclose(file)) fail("write multislice status");
 }
 
-static void capture_untouched(struct stream *stream)
-{
-	for (unsigned int plane = 0; plane < 2; plane++)
-		for (size_t byte = 0; byte < stream->capture[plane].bytes; byte++)
-			if (((u8 *)stream->capture[plane].address)[byte] != 0x79) {
-				fprintf(stderr, "Incomplete/rejected picture changed capture storage\n"); exit(1);
-			}
-}
-
 static void write_capture(struct stream *stream, const char *out, const char *name)
 {
 	char path[1024];
 	if (snprintf(path, sizeof(path), "%s/%s.bin", out, name) >= (int)sizeof(path)) exit(1);
 	FILE *file = fopen(path, "wb");
-	if (!file || fwrite(stream->capture[0].address, 1, 4096, file) != 4096 ||
-	    fwrite(stream->capture[1].address, 1, 2048, file) != 2048 || fclose(file)) fail("write capture");
+	sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+	if (!file || fwrite(plane_data(&stream->capture[0]), 1, 4096, file) != 4096 ||
+	    fwrite(plane_data(&stream->capture[1]), 1, 2048, file) != 2048 || fclose(file)) fail("write capture");
+	sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
 }
 
 /* Every OUTPUT request completes independently. Only a final request queues
@@ -106,17 +99,19 @@ static void submit_slice(struct stream *stream, const char *out, const char *nam
 		.request_fd=request, .count=sizeof(values)/sizeof(values[0]), .controls=values };
 	checked_ioctl(stream->video, VIDIOC_S_EXT_CTRLS, &controls, "S_EXT_CTRLS multislice");
 	assert(bytes <= stream->source.bytes);
+	sync_mapping(&stream->source, DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE);
 	memcpy(stream->source.address, nal, bytes);
+	sync_mapping(&stream->source, DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
 	struct v4l2_plane plane = { .bytesused=bytes, .length=stream->source.bytes };
 	struct v4l2_buffer source = { .type=V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, .memory=V4L2_MEMORY_MMAP,
 		.length=1, .m.planes=&plane, .request_fd=request, .timestamp.tv_sec=timestamp,
 		.flags=V4L2_BUF_FLAG_REQUEST_FD | (hold ? V4L2_BUF_FLAG_M2M_HOLD_CAPTURE_BUF : 0) };
 	if (first) {
-		memset(stream->capture[0].address, 0x79, stream->capture[0].bytes);
-		memset(stream->capture[1].address, 0x79, stream->capture[1].bytes);
+		select_capture(stream, &params);
+		fill_capture(stream);
 		struct v4l2_plane planes[] = { {.length=stream->capture[0].bytes}, {.length=stream->capture[1].bytes} };
 		struct v4l2_buffer capture = { .type=V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, .memory=V4L2_MEMORY_MMAP,
-			.length=2, .m.planes=planes };
+			.index=stream->capture_index, .length=2, .m.planes=planes };
 		checked_ioctl(stream->video, VIDIOC_QBUF, &capture, "QBUF multislice capture");
 	}
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF multislice source");

@@ -189,15 +189,43 @@ static int queue_setup(struct vb2_queue *queue, unsigned int *buffers,
 	unsigned int luma_size = ctx->width * ctx->height;
 	unsigned int count = output ? 1 : 2;
 	unsigned int first = output ? INPUT_SIZE : luma_size;
+	if (mt6797_engine_fenced(ctx->decoder->engine))
+		return -EIO;
 	if (*planes) {
 		if (*planes != count || sizes[0] < first || (!output && sizes[1] < luma_size / 2))
+			return -EINVAL;
+		if (output)
+			return 0;
+		/* CREATE_BUFS accepts these exact queried allocation lengths.
+		 * Logical format-only or unequal/larger backing requests are not
+		 * supported; accepted sizes must remain unchanged.
+		 */
+		if (sizes[0] != mt6797_picture_bytes(luma_size) || sizes[1] != sizes[0])
 			return -EINVAL;
 		return 0;
 	}
 	*planes = count;
 	sizes[0] = first;
-	if (!output)
-		sizes[1] = luma_size / 2;
+	if (!output) {
+		/* sizeimage describes logical image planes. MMAP/QUERYBUF lengths
+		 * cover the compound Y/C/motion backing.
+		 */
+		sizes[0] = mt6797_picture_bytes(luma_size);
+		sizes[1] = sizes[0];
+	}
+	return 0;
+}
+
+static int initialize_buffer(struct vb2_buffer *buffer)
+{
+	struct decode_file *ctx = vb2_get_drv_priv(buffer->vb2_queue);
+
+	if (!output_queue(buffer->vb2_queue->type)) {
+		buffer->planes[0].data_offset = 0;
+		buffer->planes[1].data_offset = ctx->width * ctx->height;
+		vb2_set_plane_payload(buffer, 0, 0);
+		vb2_set_plane_payload(buffer, 1, buffer->planes[1].data_offset);
+	}
 	return 0;
 }
 
@@ -210,6 +238,8 @@ static int prepare_buffer(struct vb2_buffer *buffer)
 	unsigned int first = output ? INPUT_SIZE : luma_size;
 	unsigned int bytes = vb2_get_plane_payload(buffer, 0);
 	unsigned int offset = buffer->planes[0].data_offset;
+	if (mt6797_engine_fenced(ctx->decoder->engine))
+		return -EIO;
 	if (vb2_plane_size(buffer, 0) < first ||
 	    (!output && vb2_plane_size(buffer, 1) < luma_size / 2))
 		return -EINVAL;
@@ -217,10 +247,38 @@ static int prepare_buffer(struct vb2_buffer *buffer)
 		return -EINVAL;
 	vbuf->field = V4L2_FIELD_NONE;
 	if (!output) {
+		struct mt6797_picture picture;
+		int ret;
+
+		if (vb2_plane_size(buffer, 0) < mt6797_picture_bytes(luma_size) ||
+		    vb2_plane_size(buffer, 1) < mt6797_picture_bytes(luma_size))
+			return -EINVAL;
+		ret = mt6797_capture_prepare(buffer);
+		if (!ret)
+			ret = mt6797_picture_from_vb2(buffer, &picture);
+		if (ret)
+			return ret;
+		/* The core resets capture offsets on prepare. Restore the same
+		 * stable offsets advertised by QUERYBUF at allocation time.
+		 */
+		buffer->planes[0].data_offset = 0;
+		buffer->planes[1].data_offset = luma_size;
 		vb2_set_plane_payload(buffer, 0, 0);
-		vb2_set_plane_payload(buffer, 1, 0);
+		vb2_set_plane_payload(buffer, 1, luma_size);
 	}
 	return 0;
+}
+
+static void finish_buffer(struct vb2_buffer *buffer)
+{
+	if (output_queue(buffer->vb2_queue->type) ||
+	    (buffer->state != VB2_BUF_STATE_DONE && buffer->state != VB2_BUF_STATE_ERROR))
+		return;
+	if (mt6797_capture_finish_error(buffer)) {
+		buffer->state = VB2_BUF_STATE_ERROR;
+		vb2_set_plane_payload(buffer, 0, 0);
+		vb2_set_plane_payload(buffer, 1, buffer->planes[1].data_offset);
+	}
 }
 
 static void queue_buffer(struct vb2_buffer *buffer)
@@ -249,6 +307,8 @@ static void complete_buffer_request(struct vb2_buffer *buffer)
 static int start_stream(struct vb2_queue *queue, unsigned int count)
 {
 	struct decode_file *ctx = vb2_get_drv_priv(queue);
+	if (mt6797_engine_fenced(ctx->decoder->engine))
+		return -EIO;
 	atomic_set(&ctx->abort, 0);
 	return 0;
 }
@@ -363,7 +423,9 @@ static void stop_stream(struct vb2_queue *queue)
 
 static const struct vb2_ops buffer_ops = {
 	.queue_setup = queue_setup,
+	.buf_init = initialize_buffer,
 	.buf_prepare = prepare_buffer,
+	.buf_finish = finish_buffer,
 	.buf_out_validate = validate_output_buffer,
 	.buf_queue = queue_buffer,
 	.buf_request_complete = complete_buffer_request,
@@ -383,7 +445,7 @@ static int initialize_queues(void *priv, struct vb2_queue *source, struct vb2_qu
 		queue->io_modes = VB2_MMAP;
 		queue->drv_priv = ctx;
 		queue->ops = &buffer_ops;
-		queue->mem_ops = &vb2_vmalloc_memops;
+		queue->mem_ops = i ? &mt6797_capture_memops : &vb2_vmalloc_memops;
 		queue->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 		queue->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 		queue->lock = &ctx->decoder->mutex;
@@ -407,7 +469,7 @@ static void decode_work(struct work_struct *work)
 	struct vb2_v4l2_buffer *source = v4l2_m2m_next_src_buf(ctx->fh.m2m_ctx);
 	struct vb2_v4l2_buffer *capture = v4l2_m2m_next_dst_buf(ctx->fh.m2m_ctx);
 	struct media_request *request = source->vb2_buf.req_obj.req;
-	const u8 *pixels = NULL;
+	struct mt6797_picture picture;
 	struct mt6797_decode_status status = { 0 };
 	u64 started = ktime_get_ns();
 	unsigned long flags;
@@ -415,7 +477,9 @@ static void decode_work(struct work_struct *work)
 	bool collected = false;
 	int ret;
 
-	ret = request ? v4l2_ctrl_request_setup(request, &ctx->controls) : -EINVAL;
+	ret = mt6797_picture_from_vb2(&capture->vb2_buf, &picture);
+	if (!ret)
+		ret = request ? v4l2_ctrl_request_setup(request, &ctx->controls) : -EINVAL;
 	if (!ret) {
 		/* Snapshot control payloads under the handler lock. Later control
 		 * updates cannot alter an in-flight hardware job.
@@ -446,13 +510,13 @@ static void decode_work(struct work_struct *work)
 					status.quiesced = status.guards_unchanged = true;
 				} else if (!ret) {
 					ret = mt6797_engine_decode(ctx->context, &ctx->first_slice,
-								   &pixels, &status);
+								   &picture, &status);
 				}
 				status.slice_count = ctx->packet_slices;
 				status.nal_bytes = ctx->packet_bytes;
 				status.header_bits = ctx->first_slice.slice.header_bit_size;
 			} else if (!ret) {
-				ret = mt6797_engine_decode(ctx->context, &ctx->job, &pixels, &status);
+				ret = mt6797_engine_decode(ctx->context, &ctx->job, &picture, &status);
 				status.slice_count = 1;
 				status.nal_bytes = ctx->job.bytes;
 				status.header_bits = ctx->job.slice.header_bit_size;
@@ -465,10 +529,8 @@ static void decode_work(struct work_struct *work)
 		ret = -ECANCELED;
 	if (!ret && !collected) {
 		unsigned int luma_size = ctx->width * ctx->height;
-		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 0), pixels, luma_size);
-		memcpy(vb2_plane_vaddr(&capture->vb2_buf, 1), pixels + luma_size, luma_size / 2);
 		vb2_set_plane_payload(&capture->vb2_buf, 0, luma_size);
-		vb2_set_plane_payload(&capture->vb2_buf, 1, luma_size / 2);
+		vb2_set_plane_payload(&capture->vb2_buf, 1, luma_size + luma_size / 2);
 	}
 	spin_lock_irqsave(&decoder->status_lock, flags);
 	decoder->last_status = status;

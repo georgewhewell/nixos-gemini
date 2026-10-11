@@ -1,3 +1,3 @@
 # SPDX-License-Identifier: GPL-2.0-only
 obj-m += mt6797_vdec.o
-mt6797_vdec-y := v4l2.o engine.o controls.o
+mt6797_vdec-y := v4l2.o engine.o buffer.o controls.o

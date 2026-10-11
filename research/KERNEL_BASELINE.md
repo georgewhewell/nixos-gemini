@@ -29,9 +29,10 @@ repeat RTC alarm/calendar diagnostics.
 
 The installed revision verifies the native SYSIRQ polarity field before
 forwarding type setup to the GIC. Its normal ARM64 build, required actual-callback
-regression and platform admission pass. Decoder SPI 240 has not yet been
-requested on this revision; its polarity and completion remain unqualified in
-the media IRQ owner note.
+regression and platform admission pass. Decoder trial 103 accepts SPI 240 setup
+and polarity write readback on this revision, but delivers no completion IRQ.
+The [media IRQ owner note](mt6797-vdec-v4l2/irq-contract.json) preserves that
+distinction and the remaining source-enable/handshake contract.
 
 This revision admits current supplicant userspace capability flags and station
 joins to cached passive-channel APs. Its real-callback tests use the kernel's native flag enums
@@ -101,18 +102,17 @@ the current subsystem interfaces for controls, buffer lifetime, DMA mapping,
 completion, runtime power and supplier ownership. Similar silicon supplies
 public register leads, which still require MT6797-specific validation.
 
-The current experimental decoder uses vb2-vmalloc capture buffers and copies
-from private cached DMA surfaces. Its buffer export and close/streamoff lifetime
-checks do not qualify direct decoder-to-GPU or decoder-to-display sharing.
-Moving to shared hardware surfaces requires a suitable vb2 DMA allocator,
-attachment mappings for the actual consuming device, compatible formats and
-modifiers, explicit CPU cache access
-boundaries, reference-picture lifetime, and synchronization with other devices.
-Use DMA-buf, DMA reservation fences and sync files where the participating
-subsystem contracts require them. A DMA-buf fd alone does not establish hardware
-completion or cache coherency. Preserve the independent pixel comparisons,
-error recovery, bounds and lifetime checks when changing the allocation path.
-See the [upstream DMA-buf contract](https://docs.kernel.org/driver-api/dma-buf.html).
+The experimental decoder now replaces private-picture capture copying with
+native compound DMA-buf surfaces, independent DPB/job references, reservation
+fences and explicit CPU/MMAP cache transitions for every attachment. The
+maintained kernel input `01222a4b2074555955a85715587bebf0933fb0eb` marks direct
+DMA SG bounce mappings and clears direct/IOMMU markers on teardown. This belongs
+in the DMA owner: Gemini's GPU uses direct DMA with its own MMU, rather than a
+system-IOMMU domain. The driver admits proved unbounced mapping routes and
+rejects unsupported routes without a copy fallback. See the
+[decoder owner](mt6797-vdec-v4l2/README.md) for current restrictions and the
+hardware qualification still required. The installed accepted image remains
+102; current source changes are not new hardware acceptance.
 
 ## Verified DMA-buf changes
 

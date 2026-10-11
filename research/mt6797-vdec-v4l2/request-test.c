@@ -5,6 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/dma-buf.h>
 #include <linux/media.h>
 #include <linux/videodev2.h>
 #include <poll.h>
@@ -19,10 +20,13 @@
 typedef uint8_t u8;
 #include "../mt6797-vdec/pcm64-fixture.h"
 
-struct mapping { void *address; size_t bytes; int fd; };
+#define CAPTURE_COUNT (V4L2_H264_NUM_DPB_ENTRIES + 1)
+struct mapping { void *address; size_t bytes, data_offset; int fd; };
 struct stream {
 	int video, media;
-	struct mapping source, capture[2];
+	struct mapping source, storage[CAPTURE_COUNT][2], *capture;
+	uint64_t timestamps[CAPTURE_COUNT];
+	unsigned int capture_count, capture_index;
 };
 static const char *status_path;
 static const char *fixture_directory;
@@ -43,10 +47,76 @@ static void checked_ioctl(int fd, unsigned long command, void *arg, const char *
 		fail(operation);
 }
 
+/* Exported mappings need cache ownership even when their exporter happens to
+ * be coherent. The two capture views may refer to the same complete object.
+ */
+static void sync_mapping(struct mapping *mapping, uint64_t flags)
+{
+	if (mapping->fd < 0) return;
+	struct dma_buf_sync sync = { .flags = flags };
+	int ret;
+	do { ret = ioctl(mapping->fd, DMA_BUF_IOCTL_SYNC, &sync); }
+	while (ret < 0 && (errno == EINTR || errno == EAGAIN));
+	if (ret < 0) fail("DMA_BUF_IOCTL_SYNC");
+}
+
+static u8 *plane_data(struct mapping *mapping)
+{
+	return (u8 *)mapping->address + mapping->data_offset;
+}
+
+static void sync_capture(struct stream *stream, uint64_t flags)
+{
+	for (unsigned int i = 0; i < 2; i++) sync_mapping(&stream->capture[i], flags);
+}
+
+static void fill_capture(struct stream *stream)
+{
+	size_t luma = width * storage_height;
+	sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE);
+	memset(plane_data(&stream->capture[0]), 0x79, luma);
+	memset(plane_data(&stream->capture[1]), 0x79, luma / 2);
+	sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
+}
+
+static void capture_untouched(struct stream *stream)
+{
+	size_t luma = width * storage_height;
+	sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+	for (unsigned int i = 0; i < 2; i++)
+		for (size_t byte = 0; byte < (i ? luma / 2 : luma); byte++)
+			if (plane_data(&stream->capture[i])[byte] != 0x79) {
+				fprintf(stderr, "Incomplete/rejected picture changed capture pixels\n"); exit(1);
+			}
+	sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
+}
+
+static void select_capture(struct stream *stream,
+			   const struct v4l2_ctrl_h264_decode_params *params)
+{
+	for (unsigned int i = 0; i < stream->capture_count; i++) {
+		int protected = 0;
+		for (unsigned int j = 0; j < V4L2_H264_NUM_DPB_ENTRIES; j++) {
+			const struct v4l2_h264_dpb_entry *entry = &params->dpb[j];
+			unsigned int flags = V4L2_H264_DPB_ENTRY_FLAG_VALID | V4L2_H264_DPB_ENTRY_FLAG_ACTIVE;
+			if (stream->timestamps[i] && (entry->flags & flags) == flags &&
+			    entry->reference_ts == stream->timestamps[i]) protected = 1;
+		}
+		if (!protected) {
+			stream->capture_index = i;
+			stream->capture = stream->storage[i];
+			stream->timestamps[i] = 0;
+			return;
+		}
+	}
+	fprintf(stderr, "No capture buffer outside the active DPB\n"); exit(1);
+}
+
 static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 {
 	struct v4l2_format format = { .type = type };
-	struct v4l2_requestbuffers request = { .type = type, .memory = V4L2_MEMORY_MMAP, .count = 1 };
+	struct v4l2_requestbuffers request = { .type = type, .memory = V4L2_MEMORY_MMAP,
+		.count = type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ? 1 : CAPTURE_COUNT };
 	struct v4l2_plane planes[2] = { 0 };
 	struct v4l2_buffer buffer = { .type = type, .memory = V4L2_MEMORY_MMAP,
 		.length = type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ? 1 : 2, .m.planes = planes };
@@ -60,27 +130,39 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 		fprintf(stderr, "Unexpected negotiated format\n"); exit(1);
 	}
 	checked_ioctl(stream->video, VIDIOC_REQBUFS, &request, "REQBUFS");
-	if (!request.count || (buffer.length == 1 && !(request.capabilities & V4L2_BUF_CAP_SUPPORTS_REQUESTS))) {
+	if (!request.count || (buffer.length == 2 && request.count < CAPTURE_COUNT) ||
+	    (buffer.length == 1 && !(request.capabilities & V4L2_BUF_CAP_SUPPORTS_REQUESTS))) {
 		fprintf(stderr, "Queue does not support the required allocation/request API\n"); exit(1);
 	}
-	checked_ioctl(stream->video, VIDIOC_QUERYBUF, &buffer, "QUERYBUF");
-	for (unsigned int i = 0; i < buffer.length; i++) {
-		struct mapping *mapping = buffer.length == 1 ? &stream->source : &stream->capture[i];
-		mapping->bytes = planes[i].length;
-		mapping->fd = -1;
-		int fd = stream->video;
-		off_t offset = planes[i].m.mem_offset;
-		if (export_buffers) {
-			struct v4l2_exportbuffer exported = { .type = type, .plane = i, .flags = O_RDWR | O_CLOEXEC };
-			checked_ioctl(stream->video, VIDIOC_EXPBUF, &exported, "EXPBUF");
-			mapping->fd = fd = exported.fd;
-			offset = 0;
+	if (buffer.length == 2) stream->capture_count = CAPTURE_COUNT;
+	for (unsigned int index = 0; index < (buffer.length == 1 ? 1 : stream->capture_count); index++) {
+		buffer.index = index;
+		checked_ioctl(stream->video, VIDIOC_QUERYBUF, &buffer, "QUERYBUF");
+		for (unsigned int i = 0; i < buffer.length; i++) {
+			struct mapping *mapping = buffer.length == 1 ? &stream->source : &stream->storage[index][i];
+			mapping->bytes = planes[i].length;
+			mapping->data_offset = planes[i].data_offset;
+			size_t payload = buffer.length == 1 ? 0 : width * storage_height / (i ? 2 : 1);
+			if (mapping->data_offset > mapping->bytes || payload > mapping->bytes - mapping->data_offset) {
+				fprintf(stderr, "Capture offset exceeds mapped storage\n"); exit(1);
+			}
+			mapping->fd = -1;
+			int fd = stream->video;
+			off_t offset = planes[i].m.mem_offset;
+			if (export_buffers) {
+				struct v4l2_exportbuffer exported = { .type = type, .index = index,
+					.plane = i, .flags = O_RDWR | O_CLOEXEC };
+				checked_ioctl(stream->video, VIDIOC_EXPBUF, &exported, "EXPBUF");
+				mapping->fd = fd = exported.fd;
+				offset = 0;
+			}
+			mapping->address = mmap(NULL, mapping->bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
+						fd, offset);
+			if (mapping->address == MAP_FAILED)
+				fail("mmap");
 		}
-		mapping->address = mmap(NULL, mapping->bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
-					fd, offset);
-		if (mapping->address == MAP_FAILED)
-			fail("mmap");
 	}
+	if (buffer.length == 2) stream->capture = stream->storage[0];
 }
 
 static void open_stream(struct stream *stream, const char *video, const char *media)
@@ -108,8 +190,10 @@ static void close_stream(struct stream *stream)
 	size_t luma_size = width * storage_height;
 	u8 *snapshot = malloc(luma_size * 3 / 2);
 	if (!snapshot) fail("snapshot allocation");
-	memcpy(snapshot, stream->capture[0].address, luma_size);
-	memcpy(snapshot + luma_size, stream->capture[1].address, luma_size / 2);
+	sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+	memcpy(snapshot, plane_data(&stream->capture[0]), luma_size);
+	memcpy(snapshot + luma_size, plane_data(&stream->capture[1]), luma_size / 2);
+	sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
 	for (unsigned int i = 0; i < 2; i++) {
 		enum v4l2_buf_type type = i ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 		checked_ioctl(stream->video, VIDIOC_STREAMOFF, &type, "STREAMOFF");
@@ -117,19 +201,23 @@ static void close_stream(struct stream *stream)
 	close(stream->media);
 	close(stream->video);
 	/* With exported mappings, the video file can close while these independent
-	 * DMA-buffer references keep the completed CPU queue storage alive.
+	 * DMA-buffer references keep the completed hardware storage alive.
 	 */
-	if (memcmp(snapshot, stream->capture[0].address, luma_size) ||
-	    memcmp(snapshot + luma_size, stream->capture[1].address, luma_size / 2)) {
+	sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+	if (memcmp(snapshot, plane_data(&stream->capture[0]), luma_size) ||
+	    memcmp(snapshot + luma_size, plane_data(&stream->capture[1]), luma_size / 2)) {
 		fprintf(stderr, "Capture storage changed across video close\n"); exit(1);
 	}
+	sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
 	free(snapshot);
 	munmap(stream->source.address, stream->source.bytes);
 	if (stream->source.fd >= 0) close(stream->source.fd);
-	for (unsigned int i = 0; i < 2; i++) {
-		munmap(stream->capture[i].address, stream->capture[i].bytes);
-		if (stream->capture[i].fd >= 0) close(stream->capture[i].fd);
-	}
+	for (unsigned int index = 0; index < stream->capture_count; index++)
+		for (unsigned int i = 0; i < 2; i++) {
+			struct mapping *mapping = &stream->storage[index][i];
+			munmap(mapping->address, mapping->bytes);
+			if (mapping->fd >= 0) close(mapping->fd);
+		}
 }
 
 static int64_t milliseconds(void)
@@ -157,14 +245,24 @@ static int dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_er
 		if (poll(&pollfd, 1, 50) < 0 && errno != EINTR) fail("poll video");
 	}
 	int bad = 0;
-	if (!!(buffer.flags & V4L2_BUF_FLAG_ERROR) != expect_error || buffer.index) {
+	unsigned int expected_index = type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ? stream->capture_index : 0;
+	if (!!(buffer.flags & V4L2_BUF_FLAG_ERROR) != expect_error || buffer.index != expected_index) {
 		fprintf(stderr, "Unexpected completed buffer flags %#x\n", buffer.flags); bad = 1;
 	}
-	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
-	    (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec ||
-	     buffer.sequence != sequence || planes[0].bytesused != (expect_error ? 0U : width * storage_height) ||
-	     planes[1].bytesused != (expect_error ? 0U : width * storage_height / 2))) {
-		fprintf(stderr, "Unexpected capture metadata or payload sizes\n"); bad = 1;
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+		if (buffer.timestamp.tv_sec != timestamp || buffer.timestamp.tv_usec || buffer.sequence != sequence) bad = 1;
+		for (unsigned int i = 0; i < 2; i++) {
+			struct mapping *mapping = &stream->capture[i];
+			unsigned int payload = width * storage_height / (i ? 2 : 1);
+			if (planes[i].length != mapping->bytes || planes[i].data_offset != mapping->data_offset ||
+			    planes[i].bytesused > mapping->bytes ||
+			    planes[i].bytesused < planes[i].data_offset ||
+			    planes[i].bytesused - planes[i].data_offset !=
+			    (buffer.flags & V4L2_BUF_FLAG_ERROR ? 0 : payload)) bad = 1;
+		}
+		if (!bad && !(buffer.flags & V4L2_BUF_FLAG_ERROR))
+			stream->timestamps[buffer.index] = (uint64_t)timestamp * 1000000000ULL;
+		if (bad) fprintf(stderr, "Unexpected capture metadata or payload bounds\n");
 	}
 	return bad;
 }
@@ -374,9 +472,11 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	struct v4l2_ext_controls controls = { .which = V4L2_CTRL_WHICH_REQUEST_VAL,
 		.request_fd = request, .count = sizeof(values) / sizeof(values[0]), .controls = values };
 	checked_ioctl(stream->video, VIDIOC_S_EXT_CTRLS, &controls, "S_EXT_CTRLS request");
+	select_capture(stream, &params);
+	sync_mapping(&stream->source, DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE);
 	memcpy(stream->source.address, nal, bytes);
-	memset(stream->capture[0].address, 0x79, stream->capture[0].bytes);
-	memset(stream->capture[1].address, 0x79, stream->capture[1].bytes);
+	sync_mapping(&stream->source, DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE);
+	fill_capture(stream);
 	struct v4l2_plane source_plane = { .bytesused = bytes, .length = stream->source.bytes };
 	struct v4l2_buffer source = { .type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
 		.memory = V4L2_MEMORY_MMAP, .length = 1, .m.planes = &source_plane,
@@ -384,7 +484,8 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	struct v4l2_plane capture_planes[] = { { .length = stream->capture[0].bytes },
 		{ .length = stream->capture[1].bytes } };
 	struct v4l2_buffer capture = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-		.memory = V4L2_MEMORY_MMAP, .length = 2, .m.planes = capture_planes };
+		.memory = V4L2_MEMORY_MMAP, .index = stream->capture_index,
+		.length = 2, .m.planes = capture_planes };
 	checked_ioctl(stream->video, VIDIOC_QBUF, &capture, "QBUF capture");
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
@@ -393,11 +494,7 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	    !strcmp(name, "fault-refmissing") || !strcmp(name, "fault-refmetadata") ||
 	    !strcmp(name, "fault-b-list1") || !strcmp(name, "fault-b-poc") ||
 	    !strncmp(name, "fault-longterm-", 15)) {
-		for (unsigned int plane = 0; plane < 2; plane++)
-			for (size_t byte = 0; byte < stream->capture[plane].bytes; byte++)
-				if (((u8 *)stream->capture[plane].address)[byte] != 0x79) {
-					fprintf(stderr, "Rejected control request changed capture storage\n"); exit(1);
-				}
+		capture_untouched(stream);
 	}
 
 	bad |= dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
@@ -412,8 +509,10 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		}
 		FILE *file = fopen(path, "wb");
 		if (!file) fail("output file");
-		if (fwrite(stream->capture[0].address, 1, width * storage_height, file) != width * storage_height ||
-		    fwrite(stream->capture[1].address, 1, width * storage_height / 2, file) != width * storage_height / 2 || fclose(file)) fail("write output");
+		sync_capture(stream, DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ);
+		if (fwrite(plane_data(&stream->capture[0]), 1, width * storage_height, file) != width * storage_height ||
+		    fwrite(plane_data(&stream->capture[1]), 1, width * storage_height / 2, file) != width * storage_height / 2 || fclose(file)) fail("write output");
+		sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
 	}
 	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
 	close(request);

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Original register backend derived from this project's guarded diagnostics.
  * Public register provenance: ../mt6797-video-interface.json.
- * Private bounce buffers isolate userspace queues from unproven DMA stop.
+ * Bitstream staging remains private. Capture surfaces are native dma_buf
+ * objects, independently retained if DMA stop cannot be proved.
  */
 #include <linux/clk.h>
 #include <linux/completion.h>
@@ -84,8 +85,9 @@ struct mt6797_engine {
 struct mt6797_decode_context {
 	struct mt6797_engine *engine;
 	struct list_head list;
-	struct private_buffer pictures[MT6797_H264_PICTURE_SLOTS];
+	struct mt6797_picture pictures[MT6797_H264_PICTURE_SLOTS];
 	struct mt6797_h264_cached_picture cache[MT6797_H264_PICTURE_SLOTS];
+	struct mt6797_surface_job *surface_job;
 };
 
 static void write_word(u32 value, void __iomem *address)
@@ -459,22 +461,30 @@ struct mt6797_decode_context *mt6797_decode_context_create(struct mt6797_engine 
 void mt6797_decode_context_reset(struct mt6797_decode_context *ctx)
 {
 	unsigned int i;
-	for (i = 0; i < ARRAY_SIZE(ctx->cache); i++)
-		ctx->cache[i].valid = false;
+
+	if (ctx->engine->fenced)
+		return;
+	for (i = 0; i < ARRAY_SIZE(ctx->cache); i++) {
+		memset(&ctx->cache[i], 0, sizeof(ctx->cache[i]));
+		mt6797_picture_put(&ctx->pictures[i]);
+	}
 }
 
 void mt6797_decode_context_destroy(struct mt6797_decode_context *ctx)
 {
-	unsigned int i;
 	/* On a fatal stop failure the engine retains this independent object.
 	 * It holds no frontend/file/control pointers, so file close remains safe.
 	 */
 	if (ctx->engine->fenced)
 		return;
 	list_del(&ctx->list);
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
-		release_buffer(ctx->engine, &ctx->pictures[i]);
+	mt6797_decode_context_reset(ctx);
 	kfree(ctx);
+}
+
+bool mt6797_engine_fenced(const struct mt6797_engine *engine)
+{
+	return READ_ONCE(engine->fenced);
 }
 
 void mt6797_engine_destroy(struct mt6797_engine *engine)
@@ -619,13 +629,7 @@ static void buffers_to_device(struct mt6797_decode_context *ctx)
 		dma_sync_single_for_device(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
 		buf->device_owned = true;
 	}
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		struct private_buffer *buf = &ctx->pictures[i];
-		if (!buf->cpu)
-			continue;
-		dma_sync_single_for_device(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
-		buf->device_owned = true;
-	}
+	mt6797_surface_job_to_device(ctx->surface_job);
 }
 
 static void buffers_to_cpu(struct mt6797_decode_context *ctx)
@@ -640,44 +644,37 @@ static void buffers_to_cpu(struct mt6797_decode_context *ctx)
 			buf->device_owned = false;
 		}
 	}
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		struct private_buffer *buf = &ctx->pictures[i];
-		if (buf->device_owned) {
-			dma_sync_single_for_cpu(engine->dev, buf->dma, buf->bytes, DMA_BIDIRECTIONAL);
-			buf->device_owned = false;
-		}
-	}
+	mt6797_surface_job_to_cpu(ctx->surface_job);
 }
 
 static int prepare_pictures(struct mt6797_decode_context *ctx, size_t luma_size,
-			    unsigned int output)
+			    struct mt6797_h264_reference_plan *plan,
+			    const struct mt6797_picture *capture)
 {
-	size_t bytes = ALIGN(luma_size * 7 / 4, SZ_64K) + GUARD_SIZE;
+	size_t bytes = mt6797_picture_bytes(luma_size);
 	unsigned int i;
-	int ret;
-	bool resize = false;
 
-	if (bytes > PICTURE_ALLOC_SIZE || output >= ARRAY_SIZE(ctx->pictures))
+	if (!capture->buffer || bytes > PICTURE_ALLOC_SIZE ||
+	    plan->output >= ARRAY_SIZE(ctx->pictures) || capture->bytes != bytes)
 		return -EOVERFLOW;
-	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
-		if (ctx->pictures[i].cpu && ctx->pictures[i].bytes != bytes)
-			resize = true;
-	if (resize) {
-		mt6797_decode_context_reset(ctx);
-		for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-			release_buffer(ctx->engine, &ctx->pictures[i]);
-			ctx->cache[i].allocated = false;
-		}
-	}
-	/* Allocate only storage selected for a real output. Unused opens and
-	 * single-reference streams never allocate the full17-picture capacity.
+	if (mt6797_picture_poisoned(capture))
+		return -EIO;
+	/* A current DPB reference cannot be overwritten through another view
+	 * or fd of the same allocation, even if the output slot is different.
 	 */
-	if (!ctx->pictures[output].cpu) {
-		ret = allocate_buffer(ctx->engine, &ctx->pictures[output], bytes);
-		if (ret)
-			return ret;
-		ctx->cache[output].allocated = true;
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++)
+		if ((plan->protected_mask & BIT(i)) &&
+		    ctx->pictures[i].buffer == capture->buffer)
+			return -EBUSY;
+	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
+		if (i != plan->output && ctx->cache[i].valid &&
+		    ctx->pictures[i].buffer != capture->buffer)
+			continue;
+		memset(&ctx->cache[i], 0, sizeof(ctx->cache[i]));
+		mt6797_picture_put(&ctx->pictures[i]);
 	}
+	mt6797_picture_get(&ctx->pictures[plan->output], capture);
+	ctx->cache[plan->output].allocated = true;
 	return 0;
 }
 
@@ -733,7 +730,8 @@ static void snapshot_clock(struct mt6797_engine *engine,
 
 int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			 const struct mt6797_decode_job *job,
-			 const u8 **pixels, struct mt6797_decode_status *status)
+			 const struct mt6797_picture *capture,
+			 struct mt6797_decode_status *status)
 {
 	static const u8 eos[] = { 0, 0, 0, 1, 0x0a };
 	bool cabac = job->pps.flags & V4L2_H264_PPS_FLAG_ENTROPY_CODING_MODE;
@@ -751,12 +749,12 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	void __iomem *top = engine->banks[TOP], *mc = engine->banks[MC];
 	void __iomem *avc = engine->banks[AVC], *mv = engine->banks[MV], *pp = engine->banks[PP];
 	struct private_buffer *input = &engine->memory[INPUT], *prediction = &engine->memory[PREDICTION];
-	struct private_buffer *picture;
+	struct mt6797_picture *picture;
 	u32 state, original_dcm, original_irq, original_break, original_gate;
 	unsigned int remaining, i, list, luma_size = job->width * job->height;
 	unsigned int pixel_bytes = luma_size * 3 / 2, motion_bytes = luma_size / 4;
 	bool b_picture = job->slice.slice_type == V4L2_H264_SLICE_TYPE_B;
-	int ret, stop_ret;
+	int ret, stop_ret, reference_error = 0;
 	size_t snapshot_offset;
 	bool dma_started = false, reference_poc_seen = false;
 
@@ -766,7 +764,6 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 	status->irq_masked_before = status->irq_pending_before = status->irq_active_before = -ENODATA;
 	status->irq_masked_after = status->irq_pending_after = status->irq_active_after = -ENODATA;
 	status->current_poc = job->decode.top_field_order_cnt;
-	*pixels = NULL;
 	if (engine->fenced)
 		return -EIO;
 	saved->count = 0;
@@ -803,12 +800,19 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 			if (ret)
 				return ret;
 		}
-	ret = prepare_pictures(ctx, luma_size, plan.output);
+	ret = prepare_pictures(ctx, luma_size, &plan, capture);
 	if (ret)
 		return ret;
+	ctx->surface_job = mt6797_surface_job_begin(ctx->pictures,
+						 ARRAY_SIZE(ctx->pictures), plan.output);
+	if (IS_ERR(ctx->surface_job)) {
+		ret = PTR_ERR(ctx->surface_job);
+		ctx->surface_job = NULL;
+		return ret;
+	}
 	ret = prepare_reference_snapshot(ctx, &plan);
 	if (ret)
-		return ret;
+		goto surfaces;
 	picture = &ctx->pictures[plan.output];
 	status->reference_count = plan.count;
 	status->reference_count1 = plan.count1;
@@ -848,7 +852,7 @@ int mt6797_engine_decode(struct mt6797_decode_context *ctx,
 
 	ret = pm_runtime_resume_and_get(engine->dev);
 	if (ret < 0)
-		return ret;
+		goto surfaces;
 	snapshot_clock(engine, status, MT6797_CLOCK_POWERED);
 	if ((readl(engine->larb_mmu) & GENMASK(9, 0)) != GENMASK(9, 0)) {
 		ret = -EIO;
@@ -1185,8 +1189,9 @@ cleanup:
 	status->quiesced = !status->reset_result && (!dma_started || !status->break_result);
 	if (!status->quiesced) {
 		engine->fenced = true;
+		mt6797_surface_job_poison(ctx->surface_job);
 		__module_get(THIS_MODULE);
-		dev_err(engine->dev, "decoder stop failed; private DMA/power retained until reboot\n");
+		dev_err(engine->dev, "decoder stop failed; shared DMA/fence/power retained until reboot\n");
 		return -EIO;
 	}
 	buffers_to_cpu(ctx);
@@ -1204,15 +1209,20 @@ cleanup:
 			status->guards_unchanged = false;
 	snapshot_offset = 0;
 	for (i = 0; i < ARRAY_SIZE(ctx->pictures); i++) {
-		struct private_buffer *buf = &ctx->pictures[i];
+		struct mt6797_picture *buf = &ctx->pictures[i];
 		if (!buf->cpu)
 			continue;
 		if (memchr_inv(buf->cpu + pixel_bytes + motion_bytes, 0xd3,
-			       buf->bytes - pixel_bytes - motion_bytes))
+			       buf->bytes - pixel_bytes - motion_bytes)) {
 			status->guards_unchanged = false;
+			if (plan.snapshot_mask & BIT(i))
+				reference_error = -EIO;
+		}
 		if (plan.snapshot_mask & BIT(i)) {
-			if (memcmp(buf->cpu, engine->reference_snapshot + snapshot_offset, buf->bytes))
+			if (memcmp(buf->cpu, engine->reference_snapshot + snapshot_offset, buf->bytes)) {
 				status->guards_unchanged = false;
+				reference_error = -EIO;
+			}
 			snapshot_offset += buf->bytes;
 			status->reference_guard_count++;
 			status->motion_guard_count++;
@@ -1239,12 +1249,16 @@ power:
 	if (!ret && stop_ret < 0)
 		ret = stop_ret;
 	if (!ret) {
-		if (job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC)
-			mt6797_decode_context_reset(ctx);
-		/* Timestamp reuse cannot leave two private pictures with one identity. */
+		/* Retire old IDR/reused identities without dropping this output's
+		 * independent surface reference before it becomes the new DPB slot.
+		 */
 		for (i = 0; i < ARRAY_SIZE(ctx->cache); i++)
-			if (ctx->cache[i].timestamp == job->timestamp)
-				ctx->cache[i].valid = false;
+			if (i != plan.output &&
+			    ((job->decode.flags & V4L2_H264_DECODE_PARAM_FLAG_IDR_PIC) ||
+			     ctx->cache[i].timestamp == job->timestamp)) {
+				memset(&ctx->cache[i], 0, sizeof(ctx->cache[i]));
+				mt6797_picture_put(&ctx->pictures[i]);
+			}
 		ctx->cache[plan.output] = (struct mt6797_h264_cached_picture) {
 			.timestamp = job->timestamp, .frame_number = job->decode.frame_num,
 			.width = header.width_mbs * 16, .height = header.height_mbs * 16,
@@ -1252,7 +1266,9 @@ power:
 			.bottom_poc = job->decode.bottom_field_order_cnt,
 			.allocated = true, .valid = job->decode.nal_ref_idc != 0,
 		};
-		*pixels = picture->cpu;
 	}
+surfaces:
+	mt6797_surface_job_finish(ctx->surface_job, ret, reference_error);
+	ctx->surface_job = NULL;
 	return ret;
 }
