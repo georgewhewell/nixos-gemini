@@ -12,21 +12,24 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 94, kernel
-source `690c7c5119657c6fecc8568d5642cd7268c1b1d3`.
+The [installed accepted image](accepted-baseline.json) is trial 95, kernel
+source `9d8ecc3776f0c0705173149446c66ea417d700e7`.
 Its [desktop proof](desktop-radio-activation-20261011.json) and independent
 terminal audit pass GNOME RFKILL visibility, bounded Bluetooth discovery as
 the desktop user, directed NetworkManager scanning, effective onboard stereo
-mapping, RAM-only paging, retained storage and ordinary Nix builds. Wi-Fi
-association/data, Bluetooth pairing/profiles and audible orientation remain
-unqualified. RTC and GPU results retain their relevant unchanged-input evidence
+mapping, RAM-only paging, retained storage and ordinary Nix builds. Normal
+NetworkManager association and traffic over wlan0 also pass. Selecting another
+SSID, Bluetooth pairing/profiles and audible orientation remain unqualified. RTC and GPU results retain their relevant unchanged-input evidence
 from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
 repeat RTC alarm/calendar diagnostics.
 
-Development pins `9d8ecc3776f0c0705173149446c66ea417d700e7`, which also admits
+This revision admits
 current supplicant userspace capability flags and station joins to cached
 passive-channel APs. Its real-callback tests use the kernel's native flag enums
-and are required by the normal kernel build. Hardware activation is pending.
+and are required by the normal kernel build. Native modem bring-up remains
+incomplete: a fresh boot reaches HS2, then receives a modem watchdog interrupt
+at 107 seconds before any SIM diagnostic. SIM/eSIM and cellular data are not
+qualified.
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
 GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are
 disabled. The [no-swap 7.1.3 fallback](baselines/boot-test-76.json) remains preserved;

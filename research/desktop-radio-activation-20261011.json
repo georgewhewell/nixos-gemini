@@ -2,16 +2,16 @@
   "schema_version": 1,
   "date": "2026-10-11",
   "accepted": {
-    "boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
-    "system": "/nix/store/5nmv4zbddx208ypqhz1vqz29r4kdkhmc-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
-    "kernel_revision": "690c7c5119657c6fecc8568d5642cd7268c1b1d3",
+    "boot_id": "cb56a7a3-2bae-47e4-8a8d-b0af3b81609e",
+    "system": "/nix/store/6ypzwz1r44x46grw4drlan2l6n62c642-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_revision": "9d8ecc3776f0c0705173149446c66ea417d700e7",
     "candidate_kept": true,
     "independent_recovery_audit": "passed",
     "source_count": 47,
     "rtc_alarm_calendar_diagnostics_run": false,
     "gnome_radio_inputs": "passed",
     "directed_wildcard_nm_scan": "passed",
-    "scan_duration_seconds": 13.475,
+    "scan_duration_seconds": 15.482,
     "hif_faults": 0,
     "hif_restarts": 0,
     "effective_audio_hardware_mapping": "passed",
@@ -45,7 +45,8 @@
           "state": "suspended"
         }
       ]
-    }
+    },
+    "trial": 95
   },
   "bluetooth_discovery": {
     "result": "passed",
@@ -85,7 +86,10 @@
     },
     "wifi_netdev_present": true,
     "radio_power_or_pairing_actions": 0,
-    "gnome_panel_visual_confirmation": false
+    "gnome_panel_visual_confirmation": false,
+    "trial": 94,
+    "boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
+    "reuse_reason": "Bluetooth transport, controller firmware and discovery inputs are unchanged in 95; desktop radio access checked on 95."
   },
   "wifi_activation": {
     "source_verified_against": [
@@ -106,13 +110,43 @@
     "before_real_callback": "failed as expected for MLO capability and cached NO_IR BSS",
     "after_real_callback": "passed with GCC15 ASan/UBSan",
     "fix_kernel_revision": "9d8ecc3776f0c0705173149446c66ea417d700e7",
-    "hardware_fix_qualified": false,
-    "association_and_data_qualified": false
+    "hardware_fix_qualified": true,
+    "association_and_data_qualified": true,
+    "normal_activation": {
+      "boot_id": "2717ca77-986f-452d-b814-74129ea81f3a",
+      "system": "/nix/store/6ypzwz1r44x46grw4drlan2l6n62c642-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+      "wireless_interface": "wlan0",
+      "state_before": 100,
+      "state_after": 100,
+      "active_ap_present": true,
+      "dhcp4_config_present": true,
+      "ipv4_gateway_present": true,
+      "ping_exit": 0,
+      "packets_transmitted": 3,
+      "packets_received": 3,
+      "dns_queries": [],
+      "wireless_counter_deltas": {
+        "rx_packets": 32,
+        "tx_packets": 3,
+        "rx_bytes": 10556,
+        "tx_bytes": 294,
+        "rx_errors": 0,
+        "tx_errors": 0,
+        "rx_dropped": 0,
+        "tx_dropped": 0
+      },
+      "connection_mutations": false,
+      "profile_mutations": false,
+      "ssid_or_credentials_collected": false,
+      "preferred_network_selection_qualified": false,
+      "data_exchange_passed": true
+    }
   },
   "limits": [
-    "Wi-Fi association and data are not qualified.",
+    "Preferred SSID selection and network switching are not qualified.",
     "Bluetooth pairing, profiles and the owner's target are not qualified.",
-    "Speaker/headphone acoustic orientation is not verified."
+    "Speaker/headphone acoustic orientation is not verified.",
+    "Cellular transport fails after HS2; SIM, eSIM, data, SMS and voice are not qualified."
   ],
   "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/radio-activation-discovery-20261011",
   "failed_trials": {
@@ -120,5 +154,24 @@
     "92": "Custom UCM PCM removed the onboard sink; automatic recovery and audit passed.",
     "93": "Verifier confused logical client channels with hardware positions; automatic recovery and audit passed."
   },
-  "next": "95: updated connection admission on the same maintained kernel branch; use the audited 94 image as recovery."
+  "next": "Continue native modem control/SIM bring-up and cross-build SMS/call UI integration on the same maintained branches.",
+  "cellular_transport": {
+    "result": "failed",
+    "trial": 95,
+    "boot_id": "2717ca77-986f-452d-b814-74129ea81f3a",
+    "kernel_revision": "9d8ecc3776f0c0705173149446c66ea417d700e7",
+    "startup_hs2_completed": true,
+    "failure_site": "md-wdt-irq",
+    "failure_uptime_seconds": 107.125193,
+    "terminal_error": -110,
+    "failure_before_sim_probe": true,
+    "at_port_after_failure": "EAGAIN",
+    "rejected_channels": [
+      57,
+      4
+    ],
+    "rejected_channels_cause_qualified": false,
+    "sim_esim_data_sms_voice_qualified": false,
+    "next": "Decode the public UMOLY exception report in the native first-fatal path and continue transport/SIM bring-up."
+  }
 }
