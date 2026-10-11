@@ -50,6 +50,9 @@ and bitstream addresses through shared firmware parameters and reads the byte
 count at `0x98`. It provides no direct MT6797 frame-register contract. The
 archived source hashes and this limited finding are recorded in
 [the source lead](encoder-common-interface-20260423-lead.json).
+Its current owner review records exact pinned GPL source lines and hashes,
+the missing frame contract and the next step: establish MT6797-compatible
+frame programming before implementing and qualifying one fixed-QP intra frame.
 
 The resource probe also passes in trials 36–41, with normal unload and released
 power votes. Trial 38 separately misses the supervisor's final RTC alarm; that

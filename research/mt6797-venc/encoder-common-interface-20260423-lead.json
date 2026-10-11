@@ -12,5 +12,91 @@
   "inference": "This examined modern public interface supplies no direct MT6797 source/reference/reconstruction/scratch/start/stop register contract. It cannot justify a firmware-free Gemini encoder backend.",
   "hardware_qualified": false,
   "proprietary_source_or_binary_examined": false,
-  "archive_directory": "/mnt/Home/src/nixos-gemini/handoff/video-resource-20261009"
+  "archive_directory": "/mnt/Home/src/nixos-gemini/handoff/video-resource-20261009",
+  "mt6797_owner_review_2026_10_11": {
+    "scope": "Public author-posted GPL patches, pinned Linux codec source, pinned MT6797 GPL wrapper/headers and existing resource/idle evidence only. No canonical mutation, build or hardware action.",
+    "kernel_commit": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+    "vendor_commit": "51e705e4e7b1e52a31a79985f7fbbc9e98b59c8c",
+    "direct_frame_implementation_admitted": false,
+    "firmware_architecturally_required_proven": false,
+    "finding": "None of these examined sources provides a firmware-free H264 frame implementation or a complete encoder-register contract demonstrably applicable to MT6797. V4L2 stateful encoder plumbing is reusable, but adding a compatible string or exposing a video node cannot replace the missing frame/DMA backend.",
+    "source_proof": [
+      {
+        "tree": "linux-7.2.9",
+        "path": "drivers/media/platform/mediatek/vcodec/encoder/venc/venc_h264_if.c",
+        "lines": "309-350,438-479,506-565",
+        "sha256": "8c9caca8ba23f7c823b463da6daa6780406c828cefe3665e8eae6a66ddfa1054",
+        "fact": "Working-buffer sizes and preallocated RC_CODE/SKIP_FRAME addresses come from firmware. SPS/PPS/frame operations call vpu_enc_encode; 0x98 is read after completion, not a frame-programming table."
+      },
+      {
+        "tree": "linux-7.2.9",
+        "path": "drivers/media/platform/mediatek/vcodec/encoder/venc_vpu_if.c",
+        "lines": "250-292,297-339",
+        "sha256": "259f3ae7a6428ba8a1978f35d3cebebba30a346da9c9ed598ed485986c4a8367",
+        "fact": "Input-plane DMA addresses and bitstream DMA address/size are IPI message fields. Their 16-byte alignment and 32/34-bit message layouts are a firmware ABI, not an MT6797 hardware-register contract."
+      },
+      {
+        "tree": "linux-7.2.9",
+        "path": "drivers/media/platform/mediatek/vcodec/encoder/mtk_vcodec_enc_drv.c",
+        "lines": "244-275,454-464",
+        "sha256": "06193825d4842aa19827e92bd2930fd28b60a2974ca50bcf64e3cb4f272ea98b",
+        "fact": "Probe requires mediatek,vpu or mediatek,scp and returns ENODEV without either. Match table lists MT8173/MT8183/MT8188/MT8192/MT8195, not MT6797."
+      },
+      {
+        "tree": "mt6797-public-gpl",
+        "path": "drivers/misc/mediatek/videocodec/mt6797/videocodec_kernel_driver.c",
+        "lines": "193-201,627-669,2162-2206,2610-2615",
+        "sha256": "43b368561f152d56afd648fa681d106d77001a6de00ce725c9384173db6662cd",
+        "fact": "Exact MT6797 GPL source establishes IRQ status/ACK, SPS/PPS/frame/error-related status masks and pause/reset ownership. Encoder MMIO writes in this wrapper are ACK/pause/reset only; no source/reconstruction/scratch/bitstream/start programming is supplied."
+      },
+      {
+        "tree": "mt6797-public-gpl",
+        "path": "drivers/misc/mediatek/videocodec/mt6797/common/hal/src/hal.c",
+        "lines": "16-43",
+        "sha256": "db2400d78455a2b131ff2cb7eee73abff031d0dfc21bc915815e3ce09cb105f8",
+        "fact": "GPL HAL init/deinit return success; command-queue/power/ISR cases are empty. This does not supply an encoder frame backend."
+      },
+      {
+        "tree": "mt6797-public-gpl",
+        "path": "drivers/misc/mediatek/videocodec/include/venc_drv_if_public.h",
+        "lines": "603-672,871-897",
+        "sha256": "fcee35af3acb663f9b5950e0a8acd9d56ddddf4fc67b5f71da8f24de046315c0",
+        "fact": "GPL frame/bitstream/result structures and eVEncDrvEncode declaration describe caller interfaces, not MMIO programming. No eVEncDrvEncode implementation exists in the examined videocodec C subtree."
+      }
+    ],
+    "public_patch_cross_checks": [
+      {
+        "url": "https://lkml.indiana.edu/hypermail/linux/kernel/1602.2/05539.html",
+        "archive": "../video-cleanroom-20261009/public-upstream-h264-encoder-v5.html",
+        "html_sha256": "fb3a629be9bc538bd960ab51a8df404e42c7cf0ce33452d4c294fe56aedef436",
+        "fact": "Author explicitly targets MT8173. The sole h264_write_reg helper is unused; source/BS and SPS/PPS/frame work is delegated through h264_enc_vpu_encode."
+      },
+      {
+        "url": "https://lkml.rescloud.iu.edu/hypermail/linux/kernel/1608.1/04739.html",
+        "fact": "Public follow-up removes the unused h264_write_reg helper and documents VPU-writer ownership of working-buffer/shared state. This confirms that its presence in the initial patch was not a direct encoder implementation."
+      },
+      {
+        "url": "https://lists.openwall.net/linux-kernel/2026/04/23/383",
+        "archive": "encoder-common-interface-20260423.patch.txt",
+        "patch_sha256": "d484fdb3301a4d637c5baee9f100c0eccd5d7a83e76d29145044595b93c90aba",
+        "lines": "407-430,441-451,465-475,512-522",
+        "fact": "The newer common interface stores input/BS DMA data in shared VSI and calls vpu_enc_encode for SPS/PPS/frame. It still supplies no MT6797 direct-frame registers."
+      }
+    ],
+    "hardware_evidence_boundary": {
+      "resource_probe": "Existing trial35 and later resource observations qualify command-free resource access, clock votes and release only. No encoder frame command, DMA fetch or encoded picture was executed.",
+      "idle_reset_probe": "Existing idle-reset probe was built but not loaded. Its public pause/reset sequence neither supplies frame setup nor qualifies active-DMA stop or completion IRQ.",
+      "same_ip_limit": "Matching IRQ/pause/reset offsets across MT6797 and MT8173 does not prove identical source/reference/bitstream/scratch layouts, addressing units, feature controls or revision compatibility."
+    },
+    "remaining_implementation_contract": [
+      "MT6797-compatible source plane addresses, pitch/layout and DMA addressing width/units",
+      "Reference/reconstruction surfaces and scratch sizes/layout, with allocation bounds independent of private firmware",
+      "Bitstream address/limit units and reliable overflow/error behavior",
+      "Picture geometry, fixed-QP/control fields and complete intra-frame start sequence",
+      "Completion-source enable, status/result semantics, and active-DMA quiescence before buffer release",
+      "SPS/PPS ownership and public H264 output contract, followed by actual encoded-picture validation"
+    ],
+    "next_owning_step": "Obtain a primary public programming specification or explicit GPL direct encoder implementation with MT6797-compatible IP/revision proof. Then implement one native V4L2 backend using the existing clock/power/SMI ownership, first qualify a bounded fixed-QP intra frame, and retain the full hardware encoder goal. No guessed register writes, private firmware dependency, no-op video node or software encoder substitution is admitted by this source review.",
+    "excluded_from_new_implementation_inputs": "Retained public-hosted PDF extractions carry confidentiality notices; no new facts or bits from them were used here. Confidential verification sources and proprietary codec libraries/firmware were not consulted."
+  }
 }

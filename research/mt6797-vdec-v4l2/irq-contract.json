@@ -71,5 +71,66 @@
     "fatal_syntax_detection": "Bounded CABAC alignment error check remains; picture-complete polling cannot produce success",
     "hardware_validation_pending": true,
     "does_not_qualify_previous_polling_trials_as_irq_delivery": true
+  },
+  "native_polarity_acceptance_20261011": {
+    "kernel_source_revision": "354d3657699458b144f838adbbd64f74bfa12f93",
+    "installed_accepted_source_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+    "owner": "drivers/irqchip/irq-mtk-sysirq.c",
+    "owner_sha256": "05dd58a0dde28be9bb7b6f42985ec086aed2028bbc7eb6da9297d9219b475778",
+    "change": "Complete the native INTPOL write by reading the same word under the existing raw lock. Compare only the requested IRQ polarity bit; mismatch unlocks, emits a rate-limited hwirq-only error and returns -EIO before GIC parent setup. BIT() avoids the signed bit-31 shift.",
+    "decoder_polarity_field": {
+      "spi": 240,
+      "bank": 0,
+      "word": 7,
+      "address": 270665276,
+      "bit": 16,
+      "requested_state": 1
+    },
+    "separate_decoder_completion_field": {
+      "bank": "MISC",
+      "offset": 164,
+      "bit": 16
+    },
+    "regression": {
+      "path": "tools/gemini/test-mtk-sysirq-write-host.py",
+      "sha256": "da734f2361485e64f81cf1508ef28346d52590f87dcfdeb70a795b526cf00635",
+      "executes_production_callback": true,
+      "both_mt6797_banks_384_lines": true,
+      "four_trigger_types": true,
+      "rejected_and_posted_writes": true,
+      "sibling_field_changes": true,
+      "already_correct_field": true,
+      "negative_and_positive_parent_returns": true,
+      "gcc_15_asan_ubsan_exit": 0,
+      "pre_fix_callback_rejected": true,
+      "required_by_normal_kernel_build": true
+    },
+    "source_reviews": {
+      "native_owner_and_decoder_ordering": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/media-owner-read/review-result.json",
+      "independent_native_patch_review": "gnss_integration subagent; no material blocker"
+    },
+    "normal_kernel_build_complete": true,
+    "installed": false,
+    "hardware_polarity_qualified": false,
+    "decoder_completion_qualified": false,
+    "remaining_work": "Perform supervised native hardware admission. Successful IRQ type setup would establish selected INTPOL readback acceptance only. The MISC done-bit assertion contract remains missing; this patch does not justify another decode command or guessed source-enable writes.",
+    "normal_kernel_build": {
+      "package": "/nix/store/m6qz9mw36h7da2gfi0rqhpya81nj0i4k-linux-gemini-7.2.9",
+      "derivation": "/nix/store/jq0qc28r3a2r792di0cq1wi1w0h9cwx2-linux-gemini-7.2.9.drv",
+      "exit_code": 0,
+      "gcc_version": "15.3.0",
+      "kernel_config_sha256": "fe26f3e9e157465b4202718b6a45d720cba28a210447c8847263f2f9e1365c89",
+      "module_symvers_sha256": "5718dd7ca0f9171ba8e71904eb3edb2cc39b30d2a6300420d2ce55db3d7c4489",
+      "log_sha256": "349b5a9b1a3db120f4b62ea5b08afe116650937fe67a11b550e3fc0206a5b029",
+      "native_object_compiled": true,
+      "required_check_phase_complete": true,
+      "native_regression_pass_in_build_log": true
+    }
+  },
+  "irq_trial_scope_20261011": {
+    "trials_82_86_89_90_97": "Each submitted only the first pcm64 picture; the harness exited on its failed capture metadata before compressed test commands.",
+    "trial_23_variant_5": "Compressed grey64 I_16x16 DC was actually submitted in IRQ mode, with all6144 private samples correct, zero IRQs and -110. Retained frame.flat selects grey64_nal.",
+    "polling_trials_66_67": "Exact retained engine reads MISC0xa4 after picture-complete polling and before stop, core reset or cleanup ACK. The sampled0x3001 is pre-cleanup but is not continuous source observation.",
+    "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase."
   }
 }

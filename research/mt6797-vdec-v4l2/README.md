@@ -24,7 +24,8 @@ ACTIVE-clear guard, but the command times out with no interrupt across all ten
 CPUs. Capture retains its `0x79` test sentinel: those mismatches do not measure
 decoder-private pixels. Stop, guards, unload, supervised return to image 96
 and independent terminal audit pass. The undelivered interrupt predates the
-7.2 rebase: trial 23 had correct private PCM with zero IRQs.
+7.2 rebase: trial 23's compressed grey frame had correct private pixels with
+zero IRQs.
 
 The remaining owner contract is the exact MT6797 condition that asserts MISC
 `0xa4` done bit 16 after AVC picture completion. The public
@@ -35,6 +36,14 @@ stale-event rejection, IRQ synchronization before reset/power release,
 bounded failure, private-DMA stop proof and fences. Picture-complete polling
 cannot qualify the IRQ backend. Resolve this contract before another hardware
 probe or production integration.
+
+The next native kernel source, `354d3657`, also verifies SYSIRQ polarity write
+acceptance before programming its GIC parent. Its actual-callback host regression
+passes GCC 15 sanitizers and rejects the old callback; the normal ARM64 kernel
+build and required checks pass. This change is not yet installed or
+hardware-qualified. SPI 240's INTPOL word 7 bit 16 is separate
+from decoder MISC done bit 16; acceptance does not establish decoder completion.
+The existing [IRQ note](irq-contract.json) retains this boundary and next step.
 
 The recorded polling implementation has a separate accepted scope on its
 7.1.3 builds: trial 67 compares all 683 listed pictures exactly; trial 66

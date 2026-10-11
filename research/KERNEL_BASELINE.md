@@ -26,6 +26,12 @@ RTC and GPU results retain their relevant unchanged-input evidence
 from [trial 88](desktop-responsiveness-20261011.json); desktop updates do not
 repeat RTC alarm/calendar diagnostics.
 
+The next source revision, `354d3657699458b144f838adbbd64f74bfa12f93`, verifies
+the native SYSIRQ polarity field before forwarding type setup to the GIC.
+Its normal ARM64 build and required actual-callback regression pass; it is not
+yet installed or hardware-qualified. The [media IRQ owner note](mt6797-vdec-v4l2/irq-contract.json)
+separates this acceptance check from the unresolved decoder completion source.
+
 This revision admits current supplicant userspace capability flags and station
 joins to cached passive-channel APs. Its real-callback tests use the kernel's native flag enums
 and are required by the normal kernel build. Native modem bring-up remains
