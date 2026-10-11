@@ -4,9 +4,9 @@ The installed [accepted image](research/accepted-baseline.json) is Linux 7.2.9
 with GNOME Wayland, 200% display scaling, a fixed bottom dock, NetworkManager,
 ModemManager, Bluetooth, IPv6 and RAM-only LZ4 zram. GNOME Calls, Spacebar and
 callaudiod are installed; the call daemon and SMS receiver run normally.
-[Image 98](research/desktop-radio-activation-20261011.json) passed installation,
+[Image 101](research/gnss-integration-20261011.json) passed installation,
 changed desktop checks and its independent terminal audit. Its
-[cross-runtime checks](research/desktop-radio-activation-20261011.json)
+[cross-runtime checks](research/gnss-integration-20261011.json)
 passed 1,431 ARM64 ELF files and 124 scripts, including target Python/GI and the
 telephony applications.
 
@@ -14,7 +14,9 @@ Wi-Fi automatically associates and passes traffic through NetworkManager;
 selecting another SSID remains unqualified. Bluetooth is visible to GNOME and
 bounded discovery passes; pairing and profiles remain unqualified. The native
 modem reaches HS2, then fails with a watchdog interrupt. SIM/eSIM, cellular data,
-SMS delivery and voice require further native driver bring-up. Hardware video
+SMS delivery and voice require further native driver bring-up. GNSS now exposes
+the standard Linux endpoint and passes two power lifetime cycles, but receives
+no data; receiver initialization and positioning remain unfinished. Hardware video
 completion, shared surfaces and encoding are also unfinished. The
 [current hardware status](research/HARDWARE_STATUS.md) records each feature's
 accepted checks and remaining work; the [kernel baseline](research/KERNEL_BASELINE.md)

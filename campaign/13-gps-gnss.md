@@ -1,8 +1,8 @@
 # GNSS over CONSYS/STP
 
-Development source `8b9fa390` wires the retained GNSS class endpoint in
+Installed source `8b9fa390` wires the retained GNSS class endpoint in
 `drivers/gnss/mtk-consys.c` into the existing Linux 7.2.9 CONSYS aggregate.
-The accepted image 98 still precedes that change. The endpoint uses the normal
+The accepted image 101 includes that change. The endpoint uses the normal
 `/dev/gnssN` raw interface;
 a second kernel decoder or private userspace interface is unnecessary.
 
@@ -31,15 +31,22 @@ the endpoint: the stale hardware-scan disable masked udev's module-loading rule.
 Image 98 was restored and independently audited. That setting is now removed;
 the Bluetooth startup guard remains because HCI registration queues power/setup.
 Image 101 passes admission for the effective udev rule, native GNSS alias,
-ordered drivers and ARM64 runtime. Hardware lifetime checks are pending.
+ordered drivers and ARM64 runtime. Its supervised trial and independent terminal
+audit pass; image 101 remains installed. Two 10-second open/close cycles pass
+native module/driver/class registration and LNA off/on/off with zero taint,
+then GNOME Bluetooth access and a fresh NetworkManager scan pass without radio
+faults. Both GNSS windows receive zero bytes: this qualifies the observed power
+lifetime, not reception, protocol or a position fix. Sustained concurrent radio
+traffic and suspend remain unqualified. The exact scalar proof is in
+[gnss-integration-20261011.json](../research/gnss-integration-20261011.json).
 
 `tools/test-gnss-desktop.py` reuses the existing supervised boot and storage
 owner. It qualifies two bounded open/close cycles, LNA cleanup and subsequent
 desktop radio checks; it adds no normal-boot diagnostics. Passing that scope
 does not qualify receiver protocol or position.
 
-Qualify repeated open/close and shared-radio coexistence,
-then establish publicly documented receiver framing and a real position fix.
+Establish the public receiver initialization and data-delivery contract, then
+qualify received bytes, framing, a real position fix and sustained coexistence.
 Protocol decoding belongs in ordinary userspace such as gpsd. A binary stream
 is not evidence that gpsd already supports it or that it contains solved
 positions. The public vendor NMEA-labelled port buffers userspace-written data;

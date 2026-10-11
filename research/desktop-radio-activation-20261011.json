@@ -89,7 +89,7 @@
     "gnome_panel_visual_confirmation": false,
     "trial": 94,
     "boot_id": "f4202ab4-4a6d-4875-a7d2-a34572730862",
-    "reuse_reason": "Bluetooth transport, controller firmware and discovery inputs are unchanged in 98; desktop radio access checked on 98."
+    "reuse_reason": "Controller firmware and discovery inputs retain trial 94 evidence; controller access freshly checked in 101. Sustained GNSS/Bluetooth coexistence and pairing remain unqualified."
   },
   "wifi_activation": {
     "source_verified_against": [
@@ -162,7 +162,7 @@
     "92": "Custom UCM PCM removed the onboard sink; automatic recovery and audit passed.",
     "93": "Verifier confused logical client channels with hardware positions; automatic recovery and audit passed."
   },
-  "next": "Continue native closed-port AT receive, SIM and speech bring-up; retain completed checks and remove replaced implementations.",
+  "next": "Continue the native modem watchdog, SIM and speech contracts; bounded closed-port AT retention is installed and observed in 101. Retain completed checks and retire replaced implementations.",
   "cellular_transport": {
     "result": "failed",
     "trial": 98,
@@ -318,9 +318,15 @@
       "maximum_closed_payload_bytes": 114176,
       "maximum_closed_skb_truesize_bytes": 262144,
       "fifo_start_stop_terminal_remove_checks": "passed",
-      "installed": false,
+      "installed": true,
       "watchdog_or_sim_fix_qualified": false,
-      "next": "Qualify changed receive behavior in the next combined image; continue native SIM/speech and exception bring-up"
+      "next": "Continue native exception, SIM and speech bring-up; the watchdog persists despite corrected AT receive ownership.",
+      "installed_trial": 101,
+      "installed_kernel_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+      "observed_closed_port_drop_frames": 0,
+      "observed_rx_seen_frames": 56,
+      "observed_rx_delivered_frames": 56,
+      "receive_progress_observed": true
     }
   },
   "cross_runtime": {
@@ -331,5 +337,127 @@
     "errors": 0,
     "hardware_tested": false,
     "proof": "/nix/store/c5jxhshk5k82cpgali5lc2fyi7y2bw7i-gemini-gnome-cross-runtime-check"
+  },
+  "current_acceptance": {
+    "trial": 101,
+    "boot_id": "0f6e347e-76ca-48d9-aff5-e49535ea37ee",
+    "system": "/nix/store/c7rxi2wsjiwvsrndlrxjx1dhyin3p4ih-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+    "proof": "gnss-integration-20261011.json",
+    "historical_accepted_block_trial": 98
+  },
+  "cellular_transport_101": {
+    "trial": 101,
+    "kernel_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
+    "boot_id": "0f6e347e-76ca-48d9-aff5-e49535ea37ee",
+    "system": "/nix/store/c7rxi2wsjiwvsrndlrxjx1dhyin3p4ih-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+    "kernel_taint": 0,
+    "uptime_seconds": 386.24,
+    "hs2_seen": true,
+    "reports": {
+      "overview": [
+        {
+          "kernel_seconds": 106.116935,
+          "numeric_report": "CCCI_MD_EXCEPTION overview_valid=0 cores=9 pl_prefix_only=1 ect=00000000 cs=00000000 md32=00000000"
+        }
+      ],
+      "pl": [
+        {
+          "kernel_seconds": 106.118591,
+          "numeric_report": "CCCI_MD_EXCEPTION pl=0 offender=1 header_valid=1 core_id=2863311530 type=1 type_known=1 content_valid=1 codes=00000001/00484f7d/f01cf8df assert_line=0"
+        },
+        {
+          "kernel_seconds": 106.120764,
+          "numeric_report": "CCCI_MD_EXCEPTION pl=1 offender=0 header_valid=1 core_id=3149642683 type=33 type_known=1 content_valid=1 codes=00003100/00c506af/00000001 assert_line=0"
+        }
+      ],
+      "at_metadata": [
+        {
+          "kernel_seconds": 106.122951,
+          "numeric_report": "CCCI_AT_METADATA opens=2 closes=1 tx_submitted=36 q1_reclaimed=2406 rx_seen=56 rx_closed_drop=0 rx_delivered=56"
+        }
+      ],
+      "first_fatal": [
+        {
+          "kernel_seconds": 106.124697,
+          "numeric_report": "MT6797_CCCI_FIRST_FATAL site=md-wdt-irq ready=1 irqs=4835 first_tx=00000100/ff00ff00 first_rx=00000001/ff00ff00 last_tx=00007f02/ff00ff00 last_rx=00000000/ff00ff00 q0_submitted=1 reclaimed=1 head=1 tail=1 used=0 descriptor_valid=1 payload_valid=1 reply_finalized=1 runtime_len=636"
+        }
+      ]
+    },
+    "modem_actions": false,
+    "raw_memory_retained": false,
+    "modems": [
+      {
+        "State": -1,
+        "StateFailedReason": 2,
+        "PowerState": 1,
+        "PrimarySimSlot": 0,
+        "sim_object_exposed": false,
+        "sim_slot_count": 0
+      }
+    ],
+    "rx_rejections": {
+      "total": 2,
+      "count": 2,
+      "entries": [
+        {
+          "sequence": 1,
+          "channel": 57,
+          "queue": 6,
+          "op_valid": 0,
+          "op": 0,
+          "bytes": 20,
+          "error": -95,
+          "message_valid": 0,
+          "message": 0
+        },
+        {
+          "sequence": 2,
+          "channel": 4,
+          "queue": 0,
+          "op_valid": 0,
+          "op": 0,
+          "bytes": 16,
+          "error": -95,
+          "message_valid": 0,
+          "message": 0
+        }
+      ]
+    },
+    "failure_site": "md-wdt-irq",
+    "failure_uptime_seconds": 106.124697,
+    "at_traffic": {
+      "tx_submitted": 36,
+      "rx_seen": 56,
+      "rx_closed_drop": 0,
+      "rx_delivered": 56,
+      "q1_reclaimed": 2406,
+      "q1_reclaims_include_fs_rpc": true
+    },
+    "previous_trial_98_at_traffic": {
+      "tx_submitted": 36,
+      "rx_seen": 56,
+      "rx_closed_drop": 2,
+      "rx_delivered": 54,
+      "q1_reclaimed": 2406,
+      "q1_reclaims_include_fs_rpc": true,
+      "closed_port_data_loss_cause_of_watchdog_established": false
+    },
+    "physical_sim_absence_established": false,
+    "watchdog_resolved": false,
+    "exception_cause_established": false,
+    "sim_esim_data_sms_voice_qualified": false,
+    "no_control_system_rejections_observed": true,
+    "rejected_channel_public_mapping": {
+      "4": "CCCI_PCM_RX",
+      "57": "CCCI_IMSA_DL",
+      "source": "Public GPL eccci/port_cfg.c and ccci_core.h, vendor revision 8cfe6596a503612e3332d9c26e292a19525a7f07",
+      "acknowledgment_contract_established": false
+    },
+    "evidence": {
+      "file": "/mnt/Home/src/nixos-gemini/handoff/gnss-integration-20261011/modem-native-report-101.json",
+      "sha256": "5e31a990fe6f9e05afcb6b4fac7d282b180ae602522cb677f73c21c352b0151f",
+      "read_exit": 0
+    }
   }
 }

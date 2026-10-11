@@ -401,8 +401,8 @@
   },
   "performance_followup": {
     "date": "2026-10-11",
-    "installed_trial": 98,
-    "kernel_source_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
+    "installed_trial": 101,
+    "kernel_source_revision": "8b9fa390ad32d61d2661b8719ae76a5fe6232abd",
     "measurement": {
       "seconds": 30.349,
       "idle": true,
@@ -451,13 +451,13 @@
         "nix/test-core-parking-policy.c": "4ca40cdb194d99d9b9f6fe35f8b9b09ce84953042713d828b4de331c21d54d72"
       }
     },
-    "installed": false,
+    "installed": true,
     "hardware_effect_and_subjective_responsiveness_qualified": false,
     "remaining_owner_work": [
-      "Qualify changed parking decisions during ordinary use on the combined next image.",
-      "Qualify integrated native MMC0 electrical ownership on hardware; faster eMMC timing still requires its controller timing/tuning contract.",
-      "DT lacks measured CPU capacity data for A53/A72 scheduling; no invented ratios.",
-      "Native deep idle remains incomplete; current CPU_OFF parking is still needed for core power removal."
+      "Resolve persistent parking/udev activity in the owning policy; qualify responsiveness during ordinary use.",
+      "Qualify native MMC0 electrical readbacks before faster timing; controller timing/tuning remains incomplete.",
+      "Integrate and qualify standard native PMU so A53/A72 capacities can be measured; no invented ratios.",
+      "Native deep idle remains incomplete; current CPU_OFF parking is needed for core power removal."
     ],
     "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011",
     "evidence_files": [
@@ -486,7 +486,81 @@
       "normal_combined_kernel_build_exit": 0,
       "timing_cap_hz": 25000000,
       "faster_timing_enabled": false,
-      "hardware_qualified": false
+      "hardware_qualified": false,
+      "installed": true,
+      "installed_trial": 101,
+      "legacy_storage_and_ordinary_nix_retention_passed": true,
+      "electrical_register_readbacks_qualified": false
+    },
+    "measurement_trial": 98,
+    "measurement_kernel_source_revision": "04ecf8c9ed6f07db005ec88a748e69071203f47c",
+    "post_install_idle_measurement": {
+      "trial": 101,
+      "seconds": 30.27,
+      "identity_before_after_matches": true,
+      "taint": 0,
+      "process_cpu_percent_one_core": {
+        "systemd-udevd": 7.136,
+        "gemini-core-par": 6.244,
+        "python3": 4.922,
+        "sugov:0": 4.526,
+        "kworker/0:1-events": 4.46,
+        "avahi-daemon": 2.147,
+        "kworker/0:2-events": 1.817,
+        "nsncd": 1.586,
+        "systemd": 1.454,
+        "systemd-machine": 0.958,
+        ".gnome-shell-wr": 0.727
+      },
+      "sampler_included_in_process_cpu": true,
+      "parking_log_entries": 8,
+      "total_log_entries": 19,
+      "vm_counter_deltas": {
+        "pgsteal_kswapd": 0,
+        "pgsteal_direct": 0,
+        "pgscan_kswapd": 0,
+        "pgscan_direct": 0,
+        "pswpin": 0,
+        "pswpout": 0,
+        "pgmajfault": 0,
+        "oom_kill": 0
+      },
+      "emmc_io_counter_changes": false,
+      "zram_io_counter_changes": false,
+      "available_memory_kib_before_after": [
+        2882812,
+        2885388
+      ],
+      "online_cpu_counts_observed": [
+        2,
+        3
+      ],
+      "soc_temperature_millicelsius_range": [
+        31100,
+        35200
+      ],
+      "thermal_cooling_states_nonzero": false,
+      "gpu_runtime_status": [
+        "suspended"
+      ],
+      "gpu_max_frequency_hz": 900000000,
+      "pressure_and_task_io_interfaces": "unavailable, not zero",
+      "subjective_responsiveness_qualified": false,
+      "result": "Idle parking and udev activity persists; no reclaim, swap, major-fault or eMMC I/O counter progress during this sample. This is not a UI workload comparison.",
+      "evidence": {
+        "file": "/mnt/Home/src/nixos-gemini/handoff/gnss-integration-20261011/performance-read-101.json",
+        "sha256": "6b94641f338149dabd4fd7db5bbd58b353471e6f21d8334c09ff2606fc177e41",
+        "read_exit": 0
+      }
+    },
+    "native_pmu_candidate": {
+      "installed": false,
+      "patch_sha256": "5688d17408175f26510753a377b4883a920c970d9240928254e8089b5f05619e",
+      "review_sha256": "e416789a0e834f7c37454d67a84370e533434d971ea27bdad533b54b3f3f3e29",
+      "evidence_directory": "/mnt/Home/src/nixos-gemini/handoff/stack-consolidation-20261011/pmu-offline-candidate",
+      "scope": "Native ARM PMU, PERF_EVENTS and DT PPI partitions; offline PMU probe defers and existing deferred-probe work retries after successful CPU online outside CPUHP locks.",
+      "hardware_qualified": false,
+      "capacity_weights_measured": false
     }
   }
 }

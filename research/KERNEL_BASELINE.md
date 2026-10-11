@@ -12,11 +12,13 @@ its development shell use the locked Nixpkgs ARM64 compiler: GCC 15.3.0 with
 binutils 2.46. There is no separate compiler version pin or media kernel variant.
 Driver fixes belong in Linux; packaging builds its native defconfig and DTB.
 
-The [installed accepted image](accepted-baseline.json) is trial 98, kernel
-source `04ecf8c9ed6f07db005ec88a748e69071203f47c`.
-Its [desktop proof](desktop-radio-activation-20261011.json) and independent
-terminal audit pass GNOME RFKILL visibility, directed NetworkManager scanning, effective onboard stereo
-mapping, RAM-only paging, retained storage and ordinary Nix builds. Normal
+The [installed accepted image](accepted-baseline.json) is trial 101, kernel
+source `8b9fa390ad32d61d2661b8719ae76a5fe6232abd`.
+Its [integration proof](gnss-integration-20261011.json) and independent
+terminal audit pass native GNSS registration and two bounded LNA power cycles,
+GNOME RFKILL visibility, directed NetworkManager scanning, RAM-only paging,
+retained storage and ordinary Nix builds. Onboard stereo mapping retains
+unchanged-input trial 98 evidence. Normal
 NetworkManager association and traffic over wlan0 retain trial 95 evidence;
 Bluetooth discovery retains trial 94 evidence with unchanged radio inputs. Selecting another
 SSID, Bluetooth pairing/profiles and audible orientation remain unqualified.
@@ -38,18 +40,32 @@ ASan/UBSan; strict ARM64 builds, the normal build and supervised image/audit pas
 Bounded exception decoding reads the independent PL prefix of the nine-core
 report while keeping its overview unqualified. It identifies an undefined-
 instruction offender and a cross-core exception, without establishing their
-cause. Two valid AT frames are dropped while the frontend is closed. The watchdog
-remains unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
+cause. The watchdog remains unresolved. GNOME Calls, Spacebar and callaudiod are cross-built and installed;
 native SIM, speech control and call-audio lifetime work remains open.
 
-Development source `6e84a8a9a31c431f9774d828a15efb90fa4d6e41` now retains validated
+Installed source `6e84a8a9a31c431f9774d828a15efb90fa4d6e41` retains validated
 closed-port AT frames in a bounded native FIFO. First open drains it in order;
 close, failure and removal share the same receive owner. The existing regression
 fixture checks the old loss, queue limits and concurrent lifetime transitions.
 GCC 15 ASan/UBSan, strict ARM64 compilation and the normal kernel build pass with
-unchanged configuration. This revision is built and pushed, but is not installed
-or qualified as a SIM/watchdog fix. Qualify changed receive behavior with the
-next combined image rather than repeating unchanged baseline checks.
+unchanged configuration. The fresh trial 101 metadata observes 56 of 56 AT
+frames delivered, with zero closed-port drops versus two in trial 98. The modem
+still fails at 106 seconds and ModemManager exposes no SIM object; corrected
+receive ownership is not a SIM/watchdog fix. The
+[modem record](desktop-radio-activation-20261011.json) preserves both results.
+
+This combined image also installs native MMC0 pad ownership and the current-
+demand check before CPU parking removes a core. Storage retention passes with
+legacy timing; faster eMMC modes are not enabled. Sampled idle activity still
+shows parking and udev overhead; UI responsiveness remains unqualified in the
+[performance record](desktop-responsiveness-20261011.json). The native PMU
+candidate remains separate until its offline-CPU probe lifetime and hardware
+counters are qualified; scheduling capacity ratios must be measured.
+
+GNSS uses the existing CONSYS/STP owner and the standard Linux GNSS class.
+Normal module discovery and udev loading now work. Two power cycles receive
+zero bytes, so receiver initialization, framing, position and suspend remain
+open in the [GNSS owner record](../campaign/13-gps-gnss.md).
 
 The installed platform retains built-in IPv6, FUSE, LZ4 zram, decoder resources,
 GPU DVFS and native thermal cooling. Zswap, zram writeback and hibernation are
