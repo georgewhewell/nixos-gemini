@@ -20,6 +20,10 @@ terminal audit. It submits no codec or GPU work.
 mixed-length CREATE_BUFS acceptance, preserving requested lengths and separating
 allocation capacity from codec extent. Its hardware check and independent
 restored-system audit pass; four obsolete probes are retired to pinned Git history.
+[Trial 108](mt6797-vdec-v4l2/gpu-trial-108.json) reaches native EGL import and GPU
+activity but rejects incorrect synthetic MM21 pixels. The Mesa descriptor owner
+needs correction and the unchanged pixel check; image 102 is restored and its
+independent terminal audit passes. This is separate from decoder completion.
 The modem still fails separately. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 

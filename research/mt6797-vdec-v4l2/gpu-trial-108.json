@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-11",
+  "trial": "boot-test-108",
+  "scope": "synthetic-native-mm21-gpu",
+  "passed": false,
+  "packaging_revision": "623dc19ee150bed423cad8187fa9c97171f142b3",
+  "kernel_revision": "01222a4b2074555955a85715587bebf0933fb0eb",
+  "kernel_package": "/nix/store/h84dph6rpdqf4rwf2c3abnpbpmgk5s0b-linux-gemini-7.2.9",
+  "module_sha256": "d5ac214615c4644feea527b737808ba9514dad0443f6126c422b8fe2469c8248",
+  "request_test_sha256": "c0414d396d04d55d3720d960324fcc7a5dcb02aa403af6c81c3a12af2316b1b5",
+  "observer_sha256": "73c53126f447ac8aca27cb10099982a56bd28655e9970fc11488a02a46426aef",
+  "helper": {
+    "path": "/nix/store/ifg01dy5vj4iyrs139y8vndvm53iq0kc-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/gpu-render-smoke",
+    "sha256": "b31772a23d5c01a642cd702c86f288ec3ca50e91d58fc00f948ce9605a0e077f",
+    "elf_path": "/nix/store/ifg01dy5vj4iyrs139y8vndvm53iq0kc-gemini-gpu-render-smoke-aarch64-unknown-linux-gnu-1/bin/.gpu-render-smoke-wrapped",
+    "elf_sha256": "55166411e8dbef5debf341a550b579b3d953b1170f3b572e240a258f96f1cfef",
+    "machine": 183,
+    "interpreter": {
+      "path": "/nix/store/16vd9r4pnc2f5bqlq64khwcfw38vzfnk-bash-aarch64-unknown-linux-gnu-5.3p15/bin/bash",
+      "sha256": "0a7d53ded6a64f20a10629b309545247b552c5118eaa5931dcdad1e5d3df1448",
+      "bytes": 1178064,
+      "elf_class": 64,
+      "elf_data": "little-endian",
+      "elf_type": 3,
+      "elf_machine": 183
+    },
+    "build_exit_code": 0,
+    "build_terminal": true,
+    "mesa": "/nix/store/31pch6cnd93a4vw3jgxrvzj5x7kzvw85-mesa-aarch64-unknown-linux-gnu-26.2.1",
+    "source_sha256": {
+      "nix/gpu-userspace.nix": "cf5a2c74789295d9bf6d1de060e7fd1ddf7a58eeb154363adbaf6c85935822cc",
+      "nix/gpu-render-smoke.c": "0082656b3cb78afca41475d4b661b1b2215bcd5d4d90648460e9b2dd13c27f31",
+      "nix/test-gpu-pixel-check.py": "b674784c4c9277ee14cde530b2bd6b2fef637975c7ea26c9c2eaf71a497691f6"
+    },
+    "build_record": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/wrapper-fix/gpu-build/final/metadata.json",
+    "build_record_sha256": "15a67305056ad61ef1f41a9be766d6d575f32a8f0c2e18f0dcfd274d83fc677b",
+    "mandatory_architecture_check": {
+      "build_log": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/wrapper-fix/gpu-build/final/nix-build.stderr",
+      "build_log_sha256": "f56f77753f901e9acd9217021affb2fd5fa564b51f20c654e5910e53a1f64b69",
+      "actual_pass_marker": "GPU_LAUNCHER_ARM64_PASS interpreter=/nix/store/16vd9r4pnc2f5bqlq64khwcfw38vzfnk-bash-aarch64-unknown-linux-gnu-5.3p15/bin/bash",
+      "marker_count": 1
+    }
+  },
+  "observed": {
+    "returncode": 1,
+    "candidate_boot_id": "5d40f1e0-72fe-4048-a30a-87d94a54a5bd",
+    "renderer": "Mali-T880 MC4 (Panfrost)",
+    "mesa_version": "26.2.1",
+    "native_image_imported": true,
+    "caller_export_fds_closed": true,
+    "draw_started": true,
+    "first_pixel_mismatch": {
+      "x": 0,
+      "y": 5,
+      "actual_rgba": [
+        160,
+        0,
+        0,
+        255
+      ],
+      "expected_rgba": [
+        254,
+        0,
+        0,
+        255
+      ],
+      "rgb_tolerance": 2
+    },
+    "gpu_irq_totals_before": {
+      "job": 0,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_irq_totals_after": {
+      "job": 7,
+      "mmu": 0,
+      "gpu": 0
+    },
+    "gpu_kernel_health": {
+      "scoped_gpu_error_lines": 0,
+      "kernel_failure_lines": 0
+    },
+    "decoder_irq_delta": 0,
+    "codec_submissions": 0,
+    "unloaded": false,
+    "module_retained_until_recovery": true
+  },
+  "owner_analysis": {
+    "owner": "Mesa Panfrost emit_image_bufs",
+    "source": "/nix/store/81p8hzhfad300r53swshhq2ac8jm6wjb-source",
+    "defect": "Image S/T descriptor bounds use logical base dimensions instead of the selected image plane layout extent.",
+    "luma_rgba_backing_extent": [
+      128,
+      10
+    ],
+    "luma_programmed_bounds": [
+      20,
+      64
+    ],
+    "first_rejected_source_coordinate": [
+      20,
+      0
+    ],
+    "source_byte_offset": 80,
+    "inference": "The descriptor first rejects row 5 luma; zero luma with the expected chroma produces the observed red value. A corrected Mesa build still needs the unchanged full pixel check on hardware."
+  },
+  "decoder_completion_qualified": false,
+  "gpu_rendering_qualified": false,
+  "supervised_profile_qualified": true,
+  "recovery": {
+    "final_boot_id": "7611f70b-ca2e-440c-ba15-25dc8ee9d811",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 62,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "evidence": {
+    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-108",
+    "admission_sha256": "51e2cbf9d1c29c07888bb7b56d7773feda967a8db2b8fb60908d9e4f912a71cd",
+    "observer_result_sha256": "76c069bdaec506f557a162fec8cb0a5be1781c763478981b31e661f1910d0906",
+    "helper_log_sha256": "3693c3471ca30516a092bc654589eaa63dab2b2ee0c78f5368697417788db779",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/gpu-interop/independent-audit-108/result.json",
+    "independent_audit_sha256": "c0d67a347eef5a43bbd8ccc3c5550a5554bdd096938cea4922473a7b7ad5a8c7"
+  }
+}

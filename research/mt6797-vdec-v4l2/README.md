@@ -197,7 +197,7 @@ normal-boot media qualification loop.
 in a native CAPTURE export. The existing GPU helper imports it through
 `DRM_FORMAT_NV12` and `DRM_FORMAT_MOD_MTK_16L_32S_TILE`, with offsets `0/L`
 and both pitches equal to the storage width. Mesa performs GPU detiling;
-there is no input CPU conversion or private Mesa patch. The parent releases
+there is no input CPU conversion. The parent releases
 its video, media and export references, and the renderer closes the input FDs
 after EGL import. One draw must match all 5,120 independently calculated
 BT.601 pixels before EGL/GL teardown and module removal. A CLOEXEC pipe admits
@@ -208,8 +208,15 @@ It does not submit codec work or qualify decoder completion or display scanout.
 [Trial 107](gpu-trial-107.json) failed before observed GPU activity because the
 launcher used an x86-64 shell. The package now uses the cross package set's
 wrapper hook and checks both the actual interpreter and program architecture.
-The accepted image was restored and independently audited; rendering remains
-unqualified until the corrected launcher and release gate pass on the board.
+The package and parent release gate now pass their actual host regressions.
+[Trial 108](gpu-trial-108.json) runs the corrected launcher, imports the native
+buffer and records seven GPU job interrupts, but fails the unchanged pixel check
+at `(0,5)`: red 160 instead of 254. Mesa's Midgard image descriptor uses logical
+dimensions where this import requires its flattened backing extent. That bound
+first rejects the luma load for row 5. Fix the descriptor in Mesa, qualify all
+pixels with the same fixture, then return to decoder IRQ completion and decoded
+surface imports. Both trials restored the accepted image and passed independent
+terminal audits; synthetic rendering remains unqualified.
 
 Decode admission also requires a recorded nonzero single-core full-finish word,
 following the public GPL HAL's raw Boolean semantics. This closes an acceptance
