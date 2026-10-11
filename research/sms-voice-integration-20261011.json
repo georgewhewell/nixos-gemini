@@ -129,9 +129,10 @@
       "current_backends": [
         "MBIM",
         "QMI",
-        "QMI_QRTR"
+        "QMI_QRTR",
+        "AT (read-only WWAN discovery)"
       ],
-      "at_backend_present": false,
+      "at_backend_present": true,
       "installed": false,
       "scratch_at_backend_present": true,
       "scratch_patch": {
@@ -143,16 +144,28 @@
         "sha256": "88296f052f68e44329864d7ea5f9412f8edc52e4464252286f04133a9eaadbfd"
       },
       "scratch_actual_host_exit": 0,
-      "scratch_host_cases": 22,
+      "scratch_host_cases": 23,
       "scratch_scope": "Read-only standard WWAN AT discovery, cached eUICC identity and asynchronous cancellation; no physical-slot or provisioning qualification",
-      "cross_package_built": false,
-      "packaging_remaining": "Enable LPAC_WITH_APDU_AT=ON and apply the checked Unix transport repair; build complete lpa-gtk resources with ARM64 Python/GTK/Gio and validate runtime closure"
+      "cross_package_built": true,
+      "packaging_remaining": "Install through the normal GNOME image; verify desktop launch and standard ModemManager/WWAN ownership on the board. Generic AT profile mutations remain disabled pending modem/card protocol qualification.",
+      "recipe": "nix/esim/default.nix",
+      "patches": [
+        "nix/esim/lpa-at.patch",
+        "nix/esim/at-unix-transport.patch"
+      ],
+      "cross_package_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/lpa-cross-package-20261011/result.json",
+        "sha256": "766db8f92649e5eb5cd572144424da086edecd296997d43cf06241346d741721",
+        "scope": "scratch-only generic AT GUI and lpac cross packages; no R/K edits, device actions, installation or provisioning",
+        "critical_runtime_arm64_verified": true,
+        "whole_closure_arm64_verified": false
+      }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
     "remaining": [
-      "Resolve the native modem watchdog and establish eUICC APDU routing; standard AT availability alone does not establish SIM presence or a selected physical slot.",
-      "Integrate the checked lpac transport repair and complete operation/session cancellation, deadline and long-response behavior before provisioning.",
-      "Finish generic GUI AT discovery and operations through standard ModemManager/WWAN interfaces. Generic AT ModemManager lacks EID/type loaders, so empty-eUICC discovery needs standard chip-info; do not guess slot2."
+      "Resolve the native modem watchdog and establish eUICC APDU routing through the existing standard WWAN AT endpoint; AT availability does not establish card presence or slot association.",
+      "Qualify generic AT operation deadlines, cancellation, long replies and late responses before enabling provisioning. GUI child deadlines alone do not establish modem/card recovery.",
+      "Qualify generic GUI discovery with ModemManager user authorization and the physical eUICC; do not guess slot2. Multiple-modem selection and serial TTY acquisition remain unfinished."
     ],
     "board_observation": "Accepted116 finite two-snapshot read passes exact identity, taint and native-node guards. All six pins are claimed by the protected cold owner, preserving accepted115 electrical encoding. Both locks released and host idle; observer sent no AT command or subscriber query. The earlier113 parser failure remains historical.",
     "sources": [
@@ -303,7 +316,7 @@
     "dbm_hardware_bytes_read": false,
     "installed_kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d",
     "runtime_capability_work": {
-      "status": "Public feature9 omission identified; scalar publication/conversion scratch candidate, not installed",
+      "status": "Native LK scalar metadata publication and feature9 capability conversion integrated in candidate source; not installed",
       "review": {
         "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-feature-review/review.json",
         "sha256": "266aa9d528258288f9b0bee3bc86e087b86ee9fcd7b218bd012cc0770f44c968"
@@ -315,7 +328,15 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "Review and qualify actual LK load type and independent RAT-capability policy, retain validated scalar metadata through the existing handoff consumer, and populate feature9 with an actual-builder regression. Current image116 has no metadata endpoint; do not infer capability from firmware image type or hardcode a bitmap."
+      "remaining": "Install and read the bounded native LK metadata diagnostic. Select only an established independent capability policy; unknown capability currently fails the runtime response instead of advertising fabricated data. Qualify modem readiness and watchdog separately.",
+      "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
+      "actual_production_host_exit": 0,
+      "strict_arm64_actual_exit": 0,
+      "installed": false,
+      "production_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/runtime-metadata-image/wire-production-validation.json",
+        "sha256": "17c569c5de6fbcab604ad0700d2407ccbd8692543206ae6180143a9d72a8ee1d"
+      }
     }
   },
   "current_native_installation": {

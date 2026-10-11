@@ -3,7 +3,7 @@
 
   inputs = {
     linux-gemini = {
-      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=477538930f3d819c19a93bd27ad72f76b721979d&shallow=1";
+      url = "git+ssh://git@github.com/georgewhewell/linux-gemini.git?ref=gemini-7.2.9&rev=35994bd7e06a0f706d5a2ff172f9bba4121b813d&shallow=1";
       flake = false;
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -121,7 +121,8 @@
           --modemmanager ${gemini.system.config.networking.modemmanager.package} \
           --calls ${gemini.system.pkgs.calls} \
           --spacebar ${gemini.system.pkgs.kdePackages.spacebar} \
-          --callaudiod ${gemini.system.pkgs.callaudiod} --out "$out"
+          --callaudiod ${gemini.system.pkgs.callaudiod} \
+          --lpa-gtk ${gemini.esim.lpaGtk} --lpac ${gemini.esim.lpac} --out "$out"
       '';
       network-profiles = gemini.buildPkgs.runCommand "gemini-network-profiles-check" {
         nativeBuildInputs = [gemini.buildPkgs.python3];

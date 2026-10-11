@@ -102,6 +102,51 @@ def wrapper_environment(path):
     return environment
 
 
+def esim_runtime(check, gui, lpac):
+    check.tree(gui/'bin', executables=True)
+    check.tree(lpac/'bin', executables=True)
+    check.tree(lpac/'lib')
+    for driver in ('driver_apdu_at.so', 'driver_apdu_at_csim.so'):
+        check.file(lpac/'lib/lpac/driver'/driver)
+    resource = gui/'share/lpa-gtk/lpa-gtk.gresource'
+    if not resource.is_file() or resource.stat().st_size == 0:
+        raise ValueError('Missing eSIM GUI resources')
+    check.file(resource)
+    modules = list((gui/'lib').glob('python*/site-packages/lpa_gtk/modemmanager.py'))
+    if len(modules) != 1:
+        raise ValueError('Missing or ambiguous eSIM ModemManager backend')
+    check.file(modules[0])
+    # The interpreter is an environment of symlinks. Its original prefix,
+    # rather than the resolved Python binary, owns the GI/Cairo extensions.
+    launcher = gui/'bin/.lpa-gtk-wrapped'
+    shebang = launcher.read_text().splitlines()[0]
+    if not shebang.startswith('#!/nix/store/'):
+        raise ValueError('Invalid eSIM GUI interpreter')
+    interpreter = Path(shebang[2:])
+    check.file(interpreter, executable=True)
+    sites = list((interpreter.parent.parent/'lib').glob('python*/site-packages'))
+    if len(sites) != 1:
+        raise ValueError('Missing or ambiguous eSIM Python environment')
+    extensions = []
+    for module, pattern in (('gi', '_gi.*.so'), ('gi', '_gi_cairo.*.so'),
+                            ('cairo', '_cairo.*.so')):
+        matches = list((sites[0]/module).glob(pattern))
+        if len(matches) != 1:
+            raise ValueError('Missing or ambiguous eSIM Python extension: '+pattern)
+        check.file(matches[0])
+        extensions.append(str(matches[0].resolve()))
+    environment = wrapper_environment(gui/'bin/lpa-gtk')
+    check.typelibs(environment['GI_TYPELIB_PATH'])
+    loaders = re.findall(r'^"([^"\n]+\.so)"',
+                         Path(environment['GDK_PIXBUF_MODULE_FILE']).read_text(), flags=re.M)
+    if not loaders:
+        raise ValueError('No eSIM GUI pixbuf loaders')
+    for loader in loaders:
+        check.file(loader)
+    return dict(gui=str(gui), lpac=str(lpac), python=str(interpreter),
+                python_extensions=extensions, environment=environment)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--system', type=Path, required=True)
@@ -112,10 +157,12 @@ def main():
     parser.add_argument('--calls', type=Path, required=True)
     parser.add_argument('--spacebar', type=Path, required=True)
     parser.add_argument('--callaudiod', type=Path, required=True)
+    parser.add_argument('--lpa-gtk', type=Path, required=True)
+    parser.add_argument('--lpac', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     for package in (args.system, args.shell, args.orca, args.networkmanager, args.modemmanager,
-                    args.calls, args.spacebar, args.callaudiod):
+                    args.calls, args.spacebar, args.callaudiod, args.lpa_gtk, args.lpac):
         if not package.is_dir():
             raise ValueError('Runtime package is missing: '+str(package))
     check = Check()
@@ -152,12 +199,13 @@ def main():
         raise ValueError('No loaders in the installed pixbuf cache')
     for loader in loaders:
         check.file(loader)
+    esim = esim_runtime(check, args.lpa_gtk, args.lpac)
     result = dict(passed=not check.errors, elf_files=check.elf, script_files=check.scripts,
                   system=str(args.system), shell=str(args.shell), orca=str(args.orca),
                   networkmanager=str(args.networkmanager), modemmanager=str(args.modemmanager),
                   calls=str(args.calls), spacebar=str(args.spacebar), callaudiod=str(args.callaudiod),
                   orca_environment=environment, pixbuf_loaders=loaders, errors=check.errors,
-                  hardware_tested=False)
+                  esim=esim, hardware_tested=False)
     args.out.write_text(json.dumps(result, indent=2)+'\n')
     print(f"{'PASS' if result['passed'] else 'FAIL'}: {check.elf} ELF files and "
           f'{check.scripts} script interpreter checks; {len(check.errors)} foreign ELF files')

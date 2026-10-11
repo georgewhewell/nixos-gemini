@@ -1,0 +1,67 @@
+--- a/driver/apdu/at_cmd_unix.c
++++ b/driver/apdu/at_cmd_unix.c
+@@ -47,9 +47,20 @@
+     if (userdata->fd < 0) {
+         return -1;
+     }
+-    ssize_t bytes_written = write(userdata->fd, command, strlen(command));
+-    if (bytes_written < 0) {
+-        return -1;
++    size_t remaining = strlen(command);
++    while (remaining > 0) {
++        ssize_t bytes_written = write(userdata->fd, command, remaining);
++        if (bytes_written < 0) {
++            if (errno == EINTR)
++                continue;
++            return -1;
++        }
++        if (bytes_written == 0) {
++            errno = EIO;
++            return -1;
++        }
++        command += bytes_written;
++        remaining -= bytes_written;
+     }
+     return 0;
+ }
+@@ -61,6 +72,9 @@
+ 
+     if (response)
+         *response = NULL;
++
++    if (userdata->fd < 0)
++        goto end;
+ 
+     while (1) {
+         char *newline = memchr(userdata->at_read_buffer, '\n', userdata->at_read_buffer_len);
+@@ -77,6 +91,8 @@
+ 
+             int rv = poll(&pfd, 1, -1);
+             if (rv < 0) {
++                if (errno == EINTR)
++                    continue;
+                 fprintf(stderr, "poll error: %s\n", strerror(errno));
+                 goto end;
+             } else if (rv == 0) {
+@@ -85,13 +101,19 @@
+             }
+ 
+             if (pfd.revents & POLLIN) {
+-                ssize_t bytes_read = read(userdata->fd, userdata->at_read_buffer + userdata->at_read_buffer_len,
+-                                          AT_BUFFER_SIZE - userdata->at_read_buffer_len);
++                ssize_t bytes_read;
++                do {
++                    bytes_read = read(userdata->fd, userdata->at_read_buffer + userdata->at_read_buffer_len,
++                                      AT_BUFFER_SIZE - userdata->at_read_buffer_len);
++                } while (bytes_read < 0 && errno == EINTR);
+                 if (bytes_read <= 0) {
+                     fprintf(stderr, "read error or connection closed\n");
+                     goto end;
+                 }
+                 userdata->at_read_buffer_len += bytes_read;
++            } else if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
++                fprintf(stderr, "AT transport disconnected or unavailable\n");
++                goto end;
+             }
+             continue;
+         }

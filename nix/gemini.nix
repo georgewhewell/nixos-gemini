@@ -31,6 +31,10 @@
     compiler = kernelCompiler;
     source = linux-gemini;
   };
+  esim = import ./esim {
+    pkgs = system.pkgs;
+    buildPkgs = system.pkgs.buildPackages;
+  };
   dtb = import ./dtb.nix {inherit buildPkgs kernel;};
   system = nixpkgs.lib.nixosSystem {
     system = buildSystem;
@@ -77,6 +81,7 @@
           inherit (desktopKeyboard) data check;
           protocolCheck = desktopKeyboardProtocolCheck;
         };
+        _module.args.geminiEsim = esim;
         systemd.packages = [config.nix.package];
       })
       {
@@ -127,6 +132,6 @@
   };
 
 in {
-  inherit buildPkgs crossPkgs kernelCompiler system kernel dtb image efiBootFiles uboot bootloader userspace;
+  inherit buildPkgs crossPkgs kernelCompiler system kernel dtb image efiBootFiles uboot bootloader userspace esim;
   mtkclient = import ./mtkclient-rtc.nix {inherit buildPkgs;};
 }

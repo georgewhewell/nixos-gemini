@@ -1,0 +1,1388 @@
+--- a/README.md
++++ b/README.md
+@@ -44,9 +44,26 @@
+ 
+ ## Known limitations / todo items
+ 
+-* Only Qualcomm phones supported for now (and only ones that use QMI + QRTR to communicate with the
+-  modem, so no 10-year-old phones supported, sorry)
+-    * Should work with minor changes on other platforms with an lpac backend, let me know if you can
+-      test! => e.g. https://codeberg.org/lucaweiss/lpa-gtk/issues/1
++* QMI, QMI+QRTR and MBIM backends are available. The AT backend currently
++  supports read-only eUICC identification on one typed primary AT endpoint from
++  ModemManager, including empty cards with no MM SIM/EID metadata. lpac must
++  return a valid EID, which must match MM's EID when available and the previously
++  verified EID on later reads. Missing MM metadata leaves physical slot identity
++  unknown. Discovery does not select slots or change cards; multiple candidates
++  require an explicit modem selector, which remains unfinished.
++* AT profile changes remain unfinished: qualify the modem's response behavior
++  for profile-size APDUs and long operations, then implement/qualify channel and
++  late-response recovery after abort. A GUI deadline does not repair a modem's
++  command response limit; this does not mean all AT modems lack support.
++* The AT path requires lpac built with `LPAC_WITH_APDU_AT=ON` and the Unix
++  transport fixes for terminal poll events and complete/EINTR-safe writes.
++  Upstream labels that backend unmaintained; these fixes do not establish
++  profile download support or repair a modem firmware watchdog.
++* AT operations keep one private ModemManager inhibition caller and a pinned
++  endpoint until child reaping. The current AT path supports standard WWAN
++  ports; TTY support needs an acquisition sequence compatible with MM's
++  exclusive ownership. Separate lpac commands do not make card routing
++  atomic. Involuntary D-Bus caller loss can remove inhibition before cleanup;
++  the standard API cannot guarantee reap-before-automatic-uninhibition.
+ * No support for scanning QR codes for downloading an eSIM - instead you enter the code starting
+   with LPA:1$ into the application => https://codeberg.org/lucaweiss/lpa-gtk/issues/14
+--- a/src/esim.py
++++ b/src/esim.py
+@@ -13,6 +13,9 @@
+ import shutil
+ import subprocess
+ import time
++import threading
++
++from . import modemmanager
+ 
+ 
+ class ESimError(Exception):
+@@ -125,6 +128,16 @@
+                 raise RuntimeError(f"Cannot have two backends with the same slot '{slot}'")
+             self._backends[slot] = backend
+ 
++    def supports_profile_changes(self, slot: int) -> bool:
++        return self._backends[slot].supports_profile_changes
++
++    def needs_background_io(self, slot: int) -> bool:
++        return self._backends[slot].needs_background_io
++
++    def is_cancelled(self, slot: int) -> bool:
++        backend = self._backends[slot]
++        return isinstance(backend, ModemManagerAtBackend) and backend.cancelled.is_set()
++
+     def get_chip_info(self, slot: int) -> dict:
+         """Returns various info about the eSIM chip"""
+         return self._backends[slot].get_chip_info()
+@@ -151,16 +164,23 @@
+ class ESimBackend:
+     """Interface for eSIM backend"""
+ 
++    supports_profile_changes = True
++    needs_background_io = False
++    unavailable_reason = ""
++    read_only_reason = ""
++
+     class Type(Enum):
+         MBIM = "mbim"
+         QMI = "qmi"
+         QMI_QRTR = "qmi_qrtr"
++        AT = "at"
+ 
+     @staticmethod
+-    def get_operational_backends() -> list[ESimBackend]:
++    def get_operational_backends(cancelled=None) -> list[ESimBackend]:
+         """
+         Return a list of zero to two ESimBackend instances, which should be usable
+         """
++        ESimBackend.unavailable_reason = ""
+         if os.getenv("LPA_GTK_BACKEND") == "dummy":
+             return [DummyBackend(1), DummyBackend(2)]
+ 
+@@ -176,7 +196,24 @@
+         if backends:
+             return backends
+ 
+-        # Unfortunately we've got nothing.
++        # AT candidates are verified read-only under inhibition, including
++        # empty eUICCs whose metadata ModemManager has not learned.
++        try:
++            manager = modemmanager.ModemManager()
++            try:
++                targets, has_at = manager.targets()
++            finally:
++                manager.close()
++            if len(targets) != 1:
++                if has_at:
++                    ESimBackend.unavailable_reason = "No unique compatible primary AT endpoint; explicit modem selection is required."
++                return []
++            backend = ModemManagerAtBackend(targets[0], cancelled)
++            if backend.is_operational():
++                return [backend]
++            ESimBackend.unavailable_reason = backend.unavailable_reason
++        except (modemmanager.AtError, ImportError):
++            ESimBackend.unavailable_reason = "ModemManager AT discovery is unavailable."
+         return []
+ 
+ 
+@@ -325,7 +362,7 @@
+ 
+         raise ESimError(f"Unknown lpac output type {data_type}")
+ 
+-    def __run_lpac(self, lpac_args) -> dict:
++    def _run_lpac(self, lpac_args) -> dict:
+         try:
+             output = subprocess.check_output([self.lpac_exe] + lpac_args, env=self.__get_lpac_env())
+         except subprocess.CalledProcessError as e:
+@@ -335,7 +372,7 @@
+             raise ESimError(f"Unexpected data: {res}")
+         return res.data
+ 
+-    def __run_lpac_stream(self, lpac_args) -> Iterator[LpacProgressTypes]:
++    def _run_lpac_stream(self, lpac_args) -> Iterator[LpacProgressTypes]:
+         with subprocess.Popen([self.lpac_exe] + lpac_args, env=self.__get_lpac_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
+             for line_obj in process.stdout:
+                 line = line_obj.decode('utf8')
+@@ -355,38 +392,38 @@
+ 
+     def get_profiles(self) -> list[ESimProfile]:
+         profiles = []
+-        for profile_data in self.__run_lpac(["profile", "list"]):
++        for profile_data in self._run_lpac(["profile", "list"]):
+             profile = ESimProfile.from_dict(self, profile_data)
+             profiles.append(profile)
+ 
+         return profiles
+ 
+     def download_profile(self, smdp_server: str, matching_id: str) -> Iterator[LpacProgressTypes]:
+-        res = self.__run_lpac_stream(["profile", "download", "-s", smdp_server, "-m", matching_id])
++        res = self._run_lpac_stream(["profile", "download", "-s", smdp_server, "-m", matching_id])
+         return res
+ 
+     def download_profile_code(self, activation_code: str) -> Iterator[LpacProgressTypes]:
+-        res = self.__run_lpac_stream(["profile", "download", "-a", activation_code])
++        res = self._run_lpac_stream(["profile", "download", "-a", activation_code])
+         return res
+ 
+     def enable_profile(self, iccid: str) -> None:
+-        self.__run_lpac(["profile", "enable", iccid])
++        self._run_lpac(["profile", "enable", iccid])
+ 
+     def disable_profile(self, iccid: str) -> None:
+-        self.__run_lpac(["profile", "disable", iccid])
++        self._run_lpac(["profile", "disable", iccid])
+ 
+     def delete_profile(self, iccid: str) -> None:
+-        self.__run_lpac(["profile", "delete", iccid])
++        self._run_lpac(["profile", "delete", iccid])
+ 
+     def set_profile_nickname(self, iccid: str, nickname: str) -> None:
+-        self.__run_lpac(["profile", "nickname", iccid, nickname])
++        self._run_lpac(["profile", "nickname", iccid, nickname])
+ 
+     def get_chip_info(self) -> dict:
+-        return self.__run_lpac(["chip", "info"])
++        return self._run_lpac(["chip", "info"])
+ 
+     def get_notifications(self) -> list[ESimNotification]:
+         notifications = []
+-        for notification_data in self.__run_lpac(["notification", "list"]):
++        for notification_data in self._run_lpac(["notification", "list"]):
+             notification = ESimNotification.from_dict(self, notification_data)
+             notifications.append(notification)
+ 
+@@ -396,7 +433,7 @@
+         command = ["notification", "process", "-a"]
+         if remove:
+             command.append("-r")
+-        res = self.__run_lpac_stream(command)
++        res = self._run_lpac_stream(command)
+         return res
+ 
+     def process_notification(self, seq_numbers: list[int], remove: bool) -> Iterator[LpacProgressTypes]:
+@@ -405,12 +442,65 @@
+             command.append("-r")
+         for seq_number in seq_numbers:
+             command.append(str(seq_number))
+-        res = self.__run_lpac_stream(command)
++        res = self._run_lpac_stream(command)
+         return res
+ 
+     def remove_notification(self, seq_number: int) -> Iterator[LpacProgressTypes]:
+-        res = self.__run_lpac_stream(["notification", "remove", str(seq_number)])
++        res = self._run_lpac_stream(["notification", "remove", str(seq_number)])
+         return res
++
++
++class ModemManagerAtBackend(LpacBackend):
++    """Read-only AT support after lpac identifies the selected endpoint's eUICC."""
++
++    # TODO: qualify CCHO/CGLA completion for profile-size APDUs and modem
++    # long operations, and define post-abort late-response/channel recovery.
++    # The current integration is read-only; AT modems are not inherently
++    # incapable of profile changes, and MM has no property proving this.
++    supports_profile_changes = False
++    needs_background_io = True
++
++    def __init__(self, target: modemmanager.AtTarget, cancelled=None):
++        # A single-SIM MM modem reports slot 0; 1 is only the existing UI key.
++        super().__init__(target.slot or 1, ESimBackend.Type.AT)
++        self.target = target
++        self.cancelled = cancelled if cancelled is not None else threading.Event()
++        self.operation_lock = threading.Lock()
++        self.verified_eid = None
++        self.failed = False
++
++    def cancel(self):
++        self.cancelled.set()
++
++    def is_operational(self):
++        try:
++            self.get_chip_info()
++            return True
++        except ESimError as error:
++            self.unavailable_reason = str(error)
++            return False
++
++    def _run_lpac(self, arguments):
++        if tuple(arguments) not in (("chip", "info"), ("profile", "list"), ("notification", "list")):
++            raise ESimError("AT profile changes require qualified modem long-response support.")
++        with self.operation_lock:
++            if self.failed:
++                raise ESimError("AT session failed; rediscovery is required.")
++            try:
++                with modemmanager.operation(self.target, self.lpac_exe, self.cancelled, self.verified_eid) as (owned, info):
++                    self.verified_eid = info["eidValue"]
++                    association = ("eUICC matches ModemManager's active SIM." if self.target.eid else
++                                   "eUICC verified on the selected AT endpoint; physical SIM slot is unknown.")
++                    self.read_only_reason = association + " Profile changes remain unfinished."
++                    return info if arguments == ["chip", "info"] else owned.read(arguments)
++            except modemmanager.AtError as error:
++                # Latch while still holding the operation lock, so queued GUI
++                # reads cannot retry an uncertain AT stream.
++                self.failed = True
++                raise ESimError(str(error)) from error
++
++    def _run_lpac_stream(self, arguments):
++        raise ESimError("AT profile changes require qualified modem long-response support.")
+ 
+ 
+ class DummyBackend(ESimBackend):
+--- a/src/mainwindow.py
++++ b/src/mainwindow.py
+@@ -4,10 +4,13 @@
+ from gi.repository import Adw
+ from gi.repository import Gio
+ from gi.repository import Gtk
++from gi.repository import GLib
+ from . import esim
+ from . import pages
+ from . import widgets
++from . import helpers
+ import os
++import threading
+ 
+ 
+ @Gtk.Template(resource_path="/eu/lucaweiss/lpa-gtk/mainwindow.ui")
+@@ -29,10 +32,32 @@
+     def __init__(self, **kwargs):
+         super().__init__(**kwargs)
+ 
+-        backends = esim.ESimBackend.get_operational_backends()
++        self.cancelled = threading.Event()
++        self.connect("close-request", self._cancel_operations)
++        # Keep discovery cancellable while GTK can process window close. This
++        # non-daemon worker must finish child reaping before process exit.
++        threading.Thread(target=self._discover_backends).start()
++
++    def _cancel_operations(self, *_):
++        self.cancelled.set()
++        return False
++
++    def _discover_backends(self):
++        try:
++            backends = esim.ESimBackend.get_operational_backends(self.cancelled)
++        except esim.ESimError as error:
++            esim.ESimBackend.unavailable_reason = str(error)
++            backends = []
++        GLib.idle_add(self._set_backends, backends)
++
++    def _set_backends(self, backends):
++        if self.cancelled.is_set():
++            return False
+ 
+         if not backends:
+             self.list_page.set_no_backend()
++            if esim.ESimBackend.unavailable_reason:
++                helpers.show_toast(self.list_page.overlay, esim.ESimBackend.unavailable_reason)
+             self.sim_slot_group.hide()
+             self.profile_add_button.hide()
+             return
+@@ -55,6 +80,9 @@
+         print(f"Initial active slot: {self.active_slot}")
+ 
+         self.esim_manager = esim.ESimManager(backends)
++        if not self.esim_manager.supports_profile_changes(self.active_slot):
++            self.profile_add_button.hide()
++            helpers.show_toast(self.list_page.overlay, backends[0].read_only_reason)
+ 
+         self.list_page.init_notification_task(available_slots, self.esim_manager)
+ 
+@@ -77,6 +105,7 @@
+         self.chipinfo_page.set_manager(self.esim_manager)
+ 
+         self.list_page.update()
++        return False
+ 
+     def _add_action(self, name, parameter_type, activate_cbk):
+         action = Gio.SimpleAction.new(name, parameter_type)
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -62,9 +62,13 @@
+   '__init__.py',
+   'esim.py',
+   'helpers.py',
++  'modemmanager.py',
+   'main.py',
+   'mainwindow.py',
+   'notificationtask.py',
+ ]
+ 
+ install_data(py_sources, install_dir: moduledir)
++
++test('at-backend', find_program('python3', native: true),
++  args: files('../tests/test_at_backend.py'))
+--- /dev/null
++++ b/src/modemmanager.py
+@@ -0,0 +1,281 @@
++# SPDX-License-Identifier: GPL-3.0-only
++"""Read-only eUICC discovery and operation-scoped standard AT ownership."""
++from contextlib import contextmanager
++from dataclasses import dataclass, field
++import json
++import os
++from pathlib import Path
++import re
++import select
++import selectors
++import stat
++import subprocess
++import time
++
++SERVICE = "org.freedesktop.ModemManager1"
++ROOT = "/org/freedesktop/ModemManager1"
++MODEM = SERVICE + ".Modem"
++SIM = SERVICE + ".Sim"
++OPERATION_TIMEOUT = 60.0
++MAX_OUTPUT = 1024 * 1024
++
++
++class AtError(Exception):
++    pass
++
++
++@dataclass(frozen=True)
++class AtTarget:
++    modem: str
++    uid: str = field(repr=False)
++    sim: str
++    slot: int
++    port: str
++    eid: str | None = field(repr=False)
++
++
++def discover(objects):
++    """Return typed primary AT candidates, not a claim that a card is an eUICC.
++
++    Generic AT ModemManager may have no SIM object or eUICC metadata for an
++    empty card. lpac must identify it under inhibition before UI admission.
++    Known conflicting SIM metadata must not be silently ignored.
++    """
++    targets = []
++    has_at = False
++    for path, interfaces in objects.items():
++        modem = interfaces.get(MODEM, {})
++        ports = modem.get("Ports", [])
++        if not any(kind == 3 for _, kind in ports):  # MM_MODEM_PORT_TYPE_AT
++            continue
++        has_at = True
++        port = modem.get("PrimaryPort")
++        if (port, 3) not in ports or not isinstance(port, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", port):
++            continue
++        sim_path = modem.get("Sim", "/")
++        if not isinstance(sim_path, str):
++            continue
++        sim = objects.get(sim_path, {}).get(SIM, {})
++        slot = modem.get("PrimarySimSlot", 0)
++        slots = modem.get("SimSlots", [])
++        if type(slot) is not int or slot < 0:
++            continue
++        if slots:
++            if not 1 <= slot <= len(slots) or slots[slot - 1] != sim_path:
++                continue
++        elif slot != 0:
++            continue
++        eid = sim.get("Eid", "")
++        uid = modem.get("Device")
++        if (sim and (sim.get("Active") is not True or sim.get("SimType", 0) not in (0, 2) or
++                     sim.get("EsimStatus", 0) not in (0, 1, 2))):
++            continue
++        if (not isinstance(eid, str) or (eid and not re.fullmatch(r"[0-9]{32}", eid)) or
++                not isinstance(uid, str) or not uid):
++            continue
++        targets.append(AtTarget(path, uid, sim_path, slot, "/dev/" + port, eid or None))
++    return targets, has_at
++
++
++class ModemManager:
++    """A private caller, retained until every lpac child has been reaped."""
++    def __init__(self):
++        from gi.repository import Gio, GLib
++        self.Gio, self.GLib = Gio, GLib
++        address = Gio.dbus_address_get_for_bus_sync(Gio.BusType.SYSTEM, None)
++        self.connection = Gio.DBusConnection.new_for_address_sync(
++            address, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT |
++            Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
++        self.connection.set_exit_on_close(False)
++        try:
++            self.owner = self._owner()
++        except BaseException:
++            self.close()
++            raise
++
++    def _call(self, destination, path, interface, method, signature=None, arguments=(), interactive=False):
++        try:
++            flags = self.Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION if interactive else self.Gio.DBusCallFlags.NONE
++            params = self.GLib.Variant(signature, arguments) if signature else None
++            return self.connection.call_sync(destination, path, interface, method, params,
++                                             None, flags, 30000 if interactive else 5000, None).unpack()
++        except self.GLib.Error as error:
++            raise AtError("ModemManager is unavailable or denied AT ownership.") from error
++
++    def _owner(self):
++        return self._call("org.freedesktop.DBus", "/org/freedesktop/DBus",
++                          "org.freedesktop.DBus", "GetNameOwner", "(s)", (SERVICE,))[0]
++
++    def targets(self):
++        objects = self._call(self.owner, ROOT, "org.freedesktop.DBus.ObjectManager", "GetManagedObjects")[0]
++        return discover(objects)
++
++    def alive(self):
++        return not self.connection.is_closed() and self._owner() == self.owner
++
++    def inhibit(self, uid, value):
++        self._call(self.owner, ROOT, SERVICE, "InhibitDevice", "(sb)", (uid, value), interactive=value)
++
++    def close(self):
++        try:
++            if not self.connection.is_closed():
++                self.connection.close_sync(None)
++        except self.GLib.Error as error:
++            raise AtError("ModemManager AT ownership caller could not be closed.") from error
++
++
++def at_environment(fd):
++    """Own the selected transport; never silently accept another device/slot."""
++    env = os.environ.copy()
++    for key in env:
++        if key in ("AT_DEVICE", "AT_DEBUG", "UIM_SLOT", "MBIM_DEVICE", "MBIM_USE_PROXY") or key.startswith("LPAC_APDU_"):
++            raise AtError("Inherited AT transport or slot overrides conflict with ModemManager ownership.")
++    if env.get("LPAC_APDU", "at") != "at":
++        raise AtError("Inherited lpac backend conflicts with the selected AT modem.")
++    env.update(LPAC_APDU="at", LPAC_APDU_AT_DEVICE=f"/proc/self/fd/{fd}", LPAC_APDU_AT_DEBUG="0")
++    return env
++
++
++def check_endpoint_owner(fd):
++    """Admit the standard WWAN owner whose open lifetime pins its minor.
++
++    TTY support additionally needs an acquisition sequence compatible with
++    ModemManager's TIOCEXCL ownership; opening before inhibition is insufficient
++    for a generic tty. Do not bypass that exclusion.
++    """
++    info = os.fstat(fd)
++    if not stat.S_ISCHR(info.st_mode):
++        raise AtError("Selected AT endpoint is not a character device.")
++    node = Path(f"/sys/dev/char/{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}")
++    try:
++        subsystem = (node / "subsystem").resolve(strict=True).name
++        if subsystem == "wwan":
++            with (node / "type").open() as port_type:
++                if port_type.read(32) == "AT\n":
++                    return
++    except OSError:
++        pass
++    raise AtError("AT discovery currently requires a standard WWAN port; TTY ownership remains unfinished.")
++
++
++class AtOperation:
++    def __init__(self, manager, target, executable, cancelled, fd):
++        self.manager, self.target, self.executable = manager, target, executable
++        self.cancelled, self.fd = cancelled, fd
++        self.fingerprint = os.fstat(fd)
++        self.deadline = time.monotonic() + OPERATION_TIMEOUT
++        self.env = at_environment(fd)
++        self.poller = select.poll()
++        self.poller.register(fd, select.POLLERR | select.POLLHUP | select.POLLNVAL)
++
++    def check(self):
++        if self.cancelled.is_set():
++            raise AtError("AT operation cancelled.")
++        if time.monotonic() >= self.deadline:
++            raise AtError("AT operation timed out; modem long-response support is unqualified.")
++        current = os.stat(self.target.port)
++        if ((current.st_dev, current.st_ino, current.st_rdev) !=
++                (self.fingerprint.st_dev, self.fingerprint.st_ino, self.fingerprint.st_rdev) or
++                self.poller.poll(0) or not self.manager.alive()):
++            raise AtError("Selected AT endpoint or ModemManager disappeared or changed.")
++
++    def lines(self, arguments):
++        """Bound silent children; generator close/error also reaps before release."""
++        self.check()
++        process = subprocess.Popen([self.executable, *arguments], env=self.env,
++                                   pass_fds=(self.fd,), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
++        pending = b""
++        total = 0
++        try:
++            with selectors.DefaultSelector() as selector:
++                for pipe in (process.stdout, process.stderr):
++                    os.set_blocking(pipe.fileno(), False)
++                    selector.register(pipe, selectors.EVENT_READ)
++                while selector.get_map():
++                    self.check()
++                    for key, _ in selector.select(0.1):
++                        data = os.read(key.fileobj.fileno(), 4096)
++                        if not data:
++                            selector.unregister(key.fileobj)
++                            continue
++                        total += len(data)
++                        if total > MAX_OUTPUT:
++                            raise AtError("lpac AT output exceeded its operation bound.")
++                        if key.fileobj is process.stdout:
++                            pending += data
++                            while b"\n" in pending:
++                                line, pending = pending.split(b"\n", 1)
++                                yield line.decode("utf-8")
++                while process.poll() is None:
++                    self.check()
++                    time.sleep(0.1)
++                if process.wait() != 0:
++                    raise AtError("lpac AT request failed; no profile changes were attempted.")
++                if pending:
++                    yield pending.decode("utf-8")
++                self.check()
++        finally:
++            if process.poll() is None:
++                process.terminate()
++                try:
++                    process.wait(timeout=2)
++                except subprocess.TimeoutExpired:
++                    process.kill()
++                    process.wait()
++            else:
++                process.wait()
++            process.stdout.close()
++            process.stderr.close()
++
++    def read(self, arguments):
++        try:
++            output = json.loads("\n".join(self.lines(arguments)))
++            payload = output["payload"]
++            if output["type"] != "lpa" or payload["code"] != 0:
++                raise ValueError("failed lpac response")
++            return payload["data"]
++        except (ValueError, KeyError, TypeError) as error:
++            raise AtError("lpac did not return a successful, complete AT response.") from error
++
++
++@contextmanager
++def operation(target, executable, cancelled, expected_eid=None):
++    if cancelled.is_set():
++        raise AtError("AT operation cancelled.")
++    manager = ModemManager()
++    inhibited = False
++    fd = None
++    try:
++        targets, _ = manager.targets()
++        if target not in targets:
++            raise AtError("Selected modem, SIM metadata or AT identity changed; rediscovery is required.")
++        # Pin the endpoint before intentional MM unexport. Opening sends no AT
++        # command; exclusive command access begins only after inhibition.
++        fd = os.open(target.port, os.O_RDWR | os.O_NOCTTY | os.O_CLOEXEC | os.O_NONBLOCK)
++        check_endpoint_owner(fd)
++        manager.inhibit(target.uid, True)
++        inhibited = True
++        owned = AtOperation(manager, target, executable, cancelled, fd)
++        info = owned.read(["chip", "info"])
++        eid = info.get("eidValue") if isinstance(info, dict) else None
++        if (not isinstance(eid, str) or not re.fullmatch(r"[0-9]{32}", eid) or
++                (target.eid is not None and eid != target.eid) or
++                (expected_eid is not None and eid != expected_eid)):
++            raise AtError("Selected AT eUICC identity is missing or changed; rediscovery is required.")
++        yield owned, info
++    except OSError as error:
++        raise AtError("Selected AT endpoint is unavailable.") from error
++    finally:
++        # Child finally blocks have already reaped before this context unwinds.
++        try:
++            try:
++                if fd is not None:
++                    os.close(fd)
++            except OSError as error:
++                raise AtError("Selected AT endpoint could not be closed.") from error
++        finally:
++            try:
++                if inhibited:
++                    manager.inhibit(target.uid, False)
++            finally:
++                manager.close()
+--- a/src/notificationtask.py
++++ b/src/notificationtask.py
+@@ -38,6 +38,8 @@
+         success = True
+         try:
+             for slot in self.available_slots:
++                if not self.esim_manager.supports_profile_changes(slot):
++                    continue
+                 notifications = self.esim_manager.get_notifications(slot)
+                 print(f"Notification slot {slot}:")
+                 for notification in notifications:
+--- a/src/pages/chipinfo.py
++++ b/src/pages/chipinfo.py
+@@ -6,6 +6,8 @@
+ from gi.repository import Gio
+ from gi.repository import Gtk
+ from gi.repository import Pango
++from gi.repository import GLib
++import threading
+ from .. import esim
+ from .. import helpers
+ 
+@@ -145,6 +147,26 @@
+ 
+ 
+     def update(self) -> None:
++        slot = self._active_slot
++        if self._manager.needs_background_io(slot):
++            if getattr(self, "_reading", False):
++                return
++            self._reading = True
++            def read_chip_info():
++                try:
++                    info = self._manager.get_chip_info(slot)
++                except esim.ESimError as error:
++                    GLib.idle_add(self._read_failed, slot, str(error))
++                    return
++                GLib.idle_add(self._show_chip_info, slot, info)
++            threading.Thread(target=read_chip_info).start()
++        else:
++            self._show_chip_info(slot, self._manager.get_chip_info(slot))
++
++    def _show_chip_info(self, slot, chip_info):
++        self._reading = False
++        if slot != self._active_slot or self._manager.is_cancelled(slot):
++            return False
+         store = Gio.ListStore.new(DataObject)
+ 
+         model = Gtk.TreeListModel.new(root=store, passthrough=False, autoexpand=True,
+@@ -159,6 +181,12 @@
+ 
+         self.list_view.set_model(selection)
+ 
+-        chip_info = self._manager.get_chip_info(self._active_slot)
+         for key, value in chip_info.items():
+             store.append(self.value_to_data_object(key, value))
++        return False
++
++    def _read_failed(self, slot, message):
++        self._reading = False
++        if slot == self._active_slot and not self._manager.is_cancelled(slot):
++            helpers.show_toast(self.overlay, message)
++        return False
+--- a/src/pages/esimdetail.py
++++ b/src/pages/esimdetail.py
+@@ -46,6 +46,8 @@
+         self._active_slot = slot
+ 
+     def set_profile(self, profile: esim.ESimProfile) -> None:
++        for widget in (self.enable_button, self.disable_button, self.delete_button, self.name_reset_button, self.name_row):
++            widget.set_sensitive(profile._backend.supports_profile_changes)
+         self._profile = profile
+         self.notify('iccid')
+         self.notify('isdp_aid')
+--- a/src/pages/esimlist.py
++++ b/src/pages/esimlist.py
+@@ -10,6 +10,7 @@
+ from .. import notificationtask
+ from .. import widgets
+ import traceback
++import threading
+ 
+ 
+ @Gtk.Template(resource_path="/eu/lucaweiss/lpa-gtk/pages/esimlist.ui")
+@@ -73,9 +74,28 @@
+ 
+     def update(self):
+         print("Updating eSIM profile list...")
++        slot = self.active_slot
++        if self._manager.needs_background_io(slot):
++            if getattr(self, "_reading", False):
++                return
++            self._reading = True
++            def read_profiles():
++                try:
++                    profiles = self._manager.get_profiles(slot)
++                except esim.ESimError as error:
++                    GLib.idle_add(self._read_failed, slot, str(error))
++                    return
++                GLib.idle_add(self._show_profiles, slot, profiles)
++            threading.Thread(target=read_profiles).start()
++        else:
++            self._show_profiles(slot, self._manager.get_profiles(slot))
++
++    def _show_profiles(self, slot, all_profiles):
++        self._reading = False
++        if slot != self.active_slot or self._manager.is_cancelled(slot):
++            return False
+         self.profile_list_box.remove_all()
+ 
+-        all_profiles = self._manager.get_profiles(self.active_slot)
+         profiles = list(filter(lambda p: self._should_show_profile(p), all_profiles))
+         for profile in profiles:
+             w = widgets.ESimProfileWidget(
+@@ -106,3 +126,10 @@
+ 
+         # Handle notifications in background
+         self._notification_task.start(handle_success, handle_error)
++        return False
++
++    def _read_failed(self, slot, message):
++        self._reading = False
++        if slot == self.active_slot and not self._manager.is_cancelled(slot):
++            helpers.show_toast(self.overlay, message)
++        return False
+--- /dev/null
++++ b/tests/test_at_backend.py
+@@ -0,0 +1,636 @@
++# SPDX-License-Identifier: GPL-3.0-only
++"""Actual discovery/ownership runner with synthetic MM and real host children."""
++import importlib.util
++import ast
++import json
++import os
++from pathlib import Path
++import signal
++import subprocess
++import sys
++import tempfile
++import threading
++import types
++import unittest
++from unittest.mock import patch
++
++ROOT = Path(__file__).resolve().parents[1]
++package = types.ModuleType("fixture_lpa")
++package.__path__ = [str(ROOT / "src")]
++sys.modules[package.__name__] = package
++from fixture_lpa import modemmanager as mm
++from fixture_lpa import esim
++
++EID = "0" * 32  # Original synthetic fixture, never a device identifier.
++
++
++def objects():
++    return {
++        "/modem/0": {mm.MODEM: {"Device": "fixture-modem", "Ports": [("at0", 3), ("net0", 2)],
++                                  "PrimaryPort": "at0", "Sim": "/sim/1", "SimSlots": ["/", "/sim/1"],
++                                  "PrimarySimSlot": 2}},
++        "/sim/1": {mm.SIM: {"Active": True, "SimType": 2, "EsimStatus": 1, "Eid": EID}},
++    }
++
++
++class Discovery(unittest.TestCase):
++    def test_active_primary(self):
++        targets, has_at = mm.discover(objects())
++        self.assertTrue(has_at)
++        self.assertEqual(len(targets), 1)
++        self.assertEqual((targets[0].slot, targets[0].port), (2, "/dev/at0"))
++        self.assertNotIn(EID, repr(targets[0]))
++
++    def test_conflicting_inactive_wrong_slot_and_non_at(self):
++        cases = [(mm.MODEM, "PrimarySimSlot", 1),
++                 (mm.MODEM, "PrimarySimSlot", True), (mm.MODEM, "Device", ""),
++                 (mm.MODEM, "PrimaryPort", "net0"), (mm.MODEM, "PrimaryPort", "../at0"),
++                 (mm.SIM, "Active", False), (mm.SIM, "SimType", 1),
++                 (mm.SIM, "EsimStatus", 3), (mm.SIM, "Eid", "x" * 32)]
++        for interface, key, value in cases:
++            with self.subTest(interface=interface, field=key):
++                data = objects()
++                data["/modem/0" if interface == mm.MODEM else "/sim/1"][interface][key] = value
++                self.assertEqual(mm.discover(data), ([], True))
++        data = objects()
++        data["/modem/0"][mm.MODEM]["Ports"] = [("net0", 2)]
++        self.assertEqual(mm.discover(data), ([], False))
++
++    def test_empty_euicc_is_a_candidate_without_claiming_mm_association(self):
++        data = objects()
++        data["/modem/0"][mm.MODEM]["Sim"] = "/"
++        data["/modem/0"][mm.MODEM]["SimSlots"][1] = "/"
++        del data["/sim/1"]
++        target = mm.discover(data)[0][0]
++        self.assertIsNone(target.eid)
++        self.assertEqual((target.sim, target.slot), ("/", 2))
++        data = objects()
++        data["/sim/1"][mm.SIM].update(SimType=0, EsimStatus=0, Eid="")
++        self.assertIsNone(mm.discover(data)[0][0].eid)
++
++    def test_single_sim_has_no_invented_at_slot(self):
++        data = objects()
++        data["/modem/0"][mm.MODEM].update(SimSlots=[], PrimarySimSlot=0)
++        target = mm.discover(data)[0][0]
++        self.assertEqual(target.slot, 0)
++
++
++class EndpointOwner(unittest.TestCase):
++    def test_only_typed_native_wwan_is_admitted(self):
++        master, slave = os.openpty()
++        try:
++            with tempfile.TemporaryDirectory() as tmp:
++                root = Path(tmp)
++                for owner in ("wwan", "tty"):
++                    (root / owner).mkdir()
++                node = root / "port"
++                node.mkdir()
++                (node / "subsystem").symlink_to(root / "wwan")
++                (node / "type").write_text("AT\n")
++                with patch.object(mm, "Path", return_value=node):
++                    mm.check_endpoint_owner(slave)
++                    (node / "type").write_text("QMI\n")
++                    with self.assertRaises(mm.AtError):
++                        mm.check_endpoint_owner(slave)
++                    (node / "subsystem").unlink()
++                    (node / "subsystem").symlink_to(root / "tty")
++                    (node / "type").write_text("AT\n")
++                    with self.assertRaises(mm.AtError):
++                        mm.check_endpoint_owner(slave)
++        finally:
++            os.close(master)
++            os.close(slave)
++
++
++class DBusCaller(unittest.TestCase):
++    def test_actual_adapter_uses_one_unique_caller_and_cached_owner(self):
++        events = []
++
++        class Error(Exception):
++            pass
++
++        class Variant:
++            def __init__(self, signature, arguments):
++                self.signature, self.arguments = signature, arguments
++
++            def unpack(self):
++                return self.arguments
++
++        class Connection:
++            closed = False
++            owner = ":fixture.mm"
++            denied = False
++            fail_close = False
++
++            def set_exit_on_close(self, value):
++                self.assert_exit = value
++
++            def is_closed(self):
++                return self.closed
++
++            def close_sync(self, cancellable):
++                events.append("close")
++                if self.fail_close:
++                    raise Error("fixture close failure")
++                self.closed = True
++
++            def call_sync(self, destination, path, interface, method, params, reply_type, flags, timeout, cancellable):
++                events.append((destination, path, interface, method, params, flags, timeout))
++                if self.denied:
++                    raise Error("fixture denied")
++                if method == "GetNameOwner":
++                    return Variant(None, (self.owner,))
++                if method == "GetManagedObjects":
++                    return Variant(None, (objects(),))
++                return Variant(None, ())
++
++        connection = Connection()
++        Gio = types.SimpleNamespace(
++            BusType=types.SimpleNamespace(SYSTEM=1),
++            DBusConnectionFlags=types.SimpleNamespace(AUTHENTICATION_CLIENT=1, MESSAGE_BUS_CONNECTION=2),
++            DBusCallFlags=types.SimpleNamespace(NONE=0, ALLOW_INTERACTIVE_AUTHORIZATION=1),
++            dbus_address_get_for_bus_sync=lambda *_: "fixture:bus",
++            DBusConnection=types.SimpleNamespace(new_for_address_sync=lambda *_: connection))
++        GLib = types.SimpleNamespace(Variant=Variant, Error=Error)
++        gi = types.ModuleType("gi")
++        repository = types.ModuleType("gi.repository")
++        repository.Gio, repository.GLib = Gio, GLib
++        gi.repository = repository
++        with patch.dict(sys.modules, {"gi": gi, "gi.repository": repository}):
++            manager = mm.ModemManager()
++            self.assertFalse(connection.assert_exit)
++            self.assertEqual(manager.targets(), mm.discover(objects()))
++            manager.inhibit("fixture-modem", True)
++            manager.inhibit("fixture-modem", False)
++            calls = [e for e in events if isinstance(e, tuple) and e[3] == "InhibitDevice"]
++            self.assertEqual([c[0] for c in calls], [":fixture.mm", ":fixture.mm"])
++            self.assertEqual([c[4].signature for c in calls], ["(sb)", "(sb)"])
++            self.assertEqual([c[4].arguments for c in calls], [("fixture-modem", True), ("fixture-modem", False)])
++            self.assertEqual([c[5:] for c in calls], [(1, 30000), (0, 5000)])
++            connection.owner = ":fixture.replacement"
++            self.assertFalse(manager.alive())
++            connection.denied = True
++            with self.assertRaises(mm.AtError):
++                manager.inhibit("fixture-modem", False)
++            manager.close()
++            self.assertTrue(connection.closed)
++            connection = Connection()
++            connection.denied = True
++            with self.assertRaises(mm.AtError):
++                mm.ModemManager()
++            self.assertTrue(connection.closed)
++            connection = Connection()
++            manager = mm.ModemManager()
++            connection.fail_close = True
++            with self.assertRaisesRegex(mm.AtError, "caller could not be closed") as raised:
++                manager.close()
++            self.assertIsInstance(raised.exception.__cause__, Error)
++            connection.denied = True
++            with self.assertRaisesRegex(mm.AtError, "caller could not be closed") as raised:
++                mm.ModemManager()
++            original = raised.exception.__cause__.__context__
++            self.assertIsInstance(original, mm.AtError)
++            self.assertIn("denied", str(original))
++
++
++class UIWorkers(unittest.TestCase):
++    @staticmethod
++    def production_class(path, name, methods, namespace, base=object):
++        source = ast.parse((ROOT / path).read_text())
++        owner = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name == name)
++        definition = ast.ClassDef(name=name, bases=[ast.Name(id="Base", ctx=ast.Load())], keywords=[],
++                                  body=[node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name in methods],
++                                  decorator_list=[])
++        namespace["Base"] = base
++        exec(compile(ast.fix_missing_locations(ast.Module(body=[definition], type_ignores=[])), path, "exec"), namespace)
++        return namespace[name]
++
++    def test_actual_window_registers_close_before_background_discovery(self):
++        pending, idle = [], []
++
++        class Window:
++            def __init__(self, **kwargs):
++                pass
++
++            def connect(self, signal, callback):
++                self.assert_signal = signal
++                self.close_callback = callback
++
++        class Thread:
++            def __init__(self, target):
++                self.target = target
++
++            def start(self):
++                owner = self.target.__self__
++                self.assert_signal = owner.assert_signal
++                pending.append(self)
++
++        namespace = {"esim": esim, "GLib": types.SimpleNamespace(idle_add=lambda *args: idle.append(args)),
++                     "threading": types.SimpleNamespace(Event=threading.Event, Thread=Thread)}
++        Production = self.production_class("src/mainwindow.py", "MainWindow",
++                                            {"__init__", "_cancel_operations", "_discover_backends", "_set_backends"},
++                                            namespace, Window)
++        window = Production()
++        self.assertEqual(pending[0].assert_signal, "close-request")
++        self.assertFalse(window.close_callback())
++        self.assertTrue(window.cancelled.is_set())
++        with patch.object(esim.ESimBackend, "get_operational_backends", side_effect=lambda event: [] if event.is_set() else None) as discover:
++            pending.pop().target()
++        discover.assert_called_once_with(window.cancelled)
++        callback, backends = idle.pop()
++        self.assertFalse(callback(backends))  # Closed window is not populated.
++
++    def test_actual_page_reads_are_workers_and_closed_or_stale_results_are_ignored(self):
++        for path, name, update, result, slot_field in (
++                ("src/pages/esimlist.py", "ESimListPage", "get_profiles", "_show_profiles", "active_slot"),
++                ("src/pages/chipinfo.py", "ChipInfoPage", "get_chip_info", "_show_chip_info", "_active_slot")):
++            with self.subTest(page=name):
++                pending, idle, calls = [], [], []
++
++                class Thread:
++                    def __init__(self, target):
++                        self.target = target
++
++                    def start(self):
++                        pending.append(self)
++
++                manager = types.SimpleNamespace(needs_background_io=lambda _: True,
++                                                is_cancelled=lambda _: True)
++                setattr(manager, update, lambda slot: calls.append(slot) or {})
++                namespace = {"esim": esim, "helpers": types.SimpleNamespace(show_toast=lambda *_: self.fail("closed GUI updated")),
++                             "GLib": types.SimpleNamespace(idle_add=lambda *args: idle.append(args)),
++                             "threading": types.SimpleNamespace(Thread=Thread)}
++                Production = self.production_class(path, name, {"update", result, "_read_failed"}, namespace)
++                page = Production()
++                page._manager = manager
++                setattr(page, slot_field, 2)
++                page.update()
++                page.update()
++                self.assertEqual(len(pending), 1)
++                self.assertFalse(calls)
++                pending.pop().target()
++                self.assertEqual(calls, [2])
++                self.assertEqual(len(idle), 1)
++                callback, slot, data = idle.pop()
++                self.assertFalse(callback(slot, data))
++                self.assertFalse(page._reading)
++                setattr(page, slot_field, 1)
++                self.assertFalse(callback(slot, data))
++                self.assertFalse(page._read_failed(1, "cancelled"))
++
++
++Popen = subprocess.Popen
++
++
++class TrackedChild:
++    def __init__(self, *args, **kwargs):
++        self.process = Popen(*args, **kwargs)
++        self.reaped = False
++
++    def __getattr__(self, name):
++        return getattr(self.process, name)
++
++    def wait(self, *args, **kwargs):
++        result = self.process.wait(*args, **kwargs)
++        self.reaped = True
++        return result
++
++
++class State:
++    def __init__(self):
++        self.events, self.children = [], []
++        self.alive, self.denied, self.fail_release = True, False, False
++        self.inhibited, self.changed = False, False
++        self.target = None
++
++    def reaped(self):
++        return all(child.reaped for child in self.children)
++
++
++class Runner(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.directory = Path(self.temp.name)
++        self.master, self.slave = os.openpty()
++        self.port = self.directory / "selected-at"
++        self.port.symlink_to(os.ttyname(self.slave))
++        self.target = mm.AtTarget("/modem/0", "fixture-modem", "/sim/1", 2, str(self.port), EID)
++        self.cancelled = threading.Event()
++        self.state = State()
++        self.state.target = self.target
++        self.child = self.directory / "lpac-fixture"
++        self.child.write_text("#!" + sys.executable + r'''
++import json, os, signal, sys, time
++fd = os.open(os.environ["LPAC_APDU_AT_DEVICE"], os.O_RDWR | os.O_NOCTTY)
++assert os.fstat(fd).st_rdev == os.fstat(int(os.environ["LPAC_APDU_AT_DEVICE"].split("/")[-1])).st_rdev
++mode = os.environ.get("FIXTURE_MODE", "success")
++if mode == "ignore-term": signal.signal(signal.SIGTERM, signal.SIG_IGN)
++if mode in ("silent", "ignore-term"):
++    print('{"type":"progress"}', flush=True)
++    while True: time.sleep(.05)
++if mode == "failure": sys.exit(1)
++if mode == "malformed": print("not-json"); sys.exit(0)
++if mode == "oversized": print("x" * 16384); sys.exit(0)
++value = {"eidValue": ("1" if mode == "wrong-eid" else "0") * 32} if sys.argv[1:] == ["chip", "info"] else []
++print(json.dumps({"type":"lpa", "payload":{"code":0, "data":value}}))
++''')
++        self.child.chmod(0o700)
++        state = self.state
++
++        class Manager:
++            def __init__(self):
++                state.events.append("caller-open")
++
++            def targets(self):
++                if state.inhibited:
++                    raise AssertionError("intentional unexport must use cached identity")
++                return ([] if state.changed else [state.target], True)
++
++            def alive(self):
++                return state.alive
++
++            def inhibit(self, uid, value):
++                assert uid == "fixture-modem"
++                if value:
++                    if state.denied:
++                        raise mm.AtError("denied")
++                    state.inhibited = True
++                    state.events.append("inhibit")
++                else:
++                    assert state.reaped(), "child was not reaped before uninhibition"
++                    state.events.append("uninhibit")
++                    if state.fail_release:
++                        raise mm.AtError("release failed")
++                    state.inhibited = False
++
++            def close(self):
++                assert state.reaped(), "caller died before child reaping"
++                state.events.append("caller-close")
++                state.inhibited = False
++
++        def spawn(*args, **kwargs):
++            assert state.inhibited
++            assert kwargs["env"]["LPAC_APDU"] == "at"
++            assert "LPAC_APDU_QMI_UIM_SLOT" not in kwargs["env"]
++            fd = kwargs["pass_fds"][0]
++            assert kwargs["env"]["LPAC_APDU_AT_DEVICE"] == f"/proc/self/fd/{fd}"
++            child = TrackedChild(*args, **kwargs)
++            state.children.append(child)
++            return child
++
++        def pin(fd):
++            assert not state.inhibited, "endpoint must be pinned before intentional MM unexport"
++            assert os.fstat(fd).st_rdev == os.stat(self.port).st_rdev
++            state.events.append("pin")
++
++        clean = {k: v for k, v in os.environ.items()
++                 if not k.startswith("LPAC_APDU") and k not in ("AT_DEVICE", "AT_DEBUG", "UIM_SLOT", "MBIM_DEVICE", "MBIM_USE_PROXY")}
++        self.patches = [patch.object(mm, "ModemManager", Manager), patch.object(mm.subprocess, "Popen", spawn),
++                        patch.object(mm, "check_endpoint_owner", pin),
++                        patch.dict(os.environ, clean, clear=True)]
++        for p in self.patches:
++            p.start()
++
++    def tearDown(self):
++        for child in self.state.children:
++            if child.poll() is None:
++                child.kill()
++                child.wait()
++        for p in reversed(self.patches):
++            p.stop()
++        if self.master >= 0:
++            os.close(self.master)
++        os.close(self.slave)
++        self.temp.cleanup()
++
++    def operate(self):
++        with mm.operation(self.target, str(self.child), self.cancelled) as (owned, info):
++            self.assertEqual(info["eidValue"], EID)
++            return owned.read(["profile", "list"])
++
++    def assert_clean(self):
++        self.assertTrue(self.state.reaped())
++        self.assertFalse(self.state.inhibited)
++        self.assertEqual(self.state.events[-2:], ["uninhibit", "caller-close"])
++
++    def test_success_intentional_unexport_and_same_endpoint(self):
++        self.assertEqual(self.operate(), [])
++        self.assertEqual(len(self.state.children), 2)
++        self.assertEqual(self.state.events, ["caller-open", "pin", "inhibit", "uninhibit", "caller-close"])
++        self.assert_clean()
++
++    def test_identity_change_and_denial_never_spawn(self):
++        for key in ("changed", "denied"):
++            with self.subTest(key=key):
++                setattr(self.state, key, True)
++                with self.assertRaises(mm.AtError):
++                    self.operate()
++                self.assertFalse(self.state.children)
++                self.assertEqual(self.state.events[-1], "caller-close")
++                setattr(self.state, key, False)
++
++    def test_wrong_eid_malformed_and_failed_child(self):
++        for mode in ("wrong-eid", "malformed", "failure"):
++            with self.subTest(mode=mode), patch.dict(os.environ, FIXTURE_MODE=mode):
++                before = len(self.state.children)
++                with self.assertRaises(mm.AtError):
++                    self.operate()
++                self.assertEqual(len(self.state.children), before + 1)
++                self.assert_clean()
++
++    def test_unreported_empty_euicc_eid_is_learned_then_must_match(self):
++        self.target = mm.AtTarget("/modem/0", "fixture-modem", "/", 2, str(self.port), None)
++        self.state.target = self.target
++        with patch.object(esim.shutil, "which", return_value=str(self.child)):
++            backend = esim.ModemManagerAtBackend(self.target)
++            self.assertTrue(backend.is_operational())
++            self.assertEqual(backend.verified_eid, EID)
++            self.assertIn("physical SIM slot is unknown", backend.read_only_reason)
++            self.assertEqual(backend.get_profiles(), [])
++            with patch.dict(os.environ, FIXTURE_MODE="wrong-eid"):
++                with self.assertRaisesRegex(esim.ESimError, "identity"):
++                    backend.get_profiles()
++            self.assertTrue(backend.failed)
++        self.assert_clean()
++
++    def test_generator_close_reaps_silent_child(self):
++        with mm.operation(self.target, str(self.child), self.cancelled) as (owned, _):
++            with patch.dict(os.environ, FIXTURE_MODE="silent"):
++                owned.env["FIXTURE_MODE"] = "silent"
++                lines = owned.lines(["fixture-stream"])
++                next(lines)
++                lines.close()
++                self.assertTrue(self.state.reaped())
++        self.assert_clean()
++
++    def test_cancel_and_kill_uncooperative_child(self):
++        for mode in ("silent", "ignore-term"):
++            with self.subTest(mode=mode), patch.dict(os.environ, FIXTURE_MODE=mode):
++                self.cancelled.clear()
++                timer = threading.Timer(.2, self.cancelled.set)
++                timer.start()
++                try:
++                    with self.assertRaisesRegex(mm.AtError, "cancelled"):
++                        self.operate()
++                finally:
++                    timer.join()
++                self.assert_clean()
++
++    def test_silent_deadline(self):
++        with patch.dict(os.environ, FIXTURE_MODE="silent"), patch.object(mm, "OPERATION_TIMEOUT", .2):
++            with self.assertRaisesRegex(mm.AtError, "timed out"):
++                self.operate()
++        self.assert_clean()
++
++    def test_actual_window_close_cancels_and_reaps_owned_child(self):
++        Window = UIWorkers.production_class("src/mainwindow.py", "MainWindow", {"_cancel_operations"}, {})
++        window = Window()
++        window.cancelled = self.cancelled
++        with patch.object(esim.shutil, "which", return_value=str(self.child)), patch.dict(os.environ, FIXTURE_MODE="silent"):
++            backend = esim.ModemManagerAtBackend(self.target, window.cancelled)
++            timer = threading.Timer(.2, window._cancel_operations)
++            timer.start()
++            try:
++                with self.assertRaisesRegex(esim.ESimError, "cancelled"):
++                    backend.get_chip_info()
++            finally:
++                timer.join()
++        self.assertTrue(backend.failed)
++        self.assert_clean()
++
++    def test_real_host_hup_terminates_and_reaps_owned_child(self):
++        def hangup():
++            os.close(self.master)
++            self.master = -1
++        with patch.dict(os.environ, FIXTURE_MODE="silent"):
++            timer = threading.Timer(.2, hangup)
++            timer.start()
++            try:
++                with self.assertRaisesRegex(mm.AtError, "endpoint.*(unavailable|disappeared)"):
++                    self.operate()
++            finally:
++                timer.join()
++        self.assert_clean()
++
++    def test_endpoint_replacement_and_service_loss(self):
++        for kind in ("replace", "service"):
++            with self.subTest(kind=kind), patch.dict(os.environ, FIXTURE_MODE="silent"):
++                self.state.alive = True
++                if kind == "replace":
++                    master, slave = os.openpty()
++                    def change():
++                        self.port.unlink()
++                        self.port.symlink_to(os.ttyname(slave))
++                else:
++                    def change():
++                        self.state.alive = False
++                timer = threading.Timer(.2, change)
++                timer.start()
++                try:
++                    with self.assertRaisesRegex(mm.AtError, "disappeared or changed"):
++                        self.operate()
++                finally:
++                    timer.join()
++                    if kind == "replace":
++                        self.port.unlink()
++                        self.port.symlink_to(os.ttyname(self.slave))
++                        os.close(master)
++                        os.close(slave)
++                self.assert_clean()
++
++    def test_output_bound_and_uninhibit_error_still_reap(self):
++        with patch.dict(os.environ, FIXTURE_MODE="oversized"), patch.object(mm, "MAX_OUTPUT", 1024):
++            with self.assertRaisesRegex(mm.AtError, "output exceeded"):
++                self.operate()
++        self.assert_clean()
++        self.state.fail_release = True
++        with self.assertRaisesRegex(mm.AtError, "release failed"):
++            self.operate()
++        self.assertTrue(self.state.reaped())
++        self.assertEqual(self.state.events[-1], "caller-close")
++
++    def test_fd_close_failure_still_uninhibits_and_closes_caller(self):
++        close = os.close
++        pin = mm.check_endpoint_owner
++        endpoint = []
++        def record_pin(fd):
++            pin(fd)
++            endpoint[:] = [fd]
++        def failed_close(fd):
++            close(fd)  # Linux may already release the descriptor on an error.
++            if endpoint and fd == endpoint[0]:
++                endpoint.clear()
++                raise OSError("fixture close failure")
++        with patch.object(mm, "check_endpoint_owner", side_effect=record_pin), patch.object(mm.os, "close", side_effect=failed_close):
++            with self.assertRaisesRegex(mm.AtError, "endpoint could not be closed"):
++                self.operate()
++        self.assert_clean()
++        self.state.fail_release = True
++        with patch.object(mm, "check_endpoint_owner", side_effect=record_pin), patch.object(mm.os, "close", side_effect=failed_close):
++            with self.assertRaisesRegex(mm.AtError, "release failed") as raised:
++                self.operate()
++        self.assertIn("endpoint could not be closed", str(raised.exception.__context__))
++        self.assertEqual(self.state.events[-1], "caller-close")
++
++    def test_transport_override_and_precancel_do_not_spawn(self):
++        for env in ({"LPAC_APDU": "qmi"}, {"LPAC_APDU_QMI_UIM_SLOT": "2"},
++                    {"LPAC_APDU_AT_DEVICE": "/dev/foreign"}, {"AT_DEVICE": "/dev/foreign"}):
++            with self.subTest(env=tuple(env)), patch.dict(os.environ, env):
++                with self.assertRaises(mm.AtError):
++                    self.operate()
++                self.assertFalse(self.state.children)
++                self.assert_clean()
++        self.cancelled.set()
++        with self.assertRaisesRegex(mm.AtError, "cancelled"):
++            self.operate()
++        self.assertFalse(self.state.children)
++
++    def test_backend_read_only_and_uncertain_stream_latches(self):
++        with patch.object(esim.shutil, "which", return_value=str(self.child)):
++            backend = esim.ModemManagerAtBackend(self.target)
++            self.assertTrue(backend.is_operational())
++            self.assertFalse(backend.supports_profile_changes)
++            self.assertEqual(backend.get_profiles(), [])
++            before = len(self.state.children)
++            calls = [lambda: backend.enable_profile("fixture"), lambda: backend.disable_profile("fixture"),
++                     lambda: backend.delete_profile("fixture"), lambda: backend.set_profile_nickname("fixture", "name"),
++                     lambda: backend.download_profile_code("fixture"), lambda: backend.process_notifications(True)]
++            for call in calls:
++                with self.assertRaisesRegex(esim.ESimError, "long-response"):
++                    call()
++            self.assertEqual(len(self.state.children), before)
++            with patch.dict(os.environ, FIXTURE_MODE="wrong-eid"):
++                with self.assertRaises(esim.ESimError):
++                    backend.get_profiles()
++            self.assertTrue(backend.failed)
++            before = len(self.state.children)
++            with self.assertRaisesRegex(esim.ESimError, "rediscovery"):
++                backend.get_profiles()
++            self.assertEqual(len(self.state.children), before)
++
++    def test_queued_backend_reads_do_not_retry_after_uncertain_session(self):
++        with patch.object(esim.shutil, "which", return_value=str(self.child)):
++            backend = esim.ModemManagerAtBackend(self.target)
++            self.assertTrue(backend.is_operational())
++            failures = []
++            def read():
++                try:
++                    backend.get_profiles()
++                except esim.ESimError as error:
++                    failures.append(str(error))
++            before = len(self.state.children)
++            with patch.dict(os.environ, FIXTURE_MODE="wrong-eid"):
++                threads = [threading.Thread(target=read), threading.Thread(target=read)]
++                for thread in threads:
++                    thread.start()
++                for thread in threads:
++                    thread.join(5)
++                    self.assertFalse(thread.is_alive())
++            self.assertEqual(len(failures), 2)
++            self.assertEqual(len(self.state.children), before + 1)
++            self.assertTrue(backend.failed)
++            self.assert_clean()
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -1,5 +1,5 @@
 # The normal desktop uses the same cross package set as the rest of NixOS.
-{ config, lib, pkgs, geminiDesktop, geminiDesktopKeyboard, ... }: {
+{ config, lib, pkgs, geminiDesktop, geminiDesktopKeyboard, geminiEsim, ... }: {
   disabledModules = ["i18n/input-method/default.nix"];
   imports = [./cross-input-method.nix];
 
@@ -147,5 +147,5 @@
     gnome-control-center
     gnomeExtensions.dash-to-dock
     kdePackages.spacebar
-  ];
+  ] ++ [geminiEsim.lpaGtk geminiEsim.lpac];
 }
