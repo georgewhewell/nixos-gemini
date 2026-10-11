@@ -118,6 +118,12 @@ Panfrost PRIME mapping, cache transitions and release lifetime with no codec
 or GPU submissions. [Its scoped proof](mt6797-vdec-v4l2/buffers-trial-105.json)
 includes supervised restoration and independent audit of image 102. Rendering
 and decoder completion remain unfinished.
+Trial 106 additionally qualifies advertised and mixed CREATE_BUFS lengths,
+including chroma's offset in the minimum format size and retaining a separate
+codec extent. [Its proof](mt6797-vdec-v4l2/buffers-trial-106.json) records the
+module build, failure regressions, hardware result and restored-system audit.
+These experimental-module fixes and retired probes leave the normal kernel and
+deploy derivations unchanged.
 
 ## Verified DMA-buf changes
 

@@ -1,0 +1,145 @@
+{
+  "date": "2026-10-11",
+  "trial": "boot-test-106",
+  "scope": "create-bufs-allocation-export-prime-mapping-lifetime",
+  "passed": true,
+  "packaging_revision": "cdbd0c104414fd5589ea44980b94b9d9fb92c026",
+  "kernel_revision": "01222a4b2074555955a85715587bebf0933fb0eb",
+  "kernel_package": "/nix/store/h84dph6rpdqf4rwf2c3abnpbpmgk5s0b-linux-gemini-7.2.9",
+  "module_sha256": "712e113d7c7ba6a40fbea887aa84ae46aa1df68de51855d5abf710d837b34c4b",
+  "module_source_sha256": {
+    "mt6797-vdec-v4l2/Kbuild": "9940f7c83c4045b886cda5868c52a54a2511ef1dd2c74cda22d584b360789b09",
+    "mt6797-vdec-v4l2/v4l2.c": "c7477bbc8bbad82c54bda39b19316b551a1a95fde5ea34d9a7a844c87f15b481",
+    "mt6797-vdec-v4l2/engine.c": "139a917336b35fded87fb9afbc0e07c25a633ba4305f8f419f9a8e44119b5fc1",
+    "mt6797-vdec-v4l2/engine.h": "37a5fe3a9a05e704dfa4d1fff583c2e1616e2fd41c097ee6c980af965c30c313",
+    "mt6797-vdec-v4l2/buffer.c": "af6615e5290120481c69c0e84c70c58f41955973310e3c577fa0b41b2dab28b2",
+    "mt6797-vdec-v4l2/buffer.h": "f6340cc5c787d367372ae33dc08611b2617b1ae57216b6949437bed28a8b282f",
+    "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+    "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+    "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023"
+  },
+  "request_test_sha256": "4039190481acccde1cd0b53a71cb55715ce487cd14d6f10fe4640c7e18759964",
+  "observer_sha256": "f30d41ad808ebdcaba59080e832fc517342d7f63fdfe2551219015a393e27ff1",
+  "report": {
+    "native_buffers_test_passed": true,
+    "scope": "native-buffers",
+    "width": 80,
+    "height": 64,
+    "capture_buffers": 17,
+    "planes_per_buffer": 2,
+    "sizeimage": [
+      5120,
+      7680
+    ],
+    "plane_lengths": [
+      196608,
+      196608
+    ],
+    "data_offsets": [
+      0,
+      5120
+    ],
+    "exported_fds": 34,
+    "prime_handles": 17,
+    "prime_aliases_same_handle": true,
+    "prime_gpu_va_verified": true,
+    "mmap_export_aliases_verified": true,
+    "queue_cache_cycle_verified": true,
+    "video_close_lifetime_verified": true,
+    "closed_fd_aliases_verified": true,
+    "prime_release_lifetime_verified": true,
+    "all_user_refs_released": true,
+    "create_bufs_cases": 9,
+    "create_bufs_lengths_preserved": true,
+    "create_bufs_full_backing_verified": true,
+    "create_bufs_queue_prepare_verified": true,
+    "codec_submissions": 0,
+    "gpu_submissions": 0,
+    "decode_qualified": false,
+    "gpu_rendering_qualified": false
+  },
+  "irq_before": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "irq_after": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "strict_arm64_gcc_build_exit": 0,
+  "asan_ubsan_host_checks_exit": 0,
+  "old_allocator_negative_control_rejected": true,
+  "full_kernel_image_rebuilt": false,
+  "normal_derivations_unchanged": true,
+  "supervised_profile_qualified": true,
+  "recovery": {
+    "accepted_image": 102,
+    "accepted_boot_sha256": "23c83c7228ad639353fb4f167ffbff2ebe8962275262da4e80f3157043dde80c",
+    "final_boot_id": "28975e41-7038-4f34-93ad-7a2229c0bae1",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "source_hashes_match": true,
+    "source_count": 58,
+    "ordinary_outputs_retained": {
+      "persistent-nix-01": "/nix/store/y05f867msys00kbdwy1ivjpifg3h6rw6-gemini-daemon-ab69a8311a0d48e18c57e72d629aa364",
+      "efi-nix-provision-01": "/nix/store/kayq99jxh03r74nmwik52xcfhhcbs0zb-gemini-daemon-ee61f1b8a37442b3a2c6936104d3f687",
+      "efi-nix-manager-01": "/nix/store/10ihy8gva9za862c1vhq3ak2yhyw60id-gemini-daemon-2cec893b5e3b4c21b5ffc8f514e78fec",
+      "efi-nix-provision-02": "/nix/store/961a7xb23gl33a38lnpdsf1h0d17lnr1-gemini-daemon-0fb866788b1a4dce90c71fc1a87a13dd",
+      "efi-entry-dt-provision-01": "/nix/store/43vh1dmg87qv9zhax566h9n2h1cs2pfr-gemini-daemon-9c32e81ce86d4d0f9e8b9bc8ea408ce9",
+      "efi-entry-dt-manager-01": "/nix/store/6g12n0f3bxs94ww5s6z0nzkq5rnpdqsj-gemini-daemon-33f8f91e6996441787d08442d5b9288a",
+      "efi-entry-dt-cross-manager-01": "/nix/store/xs9rihi5nvjqd44l7smxw7a6r37mq19j-gemini-daemon-0903d3c227654da4a9be340dfb186a49",
+      "efi-key-events-manager-02": "/nix/store/c7679k2rcaqw74hax6pcxdjcsr5bmkv6-gemini-daemon-99d09aee533443478a6242c44eb0f09f",
+      "desktop-keyboard-01": "/nix/store/b9armv8b79prchpd35fkwb351djah5vq-gemini-daemon-acc3205b3d71497f8abbd9be0f44885f",
+      "power-kernel-01": "/nix/store/55yqnig6lbaah84qksw4vq3hpgjvshy1-gemini-daemon-03881eb51b284c24969acba4294c6fdf",
+      "boot-test-102": "/nix/store/dkg6qsxh6z429mjrj7jx0grj53xn349g-gemini-daemon-4182763e01454833801e1122bf5d0297",
+      "boot-test-106": "/nix/store/cfvrcsm2wjmin8vd95vzxymbcf5zdfgx-gemini-daemon-b5cbee06866d4baba519b4243945be14"
+    },
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "cleanup": {
+    "retired_probe_modules": 4,
+    "retired_build_files": 1,
+    "historical_revision": "ef79a94a7f985fd15a518c77aae6d411fd5eadf0",
+    "retained_shared_files_unchanged": 22
+  },
+  "evidence": {
+    "trial": "/mnt/Home/src/nixos-gemini/handoff/boot-test-106",
+    "independent_audit": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/create-bufs/independent-audit-106/result.json",
+    "independent_audit_sha256": "8f3ca40a0f8371468e5b41de6b6e982fdffed2f125a45ae2ec7d4f6d9169e8cd",
+    "admission_sha256": "5825f5552ded278221a13a30d411f76c1d5f92b24d5f85b405f5408a23ed52b8",
+    "host_checks": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/create-bufs/host-format-result.json",
+    "old_allocator_control": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/create-bufs/old-callback-result.json",
+    "probe_retirement": "/mnt/Home/src/nixos-gemini/handoff/media-native-surfaces-20261011/completion-owner-review/retired-probes.json"
+  },
+  "reuse_boundary": "Reuse unchanged buffer API/ownership results; this submits no codec or GPU work and qualifies neither decoder completion nor rendering. Temporary external module only; no production decoder promotion."
+}

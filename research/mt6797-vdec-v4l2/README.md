@@ -100,10 +100,12 @@ The shared allocation is page-rounded `max(B, Y_view, C_view)`; the codec's
 guarded extent remains `B`. Each MMAP plane exposes its requested prefix,
 while either exported FD owns the complete allocation. Extents that cannot
 cover their offset and pixels, or exceed the DMA aperture, fail in the driver.
-The changed semantics pass strict module builds and sanitizer regressions;
-their hardware check is pending. Allocation, export and Panfrost PRIME mapping
-of the previous exact-length implementation pass
-[trial 105](buffers-trial-105.json); GPU rendering, display imports and decoded
+The changed semantics pass strict module builds, sanitizer regressions and
+[trial 106](buffers-trial-106.json). Its nine CREATE_BUFS cases check the
+advertised format, mixed lengths, complete exports, aliases and preparation,
+followed by the 17-object PRIME/lifetime case. The previous exact-length
+implementation retains [trial 105](buffers-trial-105.json). GPU rendering,
+display imports and decoded
 pixels on this path remain unqualified.
 
 The pinned GCC 15.3 build passes the normal kernel checks and full image build.
@@ -185,8 +187,15 @@ The existing observer checks that cached command counts and IRQ counts remain ze
 Remaining work stays here: establish the exact completion path to SPI 240;
 qualify actual GPU rendering and display imports of decoded surfaces with
 independent MM21 comparisons; remove reference snapshot overhead only after
-its replacement safety contract is proven; finish CAPTURE import and allocation
-semantics, sustained playback and suspend. The encoder owner still needs a
+its replacement safety contract is proven; finish CAPTURE import, sustained
+playback and suspend. The encoder owner still needs a
 public firmware-free frame-programming contract and has produced no frame.
 Reuse unchanged accepted results; there is one maintained kernel and no
 normal-boot media qualification loop.
+
+The pinned Mesa already supports `DRM_FORMAT_NV12` with
+`DRM_FORMAT_MOD_MTK_16L_32S_TILE` for external-texture sampling, using GPU
+detiling. The next rendering check will use that existing standard import path
+with offsets `0/L` and both pitches equal to the storage width, then compare
+original synthetic pixels before combining it with decoder completion.
+No input CPU conversion or private Mesa patch is required for this path.
