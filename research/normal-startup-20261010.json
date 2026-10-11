@@ -96,5 +96,37 @@
     "IPv6 ping and authenticated SSH over USB",
     "real LZ4 zram paging with zero flash-swap writes",
     "seven explicit hardware test services did not run during boot"
-  ]
+  ],
+  "m39_retirement_20261011": {
+    "change": "Delete obsolete per-boot RTC/hwclock/power-key diagnostic; move its five unchanged logind settings into the existing power-policy module.",
+    "retired_service": "gemini-m39.service",
+    "normal_service_count_before_after": [
+      100,
+      99
+    ],
+    "other_service_dependencies_and_enable_graph_unchanged": true,
+    "rendered_logind_config_identical": true,
+    "baseline_script_and_required_units_identical": true,
+    "no_normal_service_requires_udev_settle": true,
+    "frozen_recovery_derivation_unchanged": true,
+    "checks": {
+      "before_after_normal_and_recovery_evaluations": 0,
+      "baseline_acceptance_fixture": 0,
+      "six_service_entrypoints": 0,
+      "normal_image_build": 0,
+      "gnome_cross_runtime": {
+        "actual_exit": 0,
+        "elf_files": 1431,
+        "scripts": 124,
+        "foreign_elf_files": 0
+      }
+    },
+    "bundle": "/nix/store/n63lrc1apva81vqc3hf84ilkqr95ncq1-gemini-mainline-nixos-bundle",
+    "kernel_source_revision": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
+    "installed": false,
+    "hardware_qualification": "Pending combined normal update; current accepted image remains 113. RTC inputs unchanged and their existing acceptance is reused.",
+    "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-diagnostic-retirement/result.json",
+    "proof_sha256": "84372012bcf8335758cf0a054be03640a428ab7ee8a0e3d078a439c1b0e8bbc9",
+    "build_exit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/boot-diagnostic-retirement/build/exit.json"
+  }
 }

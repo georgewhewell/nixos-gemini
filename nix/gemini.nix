@@ -47,7 +47,6 @@
       ../nixos/boot.nix
       ../nixos/desktop.nix
       ../nixos/gnome.nix
-      ../nixos/m39.nix
       ../nixos/spm.nix
       ../nixos/core-parking.nix
       ../nixos/media.nix

@@ -62,6 +62,13 @@ in {
   config = {
     services.logind = {
       settings.Login = {
+        # Keep power-key and idle actions from interrupting unattended recovery.
+        # The guarded lid policy owns automatic suspend.
+        HandlePowerKey = "ignore";
+        HandlePowerKeyLongPress = "ignore";
+        HandleSuspendKey = "ignore";
+        HandleHibernateKey = "ignore";
+        IdleAction = "ignore";
         HandleLidSwitch = "ignore";
         HandleLidSwitchExternalPower = "ignore";
         HandleLidSwitchDocked = "ignore";

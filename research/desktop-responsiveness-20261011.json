@@ -1204,5 +1204,32 @@
         "hardware_failure_observed": false
       }
     ]
+  },
+  "proc_stat_owner_113": {
+    "native_owners": [
+      "fs/proc/stat.c",
+      "kernel/irq/irqdesc.c",
+      "kernel/sched/cputime.c"
+    ],
+    "accepted_image": "boot-test-113",
+    "kernel_source_revision": "2b9abbe756ad5dbee086436b59eed6277e3fd529",
+    "actual_exit": 0,
+    "owner_binary_sha256": "bd08b5ae8818521899c06240c6e320e9090eb09829de1a2f614bbeed0e0c6518",
+    "complete_show_stat_calls": 16,
+    "per_report_calls": {
+      "irq_counter_lookup": 245,
+      "decimal_formatting": 287,
+      "ktime_get": 24
+    },
+    "irq_only_decimal_calls": 245,
+    "tree_parse_errors": 0,
+    "temporary_trace_instance_removed": true,
+    "global_tracing_unchanged": true,
+    "normal_policy_writes": false,
+    "taint": 0,
+    "limits": "Partial ring prefix excluded; instrumentation raises observer cost and durations are not untraced per-function CPU attribution. Online topology changes normally during observation. This establishes executed work, not a controlled speedup or UI qualification.",
+    "next": "Reduce unused IRQ-tail construction in the native proc/seq owner while preserving complete-file text, seeking, fresh per-online-CPU counters and runnable-count semantics; measure benefit without a private interface or policy/cadence change.",
+    "proof": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/result.json",
+    "analysis": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/proc-stat-owner/summary.json"
   }
 }
