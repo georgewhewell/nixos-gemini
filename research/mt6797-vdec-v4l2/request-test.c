@@ -3,6 +3,9 @@
  * syntax; compare-frame.py independently checks every returned sample.
  */
 #define _POSIX_C_SOURCE 200809L
+#include <ctype.h>
+#include <drm/drm.h>
+#include <drm/panfrost_drm.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/dma-buf.h>
@@ -32,6 +35,7 @@ static const char *status_path;
 static const char *fixture_directory;
 static unsigned int width = 64, height = 64, storage_height = 64;
 static int export_buffers;
+static int buffers_only;
 
 static void fail(const char *operation)
 {
@@ -131,6 +135,7 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 	}
 	checked_ioctl(stream->video, VIDIOC_REQBUFS, &request, "REQBUFS");
 	if (!request.count || (buffer.length == 2 && request.count < CAPTURE_COUNT) ||
+	    (buffers_only && request.count != CAPTURE_COUNT) ||
 	    (buffer.length == 1 && !(request.capabilities & V4L2_BUF_CAP_SUPPORTS_REQUESTS))) {
 		fprintf(stderr, "Queue does not support the required allocation/request API\n"); exit(1);
 	}
@@ -165,7 +170,7 @@ static void allocate_queue(struct stream *stream, enum v4l2_buf_type type)
 	if (buffer.length == 2) stream->capture = stream->storage[0];
 }
 
-static void open_stream(struct stream *stream, const char *video, const char *media)
+static void open_device(struct stream *stream, const char *video, const char *media)
 {
 	struct v4l2_capability cap;
 	memset(stream, 0, sizeof(*stream));
@@ -177,6 +182,11 @@ static void open_stream(struct stream *stream, const char *video, const char *me
 	if (strcmp((char *)cap.driver, "mt6797-vdec")) {
 		fprintf(stderr, "Unexpected video driver\n"); exit(1);
 	}
+}
+
+static void open_stream(struct stream *stream, const char *video, const char *media)
+{
+	open_device(stream, video, media);
 	allocate_queue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
 	allocate_queue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
 	for (unsigned int i = 0; i < 2; i++) {
@@ -218,6 +228,175 @@ static void close_stream(struct stream *stream)
 			munmap(mapping->address, mapping->bytes);
 			if (mapping->fd >= 0) close(mapping->fd);
 		}
+}
+
+static u8 native_buffer_pattern(unsigned int index, size_t byte, size_t luma)
+{
+	return byte < luma ? 0x31 + index : byte < luma * 3 / 2 ? 0x91 + index : 0x51 + index;
+}
+
+static void check_native_aliases(struct stream *stream,
+				struct mapping exported[CAPTURE_COUNT][2],
+				int initialize, int written, int video_mapped)
+{
+	size_t luma = width * storage_height;
+	uint64_t access = initialize ? DMA_BUF_SYNC_RW : DMA_BUF_SYNC_READ;
+
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		struct mapping *views = exported[index];
+		struct mapping *aliases[] = { &stream->storage[index][0],
+			&stream->storage[index][1], &views[0], &views[1] };
+		sync_mapping(&views[0], DMA_BUF_SYNC_START | access);
+		/* Full-backing patterns belong only to this no-command mode.
+		 * Write before the nested alias begins, detecting a second cache
+		 * invalidation that would discard already dirty CPU contents.
+		 */
+		if (initialize) {
+			u8 *data = stream->storage[index][0].address;
+			for (size_t byte = 0; byte < views[0].bytes; byte++)
+				data[byte] = native_buffer_pattern(index, byte, luma);
+		}
+		sync_mapping(&views[1], DMA_BUF_SYNC_START | access);
+		for (unsigned int alias = video_mapped ? 0 : 2; alias < 4; alias++) {
+			u8 *data = aliases[alias]->address;
+			for (size_t byte = 0; byte < views[0].bytes; byte++)
+				if (data[byte] != (written ? native_buffer_pattern(index, byte, luma) : 0)) {
+					fprintf(stderr, "Native capture alias contents differ\n"); exit(1);
+				}
+		}
+		sync_mapping(&views[0], DMA_BUF_SYNC_END | access);
+		sync_mapping(&views[1], DMA_BUF_SYNC_END | access);
+	}
+}
+
+static void test_native_buffers(struct stream *stream, const char *video,
+				const char *media, const char *render)
+{
+	struct mapping exported[CAPTURE_COUNT][2];
+	uint32_t handles[CAPTURE_COUNT];
+	uint64_t gpu_offsets[CAPTURE_COUNT];
+	const size_t luma = 5120, backing = 196608;
+	struct v4l2_format format = { .type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE };
+	struct v4l2_plane planes[2];
+	struct v4l2_buffer buffer = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+		.memory = V4L2_MEMORY_MMAP, .length = 2, .m.planes = planes };
+	long page_size = sysconf(_SC_PAGESIZE);
+	char driver[32] = { 0 };
+	struct drm_version version = { .name_len = sizeof(driver) - 1, .name = driver };
+	int gpu;
+
+	if (page_size <= 0) fail("page size");
+	open_device(stream, video, media);
+	format.fmt.pix_mp.width = width;
+	format.fmt.pix_mp.height = height;
+	checked_ioctl(stream->video, VIDIOC_S_FMT, &format, "S_FMT output geometry");
+	if (format.fmt.pix_mp.width != 80 || format.fmt.pix_mp.height != 64 ||
+	    format.fmt.pix_mp.pixelformat != V4L2_PIX_FMT_H264_SLICE) {
+		fprintf(stderr, "Unexpected native buffer geometry\n"); exit(1);
+	}
+	allocate_queue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+	format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	checked_ioctl(stream->video, VIDIOC_G_FMT, &format, "G_FMT native capture");
+	if (format.fmt.pix_mp.num_planes != 2 ||
+	    format.fmt.pix_mp.plane_fmt[0].sizeimage != luma ||
+	    format.fmt.pix_mp.plane_fmt[1].sizeimage != luma / 2) {
+		fprintf(stderr, "Unexpected logical native capture layout\n"); exit(1);
+	}
+	gpu = open(render, O_RDWR | O_CLOEXEC);
+	if (gpu < 0) fail("open render node");
+	checked_ioctl(gpu, DRM_IOCTL_VERSION, &version, "DRM_VERSION");
+	if (version.name_len != strlen("panfrost") || strcmp(driver, "panfrost")) {
+		fprintf(stderr, "Unexpected render driver\n"); exit(1);
+	}
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		buffer.index = index;
+		memset(planes, 0, sizeof(planes));
+		checked_ioctl(stream->video, VIDIOC_QUERYBUF, &buffer, "QUERYBUF native capture");
+		for (unsigned int plane = 0; plane < 2; plane++) {
+			struct mapping *view = &exported[index][plane];
+			struct v4l2_exportbuffer exp = { .type = buffer.type, .index = index,
+				.plane = plane, .flags = O_RDWR | O_CLOEXEC };
+			struct drm_prime_handle imported = { 0 };
+			if (planes[plane].length != backing ||
+			    planes[plane].data_offset != (plane ? luma : 0) ||
+			    planes[plane].bytesused != planes[plane].data_offset) {
+				fprintf(stderr, "Unexpected queried native capture layout\n"); exit(1);
+			}
+			checked_ioctl(stream->video, VIDIOC_EXPBUF, &exp, "EXPBUF native capture");
+			*view = (struct mapping) { .bytes = backing,
+				.data_offset = planes[plane].data_offset, .fd = exp.fd };
+			view->address = mmap(NULL, backing, PROT_READ | PROT_WRITE,
+					     MAP_SHARED, view->fd, 0);
+			if (view->address == MAP_FAILED) fail("mmap native export");
+			imported.fd = view->fd;
+			checked_ioctl(gpu, DRM_IOCTL_PRIME_FD_TO_HANDLE, &imported, "PRIME native capture");
+			if (!imported.handle || (plane && imported.handle != handles[index])) {
+				fprintf(stderr, "Native export aliases have different GEM handles\n"); exit(1);
+			}
+			if (!plane) {
+				for (unsigned int previous = 0; previous < index; previous++)
+					if (handles[previous] == imported.handle) {
+						fprintf(stderr, "Distinct capture buffers share a GEM handle\n"); exit(1);
+					}
+				handles[index] = imported.handle;
+			}
+		}
+		struct drm_panfrost_get_bo_offset offset = { .handle = handles[index] };
+		checked_ioctl(gpu, DRM_IOCTL_PANFROST_GET_BO_OFFSET, &offset, "GET_BO_OFFSET native capture");
+		if (!offset.offset || offset.offset % (uint64_t)page_size) {
+			fprintf(stderr, "Invalid native GPU mapping offset\n"); exit(1);
+		}
+		gpu_offsets[index] = offset.offset;
+	}
+	check_native_aliases(stream, exported, 0, 0, 1);
+	check_native_aliases(stream, exported, 1, 1, 1);
+	/* CAPTURE preparation and queue cancellation exercise VB2 cache hooks.
+	 * Neither queue is streamed, no source/Request is queued, and no codec
+	 * or GPU command is submitted anywhere in this mode.
+	 */
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		buffer.index = index;
+		memset(planes, 0, sizeof(planes));
+		planes[0].length = planes[1].length = backing;
+		checked_ioctl(stream->video, VIDIOC_QBUF, &buffer, "QBUF native capture only");
+		for (unsigned int plane = 0; plane < 2; plane++)
+			if (munmap(stream->storage[index][plane].address, backing))
+				fail("munmap native video view");
+	}
+	if (close(stream->media) || close(stream->video)) fail("close native video");
+	check_native_aliases(stream, exported, 0, 1, 0);
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		struct drm_panfrost_get_bo_offset offset = { .handle = handles[index] };
+		checked_ioctl(gpu, DRM_IOCTL_PANFROST_GET_BO_OFFSET, &offset, "GET_BO_OFFSET after video close");
+		if (offset.offset != gpu_offsets[index]) {
+			fprintf(stderr, "Native GPU mapping changed across video close\n"); exit(1);
+		}
+		if (close(exported[index][0].fd)) fail("close first export alias");
+		exported[index][0].fd = -1;
+	}
+	check_native_aliases(stream, exported, 0, 1, 0);
+	/* PRIME deduplicates plane aliases: close each unique handle once. */
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		struct drm_gem_close close_bo = { .handle = handles[index] };
+		checked_ioctl(gpu, DRM_IOCTL_GEM_CLOSE, &close_bo, "GEM_CLOSE native capture");
+	}
+	if (close(gpu)) fail("close render node");
+	check_native_aliases(stream, exported, 0, 1, 0);
+	for (unsigned int index = 0; index < stream->capture_count; index++) {
+		for (unsigned int plane = 0; plane < 2; plane++)
+			if (munmap(exported[index][plane].address, backing)) fail("munmap native export");
+		if (close(exported[index][1].fd)) fail("close last export alias");
+	}
+	puts("{\"native_buffers_test_passed\":true,\"scope\":\"native-buffers\","
+	     "\"width\":80,\"height\":64,\"capture_buffers\":17,\"planes_per_buffer\":2,"
+	     "\"sizeimage\":[5120,2560],\"plane_lengths\":[196608,196608],"
+	     "\"data_offsets\":[0,5120],\"exported_fds\":34,\"prime_handles\":17,"
+	     "\"prime_aliases_same_handle\":true,\"prime_gpu_va_verified\":true,"
+	     "\"mmap_export_aliases_verified\":true,\"queue_cache_cycle_verified\":true,"
+	     "\"video_close_lifetime_verified\":true,\"closed_fd_aliases_verified\":true,"
+	     "\"prime_release_lifetime_verified\":true,\"all_user_refs_released\":true,"
+	     "\"codec_submissions\":0,\"gpu_submissions\":0,\"decode_qualified\":false,"
+	     "\"gpu_rendering_qualified\":false}");
 }
 
 static int64_t milliseconds(void)
@@ -265,6 +444,43 @@ static int dequeue(struct stream *stream, enum v4l2_buf_type type, int expect_er
 		if (bad) fprintf(stderr, "Unexpected capture metadata or payload bounds\n");
 	}
 	return bad;
+}
+
+static int cached_cpu_access_safe(const char *status)
+{
+	const char *keys[] = { "fetched", "submitted", "quiesced", "guards", "break", "reset" };
+	unsigned int values[6] = { 0 }, seen[6] = { 0 };
+
+	while (*status) {
+		while (isspace((unsigned char)*status)) status++;
+		const char *end = status;
+		while (*end && !isspace((unsigned char)*end)) end++;
+		for (unsigned int i = 0; i < 6; i++) {
+			size_t length = strlen(keys[i]);
+			if ((size_t)(end - status) <= length ||
+			    strncmp(status, keys[i], length) || status[length] != '=') continue;
+			const char *number = status + length + 1;
+			if (seen[i]) return 0;
+			if (i < 4) {
+				if (end - number != 1 || *number < '0' || *number > '1') return 0;
+				values[i] = *number - '0';
+			} else if (end - number == 1 && *number == '0') {
+				values[i] = 0;
+			} else {
+				/* Native status emits signed decimal errno values. */
+				if (number < end && *number == '-') number++;
+				if (number == end || *number < '1' || *number > '9') return 0;
+				while (++number < end)
+					if (!isdigit((unsigned char)*number)) return 0;
+				values[i] = 1;
+			}
+			seen[i] = 1;
+		}
+		status = end;
+	}
+	for (unsigned int i = 0; i < 6; i++) if (!seen[i]) return 0;
+	return (!values[0] && !values[1] && !values[4] && !values[5]) ||
+	       (values[2] && values[3]);
 }
 
 static void decode(struct stream *stream, const char *out, const char *name,
@@ -490,6 +706,29 @@ static void decode(struct stream *stream, const char *out, const char *name,
 	checked_ioctl(stream->video, VIDIOC_QBUF, &source, "QBUF request source");
 	checked_ioctl(request, MEDIA_REQUEST_IOC_QUEUE, NULL, "REQUEST_QUEUE");
 	int bad = dequeue(stream, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, expect_error, timestamp, sequence);
+	bad |= dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
+	struct pollfd pollfd = { .fd = request, .events = POLLPRI };
+	if (poll(&pollfd, 1, 1000) != 1 || !(pollfd.revents & POLLPRI)) {
+		fprintf(stderr, "Request did not complete\n"); exit(1);
+	}
+	/* Persist the cached stop/guard boundary before reading any capture
+	 * alias. ERROR metadata or a missing/malformed boundary must never
+	 * authorize CPU reads of memory potentially still owned by hardware.
+	 */
+	char status[4096], status_output[1024];
+	FILE *status_file = fopen(status_path, "r");
+	if (!status_file || !fgets(status, sizeof(status), status_file)) fail("read cached job status");
+	if (fclose(status_file)) fail("close cached job status");
+	if (snprintf(status_output, sizeof(status_output), "%s/%s-status.txt", out, name) >= (int)sizeof(status_output)) {
+		fprintf(stderr, "Status path too long\n"); exit(1);
+	}
+	status_file = fopen(status_output, "w");
+	if (!status_file || fputs(status, status_file) == EOF || fclose(status_file)) fail("write cached job status");
+	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
+	close(request);
+	if (bad || !strchr(status, '\n') || !cached_cpu_access_safe(status)) {
+		fprintf(stderr, "Completed metadata or cached stop boundary denies CPU access\n"); exit(1);
+	}
 	if (!strcmp(name, "fault-scaling") || !strcmp(name, "fault-weight") ||
 	    !strcmp(name, "fault-refmissing") || !strcmp(name, "fault-refmetadata") ||
 	    !strcmp(name, "fault-b-list1") || !strcmp(name, "fault-b-poc") ||
@@ -497,11 +736,6 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		capture_untouched(stream);
 	}
 
-	bad |= dequeue(stream, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, expect_error, timestamp, sequence);
-	struct pollfd pollfd = { .fd = request, .events = POLLPRI };
-	if (poll(&pollfd, 1, 1000) != 1 || !(pollfd.revents & POLLPRI)) {
-		fprintf(stderr, "Request did not complete\n"); exit(1);
-	}
 	if (!expect_error) {
 		char path[1024];
 		if (snprintf(path, sizeof(path), "%s/%s.bin", out, name) >= (int)sizeof(path)) {
@@ -514,24 +748,9 @@ static void decode(struct stream *stream, const char *out, const char *name,
 		    fwrite(plane_data(&stream->capture[1]), 1, width * storage_height / 2, file) != width * storage_height / 2 || fclose(file)) fail("write output");
 		sync_capture(stream, DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ);
 	}
-	checked_ioctl(request, MEDIA_REQUEST_IOC_REINIT, NULL, "REQUEST_REINIT");
-	close(request);
-	char status[2048], status_output[1024];
-	FILE *status_file = fopen(status_path, "r");
-	if (!status_file || !fgets(status, sizeof(status), status_file)) fail("read cached job status");
-	fclose(status_file);
-	if (snprintf(status_output, sizeof(status_output), "%s/%s-status.txt", out, name) >= (int)sizeof(status_output)) {
-		fprintf(stderr, "Status path too long\n"); exit(1);
-	}
-	status_file = fopen(status_output, "w");
-	if (!status_file || fputs(status, status_file) == EOF || fclose(status_file)) fail("write cached job status");
 	printf("{\"fixture\":\"%s\",\"expected_error\":%d,\"timestamp\":%u,\"sequence\":%u,\"request_completed\":true}\n",
 		name, expect_error, timestamp, sequence);
 	fflush(stdout);
-	/* Preserve completed capture bytes and cached status even on a failed
-	 * metadata check; the host still independently decides qualification.
-	 */
-	if (bad) exit(1);
 }
 
 int main(int argc, char **argv)
@@ -539,10 +758,17 @@ int main(int argc, char **argv)
 	struct stream stream;
 	int single_grey = argc == 7 && !strcmp(argv[5], "--single") &&
 			  !strcmp(argv[6], "grey64");
-	if (argc != 5 && argc != 9 && argc != 10 && !single_grey) {
-		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [--single grey64 | FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
+	buffers_only = argc == 7 && !strcmp(argv[5], "--buffers-only");
+	if (argc != 5 && argc != 9 && argc != 10 && !single_grey && !buffers_only) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [--buffers-only RENDER_NODE | --single grey64 | FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
 	}
 	status_path = argv[4];
+	if (buffers_only) {
+		width = 80;
+		height = storage_height = 64;
+		test_native_buffers(&stream, argv[1], argv[2], argv[6]);
+		return 0;
+	}
 	if (argc >= 9) {
 		fixture_directory = argv[5];
 		width = strtoul(argv[6], NULL, 10);

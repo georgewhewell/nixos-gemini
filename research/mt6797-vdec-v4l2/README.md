@@ -41,7 +41,7 @@ Clock ownership and accepted native polarity setup did not fix completion for
 either submitted input. The snapshots do not exclude a transient assertion
 or exhaust clock/routing causes. Preserve command attribution,
 stale-event rejection, IRQ synchronization before reset/power release,
-bounded failure, private-DMA stop proof and fences. Picture-complete polling
+bounded failure, native DMA stop proof and fences. Picture-complete polling
 cannot qualify the IRQ backend. Production integration requires this contract.
 The existing request test has `--single grey64` for the focused case. It uses
 the original 20-byte I_16x16 DC fixture and its normal controls. On success it
@@ -93,18 +93,34 @@ This path requires the pinned kernel's native direct/IOMMU SG bounce-marker
 fix (`01222a4b`). Gemini's GPU uses direct DMA with its own MMU. Unbounced
 direct and IOMMU attachments are eligible; bounced mappings and architecture
 DMA-ops routes are rejected. CAPTURE currently supports MMAP and read/write
-EXPBUF, without importing other DMA-bufs. CREATE_BUFS accepts equal queried
-backing lengths; accepting logical-only sizes or larger backing requests is
-unfinished. These restrictions are in the driver, with no downstream copy
-fallback. Hardware allocation, export, GPU/display imports and decoded pixels
+EXPBUF, without importing other DMA-bufs. CREATE_BUFS currently accepts the equal
+queried backing lengths. Logical-only chroma lengths cannot contain its luma-sized
+offset. Larger and unequal lengths with sufficient pixel coverage need the buffer
+owner to separate allocation capacity from the codec's guarded extent, preserving
+accepted plane lengths. These restrictions are in the driver, with no downstream
+copy fallback. Hardware allocation, export, GPU/display imports and decoded pixels
 on this new path remain unqualified.
 
 The pinned GCC 15.3 build passes the normal kernel checks and full image build.
 The module passes a fresh ARM64 build with `W=1` and `KCFLAGS=-Werror`; all 163
 required exports match that kernel. Host regressions with ASan/UBSan exercise
 the actual buffer ownership, cache-transition, fence and request-test code,
-including failure and fatal-retention paths. These checks cover source and
-build behavior; the new image has not been installed or hardware-qualified.
+including failure and fatal-retention paths. The buffer-only harness exercises
+17 objects, 34 exported FDs, Panfrost PRIME mapping, nested CPU access and lifetime
+after video close and import release. Malformed counts, aliases, GPU addresses,
+cache transitions and contents fail the host fixture. Capture reads after decode
+require cached reset/stop safety before inspecting or saving pixels.
+
+Trial 104 wrote and read back the new image, but its NixOS closure was absent from
+the persistent store. It stayed in initramfs; the buffer observer never ran.
+The original recovery supervisor reached its deadline. Its final attempt retained
+an exact accepted-image readback, and a fresh healthy accepted boot was independently
+audited after every service stopped: 58 source hashes match, both locks are free,
+taint is zero and the temporary decoder is absent. A subsequent rescue scan ended
+without another write. Evidence remains in `handoff/boot-test-104` and
+`handoff/media-native-surfaces-20261011/independent-audit-104` at workspace level.
+The media admission omission is fixed in the shared boot owner; a missing closure
+must now fail before reboot. This trial establishes no native-buffer hardware result.
 
 Build `mt6797_vdec.ko` through this directory's Kbuild against the exact
 configured kernel, retaining the sibling `mt6797-vdec` control translator.
@@ -126,6 +142,10 @@ request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
 
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
+  --buffers-only /dev/dri/renderD128
+
+request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
+  /sys/bus/platform/devices/16020000.video-codec/last_job \
   FIXTURE_DIRECTORY 64 64 export faults
 ```
 
@@ -136,9 +156,14 @@ paths. Compare saved MM21 samples against
 independent expected output with `../mt6797-vdec/compare-frame.py`.
 Original fixture generators and the recorded GStreamer pipelines are retained
 in the [reproduction history](README-history-20261011.md).
-`gstreamer-userspace.nix` cross-builds userspace; its local buffer-error patch
-propagates failed capture through request failure, qualified on its recorded
-polling build. It does not establish successful hardware completion.
+The unused historical GStreamer recipe and buffer-error patch are retired from
+current source; retrieve them from packaging commit `35ea17591776d7ff168a24ad26dc6dfedf27367b`
+for those recorded polling builds. Their proofs remain unchanged.
+
+`--buffers-only` uses the discovered Panfrost render node and allocates, exports,
+maps and releases native surfaces without codec or GPU submissions. Its scope is
+buffer mapping and lifetime; it cannot qualify decoded pixels or GPU rendering.
+The existing observer checks that cached command counts and IRQ counts remain zero.
 
 Remaining work stays here: establish the exact completion path to SPI 240;
 qualify native allocations/export lifetime and real GPU/display imports with

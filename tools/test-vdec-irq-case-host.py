@@ -34,7 +34,16 @@ typedef uint8_t u8;
 struct stream { int live; };
 static const char *status_path, *fixture_directory;
 static unsigned width = 64, height = 64, storage_height = 64;
-static int export_buffers, live;
+static int export_buffers, buffers_only, live;
+static void test_native_buffers(struct stream *s, const char *video, const char *media,
+                                const char *render)
+{
+    assert(!live && !strcmp(video, "video") && !strcmp(media, "media"));
+    assert(!strcmp(render, "render") && !fixture_directory);
+    assert(width == 80 && height == 64 && storage_height == 64 && buffers_only);
+    (void)s;
+    puts("{\"op\":\"buffers\"}");
+}
 static void open_stream(struct stream *s, const char *video, const char *media)
 {
     assert(!live && !strcmp(video, "video") && !strcmp(media, "media"));
@@ -83,8 +92,10 @@ static void close_stream(struct stream *s)
         assert grey['name'] == 'grey64' and grey['bytes'] == 20 and grey['controls'] == [0, 0, 0, 1, 0]
         assert hashlib.sha256(bytes.fromhex(grey['grey_hex'])).hexdigest() == GREY_SHA256
         assert single[-1] == dict(public_api_test_passed=True, scope='single-grey64')
+        assert run(['--buffers-only', 'render']) == [dict(op='buffers')]
         for extra in (['--single'], ['--single', 'pcm64'], ['--other', 'grey64'],
-                      ['--single', 'grey64', 'extra'], ['--single', 'grey64', '64', 'mmap']):
+                      ['--single', 'grey64', 'extra'], ['--single', 'grey64', '64', 'mmap'],
+                      ['--buffers-only'], ['--buffers-only', 'render', 'extra']):
             assert run(extra, expected=2) == [], extra
         assert run([], expected=2, base=False) == []
         legacy = run([])
@@ -101,6 +112,24 @@ def check_qualification(path):
     spec = importlib.util.spec_from_file_location('vdec_irq_case', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory(prefix='vdec-kernel-revision-') as tmp:
+        kernel = Path(tmp)
+        revision = '01222a4b2074555955a85715587bebf0933fb0eb'
+        manifest = kernel/'BUILD-MANIFEST'
+        manifest.write_text('source-revision='+revision+'\nkernel-release=same-ABI\n')
+        module.check_kernel_revision(kernel, revision)
+        for text, expected in (
+                ('kernel-release=same-ABI\n', revision),
+                ('source-revision='+'0'*40+'\n', revision),
+                ('source-revision='+revision+'\nsource-revision='+revision+'\n', revision),
+                ('source-revision='+revision+'\n', 'invalid')):
+            manifest.write_text(text)
+            try:
+                module.check_kernel_revision(kernel, expected)
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('Missing/foreign/ambiguous kernel source admitted')
     status = dict(result=0, fetched=1, submitted=1, quiesced=1, guards=1, error=0,
                   message=0, reset=0, irq_events=1, irq_unexpected=0, jobs=1,
                   fetch_commands=1, frame_commands=1, nal_bytes=20, header_bits=28,
@@ -173,6 +202,57 @@ def check_qualification(path):
     reject(full, 'Reused command attribution across legacy pictures')
     print(f'Actual qualifier: grey-only and legacy acceptance, {rejected} missing/unsafe/foreign evidence cases rejected: PASS')
 
+    report = dict(native_buffers_test_passed=True, scope='native-buffers', width=80, height=64,
+                  capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 2560],
+                  plane_lengths=[196608, 196608], data_offsets=[0, 5120],
+                  exported_fds=34, prime_handles=17, prime_aliases_same_handle=True,
+                  prime_gpu_va_verified=True, mmap_export_aliases_verified=True,
+                  queue_cache_cycle_verified=True, video_close_lifetime_verified=True,
+                  closed_fd_aliases_verified=True, prime_release_lifetime_verified=True,
+                  all_user_refs_released=True, codec_submissions=0, gpu_submissions=0,
+                  decode_qualified=False, gpu_rendering_qualified=False)
+    idle = dict.fromkeys(('jobs', 'failures', 'fetch_commands', 'frame_commands',
+                         'fetched', 'submitted', 'irq_events', 'irq_unexpected',
+                         'result', 'engine_result'), 0)
+    buffers = dict(reports=[report], cached={name: idle.copy() for name in
+                   ('last-job', 'engine-failure', 'context-failure')}, start=before,
+                   finish=before.copy(), returncode=0, safe=True, statuses={})
+    assert module.buffers_qualified(**buffers)
+    rejected = 0
+
+    def reject_buffer(changed, label):
+        nonlocal rejected
+        assert not module.buffers_qualified(**changed), label
+        rejected += 1
+
+    for key, value in report.items():
+        changed = copy.deepcopy(buffers)
+        del changed['reports'][0][key]
+        reject_buffer(changed, 'missing ' + key)
+        changed = copy.deepcopy(buffers)
+        changed['reports'][0][key] = (not value if type(value) is bool else
+                                    value + 1 if type(value) is int else
+                                    [value[0] + 1, *value[1:]] if type(value) is list else 'foreign')
+        reject_buffer(changed, 'invalid ' + key)
+    for name in buffers['cached']:
+        for key in idle:
+            changed = copy.deepcopy(buffers)
+            changed['cached'][name][key] = 1
+            reject_buffer(changed, 'command/failure ' + name + '/' + key)
+            del changed['cached'][name][key]
+            reject_buffer(changed, 'missing ' + name + '/' + key)
+    for key, value in (('reports', []), ('reports', [report, report]),
+                       ('reports', [True]), ('cached', {}), ('safe', False),
+                       ('returncode', 1), ('statuses', {'grey64': status}),
+                       ('finish', after), ('finish', dict(before, irq=78))):
+        changed = copy.deepcopy(buffers); changed[key] = value
+        reject_buffer(changed, key)
+    for key, value in (('native_buffers_test_passed', 1), ('codec_submissions', False),
+                       ('data_offsets', [False, 5120]), ('extra', True)):
+        changed = copy.deepcopy(buffers); changed['reports'][0][key] = value
+        reject_buffer(changed, 'foreign type/key ' + key)
+    print(f'Actual native-buffer predicate: exact scope and zero-command evidence; {rejected} incomplete/foreign cases rejected: PASS')
+
 
 def check_capture(source):
     """Run actual buffer selection, pixel access, sync and DQBUF validation."""
@@ -228,6 +308,33 @@ int fake_ioctl(int fd, unsigned long command, ...)
 }
 int main(void)
 {
+    const char *safe[] = {
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=0 reset=0",
+        "jobs=1 fetched=1 submitted=1 quiesced=1 guards=1 break=0 reset=0 result=0",
+        "fetched=1 submitted=0 quiesced=1 guards=1 break=-110 reset=0\n",
+    };
+    const char *unsafe[] = {
+        "", "fetched=0 submitted=0 quiesced=0",
+        "fetched=1 submitted=1 quiesced=0 guards=1",
+        "fetched=1 submitted=1 quiesced=1 guards=0",
+        "fetched=1 submitted=0 quiesced=0 guards=1",
+        "fetched=0 submitted=1 quiesced=0 guards=1",
+        "fetched=0 submitted=0 quiesced=0 guards=0 fetched=0",
+        "fetched=2 submitted=0 quiesced=1 guards=1",
+        "fetched=0x0 submitted=0 quiesced=0 guards=0",
+        "fetched=0 submitted=0 quiesced=0 guards=bad",
+        "xfetched=0 submitted=0 quiesced=0 guards=0",
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=0 reset=-110",
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=-110 reset=0",
+        "fetched=0 submitted=0 quiesced=0 guards=0 reset=0",
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=0",
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=0 reset=0 reset=0",
+        "fetched=0 submitted=0 quiesced=0 guards=0 break=0 reset=0x0",
+    };
+    for (unsigned i = 0; i < sizeof(safe)/sizeof(safe[0]); i++)
+        assert(cached_cpu_access_safe(safe[i]));
+    for (unsigned i = 0; i < sizeof(unsafe)/sizeof(unsafe[0]); i++)
+        assert(!cached_cpu_access_safe(unsafe[i]));
     struct stream stream = { .capture_count = CAPTURE_COUNT };
     struct v4l2_ctrl_h264_decode_params params = { 0 };
     for (unsigned i = 0; i < V4L2_H264_NUM_DPB_ENTRIES; i++) {
@@ -294,6 +401,193 @@ int main(void)
         subprocess.run(compiler + ['-std=gnu11', '-Wall', '-Wextra', '-Werror'] + flags +
                        [str(path/'capture.c'), '-o', str(path/'capture')], check=True)
         subprocess.run([str(path/'capture')], check=True)
+
+
+def check_native_buffers(source):
+    """Run the actual zero-command mode with instrumented public ioctls."""
+    code = r'''
+#define ioctl native_ioctl
+#define open native_open
+#define close native_close
+#define mmap native_mmap
+#define munmap native_munmap
+#define main request_program_main
+'''
+    code += '#include ' + json.dumps(str(source.resolve())) + '\n'
+    code += r'''
+#undef main
+#include <assert.h>
+#include <stdarg.h>
+static u8 *data[CAPTURE_COUNT];
+static unsigned maps[CAPTURE_COUNT], cpu[CAPTURE_COUNT], queued[CAPTURE_COUNT];
+static unsigned fd_live[CAPTURE_COUNT][2], gem_live[CAPTURE_COUNT];
+static unsigned video_live, media_live, gpu_live, fault, qbufs, imports, releases;
+static const size_t backing = 196608;
+int native_open(const char *path, int flags, ...)
+{
+    assert(flags & O_CLOEXEC);
+    if (!strcmp(path, "video")) { video_live = 1; return 1; }
+    if (!strcmp(path, "media")) { media_live = 1; return 2; }
+    assert(!strcmp(path, "render")); gpu_live = 1; return 3;
+}
+int native_close(int fd)
+{
+    if (fd == 1) {
+        assert(video_live && !media_live && qbufs == CAPTURE_COUNT);
+        for (unsigned i = 0; i < CAPTURE_COUNT; i++) {
+            assert(queued[i] && maps[i] == 2 && !cpu[i]);
+            queued[i] = 0;
+        }
+        if (fault == 7) data[0][0] ^= 1;
+        video_live = 0;
+    } else if (fd == 2) { assert(media_live); media_live = 0; }
+    else if (fd == 3) {
+        assert(gpu_live && releases == CAPTURE_COUNT); gpu_live = 0;
+    } else {
+        unsigned index = (fd - 10) / 2, plane = (fd - 10) % 2;
+        assert(index < CAPTURE_COUNT && fd_live[index][plane] && !cpu[index]);
+        fd_live[index][plane] = 0;
+    }
+    return 0;
+}
+void *native_mmap(void *address, size_t length, int prot, int flags, int fd, off_t offset)
+{
+    (void)address;
+    assert(length == backing && prot == (PROT_READ|PROT_WRITE) && flags == MAP_SHARED);
+    unsigned index;
+    if (fd == 1) {
+        assert(video_live && offset >= (off_t)backing && offset % backing == 0);
+        index = (offset / backing - 1) / 2;
+    } else {
+        index = (fd - 10) / 2;
+        assert(index < CAPTURE_COUNT && fd_live[index][(fd - 10) % 2] && !offset);
+    }
+    assert(index < CAPTURE_COUNT);
+    maps[index]++;
+    return data[index];
+}
+int native_munmap(void *address, size_t length)
+{
+    assert(length == backing);
+    for (unsigned i = 0; i < CAPTURE_COUNT; i++) if (address == data[i]) {
+        assert(maps[i]); maps[i]--; return 0;
+    }
+    abort();
+}
+int native_ioctl(int fd, unsigned long command, ...)
+{
+    va_list args; va_start(args, command); void *arg = va_arg(args, void *); va_end(args);
+    if (command == VIDIOC_QUERYCAP) {
+        assert(fd == 1 && video_live);
+        strcpy((char *)((struct v4l2_capability *)arg)->driver, "mt6797-vdec");
+    } else if (command == VIDIOC_G_FMT || command == VIDIOC_TRY_FMT || command == VIDIOC_S_FMT) {
+        struct v4l2_format *f = arg;
+        assert(fd == 1 && video_live);
+        f->fmt.pix_mp.width = 80; f->fmt.pix_mp.height = 64;
+        f->fmt.pix_mp.pixelformat = f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ?
+            V4L2_PIX_FMT_MM21 : V4L2_PIX_FMT_H264_SLICE;
+        f->fmt.pix_mp.num_planes = 2;
+        f->fmt.pix_mp.plane_fmt[0].sizeimage = 5120;
+        f->fmt.pix_mp.plane_fmt[1].sizeimage = 2560;
+    } else if (command == VIDIOC_REQBUFS) {
+        struct v4l2_requestbuffers *b = arg;
+        assert(fd == 1 && b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+               b->memory == V4L2_MEMORY_MMAP && b->count == CAPTURE_COUNT);
+        if (fault == 1) b->count--;
+    } else if (command == VIDIOC_QUERYBUF) {
+        struct v4l2_buffer *b = arg;
+        assert(fd == 1 && b->index < CAPTURE_COUNT && b->length == 2);
+        for (unsigned p = 0; p < 2; p++) {
+            b->m.planes[p].length = backing;
+            b->m.planes[p].data_offset = b->m.planes[p].bytesused = p ? 5120 : 0;
+            b->m.planes[p].m.mem_offset = (b->index * 2 + p + 1) * backing;
+        }
+        if (fault == 2) b->m.planes[1].bytesused = 0;
+    } else if (command == VIDIOC_EXPBUF) {
+        struct v4l2_exportbuffer *b = arg;
+        assert(fd == 1 && b->index < CAPTURE_COUNT && b->plane < 2 &&
+               b->flags == (O_RDWR|O_CLOEXEC));
+        assert(!fd_live[b->index][b->plane]);
+        fd_live[b->index][b->plane] = 1;
+        b->fd = 10 + b->index * 2 + b->plane;
+    } else if (command == DRM_IOCTL_VERSION) {
+        struct drm_version *v = arg;
+        assert(fd == 3 && gpu_live && v->name_len >= 8);
+        strcpy(v->name, fault == 3 ? "foreign" : "panfrost"); v->name_len = strlen(v->name);
+    } else if (command == DRM_IOCTL_PRIME_FD_TO_HANDLE) {
+        struct drm_prime_handle *p = arg;
+        unsigned i = (p->fd - 10) / 2, plane = (p->fd - 10) % 2;
+        assert(fd == 3 && gpu_live && i < CAPTURE_COUNT && fd_live[i][plane]);
+        p->handle = i + 1;
+        if (fault == 4 && plane) p->handle += CAPTURE_COUNT;
+        if (fault == 5) p->handle = 1;
+        gem_live[i] = 1; imports++;
+    } else if (command == DRM_IOCTL_PANFROST_GET_BO_OFFSET) {
+        struct drm_panfrost_get_bo_offset *p = arg;
+        assert(fd == 3 && gpu_live && p->handle && p->handle <= CAPTURE_COUNT);
+        assert(gem_live[p->handle - 1]);
+        p->offset = fault == 6 ? 0 : p->handle * 0x100000;
+    } else if (command == DMA_BUF_IOCTL_SYNC) {
+        struct dma_buf_sync *s = arg;
+        unsigned i = (fd - 10) / 2, plane = (fd - 10) % 2;
+        assert(i < CAPTURE_COUNT && fd_live[i][plane]);
+        assert((s->flags & DMA_BUF_SYNC_RW) == DMA_BUF_SYNC_RW ||
+               (s->flags & DMA_BUF_SYNC_RW) == DMA_BUF_SYNC_READ);
+        if (s->flags & DMA_BUF_SYNC_END) { assert(cpu[i]); cpu[i]--; }
+        else {
+            if (fault == 8 && cpu[i] && data[i][0]) memset(data[i], 0, backing);
+            cpu[i]++;
+        }
+    } else if (command == VIDIOC_QBUF) {
+        struct v4l2_buffer *b = arg;
+        assert(fd == 1 && video_live && b->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+               b->index < CAPTURE_COUNT && b->length == 2 && !cpu[b->index]);
+        assert(!queued[b->index]); queued[b->index] = 1; qbufs++;
+    } else if (command == DRM_IOCTL_GEM_CLOSE) {
+        struct drm_gem_close *b = arg;
+        assert(fd == 3 && gpu_live && b->handle && b->handle <= CAPTURE_COUNT);
+        assert(gem_live[b->handle - 1]); gem_live[b->handle - 1] = 0; releases++;
+    } else {
+        /* No STREAMON, Request, source QBUF, GPU submit or decoder command. */
+        fprintf(stderr, "Unexpected ioctl %lu\n", command); abort();
+    }
+    return 0;
+}
+int main(int argc, char **argv)
+{
+    assert(argc == 2); fault = strtoul(argv[1], NULL, 10);
+    for (unsigned i = 0; i < CAPTURE_COUNT; i++) { data[i] = calloc(1, backing); assert(data[i]); }
+    struct stream stream;
+    width = 80; height = storage_height = 64; buffers_only = 1;
+    test_native_buffers(&stream, "video", "media", "render");
+    assert(imports == CAPTURE_COUNT * 2 && releases == CAPTURE_COUNT && qbufs == CAPTURE_COUNT);
+    assert(!video_live && !media_live && !gpu_live);
+    for (unsigned i = 0; i < CAPTURE_COUNT; i++) {
+        assert(!maps[i] && !cpu[i] && !fd_live[i][0] && !fd_live[i][1] && !gem_live[i]);
+        free(data[i]);
+    }
+    return 0;
+}
+'''
+    with tempfile.TemporaryDirectory(prefix='vdec-native-buffers-host-') as tmp:
+        path = Path(tmp); (path/'buffers.c').write_text(code)
+        compiler = shlex.split(os.environ.get('HOSTCC', os.environ.get('CC', 'cc')))
+        flags = shlex.split(os.environ.get('CFLAGS', ''))
+        subprocess.run(compiler + ['-std=gnu11', '-Wall', '-Wextra', '-Werror'] + flags +
+                       [str(path/'buffers.c'), '-o', str(path/'buffers')], check=True)
+        result = subprocess.run([str(path/'buffers'), '0'], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        report = json.loads(result.stdout)
+        assert report['native_buffers_test_passed'] and report['scope'] == 'native-buffers'
+        assert report['codec_submissions'] == report['gpu_submissions'] == 0
+        for fault, message in ((1, 'Queue does not support'), (2, 'Unexpected queried'),
+                               (3, 'Unexpected render driver'), (4, 'different GEM handles'),
+                               (5, 'Distinct capture'), (6, 'Invalid native GPU'),
+                               (7, 'Native capture alias contents differ'),
+                               (8, 'Native capture alias contents differ')):
+            result = subprocess.run([str(path/'buffers'), str(fault)], capture_output=True, text=True)
+            assert result.returncode != 0 and message in result.stderr, (fault, result.stderr)
+    print('Actual native mode: layouts, 17 aliased PRIME imports, nested CPU access, queue/close lifetimes and release; eight faulty-device cases rejected: PASS')
 
 
 def check_surface_jobs(source):
@@ -588,5 +882,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     check_cli(args.request_source)
     check_capture(args.request_source)
+    check_native_buffers(args.request_source)
     check_surface_jobs(REPO/'research/mt6797-vdec-v4l2/buffer.c')
     check_qualification(args.qualifier_source)

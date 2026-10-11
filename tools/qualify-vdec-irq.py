@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check decoder IRQ delivery and pixels within a durable boot observation window."""
+"""Check decoder completion or native buffers in a durable boot observation window."""
 import argparse
 import hashlib
 import importlib.util
@@ -59,6 +59,45 @@ def irq_counter(text):
                 actions=value['actions'], counter='sysfs-all-possible-cpus')
 
 
+def check_kernel_revision(kernel, expected):
+    revisions = [row.removeprefix('source-revision=')
+                 for row in (kernel/'BUILD-MANIFEST').read_text().splitlines()
+                 if row.startswith('source-revision=')]
+    if not re.fullmatch(r'[0-9a-f]{40}', expected) or revisions != [expected]:
+        raise RuntimeError('Kernel source revision differs; matching module ABI is insufficient')
+
+
+def buffers_qualified(reports, cached, start, finish, returncode, safe, statuses):
+    expected = dict(native_buffers_test_passed=True,
+                    scope='native-buffers', width=80, height=64,
+                    capture_buffers=17, planes_per_buffer=2, sizeimage=[5120, 2560],
+                    plane_lengths=[196608, 196608], data_offsets=[0, 5120],
+                    exported_fds=34, prime_handles=17, prime_aliases_same_handle=True,
+                    prime_gpu_va_verified=True, mmap_export_aliases_verified=True,
+                    queue_cache_cycle_verified=True, video_close_lifetime_verified=True,
+                    closed_fd_aliases_verified=True, prime_release_lifetime_verified=True,
+                    all_user_refs_released=True, codec_submissions=0, gpu_submissions=0,
+                    decode_qualified=False, gpu_rendering_qualified=False)
+    if returncode != 0 or not safe or statuses or len(reports) != 1:
+        return False
+    record = reports[0]
+    if not isinstance(record, dict) or set(record) != set(expected):
+        return False
+    for key, value in expected.items():
+        if type(record[key]) is not type(value) or record[key] != value:
+            return False
+        if isinstance(value, list) and any(type(item) is not int for item in record[key]):
+            return False
+    if set(cached) != {'last-job', 'engine-failure', 'context-failure'}:
+        return False
+    zero = ('jobs', 'failures', 'fetch_commands', 'frame_commands', 'fetched',
+            'submitted', 'irq_events', 'irq_unexpected', 'result', 'engine_result')
+    if any(any(status.get(key) != 0 for key in zero) for status in cached.values()):
+        return False
+    return (start['irq'] == finish['irq'] and start['counts'] == finish['counts']
+            and start['total'] == finish['total'])
+
+
 def completion_qualified(statuses, comparisons, start, finish, returncode,
                          safe, program_complete, single=None):
     valid = (single,) if single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
@@ -95,18 +134,25 @@ def main():
     parser.add_argument('--trial', type=Path, required=True)
     parser.add_argument('--module-build', type=Path, required=True)
     parser.add_argument('--request-test', type=Path, required=True)
-    parser.add_argument('--fixtures', type=Path, required=True)
-    parser.add_argument('--single', choices=('grey64',))
+    parser.add_argument('--fixtures', type=Path)
+    case = parser.add_mutually_exclusive_group()
+    case.add_argument('--single', choices=('grey64',))
+    case.add_argument('--buffers-only', action='store_true',
+                      help='Qualify native allocation/export/import lifetime without decode')
     args = parser.parse_args()
+    if not args.buffers_only and args.fixtures is None:
+        parser.error('--fixtures is required for decode observations')
     trial = args.trial.resolve()
     metadata_file = args.module_build.resolve(strict=True)
     metadata = json.loads(metadata_file.read_text())
     KERNEL = Path(metadata['kernel_package']).resolve(strict=True)
+    check_kernel_revision(KERNEL, metadata['kernel_revision'])
     module = Path(metadata['module']['path'])
     program = args.request_test.resolve(strict=True)
     assert sha(module) == metadata['module']['sha256']
     request_build = metadata['request_test']
-    assert request_build['build_exit_code'] == 0 and request_build['machine'] == 183
+    assert request_build['build_exit_code'] == 0 and request_build['build_terminal'] is True
+    assert request_build['machine'] == 183
     assert program == Path(request_build['path']).resolve(strict=True)
     assert sha(program) == request_build['sha256']
     assert program.read_bytes()[:4] == b'\x7fELF' and int.from_bytes(program.read_bytes()[18:20], 'little') == 183
@@ -115,7 +161,11 @@ def main():
     assert subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() == metadata['module']['vermagic']
     assert sha(KERNEL/'kernel.config') == metadata['kernel_config_sha256']
     assert sha(KERNEL/'Module.symvers') == metadata['module_symvers_sha256']
-    assert metadata['build_exit_code'] == 0 and metadata['strict_modpost'] is True
+    assert metadata['build_exit_code'] == 0 and metadata['build_terminal'] is True
+    assert metadata['strict_modpost'] is True
+    if args.buffers_only:
+        assert {'mt6797-vdec-v4l2/buffer.c', 'mt6797-vdec-v4l2/buffer.h'} <= metadata['source_sha256'].keys()
+        assert metadata['native_dma_contract_source_sha256']
     for name, expected in metadata['source_sha256'].items():
         assert sha(REPO/'research'/name) == expected, name
     assert {'mt6797-vdec-v4l2/request-test.c', 'mt6797-vdec/pcm64-fixture.h'} <= request_build['source_sha256'].keys()
@@ -138,7 +188,7 @@ def main():
     SYSTEM = str((bundle/'system').resolve(strict=True))
     boot = observation['boot_id']
     assert re.fullmatch(r'[0-9a-f-]{36}', boot)
-    out = trial/'decoder-irq'
+    out = trial/('decoder-buffers' if args.buffers_only else 'decoder-irq')
     out.mkdir()
     shutil.copy2(__file__, out/'observer-at-execution.py')
     shutil.copy2(metadata_file, out/'build-result.json')
@@ -149,9 +199,9 @@ def main():
     for name in ['request-test.c', '../mt6797-vdec/pcm64-fixture.h', '../mt6797-vdec/compare-frame.py']:
         source = REPO/'research/mt6797-vdec-v4l2'/name
         shutil.copy2(source, out/source.name)
-    fixtures = args.fixtures.resolve(strict=True)
+    fixtures = args.fixtures.resolve(strict=True) if args.fixtures else None
     (out/'fixtures').mkdir()
-    valid = (args.single,) if args.single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
+    valid = () if args.buffers_only else ((args.single,) if args.single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64'))
     for name in valid:
         for suffix in ('.json', '.yuv', '.nal'):
             shutil.copy2(fixtures/(name+suffix), out/'fixtures'/(name+suffix))
@@ -201,6 +251,12 @@ def main():
     assert len(nodes) == 2 and nodes[0].startswith('/dev/video') and nodes[1].startswith('/dev/media'), nodes
     start = irq_counter(remote(irq_snapshot_script(), 'irq-before').decode())
     selection = ' --single '+args.single if args.single else ''
+    if args.buffers_only:
+        render_nodes = remote('for node in /sys/class/drm/renderD*; do '
+                              'test "$(basename "$(readlink -f "$node/device/driver")")" != panfrost || '
+                              'echo /dev/dri/${node##*/}; done', 'render-nodes').decode().splitlines()
+        assert len(render_nodes) == 1 and re.fullmatch(r'/dev/dri/renderD[0-9]+', render_nodes[0])
+        selection = ' --buffers-only '+render_nodes[0]
     command = 'mkdir '+base+'/output\nset +e\ntimeout --kill-after=2 12 '+base+'/request-test '+shlex.join(nodes)+' '+base+'/output '+DEVICE+'/last_job'+selection+' > '+base+'/output/stdout.txt 2> '+base+'/output/stderr.txt\n'
     command += 'rc=$?\nset -e\nprintf "%s\\n" "$rc" > '+base+'/output/returncode.txt\n'
     for source, name in [('last_job', 'last-job'), ('last_engine_failure', 'engine-failure'), ('first_context_failure', 'context-failure')]:
@@ -241,15 +297,25 @@ def main():
     except json.JSONDecodeError:
         reports = []
         reports_valid = False
-    marker = dict(public_api_test_passed=True, scope='single-grey64') if args.single else dict(public_api_test_passed=True)
-    program_complete = bool(reports and reports[-1] == marker)
-    passed = completion_qualified(statuses, comparisons, start, finish,
-                                  int((out/'returncode.txt').read_text()), safe,
-                                  program_complete, args.single)
+    returncode = int((out/'returncode.txt').read_text())
+    if args.buffers_only:
+        program_complete = bool(reports_valid and len(reports) == 1
+                                and isinstance(reports[0], dict)
+                                and reports[0].get('native_buffers_test_passed') is True)
+        passed = buffers_qualified(reports, cached, start, finish, returncode, safe, statuses)
+        case_scope = 'allocation-export-prime-mapping-lifetime'
+    else:
+        marker = dict(public_api_test_passed=True, scope='single-grey64') if args.single else dict(public_api_test_passed=True)
+        program_complete = bool(reports and reports[-1] == marker)
+        passed = completion_qualified(statuses, comparisons, start, finish,
+                                      returncode, safe, program_complete, args.single)
+        case_scope = 'single-grey64' if args.single else 'four-pictures-and-missing-reference'
     result = dict(passed=bool(passed), safe_quiescence=safe, boot_id=boot, module_sha256=sha(module),
-                  returncode=int((out/'returncode.txt').read_text()), statuses=statuses, cached=cached,
+                  returncode=returncode, statuses=statuses, cached=cached,
                   irq_before=start, irq_after=finish, irq_delta=finish['total']-start['total'], comparisons=comparisons,
-                  case_scope='single-grey64' if args.single else 'four-pictures-and-missing-reference',
+                  case_scope=case_scope, native_buffer_reports=reports if args.buffers_only else [],
+                  decoder_completion_qualified=bool(passed and not args.buffers_only),
+                  gpu_rendering_qualified=False,
                   program_complete=program_complete, reports_valid=reports_valid,
                   native_irq_setup_and_bind_accepted=True,
                   system_profile_qualification_pending=True, unloaded=False)
@@ -266,7 +332,7 @@ def main():
         (out/'fatal-fence-retained.txt').write_text('Unsafe DMA stop: module and allocations retained until supervised recovery.\n')
     print(json.dumps(result, indent=2), flush=True)
     if not passed:
-        raise RuntimeError('Decoder IRQ trial did not qualify; preserve evidence and await supervised recovery')
+        raise RuntimeError('Decoder observation did not qualify; preserve evidence and await supervised recovery')
 
 
 if __name__ == '__main__':

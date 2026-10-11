@@ -332,8 +332,32 @@ def configure(watchdog=False, pm_test=None, cycle=False):
 p.configure = configure
 
 
-def calendar_preflight(runner, directory, execute):
+def boot_preflight(runner, directory, execute):
+    """Admit the selected store and retain rescue before any candidate boot."""
     before = base_preflight(runner, directory, execute)
+    with ExitStack() as locks:
+        for name in ('.p22-transaction.lock', '.p22-flash-writer.lock'):
+            handle = locks.enter_context((runner.LOCKS/name).open('a'))
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        runner.qualify.check_host_idle()
+        if p.f.snapshot('swap') != dict(before, layout='swap'):
+            raise RuntimeError('Baseline changed before boot preflight')
+        if STORE_ROOT:
+            runner.persistence.run(p.f.q.SSH, f'''set -eu
+test "$(cat /proc/sys/kernel/random/boot_id)" = {before['boot_id']}
+nix-store --store 'local?root={STORE_ROOT}' --check-validity {p.SYSTEM}
+test -x {STORE_ROOT}{p.SYSTEM}/init
+df -k /persist
+''', directory, 'persistent-store-installed')
+        else:
+            cache.prepare(p, runner, directory, before)
+    if not STORE_ROOT: cache.install(p, runner, directory)
+    stage1.install(p, runner, directory)
+    return before
+
+
+def calendar_preflight(runner, directory, execute):
+    before = boot_preflight(runner, directory, execute)
     with ExitStack() as locks:
         for name in ('.p22-transaction.lock', '.p22-flash-writer.lock'):
             handle = locks.enter_context((runner.LOCKS/name).open('a'))
@@ -352,17 +376,6 @@ test ! -d /run/gemini-rtc-alarm.lock
         if values['boot_id'] != before['boot_id']:
             raise RuntimeError('Calendar baseline boot changed')
         runner.qualify.save(directory, 'rtc-calendar-baseline.json', values)
-        if STORE_ROOT:
-            runner.persistence.run(p.f.q.SSH, f'''set -eu
-test "$(cat /proc/sys/kernel/random/boot_id)" = {before['boot_id']}
-nix-store --store 'local?root={STORE_ROOT}' --check-validity {p.SYSTEM}
-test -x {STORE_ROOT}{p.SYSTEM}/init
-df -k /persist
-''', directory, 'persistent-store-installed')
-        else:
-            cache.prepare(p, runner, directory, before)
-    if not STORE_ROOT: cache.install(p, runner, directory)
-    stage1.install(p, runner, directory)
     return before
 
 
@@ -385,6 +398,26 @@ def preflight(runner, directory, execute):
 p.preflight = preflight
 
 
+def boot_finish(runner, directory, before, error=None):
+    """Complete recovery before verifying any store cache reclamation."""
+    proof = {}
+    try:
+        base_finish(runner, directory, before, error)
+        if not STORE_ROOT:
+            proof.update(cache.verify_final(runner, directory))
+    except Exception as caught:
+        error = caught
+        raise
+    finally:
+        result_file = directory/'result.json'
+        if result_file.exists():
+            result = json.loads(result_file.read_text())
+            result.update(proof)
+            if error is not None:
+                result.update(result='failed', profile_qualified=False, error=str(error))
+            runner.qualify.save(directory, 'result.json', result)
+
+
 def alarm_finish(r,directory,before,error=None):
     proof=dict(rtc_alarm_diagnostics_qualified=False,sleep_requested=False,wake_from_suspend_qualified=False)
     if not r.watchdog_expiry_requested and error is None:
@@ -392,7 +425,7 @@ def alarm_finish(r,directory,before,error=None):
         except (OSError,ValueError,RuntimeError,KeyError) as caught:error=caught
     # Complete automatic recovery and its locked retention/source audit even
     # when the RTC evidence is missing or reports a failed cancellation.
-    try:base_finish(r,directory,before,error)
+    try:boot_finish(r,directory,before,error)
     finally:
         if not r.watchdog_expiry_requested:
             r.qualify.save(directory,'rtc-result.json',proof)
@@ -415,7 +448,6 @@ def calendar_finish(runner, directory, before, error=None):
         # This always completes the original alarm proof, recovery and full
         # storage/source/ordinary-output audit, even if calendar checks fail.
         alarm_finish(runner, directory, before, error)
-        if not STORE_ROOT: proof.update(cache.verify_final(runner, directory))
         if (directory/'promoted-baseline.json').exists():
             # A kept candidate has no rescue reboot; the next trial from the
             # new baseline exercises RTC persistence across its recovery.

@@ -310,4 +310,129 @@ class Profile(unittest.TestCase):
             self.assertFalse(saved['rtc_alarm_diagnostics_qualified'])
 
 
+class MediaAdmission(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location('media_profile', Path(__file__).with_name('test-media-boot.py'))
+        self.media = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.media)
+        self.boot = self.media.boot
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.before = {'boot_id': '11111111-1111-1111-1111-111111111111'}
+        self.boot_file = self.root/'boot'; self.boot_file.write_text(self.before['boot_id'])
+        self.system = '/nix/store/'+'a'*32+'-candidate-system'
+        self.init = self.root/'store'/self.system.lstrip('/')/'init'
+        self.init.parent.mkdir(parents=True)
+        self.valid = True
+
+        def remote(ssh, script, directory, name):
+            self.assertEqual(name, 'persistent-store-installed')
+            script = script.replace('/proc/sys/kernel/random/boot_id', str(self.boot_file))
+            script = script.replace('/persist/nixos', str(self.root/'store'))
+            stub = f'nix-store() {{ return {0 if self.valid else 1}; }}\ndf() {{ :; }}\n'
+            return subprocess.run(['sh', '-c', stub+script], check=True, capture_output=True, text=True).stdout
+
+        def save(directory, name, value):
+            (directory/name).write_text(json.dumps(value))
+
+        self.runner = SimpleNamespace(LOCKS=self.root,
+            persistence=SimpleNamespace(run=mock.Mock(side_effect=remote)),
+            qualify=SimpleNamespace(check_host_idle=mock.Mock(), save=save),
+            candidate_needs_rescue_reboot=mock.Mock(return_value=False), reboot=mock.Mock(), trial=mock.Mock())
+        self.enterContext(mock.patch.object(self.boot, 'STORE_ROOT', '/persist/nixos'))
+        self.enterContext(mock.patch.object(self.boot.p, 'SYSTEM', self.system))
+        self.base = self.enterContext(mock.patch.object(self.boot, 'base_preflight', return_value=self.before))
+        self.enterContext(mock.patch.object(self.boot.p.f, 'snapshot', return_value=dict(self.before, layout='swap')))
+        self.stage1 = self.enterContext(mock.patch.object(self.boot.stage1, 'install', wraps=self.boot.stage1.install))
+
+    def install_init(self):
+        self.init.write_text('#!/bin/sh\n'); self.init.chmod(0o700)
+
+    def test_missing_or_invalid_candidate_blocks_actual_worker_before_trial(self):
+        for valid, present, executable in ((False, True, True), (True, False, False), (True, True, False)):
+            with self.subTest(valid=valid, present=present, executable=executable):
+                self.valid = valid
+                self.init.unlink(missing_ok=True)
+                if present:
+                    self.install_init()
+                    if not executable: self.init.chmod(0o600)
+                with mock.patch.object(sys, 'argv', ['test-media-boot.py', '--worker', '--out', str(self.root)]), \
+                        mock.patch.dict(os.environ, GEMINI_POWER_SWAP_UNIT='boot-test-1-2', INVOCATION_ID='host-fixture'), \
+                        mock.patch.object(self.media.p.f.q.r.qualify, 'run', return_value=str(os.getpid())), \
+                        mock.patch.object(self.media.p, 'configure', return_value=self.runner), \
+                        mock.patch.object(self.media.p, 'finish') as finish:
+                    with self.assertRaises(subprocess.CalledProcessError): self.media.p.main()
+                self.runner.trial.assert_not_called()
+                self.stage1.assert_not_called()
+                finish.assert_not_called()
+
+    def test_media_admits_store_and_installs_stage1_once_without_rtc(self):
+        self.install_init()
+        original = self.runner.candidate_needs_rescue_reboot
+        with mock.patch.object(self.boot.calendar, 'install') as calendar, \
+                mock.patch.object(self.boot.rtc, 'install') as alarm, \
+                mock.patch.object(self.boot.startup, 'install_probe') as startup:
+            self.media.configure()
+            self.assertEqual(self.media.p.preflight(self.runner, self.root, True), self.before)
+        self.base.assert_called_once_with(self.runner, self.root, True)
+        self.runner.persistence.run.assert_called_once()
+        self.stage1.assert_called_once_with(self.boot.p, self.runner, self.root)
+        self.assertIsNot(self.runner.candidate_needs_rescue_reboot, original)
+        for rtc in (calendar, alarm, startup): rtc.assert_not_called()
+
+    def test_changed_boot_blocks_store_admission(self):
+        self.install_init(); self.boot_file.write_text('another-boot')
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.media.p.preflight(self.runner, self.root, True)
+        self.stage1.assert_not_called()
+
+    def test_squashfs_admission_prepares_and_installs_before_stage1(self):
+        events = []
+        with mock.patch.object(self.boot, 'STORE_ROOT', None), \
+                mock.patch.object(self.boot.cache, 'prepare', side_effect=lambda *a: events.append('prepare')), \
+                mock.patch.object(self.boot.cache, 'install', side_effect=lambda *a: events.append('install')), \
+                mock.patch.object(self.boot.stage1, 'install', side_effect=lambda *a: events.append('stage1')):
+            self.assertEqual(self.media.p.preflight(self.runner, self.root, True), self.before)
+        self.assertEqual(events, ['prepare', 'install', 'stage1'])
+        self.runner.persistence.run.assert_not_called()
+
+    def test_generic_finish_recovers_then_checks_cache_and_records_failure(self):
+        for failed in (False, True):
+            with self.subTest(failed=failed):
+                events = []
+                def recover(*args):
+                    events.append('recovery')
+                    self.runner.qualify.save(self.root, 'result.json', dict(result='passed', profile_qualified=True))
+                def verify(*args):
+                    events.append('cache')
+                    if failed: raise RuntimeError('cache proof failed')
+                    return {'unused_cache_pruned': False}
+                with mock.patch.object(self.boot, 'STORE_ROOT', None), \
+                        mock.patch.object(self.boot, 'base_finish', side_effect=recover), \
+                        mock.patch.object(self.boot.cache, 'verify_final', side_effect=verify):
+                    if failed:
+                        with self.assertRaisesRegex(RuntimeError, 'cache proof failed'):
+                            self.media.p.finish(self.runner, self.root, self.before)
+                    else:
+                        self.media.p.finish(self.runner, self.root, self.before)
+                self.assertEqual(events, ['recovery', 'cache'])
+                result = json.loads((self.root/'result.json').read_text())
+                self.assertEqual(result['profile_qualified'], not failed)
+                self.assertEqual(result['result'], 'failed' if failed else 'passed')
+                if failed: self.assertEqual(result['error'], 'cache proof failed')
+                else: self.assertFalse(result['unused_cache_pruned'])
+
+    def test_persistent_finish_skips_cache_and_failed_recovery_cannot_pass(self):
+        error = RuntimeError('recovery failed')
+        self.runner.qualify.save(self.root, 'result.json', dict(result='passed', profile_qualified=True))
+        with mock.patch.object(self.boot, 'base_finish') as recover, \
+                mock.patch.object(self.boot.cache, 'verify_final') as cache:
+            self.media.p.finish(self.runner, self.root, self.before)
+            cache.assert_not_called()
+            recover.side_effect = error
+            with self.assertRaisesRegex(RuntimeError, 'recovery failed'):
+                self.media.p.finish(self.runner, self.root, self.before)
+            cache.assert_not_called()
+        self.assertFalse(json.loads((self.root/'result.json').read_text())['profile_qualified'])
+
+
 if __name__=='__main__':unittest.main()

@@ -20,11 +20,14 @@ p.EXTRA_EXECUTED_SOURCES += ('tools/test-media-boot.py', 'tools/qualify-vdec-irq
 p.EXTRA_EXECUTED_SOURCES += tuple('research/'+name for name in (
     'mt6797-vdec-v4l2/Kbuild', 'mt6797-vdec-v4l2/v4l2.c',
     'mt6797-vdec-v4l2/engine.c', 'mt6797-vdec-v4l2/engine.h',
+    'mt6797-vdec-v4l2/buffer.c', 'mt6797-vdec-v4l2/buffer.h',
     'mt6797-vdec-v4l2/controls.c', 'mt6797-vdec-v4l2/request-test.c',
+    'mt6797-vdec-v4l2/multislice-request-test.c',
     'mt6797-vdec/mt6797-h264-controls.c', 'mt6797-vdec/mt6797-h264-controls.h',
-    'mt6797-vdec/pcm64-fixture.h', 'mt6797-vdec/compare-frame.py'))
-p.preflight = boot.base_preflight
-p.finish = boot.base_finish
+    'mt6797-vdec/pcm64-fixture.h', 'mt6797-vdec/multislice64-fixture.h',
+    'mt6797-vdec/compare-frame.py'))
+p.preflight = boot.boot_preflight
+p.finish = boot.boot_finish
 
 def configure(*args, **kwargs):
     runner = boot.base_configure(*args, **kwargs)

@@ -126,7 +126,7 @@ Inspection of the fetched upstream `v7.1.3..v7.2.9` history shows:
 - Udmabuf fixes malformed scatterlists, DMA direction and CPU cache synchronization,
   including the first CPU access. These matter if userspace-created buffers are
   used in a future shared-frame pipeline. They are not exercised by the current
-  decoder's private DMA cache.
+  decoder's native DMA-buf cache ownership.
   [First CPU access fix](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1d0e25c1ddf206).
 - Stable 7.2 includes `dma_buf_fd_install()` and changes DMA-heap allocation to
   publish a reserved fd only after the userspace result copy succeeds. This

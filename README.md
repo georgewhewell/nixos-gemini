@@ -16,8 +16,9 @@ bounded discovery passes; pairing and profiles remain unqualified. The native
 modem reaches HS2, then fails with a watchdog interrupt. SIM/eSIM, cellular data,
 SMS delivery and voice require further native driver bring-up. GNSS now exposes
 the standard Linux endpoint and passes two power lifetime cycles, but receives
-no data; receiver initialization and positioning remain unfinished. Hardware video
-completion, shared surfaces and encoding are also unfinished. The
+no data; receiver initialization and positioning remain unfinished. Native video
+buffer ownership passes host checks; hardware completion, shared-buffer use and
+encoding remain unfinished. The
 [current hardware status](research/HARDWARE_STATUS.md) records each feature's
 accepted checks and remaining work; the [kernel baseline](research/KERNEL_BASELINE.md)
 describes the maintained driver interfaces and exact installed revision.
