@@ -6,9 +6,7 @@
   serviceabilityDtb,
   nixosToplevel,
   authorizedKeys,
-  bq2589xPreflight,
   unattendedRecovery ? false,
-  inputDiagnostics ? false,
   displayActivation ? false,
   stage1PersistentHostKey ? false,
   watchdogLeaseSeconds ? 90,
@@ -19,7 +17,6 @@
   persistentStorage,
 }:
 assert builtins.isInt watchdogLeaseSeconds;
-assert builtins.isBool inputDiagnostics;
 assert builtins.isBool displayActivation;
 assert kernelLeaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" kernelLeaseSelfAcceptToken != null;
 assert leaseSelfAcceptToken == null || builtins.match "gemini-baseline-lease-v1-[0-9a-f]{64}" leaseSelfAcceptToken != null;
@@ -80,12 +77,8 @@ let
     cp "$dropbear/bin/dropbearkey" root/bin/dropbearkey${buildPkgs.lib.optionalString stage1PersistentHostKey ''
 
     cp "$dropbear/bin/dropbearconvert" root/bin/dropbearconvert''}
-    cp ${bq2589xPreflight} root/bin/bq2589x-preflight
     cp ${./unattended-recovery-lease-record.sh} \
       root/bin/unattended-recovery-lease-record
-    ${if inputDiagnostics then ''
-      cp ${./input-observe.sh} root/bin/input-observe
-    '' else ""}
     cp "$rtlFirmware/lib/firmware/rtl_nic/rtl8156b-2.fw" \
       root/lib/firmware/rtl_nic/rtl8156b-2.fw
     test "$(sha256sum root/lib/firmware/rtl_nic/rtl8156b-2.fw | cut -d' ' -f1)" = \
@@ -384,13 +377,6 @@ let
 
     @START_WATCHDOG@
     @ACTIVATE_DISPLAY@
-    ${if inputDiagnostics then ''
-      /bin/busybox sh /bin/input-observe stage1 &
-      log "input_observe=started mode=sysfs-read-only i2c_transfers=none touchscreen_client=untouched"
-    '' else ""}
-    /bin/bq2589x-preflight &
-    preflight_pid=$!
-    log "power_observe_preflight=started mode=sysfs-and-dmesg-only watchdog_lease=unchanged"
     /bin/usb-net &
     /bin/usb-host-net &
     /bin/ssh-server &
@@ -436,17 +422,6 @@ let
     nixos_system=''${nixos_init%/init}
     [ -x "/mnt/nixos$nixos_init" ] || fail "nixos-init-missing"
     log "store=mounted system=$nixos_system"
-    # The preflight reads /proc and /sys and writes /run: let it finish
-    # before they move, or its result lands in the abandoned initramfs /run.
-    waited=0
-    while kill -0 "$preflight_pid" 2>/dev/null && [ "$waited" -lt 15 ]; do
-      sleep 1
-      waited=$((waited + 1))
-    done
-    if kill -0 "$preflight_pid" 2>/dev/null; then
-      kill "$preflight_pid" 2>/dev/null || true
-      log "power_observe_preflight=timeout waited=''${waited}s"
-    fi
     mount --move /mnt/gemian /mnt/nixos/gemian || fail "move-gemian"
     mount --move /proc /mnt/nixos/proc || fail "move-proc"
     mount --move /sys /mnt/nixos/sys || fail "move-sys"
@@ -513,13 +488,8 @@ let
       root/bin/unattended-recovery-lease-record
     chmod 0755 root/init root/bin/usb-net root/bin/usb-host-net \
       root/bin/usb-host-net-udhcpc root/bin/ssh-server \
-      root/bin/bq2589x-preflight root/bin/unattended-recovery-lease-record \
+      root/bin/unattended-recovery-lease-record \
       root/bin/dropbear root/bin/dropbearkey
-    ${if inputDiagnostics then ''
-      chmod 0755 root/bin/input-observe
-      grep -Fqx 'record "stage=$stage mode=sysfs-read-only i2c_transfers=none input_events=unopened touchscreen_client=untouched"' root/bin/input-observe
-      ! grep -Eq '/dev/(i2c|input)|i2cdetect|i2cget|i2cset' root/bin/input-observe
-    '' else ""}
     find root -exec touch -h -d @0 {} +
     (
       cd root
@@ -588,7 +558,7 @@ let
       echo "touchscreen-activation=NT36772 I2C4/0x62 explicit profile component"
       echo "fgadc-activation=MT6351 calibrated 0x28 OSR8 explicit profile component"
       echo "microsd-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /mmc@11240000 status)"
-      echo "audio=PCM playback/capture qualification plus ALSA default and UCM routes; acoustic validation pending"
+      echo "audio=ALSA default and UCM routes; playback/capture qualification explicit; acoustic validation pending"
       echo "consys-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /consys@18070000 status)"
       echo "wifi-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /consys@18070000/wifi@180f0000 status)"
       echo "gpu-dt-status=$(${buildPkgs.dtc}/bin/fdtget ${serviceabilityDtb}/gemini.dtb /gpu@13040000 status)"
@@ -598,7 +568,6 @@ let
         else "none"
       }"
       echo "store-provision=disabled"
-      echo "power-observe-preflight=BQ2589x sysfs+dmesg, no charger writes; watchdog lease unchanged"
       echo "persistent-storage=p32 ${persistentStorage.dataLabel} for /home and registered /nix; RAM-only zram swap"
       sha256sum \
         ${kernel}/Image ${kernel}/Image.gz \

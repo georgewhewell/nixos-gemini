@@ -109,7 +109,6 @@
   # manager API. Keep the package's socket-activated, notify-ready units.
   systemd.services.gemini-manager-bus-check = {
     description = "Verify PID 1 owns the system D-Bus manager API";
-    wantedBy = ["multi-user.target"];
     after = ["dbus.service"];
     requires = ["dbus.service"];
     serviceConfig = {
@@ -236,15 +235,10 @@
     '';
   };
 
-  # The Stage-1 copy runs before the root handoff.  Repeat only the same
-  # sysfs metadata inventory after systemd has settled, so a remote reviewer
-  # can compare input, I2C-adapter, and thermal-zone presence without opening
-  # an event/I2C device or changing the touchscreen's disabled-client gate.
+  # Explicit metadata inventory; normal startup does not collect evidence.
   systemd.services.gemini-input-observe = {
     description = "Record Gemini input-board metadata without bus transfers";
-    wantedBy = ["multi-user.target"];
     after = ["gemini-watchdog-takeover.service" "systemd-udevd.service"];
-    before = ["sshd.service" "gemini-mainline-success.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -276,19 +270,16 @@
   # is an explicit build-time capability carried by the Android boot cmdline;
   # it is not a secret.  The helper refuses to create the existing acceptance
   # marker unless the cmdline, Stage-1-pinned Stage-2 identity, both network
-  # paths, read-only mounts, watchdog owner, power preflight and unit health
+  # paths, read-only mounts, watchdog owner and unit health
   # all match.  Images without this module argument retain external-only,
   # fail-closed acceptance.
   systemd.services.gemini-baseline-self-accept = lib.mkIf (geminiLeaseSelfAcceptToken != null) {
     description = "Self-accept the reviewed Gemini full-NixOS watchdog lease";
-    requires = ["gemini-manager-bus-check.service"];
     wantedBy = ["multi-user.target"];
     after = [
       "gemini-mainline-success.service"
-      "gemini-manager-bus-check.service"
       "gemini-watchdog-takeover.service"
       "gemini-mainline-usb.service"
-      "gemini-input-observe.service"
       "sshd.service"
       "gemian.mount"
     ];

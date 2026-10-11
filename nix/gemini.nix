@@ -97,14 +97,7 @@
     serviceabilityDtb = dtb;
     nixosToplevel = system.config.system.build.toplevel;
     authorizedKeys = ../nixos/authorized_keys;
-    bq2589xPreflight = buildPkgs.runCommand "bq2589x-preflight-charger" {} ''
-      sed 's/^EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-observe}$/EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}/' \
-        ${./bq2589x-preflight.sh} > "$out"
-      grep -Fqx 'EXPECTED_MODE=''${GEMINI_PREFLIGHT_EXPECTED_MODE:-charger}' "$out"
-      chmod 0755 "$out"
-    '';
     unattendedRecovery = true;
-    inputDiagnostics = true;
     stage1PersistentHostKey = true;
     displayActivation = true;
     watchdogLeaseSeconds = 720;

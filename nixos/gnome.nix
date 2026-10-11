@@ -29,10 +29,8 @@
 
   systemd.services.gemini-gnome-qualify = {
     description = "Verify the local Gemini GNOME Wayland session";
-    wantedBy = ["graphical.target"];
     requires = ["display-manager.service"];
     after = ["display-manager.service"];
-    before = ["gemini-baseline-self-accept.service"];
     path = [config.systemd.package pkgs.coreutils pkgs.gawk pkgs.procps];
     serviceConfig = {
       Type = "oneshot";
@@ -71,8 +69,8 @@
     '';
   };
   systemd.services.gemini-baseline-self-accept = {
-    after = ["gemini-gnome-qualify.service"];
-    requires = ["gemini-gnome-qualify.service"];
+    after = ["display-manager.service"];
+    requires = ["display-manager.service"];
   };
 
   users.users.gemini.shell = pkgs.bashInteractive;

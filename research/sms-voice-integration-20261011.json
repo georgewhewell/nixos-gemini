@@ -230,7 +230,20 @@
           "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/seal.json",
           "sha256": "a27692d6c0b13c55846d5ce12513ac99a20bf10273125872b88e8dddb7e4b692"
         },
-        "scope": "Includes native configured-policy precedence, typed AT active-seat access and checked lpac AT error handling. Candidate write/readback succeeds; SSH health exits3, then healthy-boot gate expires. Audited rollback restores116; no eUICC APDU or provisioning operation."
+        "scope": "Includes native configured-policy precedence, typed AT active-seat access and checked lpac AT error handling. Candidate write/readback succeeds; SSH health exits3, then healthy-boot gate expires. Audited rollback restores116; no eUICC APDU or provisioning operation.",
+        "retained_journal_diagnostic": {
+          "actual_exit": 0,
+          "candidate_cause_established": false,
+          "scope": "Guarded restored116 read completes with unchanged identity and taint0. journalctl boot enumeration exits1 with zero stdout bytes/rows; no candidate boot is identified or queried. Earlier observer assertion failure is retained as attempt01, not a hardware failure.",
+          "proof": {
+            "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/retained-journal-attempt02/result.json",
+            "sha256": "0a8e0307512351d5859e6434bb97175eb19aca14e2a8f34ca28e791257d27b82"
+          },
+          "exit_proof": {
+            "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/configured-policy-image/retained-journal-attempt02/exit.json",
+            "sha256": "e0d914b7a407d465f80ddc7c927dd3c84e32a11a8de7ad6adb4bcadda4e8cff4"
+          }
+        }
       }
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. The generic GUI AT backend reuses lpac standard APDU commands and ModemManager port metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility. Physical slot association remains unqualified.",
@@ -400,7 +413,7 @@
       "actual_scratch_host_exit": 0,
       "target_or_hardware_qualified": false,
       "watchdog_cause_established": false,
-      "remaining": "Establish candidate healthy-boot failure from bounded retained evidence; install and observe configured policy and raw LK metadata, then qualify readiness and watchdog separately. Trials117/118 produced no candidate metadata or AT observer result.",
+      "remaining": "Capture the failing health unit/step on the next changed-image trial; guarded rollback journal enumeration returned no candidate boot. Install and observe configured policy and raw LK metadata, then qualify readiness and watchdog separately. Trials117/118 produced no candidate metadata or AT observer result.",
       "kernel_revision": "35994bd7e06a0f706d5a2ff172f9bba4121b813d",
       "actual_production_host_exit": 0,
       "strict_arm64_actual_exit": 0,

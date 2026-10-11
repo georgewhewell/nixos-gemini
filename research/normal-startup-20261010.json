@@ -136,5 +136,34 @@
     "independent_audit_actual_exit": 0,
     "combined_build_exit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/image-exit.json",
     "audit": "/mnt/Home/src/nixos-gemini/handoff/desktop-responsiveness-20261011/native-owner-update/independent-audit-114/result.json"
+  },
+  "remaining_diagnostic_retirement_20261011": {
+    "status": "Source-integrated and host-validated; not installed",
+    "explicit_units": [
+      "gemini-gnome-qualify.service",
+      "gemini-manager-bus-check.service",
+      "gemini-input-observe.service"
+    ],
+    "retired_stage1_diagnostics": [
+      "BQ2589x preflight and wait",
+      "input metadata inventory"
+    ],
+    "removed_acceptance_markers": [
+      "BQ2589x diagnostic marker",
+      "input inventory unit",
+      "automatic GNOME and manager-bus verification dependencies"
+    ],
+    "native_activation_and_recovery_preserved": true,
+    "desktop_qualification": "Existing GNOME session unit is invoked only by the explicit changed-desktop trial before promotion.",
+    "failed_trial_diagnostics": "Existing host health adapter retains whitelisted scalar unit status under a direct 5s TERM/1s KILL timeout; the latest health failure survives later SSH errors.",
+    "focused_host_checks_actual_exit": 0,
+    "graph_eval_actual_exit": 0,
+    "frozen_recovery_drv_unchanged": true,
+    "installed": false,
+    "boot_latency_measured": false,
+    "proof": {
+      "path": "/mnt/Home/src/nixos-gemini/handoff/startup-consolidation-20261011/result.json",
+      "sha256": "a887458429fe73c80c43652c7e2bb32c314254e01c9c8f2ca943a4a1163ee71e"
+    }
   }
 }

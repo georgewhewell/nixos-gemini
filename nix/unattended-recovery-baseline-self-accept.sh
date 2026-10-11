@@ -194,7 +194,6 @@ if [ "$system_state" != running ]; then
 fi
 unit_active gemini-watchdog-takeover.service || fail watchdog-takeover-inactive
 unit_active gemini-mainline-usb.service || fail gadget-service-inactive
-unit_active gemini-input-observe.service || fail input-observe-inactive
 unit_active sshd.service || fail sshd-inactive
 failed_units=$("$systemctl" --failed --no-legend --plain 2>/dev/null || true)
 if [ -n "$failed_units" ]; then
@@ -259,8 +258,6 @@ watchdog_owned "$owner" || fail watchdog-owner-invalid
   fail success-marker-missing
 "$busybox" grep -Fqx "watchdog-owner=$owner" "$success_file" || fail success-owner-mismatch
 "$busybox" grep -Fqx 'watchdog-state=active' "$success_file" || fail success-watchdog-mismatch
-"$busybox" grep -Fqx 'result=pass watchdog_lease=unchanged remote_review_required=yes' \
-  "$run_root/bq2589x-preflight.pass" || fail power-preflight-missing
 before_deadline || fail deadline-invalid-or-expired
 
 tmp=$accepted_file.baseline-self-accept.$$

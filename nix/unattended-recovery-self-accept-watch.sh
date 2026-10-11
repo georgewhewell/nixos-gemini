@@ -27,7 +27,7 @@ expired_file=$run_root/unattended-recovery.lease-expired
 status_file=$run_root/gemini-baseline-self-accept.status
 out=$run_root/gemini-baseline-self-accept.watch
 # The gate's Requires= chain, in boot order.
-chain="gemini-cellular.service gemini-gpu.service gemini-audio.service gemini-connectivity.service display-manager.service gemini-gnome-qualify.service gemini-manager-bus-check.service"
+chain="gemini-cellular.service gemini-gpu.service gemini-audio.service gemini-connectivity.service display-manager.service"
 
 emit() {
   line="GEMINI_MAINLINE_NIXOS: self_accept_watch $*"

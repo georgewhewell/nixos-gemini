@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -19,11 +20,12 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
 class Profile(unittest.TestCase):
-    def test_gnome_health_requires_gdm_and_a_verified_session(self):
+    def test_gnome_health_requires_activation_without_boot_qualification(self):
         r = m.configure()
         original = r.qualify.SNAPSHOT
         selected = r.qualify.desktop_snapshot(original, 'gnome')
-        self.assertIn('systemctl is-active display-manager gemini-gnome-qualify ', selected)
+        self.assertIn('systemctl is-active display-manager gemini-jpeg gemini-gpu ', selected)
+        self.assertNotIn('gemini-gnome-qualify', selected)
         self.assertNotIn('systemctl is-active gemini-desktop ', selected)
         self.assertIn('unattended_recovery=healthy', selected)
         self.assertIn('boot_sha256=', selected)
@@ -32,6 +34,112 @@ class Profile(unittest.TestCase):
         self.assertEqual(r.PAGING_POLICY, 'zram')
         with self.assertRaises(RuntimeError):
             r.qualify.desktop_snapshot(original.replace('systemctl is-active ', ':'), 'gnome')
+        legacy = 'set -eu\nsystemctl is-active gemini-desktop gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null\n'
+        adapted = r.qualify.desktop_snapshot(legacy, 'gnome')
+        self.assertIn('network_service=gemini-wifi', adapted)
+        for status in (0, 3):
+            checked = subprocess.run(['sh', '-c', f'systemctl() {{ return {status}; }}\n'+adapted], capture_output=True)
+            self.assertEqual(checked.returncode, status)
+        with self.assertRaises(RuntimeError):
+            r.qualify.desktop_snapshot(legacy.replace('set -eu', 'set -e'), 'gnome')
+
+    def test_failed_health_snapshot_retains_only_public_failure_details(self):
+        r = m.configure()
+        spec = importlib.util.spec_from_file_location('health_snapshot', Path(__file__).with_name('qualify-mtkclient.py'))
+        q = importlib.util.module_from_spec(spec); spec.loader.exec_module(q)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root/'accepted'
+            marker.write_text('unattended_recovery=healthy\n')
+            network = root/'NetworkManager.service'
+            script = q.desktop_snapshot(q.SNAPSHOT, 'gnome')
+            script = script.replace('/run/unattended-recovery.accepted', str(marker))
+            script = script.replace('/etc/systemd/system/NetworkManager.service', str(network))
+            script = script.replace('/sys/class/block/mmcblk0p34', str(root/'absent'))
+            systemctl = root/'systemctl'
+            systemctl.write_text(r'''#!/bin/sh
+case "$1" in
+  is-active) exit "${HEALTH_ACTIVE_STATUS:-3}" ;;
+  show)
+    [ "${HEALTH_SHOW_STALL:-0}" = 0 ] || { trap '' TERM; sleep 10; }
+    shift
+    for unit; do
+      [ "$unit" != -p ] || break
+      if [ "$unit" = display-manager.service ]; then
+        printf 'ActiveState=failed\nSubState=failed\nResult=exit-code\nExecMainStatus=1\n'
+      else
+        printf 'ActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\n'
+      fi
+      printf 'Id=%s\n\n' "$unit"
+    done ;;
+  --failed) [ "${HEALTH_ACTIVE_STATUS:-3}" = 0 ] || echo 'display-manager.service loaded failed failed fixed' ;;
+  *) exit 1 ;;
+esac
+''')
+            systemctl.chmod(0o755)
+            env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ['PATH'])
+            stub = r'''
+cat() {
+  case "$1" in
+    */boot_id) echo 11111111-1111-1111-1111-111111111111 ;;
+    */mmcblk0/size) echo 122142720 ;;
+    */mmcblk0p22/start) echo 362496 ;;
+    */mmcblk0p22/size) echo 32768 ;;
+    */mmcblk0p32/size) echo 32737247 ;;
+    *) return 1 ;;
+  esac
+}
+readlink() { echo /nix/store/11111111111111111111111111111111-nixos-system-test; }
+sha256sum() { echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; }
+head() { :; }
+'''
+            for managed in (False, True):
+                if managed:
+                    network.touch()
+                checked = subprocess.run(['sh', '-c', stub+script], text=True, capture_output=True, env=env, timeout=8)
+                self.assertEqual(checked.returncode, 3, checked.stderr)
+                error = subprocess.CalledProcessError(checked.returncode, ['private-command'],
+                                                      checked.stdout, 'private-stderr')
+                details = q.health_failure_details(error)
+                self.assertEqual(details['step'], 'network' if managed else 'services')
+                self.assertEqual(details['returncode'], 3)
+                self.assertEqual(details['exit_status'], 3)
+                self.assertEqual(details['failed_units'], ['display-manager.service'])
+                self.assertEqual(details['units']['display-manager.service']['ExecMainStatus'], '1')
+                self.assertEqual(details['boot_id'], '11111111-1111-1111-1111-111111111111')
+                poisoned = checked.stdout+'\n\nId=private.service\nActiveState=failed\nSecret=private\n'
+                error.stdout = poisoned
+                self.assertNotIn('private', json.dumps(q.health_failure_details(error)))
+            passed = subprocess.run(['sh', '-c', stub+script], text=True, capture_output=True,
+                                    env=dict(env, HEALTH_ACTIVE_STATUS='0'), timeout=8)
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertIn('healthy=yes\n', passed.stdout)
+            self.assertNotIn('health_failure_step', passed.stdout)
+            started = time.monotonic()
+            stalled = subprocess.run(['sh', '-c', stub+script], text=True, capture_output=True,
+                                     env=dict(env, HEALTH_SHOW_STALL='1'), timeout=9)
+            self.assertEqual(stalled.returncode, 3, stalled.stderr)
+            self.assertLess(time.monotonic()-started, 8)
+            self.assertIn('health_failure_step=network\n', stalled.stdout)
+            self.assertNotIn('Id=', stalled.stdout)
+            # The actual retry path preserves failure status; diagnosis cannot promote it.
+            transport = subprocess.CalledProcessError(255, ['private-ssh'], '', 'private-stderr')
+            with mock.patch.object(r, 'candidate_snapshot', side_effect=[error, transport]), \
+                    mock.patch.object(r, 'read_state', return_value='waiting'), \
+                    mock.patch.object(r.time, 'monotonic', side_effect=[0, 0, 0, 361]), \
+                    mock.patch.object(r.time, 'sleep'), \
+                    mock.patch.object(r, 'handoff_tree') as handoff:
+                with self.assertRaisesRegex(RuntimeError, 'Healthy candidate Linux did not return'):
+                    r.candidate_return([], {}, root, m.p.PROFILE)
+                handoff.assert_not_called()
+                retained = json.loads((root/'candidate-linux-last-error.json').read_text())
+                self.assertEqual(retained['returncode'], 255)
+                self.assertNotIn('private', json.dumps(retained))
+                health = json.loads((root/'candidate-linux-last-health-error.json').read_text())
+                self.assertEqual(health['returncode'], 3)
+                self.assertEqual(health['failed_units'], ['display-manager.service'])
+                self.assertNotIn('private', json.dumps(health))
+                self.assertFalse((root/'candidate-linux.json').exists())
 
     def test_native_startup_evidence_survives_parking_and_rejects_failed_boot(self):
         boot = '6b06926a-a9ab-4367-beec-c95a952bf376'
@@ -358,6 +466,29 @@ class MMCHighSpeed(unittest.TestCase):
 
     def path(self, value):
         return self.root / str(value).lstrip('/')
+
+    def test_explicit_gnome_session_checks_identity_and_propagates_failure(self):
+        trace = self.root/'gnome-calls'
+        for status, boot_id in ((0, self.boot_id), (1, self.boot_id), (0, 'other')):
+            trace.write_text('')
+            def run(ssh, script, directory, name, timeout):
+                script = script.replace('/proc/sys/kernel/random/boot_id', str(self.path('/proc/sys/kernel/random/boot_id')))
+                script = script.replace('/run/current-system', str(self.path('/run/current-system')))
+                stub = f'systemctl() {{ echo "$1" >> {trace}; return {status}; }}\n'
+                checked = subprocess.run(['sh', '-c', stub+script], text=True, capture_output=True, timeout=5)
+                if checked.returncode:
+                    raise subprocess.CalledProcessError(checked.returncode, ['fixture'], checked.stdout, checked.stderr)
+                return checked.stdout
+            runner = SimpleNamespace(persistence=SimpleNamespace(run=run))
+            with mock.patch.object(self.desktop.p, 'SYSTEM', self.system):
+                if status or boot_id != self.boot_id:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        self.desktop.gnome_evidence(runner, [], {'boot_id': boot_id}, self.root)
+                    self.assertEqual(trace.read_text(), 'start\n' if status else '')
+                else:
+                    result = self.desktop.gnome_evidence(runner, [], {'boot_id': boot_id}, self.root)
+                    self.assertEqual(result['result'], 'passed')
+                    self.assertEqual(trace.read_text(), 'start\nis-active\n')
 
     def write(self, path, value):
         target = self.path(path); target.parent.mkdir(parents=True, exist_ok=True)

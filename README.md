@@ -38,6 +38,9 @@ describes the maintained driver interfaces and exact installed revision.
 
 Normal boot initializes devices and opens GNOME. GPU render, audio, Wi-Fi scan,
 Weston and RTC qualification run explicitly when their behavior changes.
+Further [source cleanup](research/normal-startup-20261010.json) removes automatic
+GNOME session verification, D-Bus/input inventories and charger preflight from
+startup. Host checks pass; this cleanup is awaiting installation.
 Measured graphical boot is about 95 seconds, including 51 seconds in the kernel
 and initramfs. Paging uses RAM only: no eMMC/SD swap, zswap, zram writeback or
 hibernation. The preserved [7.1.3 fallback](research/baselines/boot-test-76.json)

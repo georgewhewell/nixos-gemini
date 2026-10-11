@@ -31,7 +31,6 @@ BUSYBOX
     'mainline NixOS reached multi-user.target' \
     'watchdog-owner=440' \
     'watchdog-state=active' > "$d/run/gemini-mainline-success"
-  printf '%s\n' 'result=pass watchdog_lease=unchanged remote_review_required=yes' > "$d/run/bq2589x-preflight.pass"
   printf '%s\n' \
     'display=activated gate=14000000.syscon/activate_drm dsi_irq=pre-host-registration' \
     > "$d/run/gemini-display-activation"
@@ -82,6 +81,12 @@ grep -Fqx unattended_recovery=healthy "$ok/run/unattended-recovery.accepted"
 test -d "$ok/run/unattended-recovery.baseline-self-accept.lock"
 grep -Fq 'baseline_self_accept=accepted' "$ok/run/stage1.log"
 grep -Fqx 'result=accepted' "$ok/run/gemini-baseline-self-accept.status"
+
+# Evidence-only inventory is not an activation or lease acceptance dependency.
+diagnostics=$WORK/diagnostics-not-requested
+make_fixture "$diagnostics"
+GEMINI_BASELINE_TEST_INACTIVE_UNIT=gemini-input-observe.service run_fixture "$diagnostics"
+grep -Fqx unattended_recovery=healthy "$diagnostics/run/unattended-recovery.accepted"
 
 network=$WORK/networkmanager
 make_fixture "$network"

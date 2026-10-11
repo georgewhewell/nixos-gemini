@@ -496,6 +496,19 @@ p.preflight = boot.boot_preflight
 p.finish = boot.boot_finish
 
 
+def gnome_evidence(runner, ssh, state, directory):
+    # Session verification belongs to this explicit desktop trial, not boot.
+    script = 'set -eu\n'
+    script += 'test "$(cat /proc/sys/kernel/random/boot_id)" = ' + shlex.quote(state['boot_id']) + '\n'
+    script += 'test "$(readlink /run/current-system)" = ' + shlex.quote(p.SYSTEM) + '\n'
+    script += 'systemctl start gemini-gnome-qualify.service\n'
+    script += 'systemctl is-active --quiet gemini-gnome-qualify.service\n'
+    script += 'echo GNOME_SESSION_PASS\n'
+    if runner.persistence.run(ssh, script, directory, 'gnome-session', timeout=110) != 'GNOME_SESSION_PASS\n':
+        raise RuntimeError('Explicit GNOME session qualification is incomplete')
+    return dict(result='passed', boot_id=state['boot_id'], system=p.SYSTEM)
+
+
 def configure(*args, **kwargs):
     runner = base_configure(*args, **kwargs)
     runner.CANDIDATE_DESKTOP = 'gnome'
@@ -508,6 +521,7 @@ def configure(*args, **kwargs):
         results = {}
         try:
             results['mmc_high_speed'] = json.loads((directory / 'mmc-high-speed' / 'result.json').read_text())
+            results['gnome'] = gnome_evidence(runner, ssh, state, directory)
             results['usb_typec'] = usb_evidence(runner, ssh, state, directory, p.SYSTEM)
             results['bluetooth'] = bluetooth_evidence(runner, ssh, state, directory)
             results['network'] = network.network_evidence(runner, ssh, state, directory, p.SYSTEM)

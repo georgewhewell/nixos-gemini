@@ -32,24 +32,49 @@ ACK = 'Download agent acknowledged reboot request'
 WRITE_ACK = 'Wrote accepted-boot.img to sector 362496 with sector count 32768.'
 PHASE_READ = 'da peek 0x10007024 4 --filename boot-phase.bin'
 RAMOOPS_READ = 'da peek 0x44410000 0xe0000 --filename ramoops.bin'
-# M69 runs cellular, GPU, audio, connectivity and desktop checks before
-# self-acceptance. A successful DA reboot exceeded the original 180s window.
+# A successful DA reboot exceeded the original 180s window.
 HEALTH_TIMEOUT = 360
+HEALTH_UNITS = (
+    'gemini-watchdog-takeover.service', 'gemini-cellular.service',
+    'gemini-gpu.service', 'gemini-jpeg.service', 'gemini-audio.service',
+    'gemini-connectivity.service', 'gemini-mainline-usb.service',
+    'gemini-mainline-success.service', 'gemini-baseline-self-accept.service',
+    'display-manager.service', 'NetworkManager.service', 'ModemManager.service',
+    'bluetooth.service', 'dbus.service', 'sshd.service',
+    'gemini-desktop.service', 'gemini-wifi.service',
+)
 SNAPSHOT = r'''set -eu
+health_step=identity
+health_failure() {
+  status=$?
+  trap - EXIT
+  if [ "$status" -ne 0 ]; then
+    set +e
+    printf 'health_failure_step=%s\nhealth_exit_status=%s\n' "$health_step" "$status"
+    timeout --signal=TERM --kill-after=1 5 systemctl show @HEALTH_UNITS@ \
+      -p Id -p ActiveState -p SubState -p Result -p ExecMainStatus 2>/dev/null
+  fi
+  exit "$status"
+}
+trap health_failure EXIT
 printf 'boot_id='; cat /proc/sys/kernel/random/boot_id
 printf 'system='; readlink /run/current-system
 printf 'boot_sha256='; sha256sum /dev/mmcblk0p22 | cut -d' ' -f1
 printf 'gpt_sha256='; head -c 32768 /dev/mmcblk0 | sha256sum | cut -d' ' -f1
+health_step=geometry
 test "$(cat /sys/class/block/mmcblk0/size)" = 122142720
 test "$(cat /sys/class/block/mmcblk0p22/start)" = 362496
 test "$(cat /sys/class/block/mmcblk0p22/size)" = 32768
 test "$(cat /sys/class/block/mmcblk0p32/size)" = 32737247
 test ! -e /sys/class/block/mmcblk0p34
+health_step=acceptance
 grep -qx 'unattended_recovery=healthy' /run/unattended-recovery.accepted
+health_step=services
 systemctl is-active gemini-desktop gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null
+health_step=units
 test -z "$(systemctl --failed --no-legend --plain)"
 printf 'healthy=yes\n'
-'''
+'''.replace('@HEALTH_UNITS@', ' '.join(HEALTH_UNITS))
 
 
 def run(argv, **kwargs):
@@ -60,7 +85,7 @@ def run(argv, **kwargs):
 def desktop_snapshot(script, desktop=None):
     if (desktop or BASELINE.get('desktop')) == 'gnome':
         old = 'systemctl is-active gemini-desktop gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
-        new = 'systemctl is-active display-manager gemini-gnome-qualify gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
+        new = 'systemctl is-active display-manager gemini-jpeg gemini-gpu gemini-wifi gemini-audio >/dev/null'
         managed = new.replace('gemini-wifi', '"$network_service"')
         old_managed = old.replace('gemini-wifi', '"$network_service"')
         if (script.count(new) == 1 or script.count(managed) == 1) and old not in script and old_managed not in script:
@@ -71,16 +96,54 @@ def desktop_snapshot(script, desktop=None):
             raise RuntimeError('Desktop health guard changed; review the GNOME adapter')
         else:
             script = script.replace(old, new)
-    if 'gemini-wifi' in script and 'network_service=gemini-wifi\n' not in script:
-        script = script.replace('gemini-wifi', '"$network_service"')
-        script = script.replace('set -eu\n', '''set -eu
+    if 'gemini-wifi gemini-audio >/dev/null' in script:
+        script = script.replace('gemini-wifi gemini-audio >/dev/null', '"$network_service" gemini-audio >/dev/null')
+        anchor = 'health_step=services\n' if 'health_step=services\n' in script else 'set -eu\n'
+        if script.count(anchor) != 1:
+            raise RuntimeError('Network health guard changed; review the adapter')
+        script = script.replace(anchor, anchor+'''health_step=network
 network_service=gemini-wifi
 if test -e /etc/systemd/system/NetworkManager.service; then
   network_service=NetworkManager
   systemctl is-active --quiet ModemManager.service
 fi
+health_step=services
 ''', 1)
     return script
+
+
+def health_failure_details(error):
+    """Retain bounded public status fields, never an SSH command or raw output."""
+    record = {'error_type': type(error).__name__, 'units': {}}
+    if isinstance(error, subprocess.CalledProcessError):
+        record['returncode'] = error.returncode
+    output = getattr(error, 'stdout', None) or ''
+    if isinstance(output, bytes):
+        output = output.decode('utf-8', errors='replace')
+    # systemctl separates unit blocks with a blank line; property order varies.
+    for block in output[:32768].split('\n\n'):
+        fields = dict(line.split('=', 1) for line in block.splitlines() if '=' in line)
+        unit = fields.get('Id')
+        if unit in HEALTH_UNITS:
+            record['units'][unit] = {}
+        else:
+            unit = None
+        for key, value in fields.items():
+            if key == 'health_failure_step' and value in ('identity', 'geometry', 'acceptance', 'network', 'services', 'units'):
+                record['step'] = value
+            elif key == 'health_exit_status' and re.fullmatch(r'[0-9]{1,10}', value):
+                record['exit_status'] = int(value)
+            elif key == 'boot_id' and re.fullmatch(r'[0-9a-f-]{36}', value):
+                record[key] = value
+            elif key == 'system' and re.fullmatch(r'/nix/store/[0-9a-z]{32}-nixos-system-[A-Za-z0-9.+_-]+', value):
+                record[key] = value
+            elif key in ('boot_sha256', 'gpt_sha256') and re.fullmatch(r'[0-9a-f]{64}', value):
+                record[key] = value
+            elif unit and ((key in ('ActiveState', 'SubState', 'Result') and re.fullmatch(r'[a-z][a-z0-9-]{0,40}', value)) or
+                           (key == 'ExecMainStatus' and re.fullmatch(r'[0-9]{1,10}', value))):
+                record['units'][unit][key] = value
+    record['failed_units'] = [name for name, status in record['units'].items() if status.get('ActiveState') == 'failed']
+    return record
 
 
 def snapshot(ssh):

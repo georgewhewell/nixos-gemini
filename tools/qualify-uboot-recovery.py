@@ -414,7 +414,11 @@ def candidate_return(ssh, before, directory, profile):
         try:
             after = candidate_snapshot(ssh, before, profile)
         except (subprocess.SubprocessError, RuntimeError, ValueError) as error:
-            (directory / 'candidate-linux-last-error.txt').write_text(str(error) + '\n')
+            details = qualify.health_failure_details(error)
+            qualify.save(directory, 'candidate-linux-last-error.json', details)
+            if 'step' in details:
+                # A later SSH failure must not erase the failing Linux unit.
+                qualify.save(directory, 'candidate-linux-last-health-error.json', details)
             time.sleep(3)
             continue
         qualify.save(directory, 'candidate-linux.json', after)
