@@ -1,25 +1,36 @@
 # Cellular modem (MD1, CCCI and CLDMA)
 
-Status: SOURCE EXISTS in the vendor tree; GENERIC UPSTREAM WWAN is not a
-drop-in CCCI driver; MT6797 applicability and DT enablement **UNKNOWN**;
-DEVICE-TESTED **NO**.
+Status: native MT6797 CCCI/CLDMA transport is installed in accepted image115
+(Linux revision `89c13acdc6c0891191be7847450ed8e199a76f10`). The modem completes
+HS1/HS2 and reaches READY, then its watchdog fires. Cellular service, SIM/eUICC
+access, SMS delivery and voice calls remain unqualified.
 
-Vendor DTS/source describe an MD1 reserved-memory area, CLDMA and CCIF resources,
-and VSIM rails. The CLDMA/CCIF resource declaration is explicit in
-`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi:1782-1806`.
-The relevant declarations are in
-`/home/grw/src/gemini-linux-kernel-3.18/arch/arm64/boot/dts/mt6797.dtsi` and
-`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/eccci/mt6797/cldma_reg.h`. They establish a source
-contract, not a safe Linux modem boot. The current Gemini DT only reserves
-generic CCCI memory (`linux-gemini-platform@518957636:arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts:108-122`) and has no modem consumer.
+CCCI is MediaTek's Cross-Core Communication Interface between the application
+processor and modem. The native kernel driver owns CCCI framing, DMA and modem
+lifetime, and exposes standard Linux WWAN AT and network interfaces. The eSIM
+GUI should use lpac's generic AT/APDU transport with ModemManager ownership;
+CCCI does not belong in the GUI.
 
-The former claims about a 161 MiB fixed address, signatures, boot-status values,
-SIM debounce, CCCI channel semantics, or ModemManager compatibility are removed:
-the checked sources do not prove those details for this board. No modem firmware
-may be loaded merely because a blob or register header exists.
+The installed driver removes a failed AT port and wakes existing descriptors
+with standard HUP/ERR; image115 hardware observation confirms that boundary.
+The native SIM electrical maps and disabled-PBM DBM initialization are installed.
+The observed six SIM pads match the public board configuration but remain
+unclaimed by Linux in this accepted image. These repairs do not establish the
+watchdog cause or eUICC routing.
 
-Next validation: identify the physically populated modem and exact reserved
-memory from a live vendor boot; document firmware ownership and MPU permissions;
-then implement a fail-closed CLDMA/CCIF probe with bounded reset and teardown.
-Only a captured modem boot handshake and AT/data exchange may become
-DEVICE-TESTED.
+The current implementation is in `drivers/net/wwan/mediatek/mtk_mt6797_ccci.c`,
+`mtk_ccci_common.c`, the native `drivers/soc/mediatek/mt6797-md1-*` owners and
+`arch/arm64/boot/dts/mediatek/mt6797-gemini-pda.dts` in the single
+[Linux source tree](https://github.com/georgewhewell/linux-gemini/tree/gemini-7.2.9).
+Calls, Spacebar and callaudiod are already in the normal image.
+
+Remaining work: select the declared SIM pin state inside the protected cold
+transaction, resolve the modem watchdog, establish eUICC APDU routing, integrate
+and qualify the generic AT GUI/transport, and finish the modem speech-control and
+duplex audio lifetime. AT availability and ModemManager's SIM-missing fallback
+do not establish physical card absence or a selected SIM slot.
+
+Keep current installation evidence and unfinished work in
+[the cellular status record](../research/sms-voice-integration-20261011.json)
+and [hardware status](../research/HARDWARE_STATUS.md); this campaign page is an
+entry point, not a separate test history.

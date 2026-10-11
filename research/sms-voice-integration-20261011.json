@@ -88,7 +88,7 @@
     "public_vendor_contract": "GPL CCCI maps PCM RX/TX channels 4/5 to ccci_aud with user headers. Its kernel port neither decodes speech messages nor supplies a startup acknowledgement; missing channel handling alone does not establish the modem-watchdog cause."
   },
   "limitations": {
-    "native_transport_and_sim": "Trial 95 reaches HS2 READY, then the modem watchdog fires before SIM diagnostics. ModemManager's SIM-missing fallback does not establish physical card absence.",
+    "native_transport_and_sim": "Accepted115 reaches READY, then its modem watchdog IRQ fires. Standard fatal AT hangup/removal is hardware qualified; ModemManager SIM-missing fallback does not establish physical card absence.",
     "sms_send_receive_qualified": false,
     "voice_control_audio_qualified": false,
     "calls_or_sms_sent_during_validation": false,
@@ -133,11 +133,25 @@
         "QMI_QRTR"
       ],
       "at_backend_present": false,
-      "installed": false
+      "installed": false,
+      "scratch_at_backend_present": true,
+      "scratch_patch": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/lpa-at.patch",
+        "sha256": "e5b229f8748713120d02a2b8fce6c0b6a407a4c4828420a707009a41b1eb941b"
+      },
+      "scratch_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/lpa-at-result.json",
+        "sha256": "88296f052f68e44329864d7ea5f9412f8edc52e4464252286f04133a9eaadbfd"
+      },
+      "scratch_actual_host_exit": 0,
+      "scratch_host_cases": 22,
+      "scratch_scope": "Read-only standard WWAN AT discovery, cached eUICC identity and asynchronous cancellation; no physical-slot or provisioning qualification",
+      "cross_package_built": false,
+      "packaging_remaining": "Enable LPAC_WITH_APDU_AT=ON and apply the checked Unix transport repair; build complete lpa-gtk resources with ARM64 Python/GTK/Gio and validate runtime closure"
     },
     "architecture": "Native CCCI exposes standard Linux WWAN AT ports. A generic GUI AT backend should reuse lpac standard APDU commands and ModemManager port/slot metadata with exclusive inhibition ownership; CCCI framing remains a kernel responsibility.",
     "remaining": [
-      "Select a declarative named SIM state inside the protected cold transaction; the observed inherited electrical state matches the public board configuration but Linux has not claimed its pads.",
+      "Qualify native named SIM state selection on the next image; accepted115 still has inherited unclaimed pads.",
       "Resolve the native modem watchdog and establish eUICC APDU routing; standard AT availability alone does not establish SIM presence or a selected physical slot.",
       "Integrate the checked lpac transport repair and complete operation/session cancellation, deadline and long-response behavior before provisioning.",
       "Finish generic GUI AT discovery and operations through standard ModemManager/WWAN interfaces. Generic AT ModemManager lacks EID/type loaders, so empty-eUICC discovery needs standard chip-info; do not guess slot2."
@@ -215,6 +229,43 @@
       "original_initializer_qualified": false,
       "linux_pad_ownership_qualified": false,
       "physical_sim_or_euicc_qualified": false
+    },
+    "native_sim_pad_ownership": {
+      "status": "Implemented and target compiled; image/hardware selection pending",
+      "kernel_revision": "57a60aeb697c35bdb195e886b20f33640308e1ce",
+      "installed": false,
+      "scope": "Named sim-only pin state selected after protected cold preflight; standard DIR-only output-enable restores CLK/RST direction after Schmitt configuration, SIO uses observed R1/R0=1/0 encoding",
+      "host_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-sim-pinctrl-20261011/ownership/host-proof/result.json",
+        "sha256": "8f15d4f97d09289d0c6161c1deb2f46f3dc372d9cebaa9d7595446ed2ff493c5"
+      },
+      "strict_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-sim-pinctrl-20261011/ownership/strict-production/result.json",
+        "sha256": "acc588503517537ec96b5587223ff47394982b16194eaf0e540297e0d81883f0"
+      },
+      "actual_host_exit": 0,
+      "strict_arm64_actual_exit": 0,
+      "binding_and_compiled_cold_owner_dt_validation_actual_exit": 0,
+      "linux_pad_ownership_hardware_qualified": false,
+      "physical_sim_or_euicc_qualified": false,
+      "watchdog_causality_qualified": false
+    },
+    "native_wwan_release": {
+      "status": "Implemented and target compiled; image pending",
+      "kernel_revision": "477538930f3d819c19a93bd27ad72f76b721979d",
+      "installed": false,
+      "scope": "Keep removed-port open count at zero when old descriptors close; existing core lock serializes last-close/removal",
+      "host_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/wwan-release-owner/result.json",
+        "sha256": "2a8c93f61da703dbf88714cc43e34eeb43bdcf475b88eab6c2501c88e044b9da"
+      },
+      "strict_proof": {
+        "path": "/mnt/Home/src/nixos-gemini/handoff/modem-esim-owner-20261011/wwan-release-owner/strict-production/result.json",
+        "sha256": "ebb23cb04c995a136286ecfc49a741cce61abf040c7f273c8cfbc5b3986bf4b1"
+      },
+      "actual_host_exit": 0,
+      "strict_arm64_actual_exit": 0,
+      "compiled_original_rejects_count_underflow": true
     }
   },
   "native_modem_runtime": {
