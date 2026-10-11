@@ -1,0 +1,121 @@
+{
+  "date": "2026-10-11",
+  "trial": "boot-test-105",
+  "scope": "allocation-export-prime-mapping-lifetime",
+  "passed": true,
+  "packaging_revision": "9e829ff35bcccdb176efff574be09c5081000b61",
+  "kernel_revision": "01222a4b2074555955a85715587bebf0933fb0eb",
+  "kernel_package": "/nix/store/h84dph6rpdqf4rwf2c3abnpbpmgk5s0b-linux-gemini-7.2.9",
+  "module_sha256": "3c83c3a784dc7468e72807225c95d762e6c3d7548d103dd29810b6cb31bbdd4d",
+  "module_source_sha256": {
+    "mt6797-vdec-v4l2/Kbuild": "9940f7c83c4045b886cda5868c52a54a2511ef1dd2c74cda22d584b360789b09",
+    "mt6797-vdec-v4l2/v4l2.c": "e68dac3cc77207c61ed7965625b433a5352a4923768b326ab879d664c9ccc40c",
+    "mt6797-vdec-v4l2/engine.c": "139a917336b35fded87fb9afbc0e07c25a633ba4305f8f419f9a8e44119b5fc1",
+    "mt6797-vdec-v4l2/engine.h": "37a5fe3a9a05e704dfa4d1fff583c2e1616e2fd41c097ee6c980af965c30c313",
+    "mt6797-vdec-v4l2/buffer.c": "9a98f19c7da0364e70c5f14e9ed631808788d5dd6d324219d1320ddadeee64b6",
+    "mt6797-vdec-v4l2/buffer.h": "392fe9974831cb537cdc3091db0f6b705d80d14c307cbe0de12299eb6b2e18c8",
+    "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+    "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+    "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023"
+  },
+  "request_test_sha256": "3823a09b8857269272dbc07eea3c8b43f0605d5fa1aa8f4d79711e12a964c037",
+  "observer_sha256": "889f8348763c17498fdb5a6f35e14ef0a6912f6457429d2a193e095707faba24",
+  "report": {
+    "native_buffers_test_passed": true,
+    "scope": "native-buffers",
+    "width": 80,
+    "height": 64,
+    "capture_buffers": 17,
+    "planes_per_buffer": 2,
+    "sizeimage": [
+      5120,
+      2560
+    ],
+    "plane_lengths": [
+      196608,
+      196608
+    ],
+    "data_offsets": [
+      0,
+      5120
+    ],
+    "exported_fds": 34,
+    "prime_handles": 17,
+    "prime_aliases_same_handle": true,
+    "prime_gpu_va_verified": true,
+    "mmap_export_aliases_verified": true,
+    "queue_cache_cycle_verified": true,
+    "video_close_lifetime_verified": true,
+    "closed_fd_aliases_verified": true,
+    "prime_release_lifetime_verified": true,
+    "all_user_refs_released": true,
+    "codec_submissions": 0,
+    "gpu_submissions": 0,
+    "decode_qualified": false,
+    "gpu_rendering_qualified": false
+  },
+  "irq_before": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "irq_after": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "observer_exit_code": 0,
+  "module_unload_exit_code": 0,
+  "decoder_completion_qualified": false,
+  "gpu_rendering_qualified": false,
+  "display_import_qualified": false,
+  "recovery": {
+    "final_boot_id": "e76380cd-a2f6-4c49-ab2f-32f59cccade5",
+    "all_trial_units_terminal": true,
+    "locks_acquired": true,
+    "no_writer": true,
+    "source_hashes_match": true,
+    "source_count": 58,
+    "final_taint": 0,
+    "temporary_decoder_absent": true
+  },
+  "accepted_image_sha256": "23c83c7228ad639353fb4f167ffbff2ebe8962275262da4e80f3157043dde80c",
+  "accepted_baseline_promoted": false,
+  "store_cleanup": {
+    "deleted_unrooted_paths": 1062,
+    "freed_reported": "1.4 GiB",
+    "all_deleted_paths_preserved_on_host": true,
+    "accepted_witness_candidate_and_unpreserved_closures_excluded": true
+  },
+  "evidence_directories": [
+    "handoff/boot-test-105",
+    "handoff/media-native-surfaces-20261011/independent-audit-105"
+  ],
+  "reuse": "Reuse this allocation/export/PRIME-mapping/lifetime result when relevant source, kernel and ABI inputs remain unchanged. It proves neither codec completion nor GPU rendering."
+}

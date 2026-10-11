@@ -13,6 +13,9 @@ Media trial 104 never reached its buffer test because the candidate closure was
 missing from the persistent store. It restores image 102; the independent audit
 passes 58 source hashes, terminal services, free locks, retained storage and taint 0.
 Shared boot admission now owns the missing-closure check and Stage-1 rescue hook.
+[Media trial 105](mt6797-vdec-v4l2/buffers-trial-105.json) then passes native
+allocation/export/Panfrost mapping/lifetime, supervised return and independent
+terminal audit. It submits no codec or GPU work.
 The modem still fails separately. The no-swap 7.1.3 fallback is preserved
 in [baselines](baselines/boot-test-76.json).
 
@@ -33,7 +36,7 @@ in [baselines](baselines/boot-test-76.json).
 | SMS and call applications | Installed; normal startup verified on trial 96 | [Application proof](sms-voice-integration-20261011.json). GNOME Calls, Spacebar and callaudiod use the existing ModemManager/session APIs. Their package inputs retain trial 96 startup evidence; image 101's full cross-runtime check passes. Native transport/SIM, speech control and call audio remain unfinished. Delivery and acoustics are unqualified. |
 | GNSS | Native registration and two power lifetime cycles pass; zero received bytes | [Trial 101 proof](gnss-integration-20261011.json) and [owner record](../campaign/13-gps-gnss.md). Source `8b9fa390` uses the existing CONSYS/STP owner and standard `lna-supply`; whole-frame FIFO admission and teardown checks pass. Standard module discovery and udev native alias loading register the endpoint. Two 10-second opens/closes pass LNA off/on/off, zero taint and subsequent Bluetooth/NetworkManager checks. Both windows receive zero bytes. Public receiver initialization/data delivery, framing, position, sustained coexistence and suspend remain unfinished. |
 | Normal startup cleanup | No routine hardware test loops during boot | [Startup record](normal-startup-20261010.json). Seven GPU/audio/Wi-Fi/Weston test units are explicit diagnostics. Trial 88 reaches graphical startup in 95.056 seconds, including 50.843 seconds in kernel/initramfs. The old Wi-Fi worker and dhcpcd are retired from the default image. |
-| Experimental H.264 decoder | Recorded polling cases work; native sharing passes host checks | [Decoder owner](mt6797-vdec-v4l2/README.md). Trials 66–67 compare progressive 8-bit I/P/B, Baseline/Main/High and tested multislice pixels exactly on their recorded 7.1.3 builds. Native DMA-buf ownership passes strict ARM64 builds and sanitizer regressions covering allocation/export/PRIME mapping/cache/lifetime and malformed-device failures. Trial 104 reaches no buffer hardware result. Hardware sharing, production IRQ completion and suspend remain unqualified. |
+| Experimental H.264 decoder | Recorded polling cases work; native buffer mapping and lifetime pass on hardware | [Decoder owner](mt6797-vdec-v4l2/README.md). Trials 66–67 compare progressive 8-bit I/P/B, Baseline/Main/High and tested multislice pixels exactly on their recorded 7.1.3 builds. Trial 105 checks 17 native objects, 34 FDs, Panfrost PRIME mappings, cache transitions and release lifetime with zero codec/GPU submissions. Strict ARM64 builds and sanitizer failure regressions also pass. Decoder IRQ completion, GPU rendering of decoded surfaces, display imports and suspend remain unqualified. |
 | Decoder IRQ completion | Tested; no interrupt delivered | [Trial 103](mt6797-vdec-v4l2/irq-trial-103.json) uses the exact image-102 kernel. Native SPI 240 setup/polarity acceptance passes; a compressed grey picture completes in AVC with ACTIVE clear (`0x101`), zero syntax error and zero IRQ delta across all ten CPUs. Stop, guards, unload, supervised return to image 102 and independent audit pass. This uses the earlier private-DMA backend; no successful frame or replacement-buffer path is qualified. Exact done-source enablement/handshake remains unfinished. |
 | Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
 | Suspend/hibernation | Unqualified; hibernation disabled | Earlier post-hibernation GPU/Wi-Fi faults prevent qualification for normal use. Camera and vibrator are outside the requested scope. |
@@ -87,6 +90,17 @@ unrooted obsolete kernel/system paths, all preserved on the host, freeing
 outputs and boot entries are unchanged. Trials 77–79 restored the accepted
 recovery after their respective startup or assertion failures. Their independent
 terminal audits pass; see the recorded trial for its exact boot identities.
+The trial-105 preparation removes another 1,062 unrooted development paths,
+all present on the host, freeing 1.4 GiB. Accepted, witness, candidate and
+unpreserved dependency closures are excluded; trial 105 audits their retention.
+
+The closure audit identifies a packaging follow-up: move GLib's runtime schema
+compiler to its `bin` output and update GNOME's runtime path; separate GI
+development generators from Orca/GDM Python wrapper dependencies. Multiple
+routes retain a 142 MB host Python, so fixing GNOME alone cannot remove it all.
+This belongs in GLib/GI package output and wrapper ownership. Native build-tool
+interpreters must remain native; verify both target runtime helpers and the
+reachable closure after the correction.
 
 The former 966-line chronological status log is preserved in
 [history](history/HARDWARE_STATUS-20261010-before-consolidation.md). Its dated

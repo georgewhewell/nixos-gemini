@@ -98,8 +98,9 @@ queried backing lengths. Logical-only chroma lengths cannot contain its luma-siz
 offset. Larger and unequal lengths with sufficient pixel coverage need the buffer
 owner to separate allocation capacity from the codec's guarded extent, preserving
 accepted plane lengths. These restrictions are in the driver, with no downstream
-copy fallback. Hardware allocation, export, GPU/display imports and decoded pixels
-on this new path remain unqualified.
+copy fallback. Allocation, export and Panfrost PRIME mapping now pass
+[trial 105](buffers-trial-105.json); GPU rendering, display imports and decoded
+pixels on this path remain unqualified.
 
 The pinned GCC 15.3 build passes the normal kernel checks and full image build.
 The module passes a fresh ARM64 build with `W=1` and `KCFLAGS=-Werror`; all 163
@@ -121,6 +122,18 @@ without another write. Evidence remains in `handoff/boot-test-104` and
 `handoff/media-native-surfaces-20261011/independent-audit-104` at workspace level.
 The media admission omission is fixed in the shared boot owner; a missing closure
 must now fail before reboot. This trial establishes no native-buffer hardware result.
+
+After installing the closure and reclaiming 1.4 GiB from 1,062 unrooted,
+host-preserved development paths, trial 105 passes the native buffer-only test on
+the `01222a4b` kernel. Its 17 objects and 34 FDs pass the complete allocation,
+alias, nested cache access, queue and lifetime checks, including actual Panfrost
+GPU virtual mappings. Codec and GPU submissions remain zero, with unchanged
+zero IRQ counts across all ten CPUs. The module unloads successfully. The
+supervised boot and independent final audit pass: image 102 restored, 58 source
+hashes match, all services stopped, locks free, retained outputs intact and taint 0.
+Accepted and witness closures were excluded from cleanup; old proofs stay intact.
+This result can be reused for unchanged inputs and does not qualify rendering or
+decoder completion.
 
 Build `mt6797_vdec.ko` through this directory's Kbuild against the exact
 configured kernel, retaining the sibling `mt6797-vdec` control translator.
@@ -166,7 +179,7 @@ buffer mapping and lifetime; it cannot qualify decoded pixels or GPU rendering.
 The existing observer checks that cached command counts and IRQ counts remain zero.
 
 Remaining work stays here: establish the exact completion path to SPI 240;
-qualify native allocations/export lifetime and real GPU/display imports with
+qualify actual GPU rendering and display imports of decoded surfaces with
 independent MM21 comparisons; remove reference snapshot overhead only after
 its replacement safety contract is proven; finish CAPTURE import and allocation
 semantics, sustained playback and suspend. The encoder owner still needs a

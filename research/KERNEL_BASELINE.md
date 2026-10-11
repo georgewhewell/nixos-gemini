@@ -112,7 +112,12 @@ system-IOMMU domain. The driver admits proved unbounced mapping routes and
 rejects unsupported routes without a copy fallback. See the
 [decoder owner](mt6797-vdec-v4l2/README.md) for current restrictions and the
 hardware qualification still required. The installed accepted image remains
-102; current source changes are not new hardware acceptance.
+102; these source changes have not been promoted to the accepted image.
+Trial 105 on the `01222a4b` kernel now qualifies native allocation, export,
+Panfrost PRIME mapping, cache transitions and release lifetime with no codec
+or GPU submissions. [Its scoped proof](mt6797-vdec-v4l2/buffers-trial-105.json)
+includes supervised restoration and independent audit of image 102. Rendering
+and decoder completion remain unfinished.
 
 ## Verified DMA-buf changes
 
