@@ -438,8 +438,10 @@ static void decode(struct stream *stream, const char *out, const char *name,
 int main(int argc, char **argv)
 {
 	struct stream stream;
-	if (argc != 5 && argc != 9 && argc != 10) {
-		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
+	int single_grey = argc == 7 && !strcmp(argv[5], "--single") &&
+			  !strcmp(argv[6], "grey64");
+	if (argc != 5 && argc != 9 && argc != 10 && !single_grey) {
+		fprintf(stderr, "Usage: %s VIDEO MEDIA OUTPUT_DIRECTORY CACHED_STATUS_PATH [--single grey64 | FIXTURES WIDTH HEIGHT mmap|export [faults]]\n", argv[0]); return 2;
 	}
 	status_path = argv[4];
 	if (argc >= 9) {
@@ -454,6 +456,13 @@ int main(int argc, char **argv)
 		export_buffers = !strcmp(argv[8], "export");
 	}
 	storage_height = (height + 31) & ~31U;
+	if (single_grey) {
+		open_stream(&stream, argv[1], argv[2]);
+		decode(&stream, argv[3], "grey64", grey64_nal, sizeof(grey64_nal), 0, 0, 0, 1, 0);
+		close_stream(&stream);
+		puts("{\"public_api_test_passed\":true,\"scope\":\"single-grey64\"}");
+		return 0;
+	}
 	open_stream(&stream, argv[1], argv[2]);
 	decode(&stream, argv[3], "pcm64", pcm64_nal, sizeof(pcm64_nal), 0, 0, 0, 1, 0);
 	decode(&stream, argv[3], "pcm64-p", pskip64_nal, sizeof(pskip64_nal), 1, 0, 0, 2, 1);

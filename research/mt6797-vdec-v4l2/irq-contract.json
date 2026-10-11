@@ -150,6 +150,6 @@
     "trial_23_variant_5": "Compressed grey64 I_16x16 DC was actually submitted in IRQ mode, with all6144 private samples correct, zero IRQs and -110. Retained frame.flat selects grey64_nal.",
     "polling_trials_66_67": "Exact retained engine reads MISC0xa4 after picture-complete polling and before stop, core reset or cleanup ACK. The sampled0x3001 is pre-cleanup but is not continuous source observation.",
     "implication": "Missing IRQ delivery is not established for all codecs/cases, but the older compressed-grey observation rules out treating it as solely the first PCM fixture or solely the7.2 rebase.",
-    "next_changed_scope": "Historical compressed-grey IRQ failure23 had clock guard0x111, while ACTIVE-clear0x101 trial97 submitted onlyPCM. A correctly labelled independently submitted grey frame under the current owner is unmeasured. The current harness lacks that focused selector; prepare it before a bounded observation."
+    "next_changed_scope": "Historical compressed-grey IRQ failure23 had clock guard0x111, while ACTIVE-clear0x101 trial97 submitted onlyPCM. The existing request test now has a truthful --single grey64 selector using the original independently verified20-byte fixture and normal controls. The qualifier requires exactly that case, one command and attributed IRQ, all6144 samples, five powered clock snapshots, safe stop/guards and recovery. This changed hardware scope remains unmeasured."
   }
 }

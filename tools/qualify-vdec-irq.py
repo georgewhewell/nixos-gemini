@@ -59,12 +59,44 @@ def irq_counter(text):
                 actions=value['actions'], counter='sysfs-all-possible-cpus')
 
 
+def completion_qualified(statuses, comparisons, start, finish, returncode,
+                         safe, program_complete, single=None):
+    valid = (single,) if single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
+    expected_names = set(valid) if single else set(valid) | {'missing-reference'}
+    passed = returncode == 0 and safe and program_complete
+    passed = passed and set(statuses) == expected_names and set(comparisons) == set(valid)
+    passed = passed and all(result['passed'] for result in comparisons.values())
+    for name in valid:
+        s = statuses.get(name, {})
+        expected = dict(result=0, fetched=1, submitted=1, quiesced=1, guards=1,
+                        error=0, message=0, reset=0, irq_events=1, irq_unexpected=0)
+        expected['break'] = 0
+        if single:
+            expected.update(jobs=1, fetch_commands=1, frame_commands=1,
+                            nal_bytes=20, header_bits=28, irq_clock_result=0)
+        passed = passed and all(s.get(k) == v for k, v in expected.items())
+        passed = passed and bool(s.get('state', 0) & (1 << 31)) and bool(s.get('irq_status', 0) & (1 << 16))
+        passed = passed and s.get('irq_command', 0) > 0 and s.get('irq_command') == s.get('irq_received_command')
+        if single:
+            passed = passed and s.get('irq_clock_trace_valid', 0) == 0x1f
+            passed = passed and not (s.get('irq_clock_submit', 1 << 4) & (1 << 4))
+            passed = passed and not (s.get('irq_clock_guard', 1 << 4) & (1 << 4))
+    if not single:
+        negative = statuses.get('missing-reference', {})
+        passed = passed and negative.get('result') == -2 and negative.get('fetched') == negative.get('submitted') == 0
+    passed = passed and len({statuses.get(n, {}).get('irq_command') for n in valid}) == len(valid)
+    passed = passed and start['irq'] == finish['irq'] and len(start['counts']) == len(finish['counts'])
+    passed = passed and all(b >= a for a, b in zip(start['counts'], finish['counts']))
+    return bool(passed and finish['total'] - start['total'] == len(valid))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--trial', type=Path, required=True)
     parser.add_argument('--module-build', type=Path, required=True)
     parser.add_argument('--request-test', type=Path, required=True)
     parser.add_argument('--fixtures', type=Path, required=True)
+    parser.add_argument('--single', choices=('grey64',))
     args = parser.parse_args()
     trial = args.trial.resolve()
     metadata_file = args.module_build.resolve(strict=True)
@@ -73,14 +105,20 @@ def main():
     module = Path(metadata['module']['path'])
     program = args.request_test.resolve(strict=True)
     assert sha(module) == metadata['module']['sha256']
-    assert sha(program) == 'faf139e405d6a24480635583c765f431a3ad53625cfbdfc3aadfbca2c48bc6eb'
+    request_build = metadata['request_test']
+    assert request_build['build_exit_code'] == 0 and request_build['machine'] == 183
+    assert program == Path(request_build['path']).resolve(strict=True)
+    assert sha(program) == request_build['sha256']
+    assert program.read_bytes()[:4] == b'\x7fELF' and int.from_bytes(program.read_bytes()[18:20], 'little') == 183
+    for name, expected in request_build['source_sha256'].items():
+        assert sha(REPO/'research'/name) == expected, name
     assert subprocess.check_output(['modinfo', '-F', 'vermagic', str(module)], text=True).strip() == metadata['module']['vermagic']
     assert sha(KERNEL/'kernel.config') == metadata['kernel_config_sha256']
     assert sha(KERNEL/'Module.symvers') == metadata['module_symvers_sha256']
     assert metadata['build_exit_code'] == 0 and metadata['strict_modpost'] is True
     for name, expected in metadata['source_sha256'].items():
         assert sha(REPO/'research'/name) == expected, name
-    assert sha(REPO/'research/mt6797-vdec-v4l2/request-test.c') == 'b2a8e564e0d2a8c491cd7efaa3d260dd704dd66ead90fd584d484a3a2dbd5597'
+    assert {'mt6797-vdec-v4l2/request-test.c', 'mt6797-vdec/pcm64-fixture.h'} <= request_build['source_sha256'].keys()
     assert sha(REPO/'research/mt6797-vdec/pcm64-fixture.h') == 'a421fca84a63bce330492b17c94778c4801624134cfcdf36686008e8fca6e758'
     deadline = time.monotonic()+900
     while not (trial/'candidate-observation.json').exists():
@@ -113,9 +151,12 @@ def main():
         shutil.copy2(source, out/source.name)
     fixtures = args.fixtures.resolve(strict=True)
     (out/'fixtures').mkdir()
-    for name in ('pcm64', 'pcm64-p', 'grey64', 'pattern64'):
-        for suffix in ('.json', '.yuv'):
+    valid = (args.single,) if args.single else ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
+    for name in valid:
+        for suffix in ('.json', '.yuv', '.nal'):
             shutil.copy2(fixtures/(name+suffix), out/'fixtures'/(name+suffix))
+    if args.single:
+        assert sha(out/'fixtures/grey64.nal') == request_build['embedded_grey_nal_sha256'] == '855a5ef2c41f93be0348d94136d49a78fba4c22829670cd2e6526ca09fc111e7'
     guard = 'set -eu\ntest "$(cat /proc/sys/kernel/random/boot_id)" = '+boot+'\n'
     guard += 'test "$(readlink /run/current-system)" = '+SYSTEM+'\n'
     guard += 'test "$(cat /run/unattended-recovery.accepted)" = unattended_recovery=healthy\n'
@@ -159,13 +200,13 @@ def main():
                    'for node in '+DEVICE+'/media*; do test "$(cat "$node/model")" != "MT6797 H.264 Request decoder" || echo /dev/${node##*/}; done', 'nodes').decode().splitlines()
     assert len(nodes) == 2 and nodes[0].startswith('/dev/video') and nodes[1].startswith('/dev/media'), nodes
     start = irq_counter(remote(irq_snapshot_script(), 'irq-before').decode())
-    command = 'mkdir '+base+'/output\nset +e\ntimeout --kill-after=2 12 '+base+'/request-test '+shlex.join(nodes)+' '+base+'/output '+DEVICE+'/last_job > '+base+'/output/stdout.txt 2> '+base+'/output/stderr.txt\n'
+    selection = ' --single '+args.single if args.single else ''
+    command = 'mkdir '+base+'/output\nset +e\ntimeout --kill-after=2 12 '+base+'/request-test '+shlex.join(nodes)+' '+base+'/output '+DEVICE+'/last_job'+selection+' > '+base+'/output/stdout.txt 2> '+base+'/output/stderr.txt\n'
     command += 'rc=$?\nset -e\nprintf "%s\\n" "$rc" > '+base+'/output/returncode.txt\n'
     for source, name in [('last_job', 'last-job'), ('last_engine_failure', 'engine-failure'), ('first_context_failure', 'context-failure')]:
         command += 'cat '+DEVICE+'/'+source+' > '+base+'/output/'+name+'.txt\n'
-    command += 'cat /proc/interrupts > '+base+'/output/proc-interrupts-after.txt\n'
     command += '{\n'+irq_snapshot_script()+'} > '+base+'/output/interrupts-after.txt\n'
-    command += 'dmesg > '+base+'/output/dmesg.txt\ntar -cf - -C '+base+'/output .'
+    command += 'tar -cf - -C '+base+'/output .'
     data = remote(command, 'decode', timeout=20)
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as archive:
         for item in archive:
@@ -184,7 +225,7 @@ def main():
     spec = importlib.util.spec_from_file_location('irq_compare', out/'compare-frame.py')
     compare = importlib.util.module_from_spec(spec); spec.loader.exec_module(compare)
     comparisons = {}
-    for name in ('pcm64', 'pcm64-p', 'grey64', 'pattern64'):
+    for name in valid:
         file = out/(name+'.bin')
         if not file.exists():
             continue
@@ -194,31 +235,27 @@ def main():
         assert file.stat().st_size == len(reference) == 6144
         actual = compare.unpack(file.read_bytes(), 64, 64, 64, 4096, 'mm21')
         comparisons[name] = dict(passed=actual == reference, different_samples=sum(a != b for a, b in zip(actual, reference)), actual_sha256=hashlib.sha256(actual).hexdigest(), expected_sha256=hashlib.sha256(reference).hexdigest())
-    valid = ('pcm64', 'pcm64-p', 'grey64', 'pattern64')
-    passed = int((out/'returncode.txt').read_text()) == 0 and safe
-    passed = passed and set(statuses) == set(valid)|{'missing-reference'} and set(comparisons) == set(valid)
-    passed = passed and all(result['passed'] for result in comparisons.values())
-    for name in valid:
-        s = statuses.get(name, {})
-        expected = dict(result=0, fetched=1, submitted=1, quiesced=1, guards=1,
-                        error=0, message=0, reset=0, irq_events=1, irq_unexpected=0)
-        expected['break'] = 0
-        passed = passed and all(s.get(k) == v for k, v in expected.items())
-        passed = passed and bool(s.get('state', 0)&(1<<31)) and bool(s.get('irq_status', 0)&(1<<16))
-        passed = passed and s.get('irq_command', 0)>0 and s.get('irq_command') == s.get('irq_received_command')
-    negative = statuses.get('missing-reference', {})
-    passed = passed and negative.get('result') == -2 and negative.get('fetched') == negative.get('submitted') == 0
-    passed = passed and len({statuses.get(n, {}).get('irq_command') for n in valid}) == 4
-    passed = passed and start['irq'] == finish['irq'] and len(start['counts']) == len(finish['counts'])
-    passed = passed and all(b >= a for a, b in zip(start['counts'], finish['counts']))
-    passed = passed and finish['total']-start['total'] == 4
+    try:
+        reports = [json.loads(line) for line in (out/'stdout.txt').read_text().splitlines()]
+        reports_valid = True
+    except json.JSONDecodeError:
+        reports = []
+        reports_valid = False
+    marker = dict(public_api_test_passed=True, scope='single-grey64') if args.single else dict(public_api_test_passed=True)
+    program_complete = bool(reports and reports[-1] == marker)
+    passed = completion_qualified(statuses, comparisons, start, finish,
+                                  int((out/'returncode.txt').read_text()), safe,
+                                  program_complete, args.single)
     result = dict(passed=bool(passed), safe_quiescence=safe, boot_id=boot, module_sha256=sha(module),
                   returncode=int((out/'returncode.txt').read_text()), statuses=statuses, cached=cached,
                   irq_before=start, irq_after=finish, irq_delta=finish['total']-start['total'], comparisons=comparisons,
+                  case_scope='single-grey64' if args.single else 'four-pictures-and-missing-reference',
+                  program_complete=program_complete, reports_valid=reports_valid,
+                  native_irq_setup_and_bind_accepted=True,
                   system_profile_qualification_pending=True, unloaded=False)
     save(out/'result.json', result)
     if safe:
-        remote('rmmod mt6797_vdec\ntest ! -e /sys/module/mt6797_vdec\ncat /proc/interrupts; cat /proc/sys/kernel/tainted', 'unload', require_window=False)
+        remote('rmmod mt6797_vdec\ntest ! -e /sys/module/mt6797_vdec\ncat /proc/sys/kernel/tainted', 'unload', require_window=False)
         result['unloaded'] = True
         result['unload_taint'] = int((out/'unload.stdout').read_text().splitlines()[-1])
         if result['unload_taint'] != 4096:

@@ -36,10 +36,12 @@ stale-event rejection, IRQ synchronization before reset/power release,
 bounded failure, private-DMA stop proof and fences. Picture-complete polling
 cannot qualify the IRQ backend. Production integration requires this contract.
 Historical compressed-grey trial 23 used clock guard `0x111`; the current
-ACTIVE-clear `0x101` trial submitted only PCM. Prepare a correctly labelled
-single-grey selector in the existing request test before observing that
-unmeasured compressed case. Aliasing it as PCM or accepting a missing-input
-error would not qualify the observation.
+ACTIVE-clear `0x101` trial submitted only PCM. The existing request test now
+has `--single grey64` for that unmeasured compressed case. It uses the original
+20-byte I_16x16 DC fixture and its normal controls, then closes the stream.
+The observer requires one command, real attributed delivery, every expected
+sample, the five powered clock snapshots, stop and guards. Aliasing grey as
+PCM or accepting a missing-input error cannot qualify the observation.
 
 The installed native kernel source, `354d3657`, also verifies SYSIRQ polarity write
 acceptance before programming its GIC parent. Its actual-callback host regression
@@ -87,6 +89,9 @@ verified fixtures. In a supervisor-owned candidate:
 ```text
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job
+
+request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
+  /sys/bus/platform/devices/16020000.video-codec/last_job --single grey64
 
 request-test /dev/videoN /dev/mediaN OUTPUT_DIRECTORY \
   /sys/bus/platform/devices/16020000.video-codec/last_job \
