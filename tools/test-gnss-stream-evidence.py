@@ -160,6 +160,8 @@ class Evidence(unittest.TestCase):
                 self.assertTrue(all(type(value) is bool for value in record.values()))
                 return record
             self.assertTrue(all(snapshot().values()))
+            (root / 'sys/bus/platform/drivers/mt6797-gnss').rmdir()
+            self.assertFalse(snapshot()['driver_bound'])
             driver.unlink()
             self.assertFalse(snapshot()['driver_bound'])
             (device / 'of_node/compatible').write_bytes(b'mediatek,unrelated\0')

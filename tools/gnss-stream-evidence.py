@@ -41,7 +41,8 @@ def registration_state(record):
             continue
         record['matching_platform_child_present'] = True
         driver = device / 'driver'
-        record['driver_bound'] |= driver.is_symlink() and driver.resolve().name == 'mt6797-gnss'
+        record['driver_bound'] |= (driver.is_symlink() and driver.is_dir()
+                                   and driver.resolve().name == 'mt6797-gnss')
 
 def lna_state():
     matches = []
