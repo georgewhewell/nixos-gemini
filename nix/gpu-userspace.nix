@@ -25,7 +25,6 @@ let
         --set MESA_SHADER_CACHE_DISABLE true
     '';
   };
-  closure = buildPkgs.closureInfo { rootPaths = [smoke]; };
   pixelCheck = buildPkgs.runCommand "gemini-gpu-pixel-check" {
     nativeBuildInputs = [buildPkgs.python3 buildPkgs.stdenv.cc];
   } ''
@@ -33,20 +32,4 @@ let
     cp ${./test-gpu-pixel-check.py} test-gpu-pixel-check.py
     HOSTCC="$CC" python3 test-gpu-pixel-check.py > "$out"
   '';
-  archive = buildPkgs.runCommand "gemini-gpu-oneboot-userspace.tar.gz" {
-    nativeBuildInputs = [buildPkgs.gnutar buildPkgs.gzip buildPkgs.binutils];
-  } ''
-    test -s ${pixelCheck}
-    # Mesa 26.2 links drivers into libgallium; it no longer installs the
-    # per-driver DRI aliases. Check the actual linked screen constructors.
-    test -s ${mesa}/lib/libgallium-${mesa.version}.so
-    nm --defined-only ${mesa}/lib/libgallium-${mesa.version}.so > driver-symbols
-    grep -Eq ' [tT] panfrost_create_screen$' driver-symbols
-    if grep -Eq ' [tT] (llvmpipe|softpipe)_create_screen$' driver-symbols; then
-      echo 'unexpected software renderer in Panfrost-only archive' >&2
-      exit 1
-    fi
-    test -s ${mesa}/share/glvnd/egl_vendor.d/50_mesa.json
-    tar -c -f - --files-from ${closure}/store-paths | gzip -1 > "$out"
-  '';
-in { inherit smoke closure archive mesa; }
+in { inherit smoke mesa; }

@@ -12,7 +12,7 @@
     path = "${ubootSource}/include/linux/input.h";
     name = "input.h";
   };
-  gpuUserspace = import ./gpu-oneboot-userspace.nix {
+  gpuUserspace = import ./gpu-userspace.nix {
     inherit buildPkgs;
     armPkgs = crossPkgs;
   };
