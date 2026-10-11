@@ -46,10 +46,11 @@ historical packages and their exact proofs are separate from current development
 
 The kernel exports its generated configuration and `Module.symvers` for strict
 external-module builds. Experimental media modules must be rebuilt against the
-exact installed kernel and toolchain. [Decoder trials 89–90](mt6797-vdec-v4l2/irq-trial-90.json)
-used the recorded trial-88 build: both timed out with zero delivered decoder
-interrupts, then passed quiescence, unload, recovery and terminal audits.
-No successful frame was exported. Media hardware completion, shared surfaces,
+exact installed kernel and toolchain. [Decoder trial 97](mt6797-vdec-v4l2/irq-trial-97.json)
+uses that exact installed build. CCF-owned ACTIVE initialization changes the
+clock word to `0x101`, but it still times out with zero delivered interrupts.
+Quiescence, guards, unload, supervised return to image 96 and terminal audit
+pass; no successful frame is exported. Media hardware completion, shared surfaces,
 encoding and suspend remain unfinished.
 
 ## Media interfaces

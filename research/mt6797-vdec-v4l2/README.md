@@ -8,7 +8,7 @@ qualification evidence are tracked in [the interface ledger](../mt6797-video-int
 This development has not used a formally separated clean-room team.
 
 Development uses the same [Linux 7.2.9](../KERNEL_BASELINE.md) kernel as the
-normal GNOME image: maintained branch `gemini-7.2.9`, source `a25cb83b`.
+normal GNOME image: maintained branch `gemini-7.2.9`, installed source `ce9fec5`.
 The former media branch is merged and retired. This kernel enables the decoder
 resources and native VDEC clock provider; the experimental decoder driver is
 not installed in the normal image. Picture, error and lifetime results below
@@ -47,7 +47,7 @@ unload, recovery and the independent terminal audit pass.
 Its [GCC 12 host build](irq-clock-build-20261010.json) matches the previously
 accepted kernel and has not been loaded. The [default-compiler build](../default-toolchain-20261010.json) now provides
 the GCC 15.3.0 kernel and a matching module with strict MODPOST and `W=1`.
-The current kernel image is accepted in trial 88. The
+The installed kernel image is accepted in trial 96. The
 [new matching module build](irq-clock-trace-build-20261011.json) uses GCC 15.3.0,
 the exact installed config and symbol table, strict MODPOST and `W=1` without
 warnings. It votes only the bus clock, matching the public MT6797 power-on
@@ -59,6 +59,16 @@ and again times out with zero delivered interrupts. Removing the engine vote
 did not resolve the failure; its cause before the first snapshot is unknown.
 Stop, guards, normal unload, recovery and the independent terminal audit pass.
 IRQ completion remains unqualified.
+
+[Trial 97](irq-trial-97.json) rebuilds against the exact accepted image-96
+kernel using GCC 15.3.0, strict MODPOST and `W=1`. It owns bus/engine clocks
+and adopts/releases the inherited ACTIVE gate through CCF. All five powered
+snapshots change to `0x101`, satisfying the public ACTIVE-clear guard, but
+the first command still times out with zero interrupts across all ten CPUs.
+Its raw error buffer differs in 6106 of 6144 samples; no successful frame is
+exported. Stop, guards, unload, supervised return to image 96 and the independent
+terminal audit pass. Clock ownership alone does not resolve IRQ completion.
+The focused media boot wrapper does not run unchanged RTC/alarm diagnostics.
 
 The candidate claims the DT interrupt with `IRQF_NO_AUTOEN`. Only a powered,
 submitted command can accept a done event; a stale done bit or an event before

@@ -60,7 +60,8 @@ struct mt6797_engine {
 	struct device *dev;
 	struct regmap *gcon;
 	void __iomem *banks[BANK_COUNT], *larb_mmu;
-	struct clk_bulk_data clocks[1];
+	struct clk_bulk_data clocks[2];
+	struct clk *active_clock;
 	struct private_buffer memory[MEMORY_COUNT];
 	u8 *reference_snapshot;
 	size_t snapshot_bytes;
@@ -298,7 +299,27 @@ static void release_buffer(struct mt6797_engine *engine, struct private_buffer *
 
 int mt6797_engine_resume(struct mt6797_engine *engine)
 {
-	return clk_bulk_prepare_enable(ARRAY_SIZE(engine->clocks), engine->clocks);
+	u32 word;
+	int ret;
+
+	ret = clk_bulk_prepare_enable(ARRAY_SIZE(engine->clocks), engine->clocks);
+	if (ret)
+		return ret;
+	/* Adopt and release the inherited ACTIVE gate through CCF while powered.
+	 * A different framework owner keeps its vote; never bypass that owner.
+	 */
+	ret = clk_prepare_enable(engine->active_clock);
+	if (ret)
+		goto clocks;
+	clk_disable_unprepare(engine->active_clock);
+	ret = regmap_read(engine->gcon, 0, &word);
+	if (!ret && (word & BIT(4)))
+		ret = -EBUSY;
+	if (!ret)
+		return 0;
+clocks:
+	clk_bulk_disable_unprepare(ARRAY_SIZE(engine->clocks), engine->clocks);
+	return ret;
 }
 
 int mt6797_engine_suspend(struct mt6797_engine *engine)
@@ -364,12 +385,10 @@ struct mt6797_engine *mt6797_engine_create(struct platform_device *pdev)
 			return ERR_CAST(engine->banks[i]);
 	}
 	engine->clocks[0].id = "bus";
-	/* The public MT6797 clock manager votes only CKEN (bit 0), apart from
-	 * the LARB handled by its own driver. Do not vote ACTIVE or CKEN_ENG.
-	 * Trial 89 retained 0x111 after removing ACTIVE alone. Keep the public
-	 * ISR guard and record powered setup transitions before submission.
-	 * This bus-only experiment remains unqualified until real IRQ delivery.
-	 */
+	engine->clocks[1].id = "engine";
+	engine->active_clock = devm_clk_get(dev, "active");
+	if (IS_ERR(engine->active_clock))
+		return ERR_CAST(engine->active_clock);
 	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(engine->clocks), engine->clocks);
 	if (ret)
 		return ERR_PTR(ret);

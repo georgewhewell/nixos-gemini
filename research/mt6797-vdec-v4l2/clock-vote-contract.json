@@ -29,8 +29,8 @@
       ]
     }
   },
-  "inference": "Removing both ACTIVE and engine votes did not change the word. It was already 0x111 immediately after runtime power. Reset, core reset and DCM setup did not change it; the cause before this first snapshot is not established.",
-  "candidate_change": "Request only the bus clock through the Linux bulk clock API; the LARB driver owns its own clock votes. Cache read-only GCON words after runtime power, subsystem reset, core reset, DCM setup and before submission. No direct global-clock writes, no relaxed IRQ guard, no polling-success fallback and no change to DMA ownership or stop/fencing rules.",
+  "inference": "Clearing the inherited ACTIVE gate changed 0x111 to 0x101, but did not produce a done IRQ or correct pixels.",
+  "candidate_change": "Own bus and engine clocks through CCF; adopt/release inherited ACTIVE through CCF, preserve other owners and reject a remaining ACTIVE bit. No direct clock-register write or completion/stop relaxation.",
   "hardware_qualified": false,
   "required_checks": [
     "Clock word and IRQ-controller snapshots",
@@ -74,6 +74,19 @@
         "submit": "0x111"
       },
       "active_bit_set": true,
+      "irq_events": 0,
+      "irq_delta": 0,
+      "safe_quiescence": true,
+      "independent_terminal_audit": "passed"
+    },
+    {
+      "record": "irq-trial-97.json",
+      "clock_votes": [
+        "bus",
+        "engine"
+      ],
+      "global_clock_word": "0x101",
+      "active_bit_set": false,
       "irq_events": 0,
       "irq_delta": 0,
       "safe_quiescence": true,
@@ -143,5 +156,7 @@
       },
       "scope": "These cached ownership counters were read after recovery, not concurrently with trial90 powered gate snapshots; they do not establish the hardware word on this boot."
     }
-  }
+  },
+  "current_build_record": "irq-trial-97.json",
+  "next_evidence": "Clock ownership alone did not resolve missing IRQ completion. Investigate the native done-source/interrupt-enable contract using public sources and the preserved failure, retaining exact pixels and DMA-stop requirements."
 }

@@ -1,0 +1,141 @@
+{
+  "trial": "boot-test-97",
+  "scope": "CCF-owned ACTIVE initialization on the exact accepted image96 kernel; clock guard passes but IRQ completion and pixels fail.",
+  "kernel_revision": "ce9fec57add5607faa3eb9f9c31f69afd414de77",
+  "kernel_package": "/nix/store/hp3wjwpqipig72y48kd8w5hb7g6v6jv4-linux-gemini-7.2.9",
+  "config_sha256": "63ace6d7889e6e1b3c6caac9cf55db8a90f03f06db067928d00ca3c10b334562",
+  "module_symvers_sha256": "27d23aa6e608448becf3f99b6bb1219cb84c7228ed9f3ee8254688607523e6dd",
+  "compiler": "GCC15.3.0",
+  "module": {
+    "module_sha256": "a950b284a3f2c24e960660fa99681118fee4d4f3ccf6957de1d1fdf9cba93afd",
+    "vermagic": "7.2.9-gemini-da921x-lkro SMP preempt mod_unload aarch64",
+    "elf_machine": 183,
+    "strict_modpost": true,
+    "w1": true,
+    "build_exit": 0,
+    "source_sha256": {
+      "mt6797-vdec/mt6797-h264-controls.c": "c8e4fe08dbd81b27b1de55d2cd01db7ba11d710c229ba7cfad367e9441055c71",
+      "mt6797-vdec/mt6797-h264-controls.h": "29c297f0befd09a2c4ac6023d49683327a0acd3461248c9d92be0cfa758c6023",
+      "mt6797-vdec-v4l2/Kbuild": "b0f729fbe7bc0b0b314a6059d251805744f6778b52293e97fef3e591b044688f",
+      "mt6797-vdec-v4l2/controls.c": "4c6c92e15dcdb30571718662097c78065266a4c1e12d284efaa40cc46117b136",
+      "mt6797-vdec-v4l2/engine.c": "596182b0ecc028db5c4c7ffa6294c658c7cc648d7004fd61b3d7d292ac798736",
+      "mt6797-vdec-v4l2/engine.h": "32ad09415f2a8c0dc7999a02d95c413b5371f3b010f591b3ce30b7d7827d346c",
+      "mt6797-vdec-v4l2/v4l2.c": "9b349e28abffb033b17c0f1ddf5a56300fa46e07d39185736090f2f206d79275"
+    }
+  },
+  "host_lifecycle_asan_ubsan_exit": 0,
+  "candidate_boot_id": "d0e54b4f-10fc-49d3-b738-581d9104d776",
+  "decoder_qualified": false,
+  "successful_picture_exported": false,
+  "clock_observation": {
+    "votes": [
+      "bus",
+      "engine"
+    ],
+    "active_initialization": "prepare/enable, then disable/unprepare through CCF; reject another owner",
+    "phases": {
+      "powered": 1,
+      "reset": 1,
+      "core_reset": 1,
+      "dcm_off": 257,
+      "submit": 257
+    },
+    "guard": 257,
+    "active_bit_clear": true,
+    "inference": "Clearing the inherited ACTIVE gate changed 0x111 to 0x101, but did not produce a done IRQ or correct pixels."
+  },
+  "command": {
+    "jobs": 1,
+    "failures": 1,
+    "result": -110,
+    "fetched": 1,
+    "submitted": 1,
+    "state": 2147483649,
+    "irq": 12289,
+    "stall": 513,
+    "irq_events": 0,
+    "irq_unexpected": 0,
+    "irq_complete": 1,
+    "quiesced": 1,
+    "guards": 1
+  },
+  "irq_before": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "irq_after": {
+    "irq": 246,
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "total": 0,
+    "actions": "16020000.video-codec",
+    "counter": "sysfs-all-possible-cpus"
+  },
+  "irq_delta": 0,
+  "pixel_comparison": {
+    "passed": false,
+    "different_samples": 6106,
+    "actual_sha256": "9553ad1fd89be6864e3602fed4a76e66c74483bc9e805d859739e77589cea94e",
+    "expected_sha256": "ea52cfe0417144d2d620c0d7939a66a2d5248603e9d08a6247ee88fb02a482dd"
+  },
+  "pixel_scope": "Only the failed raw capture buffer was compared; 6106 of 6144 samples differ.",
+  "safe_quiescence": true,
+  "unloaded": true,
+  "module_unload_taint": 4096,
+  "boot_trial_exit": 0,
+  "observer_exit": 1,
+  "independent_audit_exit": 0,
+  "boot_profile_qualified": true,
+  "independent_audit": {
+    "result": "passed",
+    "final_boot_id": "84754e34-eb81-48f6-a853-9a7e66b9a556",
+    "no_writer": true,
+    "all_trial_units_terminal": true,
+    "source_hashes_match": true,
+    "source_count": 54,
+    "final_taint": 0,
+    "temporary_decoder_absent": true,
+    "paging": {
+      "device": "/dev/zram0",
+      "size_kib": 1888252,
+      "used_kib": 0,
+      "priority": 5,
+      "flash_swap_active": false,
+      "writeback": false
+    }
+  },
+  "returned_system": "/nix/store/sdy4d4ryf9gqm84rg69v906n6ld93ydk-nixos-system-gemini-mainline-nixos-26.11.20260826.9fbb54b",
+  "normal_image_contains_experimental_module": false,
+  "rtc_alarm_calendar_diagnostics_run": false,
+  "encoder_qualified": false,
+  "evidence_sha256": {
+    "handoff/boot-test-97/decoder-irq/result.json": "8bf541bf313b3969b4ae7008f5afc6da54671d0959828ea990cec31f3d047591",
+    "handoff/boot-test-97/plan.json": "9a8338bfe4a7547ba98c6566865b7c8c620badbb23ee08ce541f4f28f95362e4",
+    "handoff/media-module-kernel96-20261011/build-record.json": "cfa9bc0398bab77d57c1ce0095351924c34ffe10af85ec9bbb2c8da09b7b1a3a",
+    "handoff/media-module-kernel96-20261011/independent-audit-97/result.json": "f67f191bcace3454024d24bd47817a0d7a03d5862f09459b0d8a22d087cbffcc"
+  }
+}
