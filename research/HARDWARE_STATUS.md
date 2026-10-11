@@ -3,32 +3,19 @@
 The installed accepted system is Linux 7.2.9 with GNOME, 200% scaling, a fixed
 bottom dock, NetworkManager, ModemManager, Bluetooth, IPv6 and RAM-only zram in
 [accepted-baseline.json](accepted-baseline.json).
-Image 102 adds native SYSIRQ write acceptance and the CPU parking sampling
-cleanup to the GCC 15.3.0 / binutils 2.46 build. It retains the native GNSS,
-Wi-Fi/modem, MMC0 and telephony inputs qualified in
-[trial 101](gnss-integration-20261011.json). Focused deployment and independent
-terminal audit pass; [media trial 103](mt6797-vdec-v4l2/irq-trial-103.json)
-also restores and independently audits image 102 after its failed IRQ case.
-Media trial 104 never reached its buffer test because the candidate closure was
-missing from the persistent store. It restores image 102; the independent audit
-passes 58 source hashes, terminal services, free locks, retained storage and taint 0.
-Shared boot admission now owns the missing-closure check and Stage-1 rescue hook.
-[Media trial 105](mt6797-vdec-v4l2/buffers-trial-105.json) then passes native
-allocation/export/Panfrost mapping/lifetime, supervised return and independent
-terminal audit. It submits no codec or GPU work.
-[Trial 106](mt6797-vdec-v4l2/buffers-trial-106.json) adds advertised-format and
-mixed-length CREATE_BUFS acceptance, preserving requested lengths and separating
-allocation capacity from codec extent. Its hardware check and independent
-restored-system audit pass; four obsolete probes are retired to pinned Git history.
-[Trial 108](mt6797-vdec-v4l2/gpu-trial-108.json) reaches native EGL import and GPU
-activity but rejects incorrect synthetic MM21 pixels. The Mesa descriptor owner
-is corrected in source and passes its actual host regression.
-[Trial 109](mt6797-vdec-v4l2/gpu-trial-109.json) then passes the unchanged 5,120-pixel
-fixture, reference release and module unload. Image 102 is restored and its
-independent terminal audit passes; the normal desktop image is not promoted.
-This is separate from decoder completion.
-The modem still fails separately. The no-swap 7.1.3 fallback is preserved
-in [baselines](baselines/boot-test-76.json).
+Image 102 uses the GCC 15.3.0 / binutils 2.46 build, native SYSIRQ write acceptance
+and consolidated CPU parking sampling. Its focused deployment and terminal audit
+pass. Native GNSS, Wi-Fi/modem, MMC0 and telephony inputs retain their scoped
+[trial-101 results](gnss-integration-20261011.json).
+
+Experimental media work shares the maintained kernel. Native buffers pass
+[trial 106](mt6797-vdec-v4l2/buffers-trial-106.json), and the shared Mesa owner fix
+passes the synthetic MM21 rendering check in
+[trial 109](mt6797-vdec-v4l2/gpu-trial-109.json). Both restore image 102 and pass
+their terminal audits. Decoder IRQ completion, decoded-surface rendering and
+encoding remain unfinished; the normal desktop image has not been promoted.
+Earlier failed trials retain their original records. The no-swap 7.1.3 fallback
+is preserved in [baselines](baselines/boot-test-76.json).
 
 | Area | Current conclusion | Evidence and remaining work |
 | --- | --- | --- |
@@ -50,7 +37,7 @@ in [baselines](baselines/boot-test-76.json).
 | Native tiled GPU import and rendering | Working for the recorded synthetic 80×64 fixture | [Trial 109](mt6797-vdec-v4l2/gpu-trial-109.json) fixes the backing-plane image bounds in the shared Mesa owner. All 5,120 BT.601 pixels pass with the original RGB tolerance of 2 and exact alpha; parent/video/export release, caller FD closure, EGL/GL teardown and module unload pass. Six GPU job IRQs progress with no detected faults; zero codec jobs are submitted. Recovery and the independent audit pass all 65 source hashes. Actual decoded frames, display scanout and sustained playback remain unqualified. |
 | Experimental H.264 decoder | Recorded polling cases work; native buffer API, mapping and lifetime pass on hardware | [Decoder owner](mt6797-vdec-v4l2/README.md). Trials 66–67 compare progressive 8-bit I/P/B, Baseline/Main/High and tested multislice pixels exactly on their recorded 7.1.3 builds. [Trial 106](mt6797-vdec-v4l2/buffers-trial-106.json) adds nine CREATE_BUFS cases to 17 native objects, 34 FDs, Panfrost PRIME mappings, cache transitions and release lifetime with zero codec/GPU submissions. Strict ARM64 builds and sanitizer failure regressions also pass. Four obsolete probes are retired to Git history. Decoder IRQ completion, GPU rendering of decoded surfaces, display imports and suspend remain unqualified. |
 | Decoder IRQ completion | Tested; no interrupt delivered | [Trial 103](mt6797-vdec-v4l2/irq-trial-103.json) uses the exact image-102 kernel. Native SPI 240 setup/polarity acceptance passes; a compressed grey picture completes in AVC with ACTIVE clear (`0x101`), zero syntax error and zero IRQ delta across all ten CPUs. Stop, guards, unload, supervised return to image 102 and independent audit pass. This uses the earlier private-DMA backend; no successful frame or replacement-buffer path is qualified. Exact done-source enablement/handshake remains unfinished. |
-| Video encoding | Unfinished | Resource and idle/reset probes exist; no encoded frame has been produced. |
+| Video encoding | Unfinished | [Encoder owner work](mt6797-venc/README.md) requires the public frame-programming contract and one independently decoded intra frame. Unused command-free probes are retired to Git history; their source and evidence are preserved. No encoded frame has been produced. |
 | Suspend/hibernation | Unqualified; hibernation disabled | Earlier post-hibernation GPU/Wi-Fi faults prevent qualification for normal use. Camera and vibrator are outside the requested scope. |
 
 ## Acceptance and testing

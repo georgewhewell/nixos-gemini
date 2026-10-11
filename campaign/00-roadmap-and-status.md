@@ -1,17 +1,21 @@
 # Gemini PDA mainline campaign: evidence first
 
-For the installed image and current integration, see [hardware status](../research/HARDWARE_STATUS.md). The observations below preserve earlier campaign baselines.
+The installed image, maintained inputs and unfinished owner work are recorded
+once in [hardware status](../research/HARDWARE_STATUS.md) and
+[the kernel baseline](../research/KERNEL_BASELINE.md). Development continues in
+the default system; the dated campaign observations below are historical.
 
-Current status, 2026-10-08: use [the completion ledger](../research/HARDWARE_STATUS.md)
-and the dated results in each campaign chapter. The maintained kernel pin is
-`b62fc653f754fde3bf388c284a5098a53cd8f244`; M69 remains the installed recovery
-baseline. Automatic A72 parking has passed repeated hardware load/idle cycles and
-service-stop restoration,
-and coupled A53/CCI voltage scaling has passed bounded tests down to770mV.
-These results do not qualify the normal cgroup2 generation: its allocator
-failure remains unresolved. USB3 SuperSpeed and the other unfinished hardware
-items are listed in the completion ledger. Camera and vibrator are excluded;
-physical keyboard work is deferred.
+## Historical October 8 baseline
+
+On 2026-10-08, the maintained kernel pin was
+`b62fc653f754fde3bf388c284a5098a53cd8f244`; M69 was the installed recovery
+baseline. Automatic A72 parking had passed repeated hardware load/idle cycles and
+service-stop restoration, and coupled A53/CCI voltage scaling had passed bounded
+tests down to 770 mV.
+Those results did not qualify that normal cgroup2 generation: its allocator
+failure was unresolved at this baseline. Later integration and remaining work
+are described by the current hardware status. Camera and vibrator remain outside
+the requested scope; physical keyboard work is deferred.
 
 ## Historical August–September ledger
 

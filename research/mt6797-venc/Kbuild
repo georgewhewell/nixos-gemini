@@ -1,2 +1,0 @@
-obj-m += mt6797_venc_resource_probe.o
-mt6797_venc_resource_probe-y := resource-probe.o
