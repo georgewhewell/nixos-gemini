@@ -1,19 +1,28 @@
 # GNSS over CONSYS/STP
 
-Status: SOURCE EXISTS; GENERIC Linux GNSS and MediaTek client drivers EXIST;
-MT6797 live applicability **UNKNOWN**; DT ENABLED **NO**; DEVICE-TESTED **NO**.
+Current Linux 7.2.9 retains the GNSS class endpoint in
+`drivers/gnss/mtk-consys.c`, but the installed CONSYS aggregate does not yet
+register it. The existing endpoint uses the normal `/dev/gnssN` raw interface;
+a second kernel decoder or private userspace interface is unnecessary.
 
-Vendor source defines `GPS_TASK_INDX = 2` and routes reads/writes through
-`mtk_wcn_stp_send_data`/`receive_data`
-(`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/connectivity/common/common_main/include/stp_exp.h:45-58`; `/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/connectivity/gps/stp_chrdev_gps.c:140-158,205-225`). Vendor GNSS EMI bookkeeping uses `gConEmiPhyBase + SZ_1M` (`/home/grw/src/gemini-linux-kernel-3.18/drivers/misc/mediatek/connectivity/gps/gps_emi.c:77-93`), but that does not establish a usable address, data structure, cache contract, or receiver identity on this device.
+The recovered August 31 hardware evidence proves GPIO69 LNA control and WMT
+GPS function on/off acknowledgements. It does not prove a position fix or a
+NMEA stream. The later assertion that a proprietary navigation library is
+required is not clean-room evidence. Receiver output semantics remain unknown.
 
-The upstream `linux-gemini-platform@518957636:drivers/gnss/mtk.c` source is not
-a proof that this CONSYS path works. No GNSS node or live STP transport is
-deployed. The former NMEA sample,
-multi-constellation claim, CRC/status semantics, and 1 MiB shared-memory layout
-are removed.
+Public GPL source establishes STP task 2, WMT function 2, and the board LNA
+sequence. The current shared CONSYS owner already provides full-STP transport
+and lifetime management. Integration work uses that owner and a standard
+`lna-supply`, retaining one radio power and transport stack.
 
-Next validation: complete the no-radio CONSYS identity gate; prove PIO byte
-transport and full STP framing; perform exact WMT GPS function-on with bounded
-responses; then register a GNSS client and require checksum-valid NMEA across
-repeated open/close and reset recovery.
+The native receive path now refuses a whole frame if its FIFO cannot fit it;
+STP retry cannot duplicate a published prefix. Actual-path host regressions
+and strict ARM64 compilation pass in development; hardware qualification is
+pending.
+
+Finish the provider integration, qualify repeated open/close and coexistence,
+then establish publicly documented receiver framing and a real position fix.
+Protocol decoding belongs in ordinary userspace such as gpsd. A binary stream
+is not evidence that gpsd already supports it or that it contains solved
+positions. Keep location data out of retained diagnostics. Current status and
+remaining work are recorded in [HARDWARE_STATUS.md](../research/HARDWARE_STATUS.md).
