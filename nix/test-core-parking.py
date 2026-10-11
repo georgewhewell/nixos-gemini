@@ -38,6 +38,8 @@ class Sim:
         with open(f"{root}/sys/class/thermal/thermal_zone0/type", "w") as f:
             f.write("soc-thermal\n")
         self.set_temp(45000)
+        # Keep the inode stable, as procfs does across refreshed snapshots.
+        self.stat_fd = os.open(f"{root}/proc/stat", os.O_RDWR | os.O_CREAT, 0o600)
         self.write_stat()
 
     def set_temp(self, mc):
@@ -74,10 +76,12 @@ class Sim:
                 c[1] += 1
             lines.append(f"cpu{cpu} {c[0]} 0 0 {c[1]} 0 0 0 0 0 0")
         lines.append(f"procs_running {self.threads + 1}")
-        tmp = f"{self.root}/proc/.stat"
-        with open(tmp, "w") as f:
-            f.write("\n".join(lines) + "\n")
-        os.rename(tmp, f"{self.root}/proc/stat")
+        # Replace one fixed-size snapshot in one write, without a truncation
+        # window or trailing CPU records when the online set shrinks.
+        data = ("\n".join(lines) + "\n").encode()
+        assert len(data) <= 4096
+        data = data.ljust(4096, b"\n")
+        assert os.pwrite(self.stat_fd, data, 0) == len(data)
 
     def run(self):
         while not self.stop:
@@ -204,6 +208,7 @@ def main():
         finally:
             sim.stop = True
             t.join()
+            os.close(sim.stat_fd)
             os.close(wfd)
             os.close(rfd)
     print("core-parking: pass")

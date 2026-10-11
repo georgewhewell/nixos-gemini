@@ -13,7 +13,7 @@ import subprocess
 PYTHON = '/nix/store/81jsmi7hxdbcikna1zxj49qnr856mcra-python3-aarch64-unknown-linux-gnu-3.14.7/bin/python3'
 
 REMOTE_CODE = r'''
-import errno, json, os, selectors, signal, stat, sys, time
+import errno, json, os, re, selectors, signal, stat, sys, time
 from pathlib import Path
 
 class CheckError(Exception):
@@ -54,6 +54,46 @@ def lna_state():
     state = (path / 'state').read_text().strip()
     require(state in ('enabled', 'disabled'), 'lna_state_unknown')
     return int((path / 'num_users').read_text().strip()), int(state == 'enabled')
+
+class RxCounters:
+    """Separate passive snapshots of the transport and endpoint owners."""
+    def __init__(self):
+        self.gdev = Path('/sys/class/gnss/gnss0')
+        self.endpoint = (self.gdev / 'device').resolve(strict=True)
+        self.consys = self.endpoint.parent
+        self.paths = (self.gdev, self.endpoint / 'rx_delivery',
+                      self.consys / 'gnss_rx_frames')
+        self.owner = self.owner_identity()
+        self.previous = None
+
+    def owner_identity(self):
+        require((self.gdev / 'device').resolve(strict=True) == self.endpoint,
+                'counter_owner_changed')
+        require((self.endpoint / 'driver').resolve(strict=True).name == 'mt6797-gnss'
+                and (self.consys / 'driver').resolve(strict=True).name == 'mt6797-consys',
+                'counter_owner_differs')
+        stats = [path.stat() for path in self.paths]
+        return tuple((info.st_dev, info.st_ino) for info in stats)
+
+    def snapshot(self):
+        require(self.owner_identity() == self.owner, 'counter_owner_changed')
+        values = []
+        for path, pattern in (
+                (self.paths[2], rb'([0-9]+)\n'),
+                (self.paths[1], rb'admitted=([0-9]+) inactive=([0-9]+) rejected=([0-9]+)\n')):
+            with path.open('rb') as stream:
+                data = stream.read(193)
+            require(len(data) <= 192, 'counter_format_invalid')
+            match = re.fullmatch(pattern, data)
+            require(match is not None, 'counter_format_invalid')
+            values.extend(int(value) for value in match.groups())
+        require(all(value < 1 << 64 for value in values), 'counter_range_invalid')
+        # Neither owner resets these counters during power or parser transitions.
+        require(self.previous is None or all(value >= old for value, old in
+                zip(values, self.previous)), 'counter_regressed')
+        require(self.owner_identity() == self.owner, 'counter_owner_changed')
+        self.previous = values
+        return dict(zip(('crc_valid_task2', 'admitted', 'inactive', 'rejected'), values))
 
 class StreamMetadata:
     def __init__(self):
@@ -103,7 +143,7 @@ class StreamMetadata:
 
 def observe(boot, system):
     metadata = StreamMetadata()
-    record = dict(schema=1, result='failed', error='none', opened=False, closed=False,
+    record = dict(schema=2, result='failed', error='none', opened=False, closed=False,
                   errno=0, lna_before_users=None, lna_before_enabled=None,
                   lna_during_users=None, lna_during_enabled=None,
                   lna_after_users=None, lna_after_enabled=None,
@@ -112,8 +152,10 @@ def observe(boot, system):
                   system_identity_preserved=False, receiver_commands_sent=0,
                   receiver_protocol_qualified=False, position_qualified=False,
                   native_gnss_module_present=False, matching_platform_child_present=False,
-                  driver_bound=False, class_registered=False, gnss_node_present=False)
+                  driver_bound=False, class_registered=False, gnss_node_present=False,
+                  rx_before=None, rx_during=None, rx_after=None)
     descriptor = None
+    counters = None
     started = time.monotonic()
     try:
         identity(boot, system)
@@ -123,6 +165,8 @@ def observe(boot, system):
         require(stat.S_ISCHR(os.stat('/dev/gnss0').st_mode), 'endpoint_missing')
         require(Path('/sys/class/gnss/gnss0/device/driver').resolve().name == 'mt6797-gnss',
                 'owner_differs')
+        counters = RxCounters()
+        record['rx_before'] = counters.snapshot()
         before = lna_state()
         record['lna_before_users'], record['lna_before_enabled'] = before
         require(before == (0, 0), 'lna_initially_active')
@@ -145,6 +189,7 @@ def observe(boot, system):
                 metadata.feed(data)
         record['read_window_complete'] = time.monotonic() >= deadline
         require(record['read_window_complete'], 'read_window_short')
+        record['rx_during'] = counters.snapshot()
     except CheckError as error:
         record['error'] = str(error)
     except OSError as error:
@@ -169,6 +214,8 @@ def observe(boot, system):
             record['boot_identity_preserved'] = record['system_identity_preserved'] = True
             record['taint_after'] = int(Path('/proc/sys/kernel/tainted').read_text().strip())
             require(record['taint_after'] == 0, 'kernel_tainted')
+            if counters is not None:
+                record['rx_after'] = counters.snapshot()
         except CheckError as error:
             record['error'] = str(error)
         except Exception:
@@ -198,8 +245,10 @@ BOOLEANS = ('opened', 'closed', 'read_window_complete', 'boot_identity_preserved
             'system_identity_preserved', 'receiver_protocol_qualified', 'position_qualified')
 REGISTRATION = ('native_gnss_module_present', 'matching_platform_child_present',
                 'driver_bound', 'class_registered', 'gnss_node_present')
+RX_PHASES = ('rx_before', 'rx_during', 'rx_after')
+RX_COUNTS = ('crc_valid_task2', 'admitted', 'inactive', 'rejected')
 FIELDS = set(COUNTS + LNA + BOOLEANS + REGISTRATION +
-             ('schema', 'result', 'error', 'read_window_seconds', 'taint_before', 'taint_after'))
+             RX_PHASES + ('schema', 'result', 'error', 'read_window_seconds', 'taint_before', 'taint_after'))
 
 
 def verify_report(raw):
@@ -208,7 +257,7 @@ def verify_report(raw):
     record = json.loads(raw)
     if not isinstance(record, dict) or set(record) != FIELDS:
         raise RuntimeError('GNSS report fields differ from the scalar schema')
-    if (record['schema'] != 1 or record['result'] != 'passed' or record['error'] != 'none'
+    if (record['schema'] != 2 or record['result'] != 'passed' or record['error'] != 'none'
             or record['read_window_seconds'] != 10 or record['errno'] != 0
             or record['receiver_commands_sent'] != 0
             or any(type(record[key]) is not int or record[key] < 0 for key in
@@ -224,6 +273,15 @@ def verify_report(raw):
             or record['nmea_checksum_valid'] > record['nmea_shapes']
             or record['nmea_valid_fix_flags'] > record['nmea_checksum_valid']):
         raise RuntimeError('GNSS power-cycle evidence is incomplete or failed')
+    for phase in RX_PHASES:
+        counts = record[phase]
+        if (not isinstance(counts, dict) or set(counts) != set(RX_COUNTS)
+                or any(type(counts[key]) is not int or not 0 <= counts[key] < 1 << 64
+                       for key in RX_COUNTS)):
+            raise RuntimeError('GNSS receive counters are missing or invalid')
+    if any(record[later][key] < record[earlier][key] for key in RX_COUNTS
+           for earlier, later in zip(RX_PHASES, RX_PHASES[1:])):
+        raise RuntimeError('GNSS receive counters regressed during the power cycle')
     return record
 
 

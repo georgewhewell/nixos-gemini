@@ -19,7 +19,7 @@ exec(gnss.REMOTE_CODE, remote)
 
 
 def good_report():
-    return dict(schema=1, result='passed', error='none', opened=True, closed=True, errno=0,
+    return dict(schema=2, result='passed', error='none', opened=True, closed=True, errno=0,
                 lna_before_users=0, lna_before_enabled=0, lna_during_users=1, lna_during_enabled=1,
                 lna_after_users=0, lna_after_enabled=0, taint_before=0, taint_after=0,
                 read_window_seconds=10, read_window_complete=True, boot_identity_preserved=True,
@@ -28,7 +28,8 @@ def good_report():
                 printable_bytes=0, nmea_shapes=0, nmea_checksum_valid=0,
                 nmea_valid_fix_flags=0, elapsed_ms=10000, native_gnss_module_present=True,
                 matching_platform_child_present=True, driver_bound=True, class_registered=True,
-                gnss_node_present=True)
+                gnss_node_present=True,
+                **{phase: dict.fromkeys(gnss.RX_COUNTS, 0) for phase in gnss.RX_PHASES})
 
 
 class Evidence(unittest.TestCase):
@@ -55,6 +56,74 @@ class Evidence(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             gnss.verify_report(json.dumps(dict(good, raw='forbidden')))
 
+    def test_receive_schema_rejects_missing_malformed_and_regressed_counts(self):
+        good = good_report()
+        for phase in gnss.RX_PHASES:
+            for value in (None, [], dict(raw='forbidden'),
+                          {**good[phase], 'extra': 0}):
+                bad = copy.deepcopy(good); bad[phase] = value
+                with self.subTest(phase=phase, value=value), self.assertRaises(RuntimeError):
+                    gnss.verify_report(json.dumps(bad))
+            for key in gnss.RX_COUNTS:
+                for value in (-1, 1 << 64, True, '0', None):
+                    bad = copy.deepcopy(good); bad[phase][key] = value
+                    with self.subTest(phase=phase, key=key, value=value), self.assertRaises(RuntimeError):
+                        gnss.verify_report(json.dumps(bad))
+                bad = copy.deepcopy(good); del bad[phase][key]
+                with self.assertRaises(RuntimeError): gnss.verify_report(json.dumps(bad))
+        for key in gnss.RX_COUNTS:
+            for earlier in gnss.RX_PHASES[:-1]:
+                bad = copy.deepcopy(good); bad[earlier][key] = 1
+                with self.subTest(earlier=earlier, key=key), self.assertRaises(RuntimeError):
+                    gnss.verify_report(json.dumps(bad))
+        with self.assertRaises(RuntimeError):
+            gnss.verify_report(json.dumps(dict(good, schema=1)))
+        # Counters from separate owners are not a joint atomic snapshot.
+        different = copy.deepcopy(good)
+        for phase in gnss.RX_PHASES:
+            different[phase]['admitted'] = 7
+        self.assertEqual(gnss.verify_report(json.dumps(different)), different)
+
+    def test_actual_counter_reader_requires_owners_bounds_and_preserved_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            consys = root / 'sys/devices/platform/consys'
+            endpoint = consys / 'gnss'
+            gdev = root / 'sys/class/gnss/gnss0'
+            for path in (endpoint, gdev, root / 'sys/bus/platform/drivers/mt6797-gnss',
+                         root / 'sys/bus/platform/drivers/mt6797-consys'):
+                path.mkdir(parents=True)
+            (gdev / 'device').symlink_to(endpoint)
+            (endpoint / 'driver').symlink_to(root / 'sys/bus/platform/drivers/mt6797-gnss')
+            (consys / 'driver').symlink_to(root / 'sys/bus/platform/drivers/mt6797-consys')
+            rx = endpoint / 'rx_delivery'; stp = consys / 'gnss_rx_frames'
+            rx.write_text('admitted=1 inactive=2 rejected=3\n'); stp.write_text('4\n')
+            with mock.patch.dict(remote, Path=lambda path: root / path.lstrip('/')):
+                reader = remote['RxCounters']()
+                self.assertEqual(reader.snapshot(), dict(crc_valid_task2=4, admitted=1,
+                                                         inactive=2, rejected=3))
+                stp.write_text('5\n')
+                self.assertEqual(reader.snapshot()['crc_valid_task2'], 5)
+                stp.write_text('4\n')
+                with self.assertRaisesRegex(remote['CheckError'], 'counter_regressed'):
+                    reader.snapshot()
+                stp.write_text('5\n')
+                for value in ('', '-1\n', f'{1 << 64}\n', '1\nraw\n', '0' * 193):
+                    stp.write_text(value)
+                    with self.subTest(value=value[:30]), self.assertRaises(remote['CheckError']):
+                        reader.snapshot()
+                stp.write_text('5\n')
+                for value in ('admitted=1 inactive=2\n', 'admitted=1 inactive=2 rejected=-1\n',
+                              'admitted=1 inactive=2 rejected=3 raw=1\n'):
+                    rx.write_text(value)
+                    with self.assertRaises(remote['CheckError']): reader.snapshot()
+                rx.write_text('admitted=1 inactive=2 rejected=3\n')
+                with mock.patch.object(reader, 'owner_identity', return_value=('replacement',)):
+                    with self.assertRaisesRegex(remote['CheckError'], 'counter_owner_changed'):
+                        reader.snapshot()
+                stp.unlink()
+                with self.assertRaises(FileNotFoundError): remote['RxCounters']()
+
     def test_fragmented_nmea_binary_noise_checksum_and_memory_bound(self):
         def sentence(body):
             checksum = 0
@@ -76,7 +145,7 @@ class Evidence(unittest.TestCase):
             self.assertTrue(all(type(value) is int for value in metadata.counts.values()))
 
     def observe_fixture(self, during=(1, 1), read_error=False, changed_identity=False,
-                        missing_node=False):
+                        missing_node=False, missing_counters=False, counter_failure=False):
         clock = SimpleNamespace(now=0)
         class Selector:
             def __enter__(self): return self
@@ -95,8 +164,14 @@ class Evidence(unittest.TestCase):
         identities = [None, remote['CheckError']('identity_changed') if changed_identity else None]
         registration = {key: True for key in gnss.REGISTRATION}
         if missing_node: registration['gnss_node_present'] = False
+        counters = mock.Mock()
+        snapshots = [dict.fromkeys(gnss.RX_COUNTS, 0) for _ in gnss.RX_PHASES]
+        if counter_failure: snapshots[1] = remote['CheckError']('counter_regressed')
+        counters.snapshot.side_effect = snapshots
         with mock.patch.dict(remote, Path=DevicePath,
                              registration_state=lambda record: record.update(registration),
+                             RxCounters=mock.Mock(return_value=counters, side_effect=
+                                 FileNotFoundError(2, 'fixture') if missing_counters else None),
                              identity=mock.Mock(side_effect=identities),
                              lna_state=mock.Mock(side_effect=[(0, 0), during, (0, 0)])), \
                 mock.patch.object(remote['time'], 'monotonic', side_effect=lambda: clock.now), \
@@ -107,7 +182,7 @@ class Evidence(unittest.TestCase):
                 mock.patch.object(remote['os'], 'close') as closed, \
                 mock.patch.object(remote['os'], 'read', side_effect=OSError(5, 'fixture')):
             record = remote['observe']('fixture', 'fixture')
-        if missing_node:
+        if missing_node or missing_counters:
             opened.assert_not_called()
             closed.assert_not_called()
         else:
@@ -125,6 +200,18 @@ class Evidence(unittest.TestCase):
             self.assertEqual(failed['result'], 'failed')
             self.assertTrue(failed['closed'])
             with self.assertRaises(RuntimeError): gnss.verify_report(json.dumps(failed))
+
+    def test_counter_failure_prevents_open_or_still_closes_an_open_endpoint(self):
+        missing = self.observe_fixture(missing_counters=True)
+        self.assertFalse(missing['opened'])
+        self.assertEqual(missing['result'], 'failed')
+        failed = self.observe_fixture(counter_failure=True)
+        self.assertTrue(failed['opened'])
+        self.assertTrue(failed['closed'])
+        self.assertEqual(failed['error'], 'counter_regressed')
+        self.assertEqual(failed['result'], 'failed')
+        for record in (missing, failed):
+            with self.assertRaises(RuntimeError): gnss.verify_report(json.dumps(record))
 
     def test_registration_flags_survive_missing_devnode_without_open(self):
         record = self.observe_fixture(missing_node=True)

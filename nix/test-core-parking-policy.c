@@ -1,10 +1,78 @@
 // SPDX-License-Identifier: MIT
 /* Host checks for the actual policy, parser and admission paths. */
+#define _GNU_SOURCE
+#include <stdio.h>
+static FILE *parser_fopen(const char *, const char *);
+static int parser_fclose(FILE *);
+#define fopen parser_fopen
+#define fclose parser_fclose
 #define main core_parking_daemon_main
 #include "core-parking.c"
 #undef main
+#undef fopen
+#undef fclose
 
 #include <assert.h>
+
+static FILE *parser_stream;
+static int parser_opens, parser_closes;
+enum { NORMAL_FILE, READ_ERROR, SEEK_ERROR };
+static int next_stream;
+static size_t cookie_position;
+static int cookie_kind;
+
+static ssize_t cookie_read(void *cookie, char *buf, size_t size)
+{
+	static const char data[] = "cpu0 40 0 0 160 0 0 0 0 0 0\nprocs_running 1\n";
+	size_t n = sizeof(data) - 1 - cookie_position;
+	(void)cookie;
+	if (!n && cookie_kind == READ_ERROR) {
+		errno = EIO;
+		return -1;
+	}
+	if (n > size)
+		n = size;
+	memcpy(buf, data + cookie_position, n);
+	cookie_position += n;
+	return (ssize_t)n;
+}
+
+static int cookie_seek(void *cookie, off64_t *offset, int whence)
+{
+	(void)cookie;
+	(void)offset;
+	(void)whence;
+	errno = ESPIPE;
+	return -1;
+}
+
+static FILE *parser_fopen(const char *path, const char *mode)
+{
+	FILE *f;
+	if (strlen(path) < 10 || strcmp(path + strlen(path) - 10, "/proc/stat"))
+		return fopen(path, mode);
+	parser_opens++;
+	if (next_stream) {
+		cookie_position = 0;
+		cookie_kind = next_stream;
+		next_stream = NORMAL_FILE;
+		f = fopencookie(NULL, "r", (cookie_io_functions_t){
+			.read = cookie_read, .seek = cookie_seek});
+	} else {
+		f = fopen(path, mode);
+	}
+	parser_stream = f;
+	return f;
+}
+
+static int parser_fclose(FILE *f)
+{
+	if (f == parser_stream) {
+		parser_closes++;
+		parser_stream = NULL;
+	}
+	return fclose(f);
+}
 
 static const struct policy P = {
 	.period_ms = 50, .up_pct = 80, .up_samples = 2,
@@ -67,6 +135,8 @@ static void test_parser(void)
 		"cpu32 100 0 0 0 0 0 0 0 0 0\n"
 		"cpu2 malformed\nprocs_running 3\n", false);
 	assert(read_stat(&x));
+	assert(parser_opens == 1 && parser_closes == 0 && parser_stream);
+	assert(fcntl(fileno(parser_stream), F_GETFD) & FD_CLOEXEC);
 	assert(x.cap == 4 && x.nr == 2 && x.load == 0);
 	assert(x.online_mask == (UINT32_C(1) | (UINT32_C(1) << 3) |
 				(UINT32_C(1) << 8) | (UINT32_C(1) << 31)));
@@ -81,6 +151,8 @@ static void test_parser(void)
 		"cpu31 0 0 0 200 0 0 0 0 0 0\n"
 		"procs_running 0\n", false);
 	assert(read_stat(&x));
+	/* Rewind the same FILE and consume the rewritten counters, not EOF. */
+	assert(parser_opens == 1 && parser_closes == 0);
 	assert(x.cap == 3 && x.nr == 0 && x.load == 60);
 	assert(x.online_mask == (UINT32_C(1) | (UINT32_C(1) << 3) |
 				(UINT32_C(1) << 31)));
@@ -97,10 +169,32 @@ static void test_parser(void)
 	assert(count_online_managed(&x) == 2);
 	fixture_file("/proc/stat", "cpu2 malformed\nprocs_running 1\n", false);
 	assert(!read_stat(&x) && x.cap == 0 && x.online_mask == 0);
+	assert(!parser_stream && parser_closes == 1);
 	fixture_file("/proc/stat", NULL, true);
 	x = (struct sample){ .cap = 7, .online_mask = UINT32_C(1) << 31 };
 	assert(!read_stat(&x) && x.cap == 7 &&
 	       x.online_mask == (UINT32_C(1) << 31));
+	/* A partial read error must discard the stream and its partial sample. */
+	next_stream = READ_ERROR;
+	assert(!read_stat(&x) && x.cap == 7 &&
+	       x.online_mask == (UINT32_C(1) << 31));
+	assert(!parser_stream && parser_closes == 2);
+	fixture_file("/proc/stat", "cpu0 40 0 0 160 0 0 0 0 0 0\n", false);
+	assert(read_stat(&x) && x.cap == 1 && parser_stream);
+	fixture_file("/proc/stat", "cpu2 malformed\n", false);
+	assert(!read_stat(&x) && !parser_stream && parser_closes == 3);
+	/* Failed seek retires a previously readable FILE; the next call reopens. */
+	next_stream = SEEK_ERROR;
+	assert(read_stat(&x) && x.cap == 1 && parser_stream);
+	x = (struct sample){ .cap = 7, .online_mask = UINT32_C(1) << 31 };
+	assert(!read_stat(&x) && x.cap == 7 &&
+	       x.online_mask == (UINT32_C(1) << 31));
+	assert(!parser_stream && parser_closes == 4);
+	fixture_file("/proc/stat", "cpu0 40 0 0 160 0 0 0 0 0 0\n", false);
+	assert(read_stat(&x) && x.cap == 1 && parser_stream);
+	fixture_file("/proc/stat", "cpu2 malformed\n", false);
+	assert(!read_stat(&x) && !parser_stream && parser_closes == 5);
+	fixture_file("/proc/stat", NULL, true);
 	for (size_t i = 0; i < sizeof(cpus) / sizeof(cpus[0]); i++) {
 		assert(asprintf(&path, "/sys/devices/system/cpu/cpu%d/online", cpus[i]) >= 0);
 		fixture_file(path, NULL, true);

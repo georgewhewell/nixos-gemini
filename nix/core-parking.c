@@ -387,6 +387,15 @@ static void apply(int want, enum reason why, const struct sample *x)
 		k = count_online_managed(NULL);
 }
 
+static FILE *stat_file;
+
+static void close_stat(void)
+{
+	if (stat_file)
+		fclose(stat_file);
+	stat_file = NULL;
+}
+
 static bool read_stat(struct sample *x)
 {
 	char path[512], line[512];
@@ -394,10 +403,22 @@ static bool read_stat(struct sample *x)
 	int load = 0, cap = 0, nr = 0;
 	uint32_t online_mask = 0;
 
-	snprintf(path, sizeof(path), "%s/proc/stat", root);
-	f = fopen(path, "re");
-	if (!f)
-		return false;
+	/* Keep the seq_file allocation, not its previous sample. Seeking to
+	 * zero discards the stdio buffer and regenerates the proc snapshot.
+	 */
+	if (stat_file) {
+		if (fseeko(stat_file, 0, SEEK_SET)) {
+			close_stat();
+			return false;
+		}
+		clearerr(stat_file);
+	} else {
+		snprintf(path, sizeof(path), "%s/proc/stat", root);
+		stat_file = fopen(path, "re");
+		if (!stat_file)
+			return false;
+	}
+	f = stat_file;
 	while (fgets(line, sizeof(line), f)) {
 		unsigned long long v[10] = {0};
 		unsigned long long busy, total, db, dt;
@@ -430,11 +451,16 @@ static bool read_stat(struct sample *x)
 		prev_total[cpu] = total;
 		prev_valid[cpu] = true;
 	}
-	fclose(f);
+	if (ferror(f)) {
+		close_stat();
+		return false;
+	}
 	x->load = load;
 	x->cap = cap;
 	x->nr = nr < 0 ? 0 : nr;
 	x->online_mask = online_mask;
+	if (!cap)
+		close_stat();
 	return cap > 0;
 }
 
@@ -867,6 +893,7 @@ int main(int argc, char **argv)
 		printf("exit: onlining all managed CPUs\n");
 		apply(norder, R_EXIT, NULL);
 	}
+	close_stat();
 	return 0;
 bad:
 	usage();
